@@ -1,0 +1,251 @@
+name: Local Unity Android Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_unity_tests:
+        description: Run Unity edit-mode and play-mode tests
+        required: true
+        default: true
+        type: boolean
+      build_emulator_apk:
+        description: Build the x86_64 Android emulator APK
+        required: true
+        default: true
+        type: boolean
+      start_emulator:
+        description: Boot an existing AVD, install the APK, and launch the app
+        required: true
+        default: false
+        type: boolean
+      avd_name:
+        description: Existing Android Virtual Device name used when start_emulator is enabled
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: local-unity-android-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Unity and Android on kawa
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+          if [[ -z "${project_version}" ]]; then
+            printf '%s\n' 'Could not read the pinned Unity version.' >&2
+            exit 1
+          fi
+
+          unity_editor="${UNITY_EDITOR:-}"
+          if [[ -z "${unity_editor}" ]]; then
+            for candidate in \
+              "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "/opt/unity/editors/${project_version}/Editor/Unity"; do
+              if [[ -x "${candidate}" ]]; then
+                unity_editor="${candidate}"
+                break
+              fi
+            done
+          fi
+          if [[ ! -x "${unity_editor}" ]]; then
+            printf 'Unity %s was not found. Set UNITY_EDITOR in the runner .env file.\n' \
+              "${project_version}" >&2
+            exit 1
+          fi
+
+          android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          if [[ ! -x "${android_sdk_root}/platform-tools/adb" ]]; then
+            printf 'Android SDK platform-tools were not found under %s.\n' \
+              "${android_sdk_root}" >&2
+            exit 1
+          fi
+          if [[ ! -x "${android_sdk_root}/emulator/emulator" ]]; then
+            printf 'Android emulator was not found under %s.\n' \
+              "${android_sdk_root}" >&2
+            exit 1
+          fi
+
+          printf 'UNITY_EDITOR=%s\n' "${unity_editor}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_HOME=%s\n' "${android_sdk_root}" >> "${GITHUB_ENV}"
+          printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
+          printf '%s\n' "${android_sdk_root}/emulator" >> "${GITHUB_PATH}"
+
+          "${unity_editor}" -version -batchmode -quit
+          "${android_sdk_root}/platform-tools/adb" version
+          "${android_sdk_root}/emulator/emulator" -accel-check
+
+      - name: Run Unity tests
+        if: ${{ inputs.run_unity_tests }}
+        shell: bash
+        env:
+          UNITY_TEST_RESULTS_DIR: ${{ runner.temp }}/unity-test-results
+        run: bash scripts/run_unity_tests.sh
+
+      - name: Upload Unity test results
+        if: ${{ inputs.run_unity_tests && always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-unity-test-results-${{ github.sha }}
+          path: ${{ runner.temp }}/unity-test-results
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build x86_64 emulator APK
+        if: ${{ inputs.build_emulator_apk || inputs.start_emulator }}
+        shell: bash
+        run: bash scripts/build_unity_android.sh emulator
+
+      - name: Verify emulator APK
+        if: ${{ inputs.build_emulator_apk || inputs.start_emulator }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s Builds/Android/weachy-mini-emulator-x86_64.apk
+
+      - name: Start configured Android emulator
+        if: ${{ inputs.start_emulator }}
+        shell: bash
+        env:
+          AVD_NAME: ${{ inputs.avd_name }}
+          EMULATOR_SERIAL: emulator-5580
+        run: |
+          set -euo pipefail
+          if [[ -z "${AVD_NAME}" ]]; then
+            printf '%s\n' 'avd_name is required when start_emulator is enabled.' >&2
+            exit 1
+          fi
+
+          mapfile -t avds < <("${ANDROID_SDK_ROOT}/emulator/emulator" -list-avds)
+          avd_found=false
+          for configured_avd in "${avds[@]}"; do
+            if [[ "${configured_avd}" == "${AVD_NAME}" ]]; then
+              avd_found=true
+              break
+            fi
+          done
+          if [[ "${avd_found}" != true ]]; then
+            printf 'AVD %s was not found. Available AVDs:\n' "${AVD_NAME}" >&2
+            printf '  %s\n' "${avds[@]}" >&2
+            exit 1
+          fi
+
+          emulator_log="${RUNNER_TEMP}/android-emulator.log"
+          "${ANDROID_SDK_ROOT}/emulator/emulator" \
+            "@${AVD_NAME}" \
+            -port 5580 \
+            -no-window \
+            -no-audio \
+            -no-boot-anim \
+            -no-snapshot-save \
+            > "${emulator_log}" 2>&1 &
+          printf 'EMULATOR_PID=%s\n' "$!" >> "${GITHUB_ENV}"
+          printf 'EMULATOR_LOG=%s\n' "${emulator_log}" >> "${GITHUB_ENV}"
+
+          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
+          "${adb_path}" -s "${EMULATOR_SERIAL}" wait-for-device
+
+          boot_deadline=$((SECONDS + 300))
+          while [[ "$("${adb_path}" -s "${EMULATOR_SERIAL}" shell getprop sys.boot_completed | tr -d '\r')" != "1" ]]; do
+            if (( SECONDS >= boot_deadline )); then
+              printf '%s\n' 'Android emulator did not finish booting within 300 seconds.' >&2
+              cat "${emulator_log}" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          "${adb_path}" -s "${EMULATOR_SERIAL}" devices -l
+          printf 'android_abi=%s\n' \
+            "$("${adb_path}" -s "${EMULATOR_SERIAL}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+
+      - name: Install and launch emulator APK
+        if: ${{ inputs.start_emulator }}
+        shell: bash
+        env:
+          EMULATOR_SERIAL: emulator-5580
+        run: |
+          set -euo pipefail
+          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
+          apk_path="Builds/Android/weachy-mini-emulator-x86_64.apk"
+          package_name="com.ekkus.weachymini"
+
+          "${adb_path}" -s "${EMULATOR_SERIAL}" install -r "${apk_path}"
+          "${adb_path}" -s "${EMULATOR_SERIAL}" shell pm path "${package_name}"
+          "${adb_path}" -s "${EMULATOR_SERIAL}" shell monkey \
+            -p "${package_name}" \
+            -c android.intent.category.LAUNCHER \
+            1
+          sleep 5
+          "${adb_path}" -s "${EMULATOR_SERIAL}" shell pidof "${package_name}"
+
+      - name: Capture emulator diagnostics after failure
+        if: ${{ inputs.start_emulator && failure() }}
+        shell: bash
+        env:
+          EMULATOR_SERIAL: emulator-5580
+        run: |
+          set +e
+          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
+          "${adb_path}" -s "${EMULATOR_SERIAL}" logcat -d \
+            > "${RUNNER_TEMP}/android-emulator-logcat.txt"
+          if [[ -f "${EMULATOR_LOG:-}" ]]; then
+            cp "${EMULATOR_LOG}" "${RUNNER_TEMP}/android-emulator-console.txt"
+          fi
+
+      - name: Upload emulator diagnostics
+        if: ${{ inputs.start_emulator && failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-android-emulator-failure-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/android-emulator-logcat.txt
+            ${{ runner.temp }}/android-emulator-console.txt
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop Android emulator
+        if: ${{ inputs.start_emulator && always() }}
+        shell: bash
+        env:
+          EMULATOR_SERIAL: emulator-5580
+        run: |
+          set +e
+          "${ANDROID_SDK_ROOT}/platform-tools/adb" \
+            -s "${EMULATOR_SERIAL}" \
+            emu kill
+          if [[ -n "${EMULATOR_PID:-}" ]]; then
+            wait "${EMULATOR_PID}" 2>/dev/null
+          fi
+
+      - name: Upload emulator APK
+        if: ${{ (inputs.build_emulator_apk || inputs.start_emulator) && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-unity-emulator-apk-${{ github.sha }}
+          path: Builds/Android/weachy-mini-emulator-x86_64.apk
+          if-no-files-found: error
+          retention-days: 14
