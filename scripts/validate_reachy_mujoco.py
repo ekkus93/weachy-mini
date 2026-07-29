@@ -72,7 +72,11 @@ def require_close_vector(
     """Require a finite numeric vector to match an absolute tolerance."""
     if not isinstance(expected, list) or not expected:
         raise MujocoValidationError(f"Baseline {label} must be a nonempty array")
-    if not isinstance(tolerance, int | float) or isinstance(tolerance, bool) or tolerance < 0:
+    if (
+        not isinstance(tolerance, int | float)
+        or isinstance(tolerance, bool)
+        or tolerance < 0
+    ):
         raise MujocoValidationError(f"Baseline {label} tolerance must be nonnegative")
     expected_array = np.asarray(expected, dtype=np.float64)
     if actual.shape != expected_array.shape:
