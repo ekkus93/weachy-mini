@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -14,6 +15,8 @@ namespace ReachyMini.Editor
         private const string DeviceFeasibilityOutput =
             "Builds/Android/weachy-mini-device-arm64-api26.apk";
         private const string ReleaseOutput = "Builds/Android/weachy-mini-release.aab";
+        private const string CompileSdkPackageEnvironmentVariable =
+            "WEACHY_ANDROID_COMPILE_SDK_PACKAGE";
 
         private const int ApplicationMinimumApiLevel = 31;
         private const int DeviceFeasibilityMinimumApiLevel = 26;
@@ -88,15 +91,50 @@ namespace ReachyMini.Editor
                     "ANDROID_SDK_ROOT or ANDROID_HOME must identify the provisioned Android SDK.");
             }
 
+            string compileSdkPackage = Environment.GetEnvironmentVariable(
+                CompileSdkPackageEnvironmentVariable);
+            if (string.IsNullOrWhiteSpace(compileSdkPackage))
+            {
+                throw new InvalidOperationException(
+                    $"{CompileSdkPackageEnvironmentVariable} must identify the SDK platform " +
+                    "package pinned by toolchain.lock.json.");
+            }
+
+            if (!compileSdkPackage.All(character =>
+                    char.IsDigit(character) || character == '.') ||
+                compileSdkPackage.StartsWith(".", StringComparison.Ordinal) ||
+                compileSdkPackage.EndsWith(".", StringComparison.Ordinal) ||
+                compileSdkPackage.Contains("..", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Invalid Android SDK package version: {compileSdkPackage}");
+            }
+
+            string expectedApiPrefix = TargetApiLevel.ToString(CultureInfo.InvariantCulture);
+            if (!string.Equals(
+                    compileSdkPackage,
+                    expectedApiPrefix,
+                    StringComparison.Ordinal) &&
+                !compileSdkPackage.StartsWith(
+                    expectedApiPrefix + ".",
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Android SDK package {compileSdkPackage} does not match target API " +
+                    $"{TargetApiLevel}.");
+            }
+
             string normalizedSdkRoot = Path.GetFullPath(sdkRoot);
-            string requiredPlatform = Path.Combine(
+            string requiredPlatformJar = Path.Combine(
                 normalizedSdkRoot,
                 "platforms",
-                $"android-{TargetApiLevel}");
-            if (!Directory.Exists(requiredPlatform))
+                $"android-{compileSdkPackage}",
+                "android.jar");
+            if (!File.Exists(requiredPlatformJar))
             {
-                throw new DirectoryNotFoundException(
-                    $"Android SDK platform {TargetApiLevel} is missing: {requiredPlatform}");
+                throw new FileNotFoundException(
+                    $"Android SDK platform package android-{compileSdkPackage} is missing.",
+                    requiredPlatformJar);
             }
 
             AndroidExternalToolsSettings.sdkRootPath = normalizedSdkRoot;
