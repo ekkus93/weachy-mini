@@ -1,6 +1,6 @@
 # GitHub Actions CI setup
 
-This project uses GitHub Actions for hosted static analysis, Android lint/tests, native tests, Android ARM64 MuJoCo cross-compilation, and optional Unity validation. A physical-phone probe uses a separately labeled self-hosted runner because a GitHub-hosted virtual machine cannot access a USB phone attached to a developer machine.
+This project uses GitHub Actions for hosted static analysis, Android lint/tests, native tests, Android ARM64 MuJoCo cross-compilation, and Unity validation. Physical-phone jobs use the separately labeled self-hosted `kawa` runner because a GitHub-hosted virtual machine cannot access a USB phone attached to the developer machine.
 
 ## Workflows
 
@@ -24,6 +24,21 @@ It performs:
 
 Third-party source is not rewritten or subjected to the repository's first-party warning policy.
 
+### `.github/workflows/local-unity-android-validation.yml`
+
+Runs on trusted pushes to `master` and may also be started manually. It targets the `kawa` runner through these labels:
+
+```text
+self-hosted
+linux
+x64
+weachy-mini-android-device
+```
+
+Automatic push runs perform Unity edit-mode and play-mode tests and build the ARM64/API-26 physical-device feasibility APK. A manual input can additionally install and launch that APK on the sole connected physical ARM64 phone. Emulator targets are ignored by the physical-device selector.
+
+The workflow is pinned to Unity 6000.5.2f1. It requires the matching Unity Android Build Support module; missing modules or mismatched editor versions fail visibly.
+
 ### `.github/workflows/android-feasibility.yml`
 
 The hosted `build-arm64` job runs automatically when the MuJoCo build/probe inputs change and can also be started manually.
@@ -38,21 +53,17 @@ It:
 6. verifies the produced ELF architecture, API floor, dynamic dependencies, symbols, and provenance;
 7. uploads the staged library, runner, fixtures, and reports as a GitHub Actions artifact.
 
-The optional `device-probe` job downloads that exact artifact and runs the 900,000-step probe on one physical ARM64 phone. The current native-feasibility floor is API 26, independently of the full Unity application's provisional API 31 minimum.
+The optional `device-probe` job downloads that exact artifact and runs the 900,000-step probe on one physical ARM64 phone. The current native-feasibility floor is API 26, independently of the full Unity application's provisional API 31 minimum. An x86_64 Android emulator may remain online because the workflow excludes `emulator-*` serials.
 
 ### `.github/workflows/unity-validation.yml`
 
-This is intentionally manual. It runs:
+This is intentionally manual and hosted. It runs Unity tests plus the API-26 feasibility APK, normal development APK, and release AAB entry points through GameCI after Unity license secrets are configured.
 
-- Unity edit-mode and play-mode tests;
-- the development APK build entry point;
-- the release AAB build entry point.
+A failed or absent Unity license must remain visible; do not bypass Unity validation with a cosmetic or non-Unity replacement.
 
-It requires valid Unity activation secrets. A failed or absent Unity license must remain visible; do not bypass Unity validation with a cosmetic or non-Unity replacement.
+## Configure the self-hosted runner
 
-## Configure the physical Android device runner
-
-Use a trusted Ubuntu machine controlled by the repository owner. Do not expose this runner to arbitrary pull-request code.
+Use the trusted Ubuntu machine controlled by the repository owner. Do not expose this runner to arbitrary pull-request code.
 
 1. Open the repository on GitHub.
 2. Go to **Settings → Actions → Runners**.
@@ -64,20 +75,30 @@ Use a trusted Ubuntu machine controlled by the repository owner. Do not expose t
    ```
 
 5. Install Android platform tools so `adb` is available to the runner account.
-6. Configure USB permissions for the phone.
-7. Connect and authorize one physical ARM64 Android phone. An emulator may remain connected; the device-probe workflow ignores emulator serials and selects the sole physical `arm64-v8a` device explicitly.
-8. Verify from the runner account:
+6. Install Unity 6000.5.2f1 and its Android Build Support module.
+7. Configure USB permissions for the LG G6.
+8. Connect the phone and approve its ADB authorization prompt.
+9. Verify from the runner account:
 
    ```bash
    adb devices -l
-   adb -d shell getprop ro.product.cpu.abi
-   adb -d shell getprop ro.build.version.sdk
+   adb -s LGH87250967ab9 shell getprop ro.product.cpu.abi
+   adb -s LGH87250967ab9 shell getprop ro.build.version.sdk
    ```
 
-   The ABI must report `arm64-v8a`. The device API level must be at least the `android.native_feasibility_min_sdk` value in `toolchain.lock.json`.
-9. Keep the runner disabled or offline when it is not being used for trusted manual device validation.
+   The expected values are `arm64-v8a` and `26`.
 
-The physical-device job is available only through `workflow_dispatch` with `run_device_probe` selected. It is not triggered by pull requests.
+10. Start the runner with the Android SDK available:
+
+   ```bash
+   cd /home/phil/actions-runner-weachy-mini
+   export ANDROID_SDK_ROOT=/home/phil/Android/Sdk
+   export ANDROID_HOME=/home/phil/Android/Sdk
+   export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+   ./run.sh
+   ```
+
+The runner may remain online while trusted Ralph-loop commits are being validated. Take it offline before accepting or running untrusted code.
 
 ## Configure Unity CI secrets
 
@@ -92,28 +113,32 @@ Do not commit license data or credentials to the repository. Run **Unity Validat
 
 ## Running the workflows
 
+### Automatic local Unity validation
+
+A trusted push to `master` queues **Local Unity Android Validation** on `kawa`. Older queued runs are cancelled when a newer push arrives.
+
+### Manual Unity validation and phone installation
+
+Open **Actions → Local Unity Android Validation → Run workflow**. Enable `install_physical_device` to install and launch the ARM64/API-26 feasibility APK on the LG G6.
+
 ### Hosted MuJoCo ARM64 build only
 
 Open **Actions → Android MuJoCo Feasibility → Run workflow** and leave `run_device_probe` disabled.
 
 ### Hosted build followed by physical-phone probe
 
-Open **Actions → Android MuJoCo Feasibility → Run workflow** and enable `run_device_probe`. The hosted build must complete first; the device job then waits for a matching online self-hosted runner. The job selects the physical ARM64 phone by serial even when an emulator is also online.
-
-### Unity validation
-
-Open **Actions → Unity Validation → Run workflow** after adding the Unity secrets.
+Open **Actions → Android MuJoCo Feasibility → Run workflow** and enable `run_device_probe`. The hosted build must complete first; the device job then waits for the online `kawa` runner and selects the physical ARM64 phone by serial even when an emulator is also online.
 
 ## Acceptance boundaries
 
 A successful hosted ARM64 cross-build can satisfy the build-related portion of RMA-020, but it does not prove physical-device loading or runtime timing.
 
-RMA-021 and RMA-022 remain incomplete until the real device and Unity jobs produce evidence for:
+RMA-021 and RMA-022 remain incomplete until real-device and Unity jobs produce evidence for:
 
-- ARM64 library loading on a physical phone;
+- ARM64 library loading on the LG G6 or another documented physical phone;
 - structured malformed-model failure;
 - the complete 900,000-step run and timing report;
+- Unity IL2CPP ARM64 APK installation and native symbol resolution;
 - application pause/resume behavior without catch-up simulation;
 - controlled native initialization failure;
-- deterministic destruction and shutdown;
-- Unity IL2CPP Android build and native symbol resolution.
+- deterministic destruction and shutdown.
