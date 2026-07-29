@@ -139,9 +139,9 @@ class ReferenceTraceToolTests(unittest.TestCase):
         """A state mismatch must name the exceeded tolerance."""
         desktop = self.synthetic_trace("desktop_reference")
         android = self.synthetic_trace("android_arm64_api26")
-        android["checkpoints"][1]["qpos"][0] = (
-            self.scenario["tolerances"]["qpos_absolute"] * 2.0
-        )
+        android["checkpoints"][1]["qpos"][0] = self.scenario["tolerances"][
+            "qpos_absolute"
+        ] * 2.0
         result = self.run_comparator(desktop, android)
         self.assertNotEqual(0, result.returncode)
         self.assertIn("qpos_absolute", result.stderr)
