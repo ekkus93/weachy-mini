@@ -69,7 +69,7 @@ jobs:
               "ANDROID_CMAKE_VERSION": android["cmake"],
               "ANDROID_COMPILE_SDK": android["compile_sdk"],
               "ANDROID_NDK_VERSION": android["ndk"],
-              "ANDROID_PLATFORM": f"android-{android['min_sdk']}",
+              "ANDROID_PLATFORM": f"android-{android['native_feasibility_min_sdk']}",
               "MUJOCO_COMMIT": mujoco["commit"],
               "MUJOCO_REPOSITORY": mujoco["repository"],
           }
@@ -174,6 +174,8 @@ jobs:
               | grep -F 'AArch64'
           grep -F "MuJoCo commit: ${MUJOCO_COMMIT}" \
               "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
+          grep -F "Android platform: ${ANDROID_PLATFORM}" \
+              "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
           test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.exports.txt"
           test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.dynamic.txt"
           test -x "${MUJOCO_ARTIFACT_DIR}/reachy_mujoco_probe_runner"
@@ -212,7 +214,7 @@ jobs:
           name: weachy-mujoco-android-arm64-${{ github.sha }}
           path: ${{ runner.temp }}/weachy-mujoco-android-arm64
 
-      - name: Verify connected device and run the long probe
+      - name: Select physical ARM64 device and run the long probe
         shell: bash
         env:
           MUJOCO_ANDROID_OUTPUT_DIR: ${{ runner.temp }}/weachy-mujoco-android-arm64
@@ -221,21 +223,46 @@ jobs:
         run: |
           set -euo pipefail
           command -v adb >/dev/null
-          device_count="$(adb devices | awk 'NR > 1 && $2 == "device" {count += 1} END {print count + 0}')"
-          if [[ "${device_count}" != "1" ]]; then
-              printf 'Exactly one authorized Android device is required; found %s.\n' \
-                  "${device_count}" >&2
+
+          mapfile -t physical_serials < <(
+              adb devices \
+                  | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          arm64_serials=()
+          for serial in "${physical_serials[@]}"; do
+              abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+              printf 'physical_device=%s abi=%s\n' "${serial}" "${abi}"
+              if [[ "${abi}" == "arm64-v8a" ]]; then
+                  arm64_serials+=("${serial}")
+              fi
+          done
+
+          if [[ "${#arm64_serials[@]}" -ne 1 ]]; then
+              printf 'Exactly one online physical arm64-v8a Android device is required; found %s.\n' \
+                  "${#arm64_serials[@]}" >&2
+              adb devices -l >&2
               exit 1
           fi
 
-          device_abi="$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
-          if [[ "${device_abi}" != "arm64-v8a" ]]; then
-              printf 'Physical device must report arm64-v8a; found %s.\n' \
-                  "${device_abi}" >&2
+          device_serial="${arm64_serials[0]}"
+          device_sdk="$(adb -s "${device_serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+          required_sdk="$(sed -n 's/^Android platform: android-//p' \
+              "${MUJOCO_ANDROID_OUTPUT_DIR}/BUILD_INFO.txt")"
+          if [[ ! "${device_sdk}" =~ ^[0-9]+$ || ! "${required_sdk}" =~ ^[0-9]+$ ]]; then
+              printf 'Could not parse device SDK (%s) or native API floor (%s).\n' \
+                  "${device_sdk}" "${required_sdk}" >&2
+              exit 1
+          fi
+          if (( device_sdk < required_sdk )); then
+              printf 'Device API %s is below native API floor %s.\n' \
+                  "${device_sdk}" "${required_sdk}" >&2
               exit 1
           fi
 
-          ./scripts/run_mujoco_probe_android.sh
+          printf 'selected_device=%s sdk=%s native_api_floor=%s\n' \
+              "${device_serial}" "${device_sdk}" "${required_sdk}"
+          REACHY_ANDROID_SERIAL="${device_serial}" \
+              ./scripts/run_mujoco_probe_android.sh
 
       - name: Upload physical-device probe report
         if: success()
