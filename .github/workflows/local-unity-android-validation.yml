@@ -1,6 +1,9 @@
 name: Local Unity Android Validation
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       run_unity_tests:
@@ -46,6 +49,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+
+      - name: Report selected self-hosted runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'runner_name=%s\n' "${RUNNER_NAME}"
+          printf 'runner_os=%s\n' "${RUNNER_OS}"
+          printf 'runner_arch=%s\n' "${RUNNER_ARCH}"
+          printf 'user=%s\n' "$(id -un)"
+          printf 'host=%s\n' "$(hostname)"
+          printf 'workspace=%s\n' "${GITHUB_WORKSPACE}"
 
       - name: Resolve local Unity and Android installations
         shell: bash
@@ -99,14 +113,14 @@ jobs:
           "${android_sdk_root}/emulator/emulator" -accel-check
 
       - name: Run Unity tests
-        if: ${{ inputs.run_unity_tests }}
+        if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
         shell: bash
         env:
           UNITY_TEST_RESULTS_DIR: ${{ runner.temp }}/unity-test-results
         run: bash scripts/run_unity_tests.sh
 
       - name: Upload Unity test results
-        if: ${{ inputs.run_unity_tests && always() }}
+        if: ${{ always() && (github.event_name == 'push' || inputs.run_unity_tests) }}
         uses: actions/upload-artifact@v4
         with:
           name: local-unity-test-results-${{ github.sha }}
@@ -115,19 +129,19 @@ jobs:
           retention-days: 14
 
       - name: Build x86_64 emulator APK
-        if: ${{ inputs.build_emulator_apk || inputs.start_emulator }}
+        if: ${{ github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator }}
         shell: bash
         run: bash scripts/build_unity_android.sh emulator
 
       - name: Verify emulator APK
-        if: ${{ inputs.build_emulator_apk || inputs.start_emulator }}
+        if: ${{ github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator }}
         shell: bash
         run: |
           set -euo pipefail
           test -s Builds/Android/weachy-mini-emulator-x86_64.apk
 
       - name: Start configured Android emulator
-        if: ${{ inputs.start_emulator }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator }}
         shell: bash
         env:
           AVD_NAME: ${{ inputs.avd_name }}
@@ -183,7 +197,7 @@ jobs:
             "$("${adb_path}" -s "${EMULATOR_SERIAL}" shell getprop ro.product.cpu.abi | tr -d '\r')"
 
       - name: Install and launch emulator APK
-        if: ${{ inputs.start_emulator }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator }}
         shell: bash
         env:
           EMULATOR_SERIAL: emulator-5580
@@ -203,7 +217,7 @@ jobs:
           "${adb_path}" -s "${EMULATOR_SERIAL}" shell pidof "${package_name}"
 
       - name: Capture emulator diagnostics after failure
-        if: ${{ inputs.start_emulator && failure() }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && failure() }}
         shell: bash
         env:
           EMULATOR_SERIAL: emulator-5580
@@ -217,7 +231,7 @@ jobs:
           fi
 
       - name: Upload emulator diagnostics
-        if: ${{ inputs.start_emulator && failure() }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: local-android-emulator-failure-${{ github.sha }}
@@ -228,7 +242,7 @@ jobs:
           retention-days: 14
 
       - name: Stop Android emulator
-        if: ${{ inputs.start_emulator && always() }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && always() }}
         shell: bash
         env:
           EMULATOR_SERIAL: emulator-5580
@@ -242,7 +256,7 @@ jobs:
           fi
 
       - name: Upload emulator APK
-        if: ${{ (inputs.build_emulator_apk || inputs.start_emulator) && success() }}
+        if: ${{ success() && (github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator) }}
         uses: actions/upload-artifact@v4
         with:
           name: local-unity-emulator-apk-${{ github.sha }}
