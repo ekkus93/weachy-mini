@@ -10,13 +10,14 @@ python3 "${SCRIPT_DIR}/validate_scaffold.py"
 python3 "${SCRIPT_DIR}/check_docs_links.py"
 python3 "${SCRIPT_DIR}/validate_inventory.py"
 python3 -m compileall -q "${SCRIPT_DIR}"
+python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -v
 
-if [[ "${MODE}" == '--static-only' ]]; then
+if [[ "${MODE}" == "--static-only" ]]; then
     exit 0
 fi
 
-if [[ "${MODE}" != 'all' ]]; then
-    printf '%s\n' 'usage: ci.sh [--static-only]' >&2
+if [[ "${MODE}" != "all" ]]; then
+    printf '%s\n' "usage: ci.sh [--static-only]" >&2
     exit 2
 fi
 

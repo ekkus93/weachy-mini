@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/pollen-robotics/reachy_mini.git",
+  "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+  "license_file": "LICENSE",
+  "model_file": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
+  "output_subdirectory": "ReachyMini/Source",
+  "asset_license": "CC-BY-NC-SA",
+  "software_license": "Apache-2.0"
+}
