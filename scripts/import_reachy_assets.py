@@ -107,7 +107,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def write_import(source: Path, lock_path: Path, lock: dict[str, Any], output_root: Path) -> Path:
+def write_import(
+    source: Path,
+    lock_path: Path,
+    lock: dict[str, Any],
+    output_root: Path,
+) -> Path:
     """Create a deterministic imported asset directory and provenance report."""
     output_subdirectory = Path(lock["output_subdirectory"])
     if output_subdirectory.is_absolute() or ".." in output_subdirectory.parts:
@@ -119,10 +124,14 @@ def write_import(source: Path, lock_path: Path, lock: dict[str, Any], output_roo
         raise AssetImportError("Output directory escapes configured output root.") from exc
 
     inputs = discover_model_files(source, lock["model_file"])
-    inputs.append(("UPSTREAM_LICENSE", checked_source_path(source, lock["license_file"])))
+    license_source = checked_source_path(source, lock["license_file"])
+    inputs.append(("UPSTREAM_LICENSE", license_source))
     inputs.sort()
 
-    with tempfile.TemporaryDirectory(prefix="reachy-import-", dir=output_root.parent) as temp_text:
+    with tempfile.TemporaryDirectory(
+        prefix="reachy-import-",
+        dir=output_root.parent,
+    ) as temp_text:
         staging = Path(temp_text) / output_subdirectory
         staging.mkdir(parents=True, exist_ok=False)
         provenance_files: list[dict[str, object]] = []
@@ -148,7 +157,11 @@ def write_import(source: Path, lock_path: Path, lock: dict[str, Any], output_roo
             "This project is unofficial and is not endorsed by Pollen Robotics or Hugging Face.\n"
         )
         attribution_path = staging / "ATTRIBUTION.md"
-        attribution_path.write_text(attribution, encoding="utf-8", newline="\n")
+        attribution_path.write_text(
+            attribution,
+            encoding="utf-8",
+            newline="\n",
+        )
         provenance_files.append(
             {
                 "path": "ATTRIBUTION.md",
@@ -181,7 +194,12 @@ def write_import(source: Path, lock_path: Path, lock: dict[str, Any], output_roo
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source", required=True, type=Path, help="Clean upstream Git checkout.")
+    parser.add_argument(
+        "--source",
+        required=True,
+        type=Path,
+        help="Clean upstream Git checkout.",
+    )
     parser.add_argument("--lock", type=Path, default=DEFAULT_LOCK_PATH)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
     return parser.parse_args()
