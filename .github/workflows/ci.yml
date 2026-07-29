@@ -34,7 +34,7 @@ jobs:
       - name: Ruff lint
         run: ruff check scripts
       - name: Ruff format
-        run: ruff format --check scripts
+        run: ruff format --check --diff scripts
       - name: ShellCheck
         run: shellcheck scripts/*.sh
       - name: Static repository checks
