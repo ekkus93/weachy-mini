@@ -157,10 +157,22 @@ namespace ReachyMini.Editor
                 .Select(scene => scene.path)
                 .ToArray();
 
-            if (scenes.Length == 0)
+            if (!File.Exists(ReachyPresentationBuilder.ScenePath))
+            {
+                throw new FileNotFoundException(
+                    "Generated Reachy presentation scene is missing. " +
+                    "Run the presentation preparation command before building.",
+                    ReachyPresentationBuilder.ScenePath);
+            }
+            if (scenes.Length != 1 ||
+                !string.Equals(
+                    scenes[0],
+                    ReachyPresentationBuilder.ScenePath,
+                    StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    "No enabled Unity scenes exist. Create the bootstrap scene before building.");
+                    "The generated Reachy presentation scene must be the sole enabled " +
+                    "Unity build scene.");
             }
 
             string outputDirectory = Path.GetDirectoryName(outputPath);
