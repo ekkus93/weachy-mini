@@ -1,0 +1,191 @@
+name: Publish Android MuJoCo Status
+
+on:
+  workflow_run:
+    workflows:
+      - Android MuJoCo Feasibility
+    types:
+      - requested
+      - in_progress
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: publish-android-mujoco-status
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: Publish latest Android MuJoCo status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Update authoritative Android MuJoCo issue
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ISSUE_NUMBER: "6"
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_STATUS: ${{ github.event.workflow_run.status }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_EVENT: ${{ github.event.workflow_run.event }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CREATED_AT: ${{ github.event.workflow_run.created_at }}
+          UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+        run: |
+          set -euo pipefail
+
+          latest_run_id="$(
+            gh api \
+              "repos/${REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs?per_page=1" \
+              --jq '.workflow_runs[0].id'
+          )"
+          if [[ "${latest_run_id}" != "${RUN_ID}" ]]; then
+            printf 'Skipping stale state for run %s; latest run is %s.\n' \
+              "${RUN_ID}" "${latest_run_id}"
+            exit 0
+          fi
+
+          jobs_file="${RUNNER_TEMP}/android-mujoco-jobs.json"
+          body_file="${RUNNER_TEMP}/android-mujoco-status.md"
+          patch_file="${RUNNER_TEMP}/android-mujoco-issue-patch.json"
+
+          gh api \
+            "repos/${REPOSITORY}/actions/runs/${RUN_ID}/jobs?filter=latest&per_page=100" \
+            > "${jobs_file}"
+
+          python3 - "${jobs_file}" "${body_file}" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          jobs_path = Path(sys.argv[1])
+          body_path = Path(sys.argv[2])
+          raw_jobs = json.loads(jobs_path.read_text(encoding="utf-8"))
+
+          jobs = []
+          failed_steps = []
+          for raw_job in raw_jobs.get("jobs", []):
+              steps = []
+              for raw_step in raw_job.get("steps", []):
+                  step = {
+                      "number": raw_step.get("number"),
+                      "name": raw_step.get("name"),
+                      "status": raw_step.get("status"),
+                      "conclusion": raw_step.get("conclusion"),
+                      "started_at": raw_step.get("started_at"),
+                      "completed_at": raw_step.get("completed_at"),
+                  }
+                  steps.append(step)
+                  if step["conclusion"] == "failure":
+                      failed_steps.append(
+                          {
+                              "job_id": raw_job.get("id"),
+                              "job": raw_job.get("name"),
+                              "step_number": step["number"],
+                              "step": step["name"],
+                          }
+                      )
+
+              jobs.append(
+                  {
+                      "id": raw_job.get("id"),
+                      "name": raw_job.get("name"),
+                      "status": raw_job.get("status"),
+                      "conclusion": raw_job.get("conclusion"),
+                      "started_at": raw_job.get("started_at"),
+                      "completed_at": raw_job.get("completed_at"),
+                      "runner_name": raw_job.get("runner_name"),
+                      "runner_group_name": raw_job.get("runner_group_name"),
+                      "steps": steps,
+                  }
+              )
+
+          payload = {
+              "schema_version": 1,
+              "workflow": os.environ["WORKFLOW_NAME"],
+              "workflow_id": int(os.environ["WORKFLOW_ID"]),
+              "run_id": int(os.environ["RUN_ID"]),
+              "run_attempt": int(os.environ["RUN_ATTEMPT"]),
+              "run_url": os.environ["RUN_URL"],
+              "status": os.environ["RUN_STATUS"],
+              "conclusion": os.environ["RUN_CONCLUSION"] or None,
+              "event": os.environ["RUN_EVENT"],
+              "head_branch": os.environ["HEAD_BRANCH"],
+              "head_sha": os.environ["HEAD_SHA"],
+              "created_at": os.environ["CREATED_AT"],
+              "updated_at": os.environ["UPDATED_AT"],
+              "failed_steps": failed_steps,
+              "jobs": jobs,
+          }
+
+          failed_summary = "None"
+          if failed_steps:
+              failed_summary = ", ".join(
+                  f'{item["job"]} / {item["step"]}' for item in failed_steps
+              )
+
+          conclusion = payload["conclusion"] or "pending"
+          body = "\n".join(
+              [
+                  "<!-- maintained by publish-android-mujoco-status.yml -->",
+                  "# Latest Android MuJoCo Feasibility",
+                  "",
+                  f'- **Status:** `{payload["status"]}`',
+                  f'- **Conclusion:** `{conclusion}`',
+                  f'- **Run:** [{payload["run_id"]}]({payload["run_url"]})',
+                  f'- **Attempt:** `{payload["run_attempt"]}`',
+                  f'- **Commit:** `{payload["head_sha"]}`',
+                  f'- **Branch/event:** `{payload["head_branch"]}` / `{payload["event"]}`',
+                  f'- **Failed steps:** {failed_summary}',
+                  f'- **Observed:** `{payload["updated_at"]}`',
+                  "",
+                  "## Machine-readable status",
+                  "",
+                  "```json",
+                  json.dumps(payload, indent=2, sort_keys=True),
+                  "```",
+                  "",
+                  "This issue is overwritten whenever the latest run changes state; it is not a historical log.",
+              ]
+          )
+          body_path.write_text(body + "\n", encoding="utf-8")
+          PY
+
+          python3 - "${body_file}" "${patch_file}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          body = Path(sys.argv[1]).read_text(encoding="utf-8")
+          patch = {
+              "title": "CI Status: Android MuJoCo Feasibility",
+              "body": body,
+              "state": "open",
+          }
+          Path(sys.argv[2]).write_text(
+              json.dumps(patch),
+              encoding="utf-8",
+          )
+          PY
+
+          gh api \
+            --method PATCH \
+            "repos/${REPOSITORY}/issues/${ISSUE_NUMBER}" \
+            --input "${patch_file}" \
+            >/dev/null
+
+          printf 'Published run %s status to issue #%s.\n' \
+            "${RUN_ID}" "${ISSUE_NUMBER}"
