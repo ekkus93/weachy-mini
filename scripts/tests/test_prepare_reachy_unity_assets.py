@@ -148,9 +148,7 @@ endsolid head
     def test_conversion_is_deterministic_and_preserves_source(self) -> None:
         """Repeated conversion must be byte-identical and leave input untouched."""
         source_hashes = {
-            path.relative_to(self.source).as_posix(): hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
+            path.relative_to(self.source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in self.source.rglob("*")
             if path.is_file()
         }
@@ -175,48 +173,33 @@ endsolid head
         """The render contract must expose mapped poses and exclude source cameras."""
         result = self.run_conversion()
         self.assertEqual(0, result.returncode, result.stderr)
-        manifest = json.loads(
-            (self.output / "UNITY_RENDER_MAP.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((self.output / "UNITY_RENDER_MAP.json").read_text(encoding="utf-8"))
         self.assertEqual(
             "reachy_stl_to_unity_obj_v1",
             manifest["transformation"]["id"],
         )
-        self.assertTrue(
-            manifest["transformation"]["coordinate_mapping"][
-                "mesh_winding_reversed"
-            ]
-        )
+        self.assertTrue(manifest["transformation"]["coordinate_mapping"]["mesh_winding_reversed"])
         self.assertFalse(manifest["presentation"]["source_cameras_included"])
         self.assertEqual(
             {"studio_close", "eye_camera"},
             {camera["name"] for camera in manifest["source_cameras"]},
         )
         self.assertTrue(
-            all(
-                not camera["included_in_presentation"]
-                for camera in manifest["source_cameras"]
-            )
+            all(not camera["included_in_presentation"] for camera in manifest["source_cameras"])
         )
         base = next(body for body in manifest["bodies"] if body["name"] == "base")
         self.assertEqual(
             [1.0, 3.0, 2.0],
             base["local_pose_unity"]["position_metres"],
         )
-        head_geom = next(
-            geom
-            for geom in manifest["visual_geoms"]
-            if geom["material"] == "light"
-        )
+        head_geom = next(geom for geom in manifest["visual_geoms"] if geom["material"] == "light")
         self.assertEqual(
             [0.0, 0.0, 2.0],
             head_geom["local_pose_unity"]["position_metres"],
         )
         self.assertEqual(2, len(manifest["visual_geoms"]))
         self.assertEqual(2, len(manifest["materials"]))
-        base_mesh = next(
-            mesh for mesh in manifest["meshes"] if mesh["name"] == "base"
-        )
+        base_mesh = next(mesh for mesh in manifest["meshes"] if mesh["name"] == "base")
         self.assertEqual(1, base_mesh["triangle_count"])
         self.assertEqual(
             hashlib.sha256((self.source / "MODEL_MAP.json").read_bytes()).hexdigest(),
