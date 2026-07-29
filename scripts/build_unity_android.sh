@@ -27,7 +27,7 @@ case "${MODE}" in
     release)
         METHOD='ReachyMini.Editor.AndroidBuild.BuildReleaseAab'
         ;;
-n    *)
+    *)
         printf '%s\n' \
             'usage: build_unity_android.sh development|device-feasibility|release' >&2
         exit 2
