@@ -26,7 +26,22 @@ class ReachyUnityAssetPreparationTests(unittest.TestCase):
         (self.source / "assets").mkdir(parents=True)
         self.write_binary_stl(self.source / "assets" / "base.stl")
         self.write_ascii_stl(self.source / "assets" / "head.stl")
-        (self.source / "reachy_mini.xml").write_text(self.fixture_mjcf(), encoding="utf-8")
+        model_path = self.source / "reachy_mini.xml"
+        model_path.write_text(self.fixture_mjcf(), encoding="utf-8")
+        model_sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        model_map = {
+            "schema_version": 1,
+            "model": "reachy_mini",
+            "counts": {"bodies": 3},
+            "source_model": {
+                "path": "reachy_mini.xml",
+                "sha256": model_sha256,
+            },
+        }
+        (self.source / "MODEL_MAP.json").write_text(
+            json.dumps(model_map, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         provenance = {
             "schema_version": 1,
             "source_commit": "0123456789abcdef0123456789abcdef01234567",
@@ -133,7 +148,9 @@ endsolid head
     def test_conversion_is_deterministic_and_preserves_source(self) -> None:
         """Repeated conversion must be byte-identical and leave input untouched."""
         source_hashes = {
-            path.relative_to(self.source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            path.relative_to(self.source).as_posix(): hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
             for path in self.source.rglob("*")
             if path.is_file()
         }
@@ -146,7 +163,9 @@ endsolid head
         self.assertEqual(
             source_hashes,
             {
-                path.relative_to(self.source).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                path.relative_to(self.source).as_posix(): hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
                 for path in self.source.rglob("*")
                 if path.is_file()
             },
@@ -156,24 +175,53 @@ endsolid head
         """The render contract must expose mapped poses and exclude source cameras."""
         result = self.run_conversion()
         self.assertEqual(0, result.returncode, result.stderr)
-        manifest = json.loads((self.output / "UNITY_RENDER_MAP.json").read_text(encoding="utf-8"))
-        self.assertEqual("reachy_stl_to_unity_obj_v1", manifest["transformation"]["id"])
-        self.assertTrue(manifest["transformation"]["coordinate_mapping"]["mesh_winding_reversed"])
+        manifest = json.loads(
+            (self.output / "UNITY_RENDER_MAP.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            "reachy_stl_to_unity_obj_v1",
+            manifest["transformation"]["id"],
+        )
+        self.assertTrue(
+            manifest["transformation"]["coordinate_mapping"][
+                "mesh_winding_reversed"
+            ]
+        )
         self.assertFalse(manifest["presentation"]["source_cameras_included"])
         self.assertEqual(
             {"studio_close", "eye_camera"},
             {camera["name"] for camera in manifest["source_cameras"]},
         )
         self.assertTrue(
-            all(not camera["included_in_presentation"] for camera in manifest["source_cameras"])
+            all(
+                not camera["included_in_presentation"]
+                for camera in manifest["source_cameras"]
+            )
         )
         base = next(body for body in manifest["bodies"] if body["name"] == "base")
-        self.assertEqual([1.0, 3.0, 2.0], base["local_pose_unity"]["position_metres"])
-        head_geom = next(geom for geom in manifest["visual_geoms"] if geom["material"] == "light")
-        self.assertEqual([0.0, 0.0, 2.0], head_geom["local_pose_unity"]["position_metres"])
+        self.assertEqual(
+            [1.0, 3.0, 2.0],
+            base["local_pose_unity"]["position_metres"],
+        )
+        head_geom = next(
+            geom
+            for geom in manifest["visual_geoms"]
+            if geom["material"] == "light"
+        )
+        self.assertEqual(
+            [0.0, 0.0, 2.0],
+            head_geom["local_pose_unity"]["position_metres"],
+        )
         self.assertEqual(2, len(manifest["visual_geoms"]))
         self.assertEqual(2, len(manifest["materials"]))
-        self.assertEqual(1, next(mesh for mesh in manifest["meshes"] if mesh["name"] == "base")["triangle_count"])
+        base_mesh = next(
+            mesh for mesh in manifest["meshes"] if mesh["name"] == "base"
+        )
+        self.assertEqual(1, base_mesh["triangle_count"])
+        self.assertEqual(
+            hashlib.sha256((self.source / "MODEL_MAP.json").read_bytes()).hexdigest(),
+            manifest["source"]["model_map_sha256"],
+        )
 
     def test_obj_applies_scale_basis_change_and_reversed_winding(self) -> None:
         """OBJ coordinates must follow the documented MuJoCo-to-Unity mapping."""
@@ -193,7 +241,7 @@ endsolid head
         (self.source / "assets" / "head.stl").write_bytes(b"not a valid STL")
         failed = self.run_conversion()
         self.assertNotEqual(0, failed.returncode)
-        self.assertIn("neither exact binary nor ASCII", failed.stderr)
+        self.assertIn("Unsupported ASCII STL syntax", failed.stderr)
         self.assertEqual(known_good, self.output_bytes())
 
     def test_output_cannot_be_inside_source_package(self) -> None:
