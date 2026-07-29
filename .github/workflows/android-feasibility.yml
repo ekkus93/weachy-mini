@@ -99,8 +99,10 @@ jobs:
           test -x "${cmake_bin}/cmake"
           test -x "${cmake_bin}/ninja"
 
-          printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}" >> "${GITHUB_ENV}"
-          printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}" >> "${GITHUB_ENV}"
+          {
+              printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}"
+              printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
+          } >> "${GITHUB_ENV}"
           printf '%s\n' "${cmake_bin}" >> "${GITHUB_PATH}"
 
       - name: Verify installed Android toolchain
