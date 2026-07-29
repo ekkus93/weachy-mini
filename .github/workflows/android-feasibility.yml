@@ -237,7 +237,10 @@ jobs:
           set -euo pipefail
           prebuilt_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt"
           mapfile -t readelf_candidates < <(
-            find "${prebuilt_root}" -type f -path '*/bin/llvm-readelf' -print
+            find "${prebuilt_root}" \
+              \( -type f -o -type l \) \
+              -path '*/bin/llvm-readelf' \
+              -print
           )
           if [[ "${#readelf_candidates[@]}" -ne 1 ]]; then
             printf 'Expected one NDK llvm-readelf, found %s.\n' \
@@ -245,6 +248,10 @@ jobs:
             exit 1
           fi
           readelf="${readelf_candidates[0]}"
+          if [[ ! -x "${readelf}" ]]; then
+            printf 'NDK llvm-readelf is not executable: %s\n' "${readelf}" >&2
+            exit 1
+          fi
 
           "${readelf}" -h "${MUJOCO_ARTIFACT_DIR}/libmujoco.so" \
             | tee "${MUJOCO_ARTIFACT_DIR}/libmujoco.elf-header.txt"
