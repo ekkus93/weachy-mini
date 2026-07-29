@@ -115,8 +115,14 @@ jobs:
             --lock third_party/reachy-mini-source.lock.json \
             --baseline models/reachy-mini/model-baseline.json \
             --model "upstream/reachy-mini/${REACHY_MODEL_FILE}"
+          python3 scripts/generate_reachy_reference_header.py \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --output native/reachy_sim/feasibility/reachy_reference_scenario.generated.h \
+            --check
           cp models/reachy-mini/model-parameter-audit.json \
             build/reachy-model/MODEL_PARAMETER_AUDIT.json
+          cp models/reachy-mini/reference-scenario.json \
+            build/reachy-model/REFERENCE_SCENARIO.json
       - name: Install pinned desktop MuJoCo runtime
         env:
           MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
@@ -135,6 +141,16 @@ jobs:
             --expected-version "${MUJOCO_VERSION}" \
             --steps 100 \
             --output build/reachy-model/MUJOCO_LOAD_REPORT.json
+      - name: Generate desktop reference trace
+        shell: bash
+        env:
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_reachy_reference_trace.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --output build/reachy-model/REFERENCE_TRACE_DESKTOP.json
       - name: Upload pinned Reachy model evidence
         uses: actions/upload-artifact@v4
         with:
