@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_utc": "2026-07-29T12:03:00Z",
+  "updated_utc": "2026-07-29T18:30:00Z",
   "unity": {
     "editor_version": "6000.5.2f1",
     "release_line": "Unity 6.5 Update",
@@ -14,6 +14,7 @@
     "native_feasibility_min_sdk": 26,
     "unity_device_feasibility_min_sdk": 26,
     "compile_sdk": 37,
+    "compile_sdk_package": "37.0",
     "target_sdk": 37,
     "build_tools": "36.0.0",
     "android_gradle_plugin": "9.3.1",
