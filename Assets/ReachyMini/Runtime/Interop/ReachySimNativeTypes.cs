@@ -131,7 +131,8 @@ namespace ReachyMini.Interop
         internal ulong Sequence;
         internal double SimulationTime;
         internal uint PayloadSize;
-        internal uint Reserved;
+        internal uint SnapshotVersion;
+        internal ulong CalibrationProfileId;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
