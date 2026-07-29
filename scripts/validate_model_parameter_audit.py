@@ -103,9 +103,7 @@ def collect_classifications(
     if isinstance(value, dict):
         for key, child in value.items():
             child_path = f"{path}.{key}"
-            is_parameter_classification = key == "classification" or key.endswith(
-                "_classification"
-            )
+            is_parameter_classification = key == "classification" or key.endswith("_classification")
             is_fidelity_level = child_path == "audit.fidelity.classification"
             if is_parameter_classification and not is_fidelity_level:
                 if not isinstance(child, str):
