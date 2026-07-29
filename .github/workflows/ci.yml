@@ -90,7 +90,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: ${{ steps.reachy_source.outputs.model_directory }}
           sparse-checkout-cone-mode: false
-      - name: Verify pinned source and model topology
+      - name: Verify pinned source, topology, and parameter audit
         shell: bash
         env:
           EXPECTED_REACHY_COMMIT: ${{ steps.reachy_source.outputs.commit }}
@@ -110,6 +110,13 @@ jobs:
           python3 scripts/validate_reachy_model.py \
             --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
             --output build/reachy-model/MODEL_MAP.json
+          python3 scripts/validate_model_parameter_audit.py \
+            --audit models/reachy-mini/model-parameter-audit.json \
+            --lock third_party/reachy-mini-source.lock.json \
+            --baseline models/reachy-mini/model-baseline.json \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}"
+          cp models/reachy-mini/model-parameter-audit.json \
+            build/reachy-model/MODEL_PARAMETER_AUDIT.json
       - name: Install pinned desktop MuJoCo runtime
         env:
           MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
