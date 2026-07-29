@@ -124,6 +124,7 @@ jobs:
           python3 scripts/validate_reachy_mujoco.py \
             --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
             --model-map build/reachy-model/MODEL_MAP.json \
+            --baseline models/reachy-mini/model-baseline.json \
             --expected-version "${MUJOCO_VERSION}" \
             --steps 100 \
             --output build/reachy-model/MUJOCO_LOAD_REPORT.json
