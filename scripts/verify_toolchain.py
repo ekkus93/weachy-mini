@@ -37,6 +37,8 @@ def load_manifest() -> dict[str, Any]:
 
     android = manifest["android"]
     for key in (
+        "min_sdk",
+        "native_feasibility_min_sdk",
         "compile_sdk",
         "target_sdk",
         "android_gradle_plugin",
@@ -48,6 +50,28 @@ def load_manifest() -> dict[str, Any]:
     ):
         if key not in android:
             raise ToolchainError(f"Toolchain manifest android section is missing {key!r}")
+
+    integer_api_keys = (
+        "min_sdk",
+        "native_feasibility_min_sdk",
+        "compile_sdk",
+        "target_sdk",
+    )
+    for key in integer_api_keys:
+        value = android[key]
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ToolchainError(
+                f"Toolchain manifest android {key!r} must be a positive integer."
+            )
+
+    if android["native_feasibility_min_sdk"] > android["min_sdk"]:
+        raise ToolchainError(
+            "The native feasibility API floor must not exceed the full app minSdkVersion."
+        )
+    if android["min_sdk"] > android["compile_sdk"]:
+        raise ToolchainError("Android minSdkVersion must not exceed compileSdkVersion.")
+    if android["target_sdk"] > android["compile_sdk"]:
+        raise ToolchainError("Android targetSdkVersion must not exceed compileSdkVersion.")
 
     return manifest
 
