@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "scenario_id": "rma042_representative_motion_v1",
+  "description": "Deterministic reset, settling, two bounded representative position-command poses, and return to neutral for desktop/Android MuJoCo comparison.",
+  "source": {
+    "repository": "https://github.com/pollen-robotics/reachy_mini.git",
+    "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_path": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "mujoco_version": "3.9.0"
+  },
+  "timestep_seconds": 0.002,
+  "total_steps": 900,
+  "actuator_names": [
+    "yaw_body",
+    "stewart_1",
+    "stewart_2",
+    "stewart_3",
+    "stewart_4",
+    "stewart_5",
+    "stewart_6",
+    "right_antenna",
+    "left_antenna"
+  ],
+  "body_names": [
+    "body_foot_3dprint",
+    "body_down_3dprint",
+    "dc15_a01_horn_dummy",
+    "stewart_link_rod",
+    "dc15_a01_horn_dummy_2",
+    "stewart_link_rod_2",
+    "dc15_a01_horn_dummy_3",
+    "stewart_link_rod_3",
+    "dc15_a01_horn_dummy_4",
+    "stewart_link_rod_4",
+    "dc15_a01_horn_dummy_5",
+    "stewart_link_rod_5",
+    "dc15_a01_horn_dummy_6",
+    "stewart_link_rod_6",
+    "xl_330",
+    "dc15_a01_horn_dummy_7",
+    "dc15_a01_horn_dummy_8"
+  ],
+  "phases": [
+    {
+      "start_step": 0,
+      "name": "neutral_settle",
+      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    },
+    {
+      "start_step": 100,
+      "name": "pose_a",
+      "targets_radians": [0.18, 0.25, -0.2, 0.18, -0.15, 0.22, -0.17, 0.3, -0.25]
+    },
+    {
+      "start_step": 350,
+      "name": "pose_b",
+      "targets_radians": [-0.12, -0.2, 0.18, -0.15, 0.2, -0.18, 0.16, -0.2, 0.28]
+    },
+    {
+      "start_step": 600,
+      "name": "return_neutral",
+      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    }
+  ],
+  "checkpoint_steps": [0, 1, 50, 100, 150, 350, 400, 600, 700, 900],
+  "expected_counts": {
+    "bodies_including_world": 19,
+    "joints": 16,
+    "actuators": 9,
+    "equalities": 5,
+    "sites": 13,
+    "cameras": 2,
+    "nq": 37,
+    "nv": 30
+  },
+  "tolerances": {
+    "simulation_time_seconds": 1e-12,
+    "qpos_absolute": 2e-6,
+    "qvel_absolute": 2e-5,
+    "body_position_metres_absolute": 2e-6,
+    "body_quaternion_component_absolute": 2e-6,
+    "equality_residual_absolute": 1e-6,
+    "maximum_equality_residual": 0.001
+  },
+  "notes": [
+    "Tolerances measure deterministic cross-platform numerical agreement, not physical calibration accuracy.",
+    "Quaternion comparison treats q and -q as equivalent representations of the same rotation.",
+    "The scenario uses the upstream placeholder chosen_actuator dynamics and must remain labeled uncalibrated."
+  ]
+}
