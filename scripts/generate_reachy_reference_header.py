@@ -194,10 +194,7 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
             "static const char REACHY_REFERENCE_SCENARIO_ID[] = "
             f"{c_string(scenario['scenario_id'])};"
         ),
-        (
-            "static const char REACHY_REFERENCE_SCENARIO_SHA256[] = "
-            f"{c_string(scenario_sha256)};"
-        ),
+        (f"static const char REACHY_REFERENCE_SCENARIO_SHA256[] = {c_string(scenario_sha256)};"),
         (
             "static const char REACHY_REFERENCE_MODEL_SHA256[] = "
             f"{c_string(source['model_sha256'])};"
