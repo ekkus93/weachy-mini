@@ -37,34 +37,34 @@ class ModelParameterAuditTests(unittest.TestCase):
 
     def fixture_model(self, audit: dict[str, Any]) -> bytes:
         """Build a compact MJCF carrying every audited source parameter."""
-        lines = ["<?xml version=\"1.0\"?>"]
+        lines = ['<?xml version="1.0"?>']
         for note in audit["uncertainty_notes"]:
             lines.append(f"<!-- {note} -->")
         lines.extend(
             [
-                "<mujoco model=\"audit_fixture\">",
+                '<mujoco model="audit_fixture">',
                 "  <default>",
             ]
         )
         for model in audit["actuator_models"]:
             source_class = model["source_default_class"]
-            lines.append(f"    <default class=\"{source_class}\">")
+            lines.append(f'    <default class="{source_class}">')
             joint = model["joint"]
             lines.append(
                 "      <joint "
-                f"damping=\"{joint['damping']}\" "
-                f"frictionloss=\"{joint['frictionloss']}\" "
-                f"armature=\"{joint['armature']}\"/>"
+                f'damping="{joint["damping"]}" '
+                f'frictionloss="{joint["frictionloss"]}" '
+                f'armature="{joint["armature"]}"/>'
             )
             position = model["position"]
             lines.append(
                 "      <position "
-                f"kp=\"{position['kp']}\" "
-                f"kv=\"{position['kv']}\" "
-                f"forcerange=\"{self.numeric_attribute(position['forcerange'])}\"/>"
+                f'kp="{position["kp"]}" '
+                f'kv="{position["kv"]}" '
+                f'forcerange="{self.numeric_attribute(position["forcerange"])}"/>'
             )
             if model["id"] == "chosen_actuator":
-                lines.append("      <default class=\"chosen_actuator\"/>")
+                lines.append('      <default class="chosen_actuator"/>')
             lines.append("    </default>")
         equality = audit["equality_solver"]
         lines.extend(
@@ -72,22 +72,20 @@ class ModelParameterAuditTests(unittest.TestCase):
                 "  </default>",
                 "  <default>",
                 "    <equality "
-                f"solref=\"{self.numeric_attribute(equality['solref'])}\" "
-                f"solimp=\"{self.numeric_attribute(equality['solimp'])}\"/>",
+                f'solref="{self.numeric_attribute(equality["solref"])}" '
+                f'solimp="{self.numeric_attribute(equality["solimp"])}"/>',
                 "  </default>",
                 "  <worldbody>",
-                "    <body name=\"fixture_body\">",
+                '    <body name="fixture_body">',
             ]
         )
         for joint in audit["joints"]:
             attributes = [
-                f"name=\"{joint['name']}\"",
-                f"type=\"{joint['type']}\"",
+                f'name="{joint["name"]}"',
+                f'type="{joint["type"]}"',
             ]
             if joint["range_radians"] is not None:
-                attributes.append(
-                    f"range=\"{self.numeric_attribute(joint['range_radians'])}\""
-                )
+                attributes.append(f'range="{self.numeric_attribute(joint["range_radians"])}"')
             lines.append(f"      <joint {' '.join(attributes)}/>")
         lines.extend(
             [
@@ -99,15 +97,13 @@ class ModelParameterAuditTests(unittest.TestCase):
         for actuator in audit["actuators"]:
             lines.append(
                 "    <position "
-                f"class=\"{actuator['source_class']}\" "
-                f"name=\"{actuator['name']}\" "
-                f"joint=\"{actuator['joint']}\"/>"
+                f'class="{actuator["source_class"]}" '
+                f'name="{actuator["name"]}" '
+                f'joint="{actuator["joint"]}"/>'
             )
         lines.extend(["  </actuator>", "  <equality>"])
         for index in range(equality["count"]):
-            lines.append(
-                f"    <connect site1=\"left_{index}\" site2=\"right_{index}\"/>"
-            )
+            lines.append(f'    <connect site1="left_{index}" site2="right_{index}"/>')
         lines.extend(["  </equality>", "</mujoco>"])
         return ("\n".join(lines) + "\n").encode()
 
