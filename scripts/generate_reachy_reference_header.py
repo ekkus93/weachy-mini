@@ -53,7 +53,11 @@ def validate_names(value: object, label: str) -> list[str]:
     return typed_names
 
 
-def validate_numbers(value: object, label: str, expected_length: int) -> list[float]:
+def validate_numbers(
+    value: object,
+    label: str,
+    expected_length: int,
+) -> list[float]:
     """Validate a fixed-length numeric array."""
     values = require_list(value, label)
     if len(values) != expected_length:
@@ -76,21 +80,47 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
     source = scenario.get("source")
     if not isinstance(source, dict):
         raise ScenarioError("source must be an object")
-    for key in ("repository", "commit", "model_path", "model_sha256", "mujoco_version"):
+    source_keys = (
+        "repository",
+        "commit",
+        "model_path",
+        "model_sha256",
+        "mujoco_version",
+    )
+    for key in source_keys:
         require_string(source.get(key), f"source.{key}")
     if len(source["model_sha256"]) != 64:
         raise ScenarioError("source.model_sha256 must contain 64 hexadecimal characters")
 
     timestep = scenario.get("timestep_seconds")
-    if not isinstance(timestep, int | float) or isinstance(timestep, bool) or timestep <= 0:
+    if (
+        not isinstance(timestep, int | float)
+        or isinstance(timestep, bool)
+        or timestep <= 0
+    ):
         raise ScenarioError("timestep_seconds must be positive")
     total_steps = scenario.get("total_steps")
-    if not isinstance(total_steps, int) or isinstance(total_steps, bool) or total_steps <= 0:
+    if (
+        not isinstance(total_steps, int)
+        or isinstance(total_steps, bool)
+        or total_steps <= 0
+    ):
         raise ScenarioError("total_steps must be a positive integer")
 
     actuator_names = validate_names(scenario.get("actuator_names"), "actuator_names")
     validate_names(scenario.get("body_names"), "body_names")
+    validate_phases(scenario, actuator_names, total_steps)
+    validate_checkpoints(scenario, total_steps)
+    validate_counts(scenario, len(actuator_names))
+    validate_tolerances(scenario)
 
+
+def validate_phases(
+    scenario: dict[str, Any],
+    actuator_names: list[str],
+    total_steps: int,
+) -> None:
+    """Validate ordered command phases."""
     raw_phases = require_list(scenario.get("phases"), "phases")
     if not raw_phases:
         raise ScenarioError("phases must not be empty")
@@ -117,6 +147,9 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
     if raw_phases[0]["start_step"] != 0:
         raise ScenarioError("The first phase must start at step zero")
 
+
+def validate_checkpoints(scenario: dict[str, Any], total_steps: int) -> None:
+    """Validate the complete ordered checkpoint set."""
     checkpoints = require_list(scenario.get("checkpoint_steps"), "checkpoint_steps")
     if not checkpoints or checkpoints[0] != 0 or checkpoints[-1] != total_steps:
         raise ScenarioError("Checkpoints must start at zero and end at total_steps")
@@ -127,6 +160,9 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
     if any(step < 0 or step > total_steps for step in checkpoints):
         raise ScenarioError("Checkpoint step is outside the scenario")
 
+
+def validate_counts(scenario: dict[str, Any], actuator_count: int) -> None:
+    """Validate pinned compiled-model dimensions."""
     counts = scenario.get("expected_counts")
     if not isinstance(counts, dict):
         raise ScenarioError("expected_counts must be an object")
@@ -147,9 +183,12 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
         for value in counts.values()
     ):
         raise ScenarioError("expected_counts values must be nonnegative integers")
-    if counts["actuators"] != len(actuator_names):
+    if counts["actuators"] != actuator_count:
         raise ScenarioError("Actuator-name count does not match expected_counts")
 
+
+def validate_tolerances(scenario: dict[str, Any]) -> None:
+    """Validate cross-platform comparison tolerances."""
     tolerances = scenario.get("tolerances")
     if not isinstance(tolerances, dict):
         raise ScenarioError("tolerances must be an object")
@@ -172,7 +211,7 @@ def validate_scenario(scenario: dict[str, Any]) -> None:
 
 
 def c_string(value: str) -> str:
-    """Encode a limited UTF-8 JSON string as a C string literal."""
+    """Encode a UTF-8 JSON string as a C string literal."""
     return json.dumps(value, ensure_ascii=True)
 
 
@@ -181,6 +220,11 @@ def c_number(value: int | float) -> str:
     if isinstance(value, int):
         return str(value)
     return format(float(value), ".17g")
+
+
+def c_declaration(type_name: str, name: str, value: str) -> str:
+    """Render one generated C constant declaration."""
+    return f"static const {type_name} {name} = {value};"
 
 
 def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
@@ -215,21 +259,51 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
         "    double targets[REACHY_REFERENCE_ACTUATOR_COUNT];",
         "} ReachyReferencePhase;",
         "",
-        f"static const char REACHY_REFERENCE_SCENARIO_ID[] = {c_string(scenario['scenario_id'])};",
-        f"static const char REACHY_REFERENCE_SCENARIO_SHA256[] = {c_string(scenario_sha256)};",
-        f"static const char REACHY_REFERENCE_MODEL_SHA256[] = {c_string(source['model_sha256'])};",
-        f"static const char REACHY_REFERENCE_MUJOCO_VERSION[] = {c_string(source['mujoco_version'])};",
-        f"static const double REACHY_REFERENCE_TIMESTEP_SECONDS = {c_number(scenario['timestep_seconds'])};",
-        f"static const double REACHY_REFERENCE_MAXIMUM_EQUALITY_RESIDUAL = {c_number(tolerances['maximum_equality_residual'])};",
+        c_declaration(
+            "char REACHY_REFERENCE_SCENARIO_ID[]",
+            "",
+            c_string(scenario["scenario_id"]),
+        ).replace("[]  =", "[] ="),
+        c_declaration(
+            "char REACHY_REFERENCE_SCENARIO_SHA256[]",
+            "",
+            c_string(scenario_sha256),
+        ).replace("[]  =", "[] ="),
+        c_declaration(
+            "char REACHY_REFERENCE_MODEL_SHA256[]",
+            "",
+            c_string(source["model_sha256"]),
+        ).replace("[]  =", "[] ="),
+        c_declaration(
+            "char REACHY_REFERENCE_MUJOCO_VERSION[]",
+            "",
+            c_string(source["mujoco_version"]),
+        ).replace("[]  =", "[] ="),
+        c_declaration(
+            "double",
+            "REACHY_REFERENCE_TIMESTEP_SECONDS",
+            c_number(scenario["timestep_seconds"]),
+        ),
+        c_declaration(
+            "double",
+            "REACHY_REFERENCE_MAXIMUM_EQUALITY_RESIDUAL",
+            c_number(tolerances["maximum_equality_residual"]),
+        ),
         "",
-        "static const char* const REACHY_REFERENCE_ACTUATOR_NAMES[REACHY_REFERENCE_ACTUATOR_COUNT] = {",
+        (
+            "static const char* const REACHY_REFERENCE_ACTUATOR_NAMES"
+            "[REACHY_REFERENCE_ACTUATOR_COUNT] = {"
+        ),
     ]
     lines.extend(f"    {c_string(name)}," for name in actuator_names)
     lines.extend(
         [
             "};",
             "",
-            "static const char* const REACHY_REFERENCE_BODY_NAMES[REACHY_REFERENCE_BODY_COUNT] = {",
+            (
+                "static const char* const REACHY_REFERENCE_BODY_NAMES"
+                "[REACHY_REFERENCE_BODY_COUNT] = {"
+            ),
         ]
     )
     lines.extend(f"    {c_string(name)}," for name in body_names)
@@ -237,7 +311,10 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
         [
             "};",
             "",
-            "static const uint64_t REACHY_REFERENCE_CHECKPOINT_STEPS[REACHY_REFERENCE_CHECKPOINT_COUNT] = {",
+            (
+                "static const uint64_t REACHY_REFERENCE_CHECKPOINT_STEPS"
+                "[REACHY_REFERENCE_CHECKPOINT_COUNT] = {"
+            ),
         ]
     )
     lines.extend(f"    UINT64_C({step})," for step in checkpoints)
@@ -245,7 +322,10 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
         [
             "};",
             "",
-            "static const ReachyReferencePhase REACHY_REFERENCE_PHASES[REACHY_REFERENCE_PHASE_COUNT] = {",
+            (
+                "static const ReachyReferencePhase REACHY_REFERENCE_PHASES"
+                "[REACHY_REFERENCE_PHASE_COUNT] = {"
+            ),
         ]
     )
     for phase in phases:
@@ -257,21 +337,24 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
             + target_text
             + "}},"
         )
-    lines.extend(
-        [
-            "};",
-            "",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_BODY_COUNT = {counts['bodies_including_world']}U;",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_JOINT_COUNT = {counts['joints']}U;",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_ACTUATOR_COUNT = {counts['actuators']}U;",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_EQUALITY_COUNT = {counts['equalities']}U;",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_SITE_COUNT = {counts['sites']}U;",
-            f"static const uint32_t REACHY_REFERENCE_EXPECTED_CAMERA_COUNT = {counts['cameras']}U;",
-            "",
-            "#endif",
-            "",
-        ]
+    count_declarations = (
+        ("BODY", "bodies_including_world"),
+        ("JOINT", "joints"),
+        ("ACTUATOR", "actuators"),
+        ("EQUALITY", "equalities"),
+        ("SITE", "sites"),
+        ("CAMERA", "cameras"),
     )
+    lines.extend(["};", ""])
+    for constant_name, count_key in count_declarations:
+        lines.append(
+            c_declaration(
+                "uint32_t",
+                f"REACHY_REFERENCE_EXPECTED_{constant_name}_COUNT",
+                f"{counts[count_key]}U",
+            )
+        )
+    lines.extend(["", "#endif", ""])
     return "\n".join(lines)
 
 
