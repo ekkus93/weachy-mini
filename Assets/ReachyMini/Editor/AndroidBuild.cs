@@ -67,7 +67,7 @@ namespace ReachyMini.Editor
                     "No enabled Unity scenes exist. Create the bootstrap scene before building.");
             }
 
-            string? outputDirectory = Path.GetDirectoryName(outputPath);
+            string outputDirectory = Path.GetDirectoryName(outputPath);
             if (string.IsNullOrWhiteSpace(outputDirectory))
             {
                 throw new InvalidOperationException(
