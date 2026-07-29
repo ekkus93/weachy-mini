@@ -14,6 +14,7 @@ on:
       - 'scripts/reachy_model_map.py'
       - 'scripts/run_mujoco_probe_android.sh'
       - 'scripts/source_checkout.py'
+      - 'scripts/validate_reachy_mujoco.py'
       - 'scripts/verify_source_checkout.py'
       - 'third_party/mujoco-source.lock.json'
       - 'third_party/reachy-mini-source.lock.json'
@@ -113,13 +114,15 @@ jobs:
           fi
 
           "${sdkmanager}" \
-            --channel=3 \
             --install \
             "platform-tools" \
-            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;${ANDROID_CMAKE_VERSION}"
+          "${sdkmanager}" \
+            --channel=3 \
+            --install \
+            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}"
 
           ndk_root="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
           cmake_bin="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin"
