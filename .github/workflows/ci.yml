@@ -42,45 +42,53 @@ jobs:
 
   reachy-model:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - name: Check out project
         uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Read pinned Reachy source
+      - name: Read pinned Reachy and MuJoCo sources
         id: reachy_source
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY' >> "${GITHUB_OUTPUT}"
           import json
-          from pathlib import Path
+          from pathlib import Path, PurePosixPath
           from urllib.parse import urlparse
 
-          lock = json.loads(
+          reachy = json.loads(
               Path("third_party/reachy-mini-source.lock.json").read_text(
                   encoding="utf-8"
               )
           )
-          repository_path = urlparse(lock["repository"]).path
+          mujoco = json.loads(
+              Path("third_party/mujoco-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          repository_path = urlparse(reachy["repository"]).path
           repository = repository_path.removesuffix(".git").strip("/")
           if repository.count("/") != 1:
               raise SystemExit(f"Invalid pinned GitHub repository: {repository!r}")
           print(f"repository={repository}")
-          print(f"commit={lock['commit']}")
-          print(f"model_file={lock['model_file']}")
+          print(f"commit={reachy['commit']}")
+          print(f"model_file={reachy['model_file']}")
+          print(f"model_directory={PurePosixPath(reachy['model_file']).parent}")
+          print(f"mujoco_version={mujoco['version']}")
           PY
-      - name: Check out pinned Reachy MJCF
+      - name: Check out pinned Reachy MJCF and meshes
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.reachy_source.outputs.repository }}
           ref: ${{ steps.reachy_source.outputs.commit }}
           path: upstream/reachy-mini
           fetch-depth: 1
-          lfs: false
+          lfs: true
           persist-credentials: false
-          sparse-checkout: ${{ steps.reachy_source.outputs.model_file }}
+          sparse-checkout: ${{ steps.reachy_source.outputs.model_directory }}
           sparse-checkout-cone-mode: false
       - name: Verify pinned source and model topology
         shell: bash
@@ -102,11 +110,28 @@ jobs:
           python3 scripts/validate_reachy_model.py \
             --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
             --output build/reachy-model/MODEL_MAP.json
-      - name: Upload pinned Reachy model map
+      - name: Install pinned desktop MuJoCo runtime
+        env:
+          MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
+        run: python -m pip install --disable-pip-version-check "mujoco==${MUJOCO_VERSION}"
+      - name: Compile and step the official Reachy model
+        shell: bash
+        env:
+          MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_reachy_mujoco.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --model-map build/reachy-model/MODEL_MAP.json \
+            --expected-version "${MUJOCO_VERSION}" \
+            --steps 100 \
+            --output build/reachy-model/MUJOCO_LOAD_REPORT.json
+      - name: Upload pinned Reachy model evidence
         uses: actions/upload-artifact@v4
         with:
-          name: reachy-model-map-${{ github.sha }}
-          path: build/reachy-model/MODEL_MAP.json
+          name: reachy-model-evidence-${{ github.sha }}
+          path: build/reachy-model
           if-no-files-found: error
           retention-days: 14
 
