@@ -140,23 +140,35 @@ static int array_is_finite(const mjtNum* values, mjtSize count)
     return 1;
 }
 
-static double maximum_absolute_value(const mjtNum* values, mjtSize count)
+static int maximum_equality_residual(const mjData* data, double* output)
 {
-    double maximum = 0.0;
-    if(values == NULL || count <= 0)
+    if(data == NULL || output == NULL || data->nefc < 0 ||
+       (data->nefc > 0 && (data->efc_pos == NULL || data->efc_type == NULL)))
     {
-        return maximum;
+        return 0;
     }
 
-    for(mjtSize index = 0; index < count; ++index)
+    double maximum = 0.0;
+    for(mjtSize index = 0; index < data->nefc; ++index)
     {
-        const double absolute_value = fabs((double)values[index]);
+        if(data->efc_type[index] != mjCNSTR_EQUALITY)
+        {
+            continue;
+        }
+
+        const double absolute_value = fabs((double)data->efc_pos[index]);
+        if(!isfinite(absolute_value))
+        {
+            return 0;
+        }
         if(absolute_value > maximum)
         {
             maximum = absolute_value;
         }
     }
-    return maximum;
+
+    *output = maximum;
+    return 1;
 }
 
 static uint64_t total_warning_count(const mjData* data)
@@ -284,14 +296,20 @@ static ReachyMujocoProbeStatus run_loaded_model(
             break;
         }
 
-        const double residual = maximum_absolute_value(data->efc_pos, data->nefc);
+        double residual = 0.0;
+        if(!maximum_equality_residual(data, &residual))
+        {
+            copy_error(error_buffer, error_buffer_size, "invalid MuJoCo constraint metadata");
+            status = REACHY_MUJOCO_PROBE_NONFINITE_STATE;
+            break;
+        }
         if(residual > maximum_residual)
         {
             maximum_residual = residual;
         }
         if(residual > config->maximum_constraint_residual)
         {
-            copy_error(error_buffer, error_buffer_size, "constraint residual exceeded threshold");
+            copy_error(error_buffer, error_buffer_size, "equality residual exceeded threshold");
             status = REACHY_MUJOCO_PROBE_CONSTRAINT_DIVERGENCE;
             break;
         }
