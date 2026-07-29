@@ -1,58 +1,65 @@
 # RMA-020 Android toolchain execution blocker
 
-**Recorded:** 2026-07-28  
+**Recorded:** 2026-07-29  
 **Affected tasks:** RMA-020, RMA-021, RMA-022  
-**Status:** Environment blocked; implementation remains incomplete
+**Status:** Hosted CI path implemented; successful hosted and physical-device evidence still required
 
-## Required external inputs
+## Required pinned inputs
 
 The feasibility build is pinned to:
 
 - Android NDK r28c, package revision `28.2.13676358`;
-- Linux package `android-ndk-r28c-linux.zip`;
-- official package size `722261334` bytes;
-- official SHA-1 `a7b54a5de87fecd125a17d54f73c446199e72a64`;
-- MuJoCo 3.9.0 commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`.
+- MuJoCo 3.9.0 commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`;
+- Android ABI `arm64-v8a`;
+- Android platform API 31;
+- CMake 3.31.6.
 
-## Evidence from this execution environment
+## Original execution-environment limitation
 
-- Available disk space was sufficient for the archive and extracted toolchain.
-- The official NDK download URL was resolved from the Android NDK unsupported-downloads page.
-- The managed download attempt failed.
-- A direct `curl` attempt failed with `Could not resolve host: dl.google.com` after retries.
-- No Android SDK, Android NDK, `adb`, Unity editor, or physical Android phone is available in this environment.
+The initial implementation environment had sufficient disk space but could not resolve the Android download host and did not contain an Android SDK, NDK, `adb`, Unity editor, or physical Android phone.
 
-This is not evidence that MuJoCo cannot be built for Android. It means the required experiment could not be executed in this environment.
+That limitation is not evidence that MuJoCo cannot be built for Android. It only prevented the experiment from running in that environment.
 
-## Work completed despite the blocker
+## GitHub Actions path now implemented
+
+`.github/workflows/android-feasibility.yml` now moves the toolchain-dependent portion to GitHub Actions.
+
+The hosted Ubuntu job:
+
+1. installs the exact SDK, NDK, and CMake packages through `sdkmanager`;
+2. checks out the exact pinned MuJoCo commit;
+3. validates that the checkout is clean and matches the repository lock file;
+4. cross-compiles `libmujoco.so` and the first-party probe for ARM64;
+5. verifies AArch64 ELF metadata, dynamic dependencies, exported symbols, and build provenance;
+6. uploads the complete staged probe as an immutable workflow artifact for that commit.
+
+The same workflow has a manual `device-probe` job. That job runs only when explicitly requested and only on a trusted self-hosted Linux runner labeled `weachy-mini-android-device`. It downloads the exact hosted artifact and runs it on exactly one authorized ARM64 Android phone.
+
+The physical-device job is deliberately unavailable to pull-request events so untrusted pull-request code cannot execute on the trusted USB-connected machine.
+
+## Work completed
 
 - Exact MuJoCo source revision and license are pinned.
-- The Android ARM64 CMake build harness validates the source commit and NDK revision.
+- The Android ARM64 CMake build harness validates source and toolchain revisions.
 - Third-party MuJoCo source remains unmodified and does not inherit first-party warning flags.
 - A first-party closed-loop MJCF fixture and malformed fixture are committed.
 - A first-party probe checks fixed timestep, non-finite state, constraint residual, simulation-time advancement, warning count, and median/p95/maximum step duration.
 - A 900,000-step contract test passes with strict warnings-as-errors and ASan/UBSan against a first-party MuJoCo API mock.
-- An `adb` runner is prepared to verify malformed-model handling and collect phone/device timing evidence.
+- The hosted cross-build workflow and artifact checks are committed.
+- The self-hosted `adb` job and device-report artifact path are committed.
+- A manual Unity validation workflow is committed for tests, development APK, and release AAB after Unity secrets are configured.
 
 The mock validates our wrapper contract and failure handling only. It is not a substitute for running the real MuJoCo solver.
 
-## Next required experiment
+## Remaining setup
 
-On a networked Linux developer machine:
+Follow `docs/ci/GITHUB_ACTIONS_SETUP.md` to:
 
-```bash
-sha1sum android-ndk-r28c-linux.zip
-# Must equal a7b54a5de87fecd125a17d54f73c446199e72a64
+1. review the hosted ARM64 build result;
+2. register a trusted self-hosted runner with the `weachy-mini-android-device` label;
+3. connect and authorize exactly one ARM64 Android phone;
+4. manually run **Android MuJoCo Feasibility** with `run_device_probe` enabled;
+5. configure Unity CI license secrets;
+6. manually run **Unity Validation**.
 
-ANDROID_NDK_HOME=/path/to/android-ndk-r28c \
-MUJOCO_SOURCE_DIR=/path/to/mujoco-at-pinned-commit \
-./scripts/build_mujoco_android.sh
-```
-
-Then connect exactly one authorized ARM64 Android phone and run:
-
-```bash
-./scripts/run_mujoco_probe_android.sh
-```
-
-RMA-020 through RMA-022 must remain open until the build, load, 900,000-step run, malformed-model result, pause/resume behavior, and device measurements are recorded.
+RMA-020 through RMA-022 must remain open until the hosted build, physical-device load, 900,000-step timing, malformed-model result, Unity IL2CPP build, pause/resume behavior, failure visibility, and deterministic shutdown evidence are all recorded.
