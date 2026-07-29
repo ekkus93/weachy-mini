@@ -220,7 +220,7 @@ namespace ReachyMini.Simulation
                 commandBufferSize = maximumCommandBytes;
                 commandBuffer = Marshal.AllocHGlobal(commandBufferSize);
             }
-            catch
+            catch (OutOfMemoryException)
             {
                 Marshal.FreeHGlobal(stateBuffer);
                 throw;
@@ -380,11 +380,20 @@ namespace ReachyMini.Simulation
                 }
             }
 
+            TimeSpan requestTime = RemainingTime(deadline);
+            if (requestTime <= TimeSpan.Zero)
+            {
+                return ReachySimulationControlResult.Failure(
+                    State,
+                    TimeoutError(
+                        "Simulation shutdown deadline expired before the request could be submitted."));
+            }
+
             ReachySimulationControlResult requestResult =
                 SubmitControlRequest(
                     ControlRequestKind.Shutdown,
                     resetId: 0U,
-                    RemainingTime(deadline));
+                    requestTime);
             if (!requestResult.IsSuccess)
             {
                 return requestResult;
@@ -459,6 +468,7 @@ namespace ReachyMini.Simulation
                     $"Simulation worker shutdown failed: {shutdownResult.Error.Code}: {shutdownResult.Error.Message}");
             }
 
+            session.Dispose();
             lock (controlGate)
             {
                 disposed = true;
@@ -477,6 +487,7 @@ namespace ReachyMini.Simulation
             ReachySimError error = ManagedFaultError(exception);
             lock (controlGate)
             {
+                workerThread = null;
                 fault = new ReachySimulationFault("startup", error);
                 runState = ReachySimulationRunState.Faulted;
                 Monitor.PulseAll(controlGate);
@@ -625,13 +636,13 @@ namespace ReachyMini.Simulation
                 SetRunState(ReachySimulationRunState.Running);
                 RunFixedStepLoop(ref shutdownRequestId);
             }
-            catch (InvalidOperationException exception)
+            catch (ObjectDisposedException exception)
             {
                 EnterManagedFault("worker loop", exception);
                 CompleteNonShutdownRequestAfterFault();
                 WaitForShutdownAfterFault(ref shutdownRequestId);
             }
-            catch (ObjectDisposedException exception)
+            catch (InvalidOperationException exception)
             {
                 EnterManagedFault("worker loop", exception);
                 CompleteNonShutdownRequestAfterFault();
@@ -763,7 +774,9 @@ namespace ReachyMini.Simulation
                     }
                     ++totalStepCount;
                     accumulatorSeconds -= TimestepSeconds;
-                    accumulatedLagSeconds = accumulatorSeconds;
+                    accumulatedLagSeconds = Math.Max(
+                        0.0,
+                        accumulatorSeconds);
 
                     if (!PublishCurrentState(stepDurationSeconds))
                     {
@@ -776,10 +789,7 @@ namespace ReachyMini.Simulation
                 if (accumulatorSeconds >= TimestepSeconds &&
                     State == ReachySimulationRunState.Running)
                 {
-                    ulong missedSteps = checked((ulong)Math.Floor(
-                        accumulatorSeconds / TimestepSeconds));
-                    deadlineMissCount = checked(
-                        deadlineMissCount + missedSteps);
+                    ++deadlineMissCount;
                     accumulatedLagSeconds = accumulatorSeconds;
                     Thread.Yield();
                 }
@@ -861,6 +871,8 @@ namespace ReachyMini.Simulation
                 return;
             }
 
+            lastStepDurationSeconds = 0.0;
+            accumulatedLagSeconds = 0.0;
             if (!PublishCurrentState(stepDurationSeconds: 0.0))
             {
                 CompleteRequest(
@@ -937,6 +949,7 @@ namespace ReachyMini.Simulation
                 ++solverWarningCount;
             }
 
+            lastStepDurationSeconds = stepDurationSeconds;
             ReachySimulationTimingSnapshot timing =
                 new ReachySimulationTimingSnapshot(
                     totalStepCount,
@@ -949,7 +962,7 @@ namespace ReachyMini.Simulation
                         0L,
                         Interlocked.Read(ref discardedCommandCount))),
                     accumulatedLagSeconds,
-                    stepDurationSeconds,
+                    lastStepDurationSeconds,
                     maximumStepDurationSeconds);
             ReachyPublishedSimulationSnapshot published =
                 new ReachyPublishedSimulationSnapshot(
@@ -1168,15 +1181,20 @@ namespace ReachyMini.Simulation
 
         private static long CreateDeadline(TimeSpan timeout)
         {
+            long now = Stopwatch.GetTimestamp();
             double timeoutTicks = timeout.TotalSeconds *
                 Stopwatch.Frequency;
             if (timeoutTicks >= long.MaxValue)
             {
                 return long.MaxValue;
             }
-            return checked(
-                Stopwatch.GetTimestamp() +
-                (long)Math.Ceiling(timeoutTicks));
+
+            long additionalTicks = (long)Math.Ceiling(timeoutTicks);
+            if (additionalTicks >= long.MaxValue - now)
+            {
+                return long.MaxValue;
+            }
+            return now + additionalTicks;
         }
 
         private static TimeSpan RemainingTime(long deadline)
@@ -1349,7 +1367,7 @@ namespace ReachyMini.Simulation
                 uint declaredByteCount = BitConverter.ToUInt32(bytes, 20);
                 return abiVersion == ProjectMetadata.NativeAbiVersion &&
                     structureSize == CommandHeaderSize &&
-                    declaredByteCount == bytes.Length;
+                    declaredByteCount == checked((uint)bytes.Length);
             }
         }
 
