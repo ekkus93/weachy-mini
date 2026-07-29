@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 STAGING_DIR="${MUJOCO_ANDROID_OUTPUT_DIR:-${ROOT_DIR}/Assets/Plugins/Android/libs/arm64-v8a}"
 REMOTE_DIR="/data/local/tmp/weachy-mujoco-probe"
+REMOTE_MODEL_DIR="${REMOTE_DIR}/reachy-model"
 REPORT_DIR="${REACHY_PROBE_REPORT_DIR:-${ROOT_DIR}/diagnostics-output/mujoco-probe}"
 STEP_COUNT="${REACHY_PROBE_STEP_COUNT:-900000}"
 REACHY_MODEL_STEP_COUNT="${REACHY_MODEL_PROBE_STEP_COUNT:-100}"
@@ -13,6 +14,33 @@ REQUESTED_SERIAL="${REACHY_ANDROID_SERIAL:-${ANDROID_SERIAL:-}}"
 REACHY_MODEL_DIR="${STAGING_DIR}/reachy-model"
 REACHY_MODEL_PATH="${REACHY_MODEL_DIR}/reachy_mini.xml"
 REACHY_BASELINE_PATH="${REACHY_MODEL_DIR}/model-baseline.json"
+DEVICE_SERIAL=""
+
+dump_failure_diagnostics()
+{
+    local status=$?
+    if (( status == 0 )); then
+        return
+    fi
+
+    trap - EXIT
+    set +e
+    printf 'Android MuJoCo probe failed with exit status %s.\n' "${status}" >&2
+    if [[ -n "${DEVICE_SERIAL}" ]]; then
+        printf '%s\n' 'Remote probe files:' >&2
+        "${ADB_BIN}" -s "${DEVICE_SERIAL}" shell \
+            "find '${REMOTE_DIR}' -maxdepth 4 -type f -print 2>/dev/null | sort" >&2
+    fi
+    if [[ -d "${REPORT_DIR}" ]]; then
+        printf '%s\n' 'Partial local reports:' >&2
+        while IFS= read -r report; do
+            printf '%s\n' "--- ${report}" >&2
+            cat "${report}" >&2
+        done < <(find "${REPORT_DIR}" -maxdepth 1 -type f -print | sort)
+    fi
+    exit "${status}"
+}
+trap dump_failure_diagnostics EXIT
 
 for required_file in \
     libmujoco.so \
@@ -154,16 +182,36 @@ DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
     printf 'abi=%s\n' "$("${ADB_COMMAND[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
 } > "${DEVICE_PATH}"
 
-"${ADB_COMMAND[@]}" shell "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_DIR}'"
-"${ADB_COMMAND[@]}" push "${STAGING_DIR}/libmujoco.so" "${REMOTE_DIR}/libmujoco.so" >/dev/null
+"${ADB_COMMAND[@]}" shell \
+    "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_MODEL_DIR}'"
+"${ADB_COMMAND[@]}" push \
+    "${STAGING_DIR}/libmujoco.so" \
+    "${REMOTE_DIR}/libmujoco.so" >/dev/null
 "${ADB_COMMAND[@]}" push \
     "${STAGING_DIR}/reachy_mujoco_probe_runner" \
     "${REMOTE_DIR}/reachy_mujoco_probe_runner" >/dev/null
-"${ADB_COMMAND[@]}" push "${STAGING_DIR}/closed_loop_probe.xml" "${REMOTE_DIR}/closed_loop_probe.xml" >/dev/null
-"${ADB_COMMAND[@]}" push "${STAGING_DIR}/malformed_probe.xml" "${REMOTE_DIR}/malformed_probe.xml" >/dev/null
-"${ADB_COMMAND[@]}" push "${REACHY_MODEL_DIR}" "${REMOTE_DIR}/" >/dev/null
-"${ADB_COMMAND[@]}" shell "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner'"
-"${ADB_COMMAND[@]}" shell "test -f '${REMOTE_DIR}/reachy-model/reachy_mini.xml'"
+"${ADB_COMMAND[@]}" push \
+    "${STAGING_DIR}/closed_loop_probe.xml" \
+    "${REMOTE_DIR}/closed_loop_probe.xml" >/dev/null
+"${ADB_COMMAND[@]}" push \
+    "${STAGING_DIR}/malformed_probe.xml" \
+    "${REMOTE_DIR}/malformed_probe.xml" >/dev/null
+"${ADB_COMMAND[@]}" push \
+    "${REACHY_MODEL_DIR}/." \
+    "${REMOTE_MODEL_DIR}/" >/dev/null
+"${ADB_COMMAND[@]}" shell \
+    "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner'"
+
+for remote_required_file in \
+    "${REMOTE_MODEL_DIR}/reachy_mini.xml" \
+    "${REMOTE_MODEL_DIR}/MODEL_MAP.json" \
+    "${REMOTE_MODEL_DIR}/model-baseline.json"; do
+    if ! "${ADB_COMMAND[@]}" shell "test -f '${remote_required_file}'"; then
+        printf 'Required remote model file is missing: %s\n' \
+            "${remote_required_file}" >&2
+        exit 1
+    fi
+done
 
 MALFORMED_OUTPUT="$("${ADB_COMMAND[@]}" shell \
     "cd '${REMOTE_DIR}' && LD_LIBRARY_PATH='${REMOTE_DIR}' ./reachy_mujoco_probe_runner malformed_probe.xml 1" \
@@ -184,6 +232,7 @@ validate_probe_report "${CONSTRAINED_REPORT_PATH}" "${STEP_COUNT}"
     | tr -d '\r' > "${REACHY_REPORT_PATH}"
 validate_reachy_report "${REACHY_REPORT_PATH}" "${REACHY_MODEL_STEP_COUNT}"
 
+trap - EXIT
 printf 'Constrained probe report: %s\nReachy model report: %s\nDevice report: %s\n' \
     "${CONSTRAINED_REPORT_PATH}" \
     "${REACHY_REPORT_PATH}" \
