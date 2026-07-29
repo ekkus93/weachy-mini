@@ -7,7 +7,7 @@ At the current scaffold stage, no MuJoCo, Reachy model asset, llama.cpp source, 
 ## Planned dependencies
 
 - **Unity 6.3 LTS** — governed by Unity's software terms and package-specific notices. The Unity editor is not redistributed by this repository.
-- **MuJoCo** — Google DeepMind, Apache License 2.0. A release and source commit will be pinned during RMA-020 before source or binaries are imported.
+- **MuJoCo** — Google DeepMind, Apache License 2.0. Version 3.9.0 is pinned at commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. Source and binaries are not yet imported or packaged.
 - **Reachy Mini software** — Pollen Robotics / Hugging Face, generally Apache License 2.0 for software. The initial source revision is pinned to `a739a6e461eb6d722901f1cfc225265ffc85c28d`; exact imported paths are recorded by the generated provenance report.
 - **Reachy Mini hardware/model assets** — Pollen Robotics, CC BY-NC-SA as identified by the upstream project. The source revision is pinned to `a739a6e461eb6d722901f1cfc225265ffc85c28d`. Redistribution remains blocked until each imported asset's notice requirements are verified for release packaging.
 - **llama.cpp** — MIT License. A source revision will be pinned during RMA-130.

@@ -19,8 +19,8 @@
       "owner": "Google DeepMind",
       "license": "Apache-2.0",
       "source_url": "https://github.com/google-deepmind/mujoco",
-      "source_revision": null,
-      "status": "planned",
+      "source_revision": "237c17e48539b6c90bf90d3161547cbdcbfaa1e0",
+      "status": "pinned_not_imported",
       "modification_status": "not_imported",
       "redistribution_status": "allowed_with_notice",
       "required_notice": "Apache License 2.0 and upstream NOTICE when pinned and packaged."

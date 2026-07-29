@@ -18,7 +18,7 @@ Use `--manifest-only` to validate the lock file without requiring the SDKs to be
 ./scripts/ci.sh --static-only
 ```
 
-This validates the repository layout, Markdown links, third-party inventory, JSON files, and Python syntax. CI additionally runs Ruff, ShellCheck, managed tests, and the native compiler warnings-as-errors build.
+This validates the repository layout, Markdown links, third-party inventory, JSON files, Python syntax, and deterministic import tests. CI additionally runs Ruff, ShellCheck, managed tests, and the native compiler warnings-as-errors build.
 
 ## Native desktop build
 
@@ -28,6 +28,16 @@ REACHY_ENABLE_SANITIZERS=ON ./scripts/build_native.sh
 ```
 
 The sanitizer build is a desktop-only first-party test configuration. It does not modify or rebuild third-party source with project warning flags.
+
+## MuJoCo Android feasibility build
+
+See `docs/MUJOCO_ANDROID_FEASIBILITY.md`. The build requires a clean checkout at the pinned MuJoCo commit and Android NDK 28.2.13676358. It never patches third-party source or applies first-party warning flags to that source.
+
+```bash
+ANDROID_NDK_HOME=/path/to/ndk \
+MUJOCO_SOURCE_DIR=/path/to/mujoco \
+./scripts/build_mujoco_android.sh
+```
 
 ## Android bridge
 

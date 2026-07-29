@@ -6,14 +6,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
+
+from source_checkout import SourceCheckoutError, validate_clean_checkout
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCK_PATH = ROOT / "third_party" / "reachy-mini-source.lock.json"
@@ -35,25 +35,6 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def run_git(source: Path, *arguments: str) -> str:
-    """Run a noninteractive Git command against the source checkout."""
-    try:
-        completed = subprocess.run(
-            ["git", "-C", str(source), *arguments],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise AssetImportError(f"Cannot inspect source Git checkout: {exc}") from exc
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout).strip()
-        raise AssetImportError(f"Git command failed ({' '.join(arguments)}): {detail}")
-    return completed.stdout.strip()
-
-
 def validate_lock(lock: dict[str, Any]) -> None:
     """Validate required lock-file fields."""
     required = {
@@ -71,25 +52,6 @@ def validate_lock(lock: dict[str, Any]) -> None:
         raise AssetImportError(f"Source lock is missing fields: {', '.join(missing)}")
     if lock["schema_version"] != 1:
         raise AssetImportError(f"Unsupported source-lock schema: {lock['schema_version']}")
-    commit = lock["commit"]
-    if not isinstance(commit, str) or len(commit) != 40 or any(
-        character not in "0123456789abcdef" for character in commit
-    ):
-        raise AssetImportError("Pinned commit must be a lowercase 40-character SHA-1.")
-
-
-def validate_checkout(source: Path, expected_commit: str) -> None:
-    """Require a clean checkout at the exact pinned commit."""
-    if not source.is_dir():
-        raise AssetImportError(f"Source checkout is not a directory: {source}")
-    actual_commit = run_git(source, "rev-parse", "HEAD")
-    if actual_commit != expected_commit:
-        raise AssetImportError(
-            f"Reachy source revision mismatch: expected {expected_commit}, found {actual_commit}"
-        )
-    worktree_status = run_git(source, "status", "--porcelain", "--untracked-files=all")
-    if worktree_status:
-        raise AssetImportError("Reachy source checkout has modified or untracked files.")
 
 
 def checked_source_path(source_root: Path, relative_text: str) -> Path:
@@ -145,12 +107,7 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def write_import(
-    source: Path,
-    lock_path: Path,
-    lock: dict[str, Any],
-    output_root: Path,
-) -> Path:
+def write_import(source: Path, lock_path: Path, lock: dict[str, Any], output_root: Path) -> Path:
     """Create a deterministic imported asset directory and provenance report."""
     output_subdirectory = Path(lock["output_subdirectory"])
     if output_subdirectory.is_absolute() or ".." in output_subdirectory.parts:
@@ -162,8 +119,7 @@ def write_import(
         raise AssetImportError("Output directory escapes configured output root.") from exc
 
     inputs = discover_model_files(source, lock["model_file"])
-    license_source = checked_source_path(source, lock["license_file"])
-    inputs.append(("UPSTREAM_LICENSE", license_source))
+    inputs.append(("UPSTREAM_LICENSE", checked_source_path(source, lock["license_file"])))
     inputs.sort()
 
     with tempfile.TemporaryDirectory(prefix="reachy-import-", dir=output_root.parent) as temp_text:
@@ -191,16 +147,13 @@ def write_import(
             "Files were copied without content modification by the deterministic import script. "
             "This project is unofficial and is not endorsed by Pollen Robotics or Hugging Face.\n"
         )
-        (staging / "ATTRIBUTION.md").write_text(
-            attribution,
-            encoding="utf-8",
-            newline="\n",
-        )
+        attribution_path = staging / "ATTRIBUTION.md"
+        attribution_path.write_text(attribution, encoding="utf-8", newline="\n")
         provenance_files.append(
             {
                 "path": "ATTRIBUTION.md",
-                "size": (staging / "ATTRIBUTION.md").stat().st_size,
-                "sha256": sha256(staging / "ATTRIBUTION.md"),
+                "size": attribution_path.stat().st_size,
+                "sha256": sha256(attribution_path),
             }
         )
         report = {
@@ -242,11 +195,11 @@ def main() -> int:
         lock = read_json(lock_path)
         validate_lock(lock)
         source = args.source.resolve()
-        validate_checkout(source, lock["commit"])
+        validate_clean_checkout(source, lock["commit"])
         output_root = args.output_root.resolve()
         output_root.mkdir(parents=True, exist_ok=True)
         destination = write_import(source, lock_path, lock, output_root)
-    except AssetImportError as exc:
+    except (AssetImportError, SourceCheckoutError) as exc:
         print(f"Reachy asset import failed: {exc}", file=sys.stderr)
         return 1
 

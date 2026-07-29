@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/google-deepmind/mujoco.git",
+  "version": "3.9.0",
+  "commit": "237c17e48539b6c90bf90d3161547cbdcbfaa1e0",
+  "license": "Apache-2.0",
+  "license_file": "LICENSE"
+}
