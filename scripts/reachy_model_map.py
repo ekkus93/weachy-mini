@@ -59,9 +59,7 @@ def require_unique_name(
         return
     previous = seen.get(name)
     if previous is not None:
-        raise ModelMapError(
-            f"Duplicate {category} name {name!r}: {previous} and {path}"
-        )
+        raise ModelMapError(f"Duplicate {category} name {name!r}: {previous} and {path}")
     seen[name] = path
 
 
@@ -129,16 +127,12 @@ def build_model_map(
             }
         )
 
-        joint_elements = [
-            child for child in body if child.tag in {"joint", "freejoint"}
-        ]
+        joint_elements = [child for child in body if child.tag in {"joint", "freejoint"}]
         for joint_index, joint in enumerate(joint_elements):
             joint_name = joint.attrib.get("name")
             joint_path = entity_path(path, "joint", joint_index, joint_name)
             require_unique_name(seen["joint"], "joint", joint_name, joint_path)
-            joint_type = "free" if joint.tag == "freejoint" else joint.attrib.get(
-                "type", "hinge"
-            )
+            joint_type = "free" if joint.tag == "freejoint" else joint.attrib.get("type", "hinge")
             joints.append(
                 {
                     "attributes": sorted_attributes(joint),
@@ -227,11 +221,7 @@ def build_model_map(
 
 def named_entries(model_map: dict[str, Any], category: str) -> dict[str, dict[str, Any]]:
     """Index named model-map entries by name."""
-    return {
-        entry["name"]: entry
-        for entry in model_map[category]
-        if entry["name"] is not None
-    }
+    return {entry["name"]: entry for entry in model_map[category] if entry["name"] is not None}
 
 
 def require_expected_subset(
@@ -243,8 +233,7 @@ def require_expected_subset(
     for key, value in expected.items():
         if actual.get(key) != value:
             raise ModelMapError(
-                f"{label} attribute {key!r} mismatch: expected {value!r}, "
-                f"found {actual.get(key)!r}"
+                f"{label} attribute {key!r} mismatch: expected {value!r}, found {actual.get(key)!r}"
             )
 
 
@@ -259,8 +248,7 @@ def validate_model_requirements(
     expected_model = requirements.get("model_name")
     if model_map["model"] != expected_model:
         raise ModelMapError(
-            f"MJCF model mismatch: expected {expected_model!r}, "
-            f"found {model_map['model']!r}"
+            f"MJCF model mismatch: expected {expected_model!r}, found {model_map['model']!r}"
         )
 
     exact_counts = requirements.get("exact_counts")
@@ -286,9 +274,7 @@ def validate_model_requirements(
         available = named_entries(model_map, category)
         missing = sorted(set(names).difference(available))
         if missing:
-            raise ModelMapError(
-                f"MJCF is missing required {category}: {', '.join(missing)}"
-            )
+            raise ModelMapError(f"MJCF is missing required {category}: {', '.join(missing)}")
 
     joints = named_entries(model_map, "joints")
     joint_types = requirements.get("required_joint_types", {})
@@ -300,8 +286,7 @@ def validate_model_requirements(
             raise ModelMapError(f"MJCF is missing required joint {name!r}")
         if entry["type"] != expected_type:
             raise ModelMapError(
-                f"Joint {name!r} type mismatch: expected {expected_type!r}, "
-                f"found {entry['type']!r}"
+                f"Joint {name!r} type mismatch: expected {expected_type!r}, found {entry['type']!r}"
             )
 
     actuators = named_entries(model_map, "actuators")
