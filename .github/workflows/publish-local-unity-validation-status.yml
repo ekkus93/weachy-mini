@@ -5,6 +5,8 @@ on:
     workflows:
       - Local Unity Android Validation
     types:
+      - requested
+      - in_progress
       - completed
 
 permissions:
@@ -14,7 +16,7 @@ permissions:
 
 concurrency:
   group: publish-local-unity-validation-status
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   publish:
@@ -50,7 +52,7 @@ jobs:
               --jq '.workflow_runs[0].id'
           )"
           if [[ "${latest_run_id}" != "${RUN_ID}" ]]; then
-            printf 'Skipping stale completion for run %s; latest run is %s.\n' \
+            printf 'Skipping stale state for run %s; latest run is %s.\n' \
               "${RUN_ID}" "${latest_run_id}"
             exit 0
           fi
@@ -119,7 +121,7 @@ jobs:
               "run_attempt": int(os.environ["RUN_ATTEMPT"]),
               "run_url": os.environ["RUN_URL"],
               "status": os.environ["RUN_STATUS"],
-              "conclusion": os.environ["RUN_CONCLUSION"],
+              "conclusion": os.environ["RUN_CONCLUSION"] or None,
               "event": os.environ["RUN_EVENT"],
               "head_branch": os.environ["HEAD_BRANCH"],
               "head_sha": os.environ["HEAD_SHA"],
@@ -129,7 +131,8 @@ jobs:
               "jobs": jobs,
           }
 
-          conclusion = payload["conclusion"] or "unknown"
+          status = payload["status"] or "unknown"
+          conclusion = payload["conclusion"] or "pending"
           failed_summary = "None"
           if failed_steps:
               failed_summary = ", ".join(
@@ -141,13 +144,14 @@ jobs:
                   "<!-- maintained by publish-local-unity-validation-status.yml -->",
                   "# Latest Local Unity Android Validation",
                   "",
+                  f'- **Status:** `{status}`',
                   f'- **Conclusion:** `{conclusion}`',
                   f'- **Run:** [{payload["run_id"]}]({payload["run_url"]})',
                   f'- **Attempt:** `{payload["run_attempt"]}`',
                   f'- **Commit:** `{payload["head_sha"]}`',
                   f'- **Branch/event:** `{payload["head_branch"]}` / `{payload["event"]}`',
                   f'- **Failed steps:** {failed_summary}',
-                  f'- **Completed:** `{payload["updated_at"]}`',
+                  f'- **Observed:** `{payload["updated_at"]}`',
                   "",
                   "## Machine-readable status",
                   "",
@@ -155,7 +159,7 @@ jobs:
                   json.dumps(payload, indent=2, sort_keys=True),
                   "```",
                   "",
-                  "This issue is overwritten after each completed run; it is not a historical log.",
+                  "This issue is overwritten whenever the latest run changes state; it is not a historical log.",
               ]
           )
           body_path.write_text(body + "\n", encoding="utf-8")
@@ -184,5 +188,5 @@ jobs:
             --input "${patch_file}" \
             >/dev/null
 
-          printf 'Published run %s status to issue #%s.\n' \
-            "${RUN_ID}" "${ISSUE_NUMBER}"
+          printf 'Published run %s status %s to issue #%s.\n' \
+            "${RUN_ID}" "${RUN_STATUS}" "${ISSUE_NUMBER}"
