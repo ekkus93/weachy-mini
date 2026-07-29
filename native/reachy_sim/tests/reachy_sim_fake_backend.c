@@ -12,7 +12,20 @@ typedef struct FakeBackendContext {
     ReachySimStateHeader state;
     uint64_t model_hash;
     uint64_t last_command_sequence;
+    ReachySimCalibrationProfileId calibration_profile_id;
+    uint32_t reset_pose_id;
 } FakeBackendContext;
+
+typedef struct FakeSnapshotPayload {
+    ReachySimStateHeader state;
+    uint64_t last_command_sequence;
+    uint32_t reset_pose_id;
+    uint32_t reserved;
+} FakeSnapshotPayload;
+
+_Static_assert(
+    sizeof(FakeSnapshotPayload) == 64U,
+    "FakeSnapshotPayload layout changed");
 
 static void write_message(
     char* error,
@@ -38,6 +51,19 @@ static uint64_t hash_bytes(
     return hash;
 }
 
+static bool valid_reset_pose(uint32_t reset_pose_id)
+{
+    return reset_pose_id == (uint32_t)REACHY_SIM_RESET_POSE_SLEEP_REST ||
+        reset_pose_id == (uint32_t)REACHY_SIM_RESET_POSE_NEUTRAL_AWAKE;
+}
+
+static uint32_t health_flags_for_reset_pose(uint32_t reset_pose_id)
+{
+    return reset_pose_id == (uint32_t)REACHY_SIM_RESET_POSE_SLEEP_REST
+        ? (uint32_t)REACHY_SIM_HEALTH_FLAG_SLEEPING
+        : 0U;
+}
+
 static void fake_destroy(void* context)
 {
     free(context);
@@ -50,15 +76,17 @@ static ReachySimStatus fake_reset(
     size_t error_size)
 {
     FakeBackendContext* const fake = context;
-    if(reset_id > 1U)
+    if(!valid_reset_pose(reset_id))
     {
-        write_message(error, error_size, "unknown reset identifier");
+        write_message(error, error_size, "unknown reset pose identifier");
         return REACHY_SIM_STATUS_INVALID_ARGUMENT;
     }
+
     fake->state.sequence = 0U;
     fake->state.simulation_time = 0.0;
-    fake->state.health_flags = 0U;
+    fake->state.health_flags = health_flags_for_reset_pose(reset_id);
     fake->last_command_sequence = 0U;
+    fake->reset_pose_id = reset_id;
     return REACHY_SIM_STATUS_OK;
 }
 
@@ -201,17 +229,24 @@ static ReachySimStatus fake_copy_snapshot(
     size_t error_size)
 {
     const FakeBackendContext* const fake = context;
-    const ReachySimSnapshotHeader snapshot = {
+    const ReachySimSnapshotHeader header = {
         REACHY_SIM_ABI_VERSION,
         (uint32_t)sizeof(ReachySimSnapshotHeader),
         fake->model_hash,
         fake->state.sequence,
         fake->state.simulation_time,
-        0U,
+        (uint32_t)sizeof(FakeSnapshotPayload),
+        REACHY_SIM_SNAPSHOT_FORMAT_VERSION,
+        fake->calibration_profile_id};
+    const FakeSnapshotPayload payload = {
+        fake->state,
+        fake->last_command_sequence,
+        fake->reset_pose_id,
         0U};
+    const size_t snapshot_size = sizeof(header) + sizeof(payload);
 
-    *required_size = sizeof(snapshot);
-    if(bytes == NULL || byte_capacity < sizeof(snapshot))
+    *required_size = snapshot_size;
+    if(bytes == NULL || byte_capacity < snapshot_size)
     {
         write_message(
             error,
@@ -219,7 +254,10 @@ static ReachySimStatus fake_copy_snapshot(
             "snapshot buffer is too small");
         return REACHY_SIM_STATUS_BUFFER_TOO_SMALL;
     }
-    memcpy(bytes, &snapshot, sizeof(snapshot));
+
+    uint8_t* const output = bytes;
+    memcpy(output, &header, sizeof(header));
+    memcpy(output + sizeof(header), &payload, sizeof(payload));
     return REACHY_SIM_STATUS_OK;
 }
 
@@ -231,8 +269,9 @@ static ReachySimStatus fake_restore_snapshot(
     size_t error_size)
 {
     FakeBackendContext* const fake = context;
-    ReachySimSnapshotHeader snapshot = {0};
-    if(byte_count != sizeof(snapshot))
+    const size_t expected_size =
+        sizeof(ReachySimSnapshotHeader) + sizeof(FakeSnapshotPayload);
+    if(byte_count != expected_size)
     {
         write_message(
             error,
@@ -240,24 +279,50 @@ static ReachySimStatus fake_restore_snapshot(
             "snapshot size is unsupported");
         return REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE;
     }
-    memcpy(&snapshot, bytes, sizeof(snapshot));
 
-    if(snapshot.abi_version != REACHY_SIM_ABI_VERSION ||
-       snapshot.struct_size != (uint32_t)sizeof(snapshot) ||
-       snapshot.payload_size != 0U ||
-       snapshot.model_hash != fake->model_hash ||
-       !isfinite(snapshot.simulation_time) ||
-       snapshot.simulation_time < 0.0)
+    ReachySimSnapshotHeader header = {0};
+    FakeSnapshotPayload payload = {0};
+    const uint8_t* const input = bytes;
+    memcpy(&header, input, sizeof(header));
+    memcpy(&payload, input + sizeof(header), sizeof(payload));
+
+    if(header.abi_version != REACHY_SIM_ABI_VERSION ||
+       header.struct_size != (uint32_t)sizeof(header) ||
+       header.snapshot_version != REACHY_SIM_SNAPSHOT_FORMAT_VERSION ||
+       header.payload_size != (uint32_t)sizeof(payload) ||
+       header.model_hash != fake->model_hash ||
+       header.calibration_profile_id != fake->calibration_profile_id ||
+       !isfinite(header.simulation_time) ||
+       header.simulation_time < 0.0)
     {
         write_message(
             error,
             error_size,
-            "snapshot metadata is incompatible");
+            "snapshot header is incompatible");
         return REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE;
     }
 
-    fake->state.sequence = snapshot.sequence;
-    fake->state.simulation_time = snapshot.simulation_time;
+    if(payload.state.abi_version != REACHY_SIM_ABI_VERSION ||
+       payload.state.struct_size != (uint32_t)sizeof(payload.state) ||
+       payload.state.sequence != header.sequence ||
+       payload.state.simulation_time != header.simulation_time ||
+       !isfinite(payload.state.simulation_time) ||
+       payload.state.simulation_time < 0.0 ||
+       !valid_reset_pose(payload.reset_pose_id) ||
+       payload.reserved != 0U ||
+       payload.state.health_flags !=
+           health_flags_for_reset_pose(payload.reset_pose_id))
+    {
+        write_message(
+            error,
+            error_size,
+            "snapshot payload is incompatible");
+        return REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE;
+    }
+
+    fake->state = payload.state;
+    fake->last_command_sequence = payload.last_command_sequence;
+    fake->reset_pose_id = payload.reset_pose_id;
     return REACHY_SIM_STATUS_OK;
 }
 
@@ -291,6 +356,10 @@ ReachySimStatus reachy_sim_backend_create(
 
     fake->config = *config;
     fake->model_hash = hash_bytes(model_bytes, model_size);
+    fake->calibration_profile_id =
+        REACHY_SIM_CALIBRATION_PROFILE_UNCALIBRATED;
+    fake->reset_pose_id =
+        (uint32_t)REACHY_SIM_RESET_POSE_NEUTRAL_AWAKE;
     fake->state.abi_version = REACHY_SIM_ABI_VERSION;
     fake->state.struct_size = (uint32_t)sizeof(fake->state);
     fake->state.body_count = 1U;
