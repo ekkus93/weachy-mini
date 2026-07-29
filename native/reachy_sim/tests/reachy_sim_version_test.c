@@ -6,18 +6,27 @@
 
 int main(void)
 {
-    const uint32_t actual_abi = reachy_sim_scaffold_abi_version();
-    const char* const version = reachy_sim_scaffold_version_string();
+    const uint32_t actual_abi =
+        reachy_sim_scaffold_abi_version();
+    const char* const version =
+        reachy_sim_scaffold_version_string();
 
     if(actual_abi != REACHY_SIM_SCAFFOLD_ABI_VERSION)
     {
-        (void)fprintf(stderr, "ABI version mismatch: %u\n", actual_abi);
+        (void)fprintf(
+            stderr,
+            "ABI version mismatch: %u\n",
+            actual_abi);
         return 1;
     }
 
-    if(version == NULL || strcmp(version, "0.1.0-scaffold") != 0)
+    if(version == NULL ||
+       strcmp(version, "0.2.0-abi-contract") != 0)
     {
-        (void)fprintf(stderr, "Unexpected scaffold version string.\n");
+        (void)fprintf(
+            stderr,
+            "%s\n",
+            "Unexpected simulation version string.");
         return 1;
     }
 
