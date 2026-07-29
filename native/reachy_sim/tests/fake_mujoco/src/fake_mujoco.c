@@ -19,6 +19,19 @@ static mjtNum* allocate_values(mjtSize count)
     return calloc((size_t)count, sizeof(mjtNum));
 }
 
+static int* allocate_types(mjtSize count)
+{
+    if(count <= 0)
+    {
+        return NULL;
+    }
+    if((uint64_t)count > (uint64_t)(SIZE_MAX / sizeof(int)))
+    {
+        return NULL;
+    }
+    return calloc((size_t)count, sizeof(int));
+}
+
 static void write_error(char* error, int error_size, const char* message)
 {
     if(error != NULL && error_size > 0)
@@ -158,19 +171,22 @@ mjData* mj_makeData(const mjModel* model)
     {
         return NULL;
     }
-    data->nefc = model->neq;
+    data->nefc = model->neq + 1;
     data->qpos = allocate_values(model->nq);
     data->qvel = allocate_values(model->nv);
     data->qacc = allocate_values(model->nv);
     data->act = allocate_values(model->na);
     data->ctrl = allocate_values(model->nu);
     data->efc_pos = allocate_values(data->nefc);
+    data->efc_type = allocate_types(data->nefc);
     if(data->qpos == NULL || data->qvel == NULL || data->qacc == NULL ||
-       data->efc_pos == NULL)
+       data->efc_pos == NULL || data->efc_type == NULL)
     {
         mj_deleteData(data);
         return NULL;
     }
+    data->efc_type[0] = mjCNSTR_EQUALITY;
+    data->efc_type[1] = mjCNSTR_CONTACT_FRICTIONLESS;
     return data;
 }
 
@@ -184,6 +200,7 @@ void mj_step(const mjModel* model, mjData* data)
     data->qacc[0] = 0.0;
     data->qacc[1] = 0.0;
     data->efc_pos[0] = 0.0000001;
+    data->efc_pos[1] = -0.05;
 }
 
 void mj_deleteData(mjData* data)
@@ -198,6 +215,7 @@ void mj_deleteData(mjData* data)
     free(data->act);
     free(data->ctrl);
     free(data->efc_pos);
+    free(data->efc_type);
     free(data);
 }
 
