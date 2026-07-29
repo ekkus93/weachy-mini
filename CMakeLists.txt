@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(weachy_mini LANGUAGES C)
+project(weachy_mini LANGUAGES C CXX)
 
 include(CTest)
 
