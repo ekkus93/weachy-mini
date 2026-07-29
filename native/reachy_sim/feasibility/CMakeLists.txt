@@ -50,6 +50,31 @@ if(BUILD_TESTING)
     reachy_enable_strict_warnings(reachy_mujoco_probe_contract_test)
     reachy_enable_sanitizers(reachy_mujoco_probe_contract_test)
     add_test(NAME reachy_mujoco_probe_contract_test COMMAND reachy_mujoco_probe_contract_test)
+
+    add_executable(reachy_mujoco_probe_runner_contract reachy_mujoco_probe_runner.c)
+    target_link_libraries(
+        reachy_mujoco_probe_runner_contract
+        PRIVATE
+            reachy_mujoco_probe_contract
+            reachy_fake_mujoco
+            m
+    )
+    target_compile_features(reachy_mujoco_probe_runner_contract PRIVATE c_std_17)
+    set_target_properties(reachy_mujoco_probe_runner_contract PROPERTIES C_EXTENSIONS OFF)
+    reachy_enable_strict_warnings(reachy_mujoco_probe_runner_contract)
+    reachy_enable_sanitizers(reachy_mujoco_probe_runner_contract)
+    add_test(
+        NAME reachy_mujoco_probe_runner_contract_test
+        COMMAND
+            reachy_mujoco_probe_runner_contract
+            ${CMAKE_CURRENT_SOURCE_DIR}/../tests/fixtures/closed_loop_probe.xml
+            1000
+    )
+    set_tests_properties(
+        reachy_mujoco_probe_runner_contract_test
+        PROPERTIES
+            PASS_REGULAR_EXPRESSION "\"status\":\"ok\""
+    )
 endif()
 
 option(REACHY_BUILD_MUJOCO_PROBE "Build the probe against an external MuJoCo library" OFF)
