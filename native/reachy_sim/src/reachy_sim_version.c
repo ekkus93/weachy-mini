@@ -2,10 +2,10 @@
 
 uint32_t reachy_sim_scaffold_abi_version(void)
 {
-    return REACHY_SIM_SCAFFOLD_ABI_VERSION;
+    return reachy_sim_abi_version();
 }
 
 const char* reachy_sim_scaffold_version_string(void)
 {
-    return "0.1.0-scaffold";
+    return reachy_sim_version_string();
 }
