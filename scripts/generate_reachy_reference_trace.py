@@ -171,8 +171,7 @@ def generate_trace(model_path: Path, scenario_path: Path) -> dict[str, Any]:
     model_sha256 = hashlib.sha256(model_raw).hexdigest()
     if model_sha256 != source["model_sha256"]:
         raise TraceGenerationError(
-            f"Model SHA-256 mismatch: expected {source['model_sha256']}, "
-            f"found {model_sha256}"
+            f"Model SHA-256 mismatch: expected {source['model_sha256']}, found {model_sha256}"
         )
 
     model = mujoco.MjModel.from_xml_path(str(model_path))
@@ -191,9 +190,7 @@ def generate_trace(model_path: Path, scenario_path: Path) -> dict[str, Any]:
     phases = list(scenario["phases"])
     checkpoints = list(scenario["checkpoint_steps"])
     checkpoint_set = set(checkpoints)
-    maximum_allowed_residual = float(
-        scenario["tolerances"]["maximum_equality_residual"]
-    )
+    maximum_allowed_residual = float(scenario["tolerances"]["maximum_equality_residual"])
 
     data = mujoco.MjData(model)
     apply_targets(data, actuator_ids, phase_for_step(phases, 0))
@@ -223,9 +220,7 @@ def generate_trace(model_path: Path, scenario_path: Path) -> dict[str, Any]:
             )
     actual_steps = [checkpoint["step"] for checkpoint in trace_checkpoints]
     if actual_steps != checkpoints:
-        raise TraceGenerationError(
-            f"Captured checkpoint set differs from scenario: {actual_steps}"
-        )
+        raise TraceGenerationError(f"Captured checkpoint set differs from scenario: {actual_steps}")
 
     return {
         "schema_version": 1,
