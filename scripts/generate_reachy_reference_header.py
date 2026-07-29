@@ -10,232 +10,163 @@ import sys
 from pathlib import Path
 from typing import Any
 
+COUNT_KEYS = (
+    ("BODY", "bodies_including_world"),
+    ("JOINT", "joints"),
+    ("ACTUATOR", "actuators"),
+    ("EQUALITY", "equalities"),
+    ("SITE", "sites"),
+    ("CAMERA", "cameras"),
+)
+
 
 class ScenarioError(RuntimeError):
-    """Raised when the reference scenario is malformed."""
+    """Raised when the reference scenario is malformed or stale."""
 
 
-def read_scenario(path: Path) -> tuple[dict[str, Any], str]:
-    """Read, validate, and hash a reference scenario."""
-    try:
-        raw = path.read_bytes()
-        value = json.loads(raw)
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ScenarioError(f"Cannot read scenario {path}: {exc}") from exc
+def require_object(value: object, label: str) -> dict[str, Any]:
+    """Return a required JSON object."""
     if not isinstance(value, dict):
-        raise ScenarioError("Scenario root must be an object")
-    validate_scenario(value)
-    return value, hashlib.sha256(raw).hexdigest()
+        raise ScenarioError(f"{label} must be an object")
+    return value
 
 
-def require_list(value: object, label: str) -> list[Any]:
+def require_array(value: object, label: str) -> list[Any]:
     """Return a required JSON array."""
     if not isinstance(value, list):
         raise ScenarioError(f"{label} must be an array")
     return value
 
 
-def require_string(value: object, label: str) -> str:
-    """Return a required nonempty string."""
-    if not isinstance(value, str) or not value:
-        raise ScenarioError(f"{label} must be a nonempty string")
-    return value
-
-
-def validate_names(value: object, label: str) -> list[str]:
-    """Validate a nonempty unique name array."""
-    names = require_list(value, label)
-    if not names or not all(isinstance(name, str) and name for name in names):
+def require_names(value: object, label: str) -> list[str]:
+    """Return a nonempty array of unique names."""
+    values = require_array(value, label)
+    if not values or not all(isinstance(item, str) and item for item in values):
         raise ScenarioError(f"{label} must contain nonempty strings")
-    typed_names = list(names)
-    if len(set(typed_names)) != len(typed_names):
+    names = list(values)
+    if len(names) != len(set(names)):
         raise ScenarioError(f"{label} contains duplicate names")
-    return typed_names
+    return names
 
 
-def validate_numbers(
-    value: object,
-    label: str,
-    expected_length: int,
-) -> list[float]:
-    """Validate a fixed-length numeric array."""
-    values = require_list(value, label)
-    if len(values) != expected_length:
-        raise ScenarioError(
-            f"{label} must contain {expected_length} values, found {len(values)}"
-        )
-    result: list[float] = []
-    for index, item in enumerate(values):
-        if not isinstance(item, int | float) or isinstance(item, bool):
-            raise ScenarioError(f"{label}[{index}] must be numeric")
-        result.append(float(item))
-    return result
+def require_number(value: object, label: str) -> float:
+    """Return a finite JSON number represented as float."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise ScenarioError(f"{label} must be numeric")
+    number = float(value)
+    if not (-float("inf") < number < float("inf")):
+        raise ScenarioError(f"{label} must be finite")
+    return number
+
+
+def read_scenario(path: Path) -> tuple[dict[str, Any], str]:
+    """Read, validate, and hash the scenario's exact bytes."""
+    try:
+        raw = path.read_bytes()
+        scenario = json.loads(raw)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ScenarioError(f"Cannot read scenario {path}: {exc}") from exc
+    scenario = require_object(scenario, "scenario root")
+    validate_scenario(scenario)
+    return scenario, hashlib.sha256(raw).hexdigest()
 
 
 def validate_scenario(scenario: dict[str, Any]) -> None:
-    """Validate the complete scenario contract before code generation."""
+    """Validate fields consumed by the generated native runner."""
     if scenario.get("schema_version") != 1:
         raise ScenarioError("Unsupported scenario schema version")
-    require_string(scenario.get("scenario_id"), "scenario_id")
-    source = scenario.get("source")
-    if not isinstance(source, dict):
-        raise ScenarioError("source must be an object")
-    source_keys = (
-        "repository",
-        "commit",
-        "model_path",
-        "model_sha256",
-        "mujoco_version",
-    )
-    for key in source_keys:
-        require_string(source.get(key), f"source.{key}")
+    scenario_id = scenario.get("scenario_id")
+    if not isinstance(scenario_id, str) or not scenario_id:
+        raise ScenarioError("scenario_id must be a nonempty string")
+    source = require_object(scenario.get("source"), "source")
+    for field in ("model_sha256", "mujoco_version"):
+        if not isinstance(source.get(field), str) or not source[field]:
+            raise ScenarioError(f"source.{field} must be a nonempty string")
     if len(source["model_sha256"]) != 64:
-        raise ScenarioError("source.model_sha256 must contain 64 hexadecimal characters")
+        raise ScenarioError("source.model_sha256 must be a SHA-256 string")
 
-    timestep = scenario.get("timestep_seconds")
-    if (
-        not isinstance(timestep, int | float)
-        or isinstance(timestep, bool)
-        or timestep <= 0
-    ):
+    timestep = require_number(scenario.get("timestep_seconds"), "timestep_seconds")
+    if timestep <= 0.0:
         raise ScenarioError("timestep_seconds must be positive")
     total_steps = scenario.get("total_steps")
-    if (
-        not isinstance(total_steps, int)
-        or isinstance(total_steps, bool)
-        or total_steps <= 0
-    ):
+    if not isinstance(total_steps, int) or isinstance(total_steps, bool) or total_steps <= 0:
         raise ScenarioError("total_steps must be a positive integer")
 
-    actuator_names = validate_names(scenario.get("actuator_names"), "actuator_names")
-    validate_names(scenario.get("body_names"), "body_names")
-    validate_phases(scenario, actuator_names, total_steps)
-    validate_checkpoints(scenario, total_steps)
-    validate_counts(scenario, len(actuator_names))
-    validate_tolerances(scenario)
-
-
-def validate_phases(
-    scenario: dict[str, Any],
-    actuator_names: list[str],
-    total_steps: int,
-) -> None:
-    """Validate ordered command phases."""
-    raw_phases = require_list(scenario.get("phases"), "phases")
-    if not raw_phases:
-        raise ScenarioError("phases must not be empty")
-    previous_start = -1
-    phase_names: set[str] = set()
-    for index, raw_phase in enumerate(raw_phases):
-        if not isinstance(raw_phase, dict):
-            raise ScenarioError(f"phases[{index}] must be an object")
-        phase_name = require_string(raw_phase.get("name"), f"phases[{index}].name")
-        if phase_name in phase_names:
-            raise ScenarioError(f"Duplicate phase name: {phase_name}")
-        phase_names.add(phase_name)
-        start = raw_phase.get("start_step")
-        if not isinstance(start, int) or isinstance(start, bool):
-            raise ScenarioError(f"phases[{index}].start_step must be an integer")
-        if start <= previous_start or start < 0 or start >= total_steps:
-            raise ScenarioError("Phase start steps must be increasing and within total_steps")
-        previous_start = start
-        validate_numbers(
-            raw_phase.get("targets_radians"),
-            f"phases[{index}].targets_radians",
-            len(actuator_names),
-        )
-    if raw_phases[0]["start_step"] != 0:
-        raise ScenarioError("The first phase must start at step zero")
-
-
-def validate_checkpoints(scenario: dict[str, Any], total_steps: int) -> None:
-    """Validate the complete ordered checkpoint set."""
-    checkpoints = require_list(scenario.get("checkpoint_steps"), "checkpoint_steps")
-    if not checkpoints or checkpoints[0] != 0 or checkpoints[-1] != total_steps:
-        raise ScenarioError("Checkpoints must start at zero and end at total_steps")
-    if any(not isinstance(step, int) or isinstance(step, bool) for step in checkpoints):
-        raise ScenarioError("Checkpoint steps must be integers")
-    if checkpoints != sorted(set(checkpoints)):
-        raise ScenarioError("Checkpoint steps must be unique and increasing")
-    if any(step < 0 or step > total_steps for step in checkpoints):
-        raise ScenarioError("Checkpoint step is outside the scenario")
-
-
-def validate_counts(scenario: dict[str, Any], actuator_count: int) -> None:
-    """Validate pinned compiled-model dimensions."""
-    counts = scenario.get("expected_counts")
-    if not isinstance(counts, dict):
-        raise ScenarioError("expected_counts must be an object")
-    required_counts = {
-        "bodies_including_world",
-        "joints",
-        "actuators",
-        "equalities",
-        "sites",
-        "cameras",
-        "nq",
-        "nv",
-    }
-    if set(counts) != required_counts:
+    actuators = require_names(scenario.get("actuator_names"), "actuator_names")
+    require_names(scenario.get("body_names"), "body_names")
+    counts = require_object(scenario.get("expected_counts"), "expected_counts")
+    required_count_keys = {key for _, key in COUNT_KEYS} | {"nq", "nv"}
+    if set(counts) != required_count_keys:
         raise ScenarioError("expected_counts has an unexpected key set")
     if any(
         not isinstance(value, int) or isinstance(value, bool) or value < 0
         for value in counts.values()
     ):
         raise ScenarioError("expected_counts values must be nonnegative integers")
-    if counts["actuators"] != actuator_count:
-        raise ScenarioError("Actuator-name count does not match expected_counts")
+    if counts["actuators"] != len(actuators):
+        raise ScenarioError("Actuator count differs from actuator_names")
 
+    phases = require_array(scenario.get("phases"), "phases")
+    if not phases:
+        raise ScenarioError("phases must not be empty")
+    previous_start = -1
+    for index, raw_phase in enumerate(phases):
+        phase = require_object(raw_phase, f"phases[{index}]")
+        start = phase.get("start_step")
+        name = phase.get("name")
+        targets = require_array(phase.get("targets_radians"), f"phases[{index}].targets")
+        if not isinstance(start, int) or isinstance(start, bool):
+            raise ScenarioError(f"phases[{index}].start_step must be an integer")
+        if start <= previous_start or start < 0 or start >= total_steps:
+            raise ScenarioError("Phase start steps must increase within total_steps")
+        if not isinstance(name, str) or not name:
+            raise ScenarioError(f"phases[{index}].name must be nonempty")
+        if len(targets) != len(actuators):
+            raise ScenarioError(f"phases[{index}] target count differs from actuators")
+        for target_index, target in enumerate(targets):
+            require_number(target, f"phases[{index}].targets[{target_index}]")
+        previous_start = start
+    if phases[0]["start_step"] != 0:
+        raise ScenarioError("The first phase must start at step zero")
 
-def validate_tolerances(scenario: dict[str, Any]) -> None:
-    """Validate cross-platform comparison tolerances."""
-    tolerances = scenario.get("tolerances")
-    if not isinstance(tolerances, dict):
-        raise ScenarioError("tolerances must be an object")
-    required_tolerances = {
-        "simulation_time_seconds",
-        "qpos_absolute",
-        "qvel_absolute",
-        "body_position_metres_absolute",
-        "body_quaternion_component_absolute",
-        "equality_residual_absolute",
-        "maximum_equality_residual",
-    }
-    if set(tolerances) != required_tolerances:
-        raise ScenarioError("tolerances has an unexpected key set")
-    if any(
-        not isinstance(value, int | float) or isinstance(value, bool) or value < 0
-        for value in tolerances.values()
-    ):
-        raise ScenarioError("Tolerance values must be nonnegative numbers")
+    checkpoints = require_array(scenario.get("checkpoint_steps"), "checkpoint_steps")
+    if checkpoints != sorted(set(checkpoints)):
+        raise ScenarioError("Checkpoint steps must be unique and increasing")
+    if not checkpoints or checkpoints[0] != 0 or checkpoints[-1] != total_steps:
+        raise ScenarioError("Checkpoints must span zero through total_steps")
+    if any(not isinstance(step, int) or isinstance(step, bool) for step in checkpoints):
+        raise ScenarioError("Checkpoint steps must be integers")
+
+    tolerances = require_object(scenario.get("tolerances"), "tolerances")
+    maximum_residual = require_number(
+        tolerances.get("maximum_equality_residual"),
+        "tolerances.maximum_equality_residual",
+    )
+    if maximum_residual < 0.0:
+        raise ScenarioError("maximum_equality_residual must be nonnegative")
 
 
 def c_string(value: str) -> str:
-    """Encode a UTF-8 JSON string as a C string literal."""
+    """Render an ASCII-safe C string literal."""
     return json.dumps(value, ensure_ascii=True)
 
 
 def c_number(value: int | float) -> str:
-    """Emit stable C numeric source."""
+    """Render deterministic C numeric source."""
     if isinstance(value, int):
         return str(value)
     return format(float(value), ".17g")
 
 
-def c_declaration(type_name: str, name: str, value: str) -> str:
-    """Render one generated C constant declaration."""
-    return f"static const {type_name} {name} = {value};"
-
-
 def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
-    """Render the validated native scenario header."""
+    """Render the canonical generated header."""
     source = scenario["source"]
-    actuator_names = scenario["actuator_names"]
-    body_names = scenario["body_names"]
+    actuators = scenario["actuator_names"]
+    bodies = scenario["body_names"]
     phases = scenario["phases"]
     checkpoints = scenario["checkpoint_steps"]
     counts = scenario["expected_counts"]
-    tolerances = scenario["tolerances"]
+    maximum_residual = scenario["tolerances"]["maximum_equality_residual"]
 
     lines = [
         "#ifndef REACHY_REFERENCE_SCENARIO_GENERATED_H",
@@ -246,8 +177,8 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
         "/* Generated by scripts/generate_reachy_reference_header.py. */",
         f"#define REACHY_REFERENCE_SCENARIO_SCHEMA_VERSION {scenario['schema_version']}U",
         f"#define REACHY_REFERENCE_TOTAL_STEPS UINT64_C({scenario['total_steps']})",
-        f"#define REACHY_REFERENCE_ACTUATOR_COUNT {len(actuator_names)}U",
-        f"#define REACHY_REFERENCE_BODY_COUNT {len(body_names)}U",
+        f"#define REACHY_REFERENCE_ACTUATOR_COUNT {len(actuators)}U",
+        f"#define REACHY_REFERENCE_BODY_COUNT {len(bodies)}U",
         f"#define REACHY_REFERENCE_PHASE_COUNT {len(phases)}U",
         f"#define REACHY_REFERENCE_CHECKPOINT_COUNT {len(checkpoints)}U",
         f"#define REACHY_REFERENCE_EXPECTED_NQ {counts['nq']}U",
@@ -259,35 +190,29 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
         "    double targets[REACHY_REFERENCE_ACTUATOR_COUNT];",
         "} ReachyReferencePhase;",
         "",
-        c_declaration(
-            "char REACHY_REFERENCE_SCENARIO_ID[]",
-            "",
-            c_string(scenario["scenario_id"]),
-        ).replace("[]  =", "[] ="),
-        c_declaration(
-            "char REACHY_REFERENCE_SCENARIO_SHA256[]",
-            "",
-            c_string(scenario_sha256),
-        ).replace("[]  =", "[] ="),
-        c_declaration(
-            "char REACHY_REFERENCE_MODEL_SHA256[]",
-            "",
-            c_string(source["model_sha256"]),
-        ).replace("[]  =", "[] ="),
-        c_declaration(
-            "char REACHY_REFERENCE_MUJOCO_VERSION[]",
-            "",
-            c_string(source["mujoco_version"]),
-        ).replace("[]  =", "[] ="),
-        c_declaration(
-            "double",
-            "REACHY_REFERENCE_TIMESTEP_SECONDS",
-            c_number(scenario["timestep_seconds"]),
+        (
+            "static const char REACHY_REFERENCE_SCENARIO_ID[] = "
+            f"{c_string(scenario['scenario_id'])};"
         ),
-        c_declaration(
-            "double",
-            "REACHY_REFERENCE_MAXIMUM_EQUALITY_RESIDUAL",
-            c_number(tolerances["maximum_equality_residual"]),
+        (
+            "static const char REACHY_REFERENCE_SCENARIO_SHA256[] = "
+            f"{c_string(scenario_sha256)};"
+        ),
+        (
+            "static const char REACHY_REFERENCE_MODEL_SHA256[] = "
+            f"{c_string(source['model_sha256'])};"
+        ),
+        (
+            "static const char REACHY_REFERENCE_MUJOCO_VERSION[] = "
+            f"{c_string(source['mujoco_version'])};"
+        ),
+        (
+            "static const double REACHY_REFERENCE_TIMESTEP_SECONDS = "
+            f"{c_number(scenario['timestep_seconds'])};"
+        ),
+        (
+            "static const double REACHY_REFERENCE_MAXIMUM_EQUALITY_RESIDUAL = "
+            f"{c_number(maximum_residual)};"
         ),
         "",
         (
@@ -295,7 +220,7 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
             "[REACHY_REFERENCE_ACTUATOR_COUNT] = {"
         ),
     ]
-    lines.extend(f"    {c_string(name)}," for name in actuator_names)
+    lines.extend(f"    {c_string(name)}," for name in actuators)
     lines.extend(
         [
             "};",
@@ -306,7 +231,7 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
             ),
         ]
     )
-    lines.extend(f"    {c_string(name)}," for name in body_names)
+    lines.extend(f"    {c_string(name)}," for name in bodies)
     lines.extend(
         [
             "};",
@@ -331,28 +256,20 @@ def render_header(scenario: dict[str, Any], scenario_sha256: str) -> str:
     for phase in phases:
         target_text = ", ".join(c_number(value) for value in phase["targets_radians"])
         lines.append(
-            "    {UINT64_C(" + str(phase["start_step"]) + "), "
+            "    {UINT64_C("
+            + str(phase["start_step"])
+            + "), "
             + c_string(phase["name"])
             + ", {"
             + target_text
             + "}},"
         )
-    count_declarations = (
-        ("BODY", "bodies_including_world"),
-        ("JOINT", "joints"),
-        ("ACTUATOR", "actuators"),
-        ("EQUALITY", "equalities"),
-        ("SITE", "sites"),
-        ("CAMERA", "cameras"),
-    )
     lines.extend(["};", ""])
-    for constant_name, count_key in count_declarations:
+    for constant_name, count_key in COUNT_KEYS:
         lines.append(
-            c_declaration(
-                "uint32_t",
-                f"REACHY_REFERENCE_EXPECTED_{constant_name}_COUNT",
-                f"{counts[count_key]}U",
-            )
+            "static const uint32_t "
+            f"REACHY_REFERENCE_EXPECTED_{constant_name}_COUNT = "
+            f"{counts[count_key]}U;"
         )
     lines.extend(["", "#endif", ""])
     return "\n".join(lines)
