@@ -27,6 +27,10 @@ typedef struct mjModel {
     int na;
     int nu;
     int neq;
+    int nbody;
+    int njnt;
+    int nsite;
+    int ncam;
 } mjModel;
 
 typedef struct mjWarningStat {
