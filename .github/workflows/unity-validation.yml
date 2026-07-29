@@ -28,7 +28,7 @@ jobs:
           lfs: true
 
       - name: Run Unity tests
-        id: unity-tests
+        id: unity_tests
         uses: game-ci/unity-test-runner@v4
         with:
           projectPath: .
@@ -40,7 +40,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: unity-test-results-${{ github.sha }}
-          path: ${{ steps.unity-tests.outputs.artifactsPath }}
+          path: ${{ steps.unity_tests.outputs.artifactsPath }}
           if-no-files-found: error
           retention-days: 14
 
