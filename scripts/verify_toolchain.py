@@ -33,13 +33,9 @@ def load_manifest() -> dict[str, Any]:
     required_top_level = {"schema_version", "unity", "android", "quality_tools"}
     missing = sorted(required_top_level.difference(manifest))
     if missing:
-        raise ToolchainError(
-            f"Toolchain manifest is missing keys: {', '.join(missing)}"
-        )
+        raise ToolchainError(f"Toolchain manifest is missing keys: {', '.join(missing)}")
     if manifest["schema_version"] != 1:
-        raise ToolchainError(
-            f"Unsupported toolchain schema: {manifest['schema_version']}"
-        )
+        raise ToolchainError(f"Unsupported toolchain schema: {manifest['schema_version']}")
 
     unity = manifest["unity"]
     for key in (
@@ -50,14 +46,10 @@ def load_manifest() -> dict[str, Any]:
         "graphics_apis",
     ):
         if key not in unity:
-            raise ToolchainError(
-                f"Toolchain manifest unity section is missing {key!r}"
-            )
+            raise ToolchainError(f"Toolchain manifest unity section is missing {key!r}")
 
     if unity["scripting_backend"] != "IL2CPP":
-        raise ToolchainError(
-            "Android Unity builds must keep IL2CPP as the pinned backend."
-        )
+        raise ToolchainError("Android Unity builds must keep IL2CPP as the pinned backend.")
     if unity["architectures"] != ["ARM64"]:
         raise ToolchainError(
             "Unity Android architectures must be exactly ['ARM64']; x86_64 is unsupported."
@@ -79,9 +71,7 @@ def load_manifest() -> dict[str, Any]:
         "abi",
     ):
         if key not in android:
-            raise ToolchainError(
-                f"Toolchain manifest android section is missing {key!r}"
-            )
+            raise ToolchainError(f"Toolchain manifest android section is missing {key!r}")
 
     integer_api_keys = (
         "min_sdk",
@@ -93,14 +83,13 @@ def load_manifest() -> dict[str, Any]:
     for key in integer_api_keys:
         value = android[key]
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise ToolchainError(
-                f"Toolchain manifest android {key!r} must be a positive integer."
-            )
+            raise ToolchainError(f"Toolchain manifest android {key!r} must be a positive integer.")
 
     compile_sdk_package = android["compile_sdk_package"]
-    if not isinstance(compile_sdk_package, str) or re.fullmatch(
-        r"\d+(?:\.\d+)?", compile_sdk_package
-    ) is None:
+    if (
+        not isinstance(compile_sdk_package, str)
+        or re.fullmatch(r"\d+(?:\.\d+)?", compile_sdk_package) is None
+    ):
         raise ToolchainError(
             "Toolchain manifest android 'compile_sdk_package' must be a numeric "
             "SDK package suffix such as '37.0'."
@@ -114,13 +103,9 @@ def load_manifest() -> dict[str, Any]:
     for key in ("native_feasibility_min_sdk", "unity_device_feasibility_min_sdk"):
         value = android[key]
         if value < UNITY_MINIMUM_ANDROID_API:
-            raise ToolchainError(
-                f"Android {key} must be at least API {UNITY_MINIMUM_ANDROID_API}."
-            )
+            raise ToolchainError(f"Android {key} must be at least API {UNITY_MINIMUM_ANDROID_API}.")
         if value > android["min_sdk"]:
-            raise ToolchainError(
-                f"Android {key} must not exceed the full app minSdkVersion."
-            )
+            raise ToolchainError(f"Android {key} must not exceed the full app minSdkVersion.")
 
     if android["min_sdk"] > android["compile_sdk"]:
         raise ToolchainError("Android minSdkVersion must not exceed compileSdkVersion.")
@@ -140,9 +125,7 @@ def load_manifest() -> dict[str, Any]:
         re.MULTILINE,
     )
     if version_match is None:
-        raise ToolchainError(
-            f"Cannot parse Unity editor version from {PROJECT_VERSION_PATH}."
-        )
+        raise ToolchainError(f"Cannot parse Unity editor version from {PROJECT_VERSION_PATH}.")
     project_version = version_match.group(1)
     if project_version != unity["editor_version"]:
         raise ToolchainError(
@@ -169,8 +152,7 @@ def run_version(command: list[str]) -> str:
     output = f"{completed.stdout}\n{completed.stderr}".strip()
     if completed.returncode != 0:
         raise ToolchainError(
-            f"Command {' '.join(command)} failed with exit code "
-            f"{completed.returncode}: {output}"
+            f"Command {' '.join(command)} failed with exit code {completed.returncode}: {output}"
         )
     return output
 
@@ -190,9 +172,7 @@ def require_pattern(label: str, output: str, pattern: str, expected: str) -> Non
         raise ToolchainError(f"Could not parse {label} version from: {output}")
     actual = match.group(1)
     if actual != expected:
-        raise ToolchainError(
-            f"{label} version mismatch: expected {expected}, found {actual}"
-        )
+        raise ToolchainError(f"{label} version mismatch: expected {expected}, found {actual}")
 
 
 def verify_installed_tools(manifest: dict[str, Any]) -> None:
@@ -202,9 +182,7 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
 
     python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
     minimum_python = quality["python_minimum"]
-    if tuple(map(int, python_version.split("."))) < tuple(
-        map(int, minimum_python.split("."))
-    ):
+    if tuple(map(int, python_version.split("."))) < tuple(map(int, minimum_python.split("."))):
         raise ToolchainError(
             f"Python {minimum_python}+ is required; this interpreter is {python_version}."
         )
@@ -223,15 +201,12 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
         raise ToolchainError(f"Could not parse Java version from: {java_output}")
     if int(java_match.group(1)) != android["jdk_major"]:
         raise ToolchainError(
-            f"JDK version mismatch: expected {android['jdk_major']}, "
-            f"found {java_match.group(1)}"
+            f"JDK version mismatch: expected {android['jdk_major']}, found {java_match.group(1)}"
         )
 
     unity_editor = os.environ.get("UNITY_EDITOR")
     if not unity_editor:
-        raise ToolchainError(
-            "UNITY_EDITOR must point to the pinned Unity editor executable."
-        )
+        raise ToolchainError("UNITY_EDITOR must point to the pinned Unity editor executable.")
     unity_path = Path(unity_editor)
     if not unity_path.is_file():
         raise ToolchainError(f"UNITY_EDITOR is not a file: {unity_path}")
@@ -252,9 +227,7 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
 
     android_home = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
     if not android_home:
-        raise ToolchainError(
-            "ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK."
-        )
+        raise ToolchainError("ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK.")
     sdk_root = Path(android_home)
     required_paths = [
         sdk_root / "platforms" / f"android-{android['compile_sdk_package']}",
