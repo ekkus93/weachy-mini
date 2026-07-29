@@ -209,15 +209,12 @@ def compare_traces(
     for key in comparison_keys:
         if maxima[key] > float(tolerances[key]):
             raise TraceComparisonError(
-                f"{key} error {maxima[key]:.17g} exceeds tolerance "
-                f"{float(tolerances[key]):.17g}"
+                f"{key} error {maxima[key]:.17g} exceeds tolerance {float(tolerances[key]):.17g}"
             )
     if maxima["maximum_observed_equality_residual"] > float(
         tolerances["maximum_equality_residual"]
     ):
-        raise TraceComparisonError(
-            "Observed equality residual exceeds the bounded-residual policy"
-        )
+        raise TraceComparisonError("Observed equality residual exceeds the bounded-residual policy")
     return maxima
 
 
@@ -259,10 +256,7 @@ def main() -> int:
     except (TraceComparisonError, KeyError, TypeError, ValueError) as exc:
         print(f"Reference trace comparison failed: {exc}", file=sys.stderr)
         return 1
-    print(
-        "Reference trace comparison passed: "
-        f"scenario={scenario['scenario_id']} output={output}"
-    )
+    print(f"Reference trace comparison passed: scenario={scenario['scenario_id']} output={output}")
     return 0
 
 
