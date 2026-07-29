@@ -648,7 +648,7 @@ namespace ReachyMini.Editor
                     "Unity render manifest contains a malformed local pose.");
             }
 
-            transform.localPosition = new Vector3(
+            Vector3 position = new Vector3(
                 (float)pose.position_metres[0],
                 (float)pose.position_metres[1],
                 (float)pose.position_metres[2]);
@@ -657,17 +657,30 @@ namespace ReachyMini.Editor
                 (float)pose.quaternion_wxyz[2],
                 (float)pose.quaternion_wxyz[3],
                 (float)pose.quaternion_wxyz[0]);
-            if (rotation.sqrMagnitude <= 0f)
+            float magnitudeSquared =
+                rotation.x * rotation.x +
+                rotation.y * rotation.y +
+                rotation.z * rotation.z +
+                rotation.w * rotation.w;
+            if (!IsFinite(position.x) || !IsFinite(position.y) ||
+                !IsFinite(position.z) || !IsFinite(magnitudeSquared) ||
+                magnitudeSquared <= 0f)
             {
                 throw new InvalidDataException(
-                    "Unity render manifest contains a zero quaternion.");
+                    "Unity render manifest pose cannot be represented as finite Unity floats.");
             }
+            transform.localPosition = position;
             transform.localRotation = rotation.normalized;
         }
 
         private static bool IsFinite(double value)
         {
             return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
 
         private static void AssertNoUnityPhysics(GameObject root)
