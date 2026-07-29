@@ -1,0 +1,245 @@
+name: Android MuJoCo Feasibility
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/android-feasibility.yml'
+      - 'CMakeLists.txt'
+      - 'native/**'
+      - 'scripts/build_mujoco_android.sh'
+      - 'scripts/run_mujoco_probe_android.sh'
+      - 'scripts/source_checkout.py'
+      - 'scripts/verify_source_checkout.py'
+      - 'third_party/mujoco-source.lock.json'
+      - 'toolchain.lock.json'
+  workflow_dispatch:
+    inputs:
+      run_device_probe:
+        description: Run the ARM64 probe on the labeled self-hosted Android-device runner
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-mujoco-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-arm64:
+    name: Build Android ARM64 MuJoCo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Export pinned versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+
+          toolchain = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))
+          mujoco = json.loads(
+              Path("third_party/mujoco-source.lock.json").read_text(encoding="utf-8")
+          )
+          android = toolchain["android"]
+          values = {
+              "ANDROID_ABI": android["abi"],
+              "ANDROID_BUILD_TOOLS": android["build_tools"],
+              "ANDROID_CMAKE_VERSION": android["cmake"],
+              "ANDROID_COMPILE_SDK": android["compile_sdk"],
+              "ANDROID_NDK_VERSION": android["ndk"],
+              "ANDROID_PLATFORM": f"android-{android['min_sdk']}",
+              "MUJOCO_COMMIT": mujoco["commit"],
+              "MUJOCO_REPOSITORY": mujoco["repository"],
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+              sdkmanager="$(command -v sdkmanager)"
+          fi
+
+          "${sdkmanager}" --install \
+              "platform-tools" \
+              "platforms;android-${ANDROID_COMPILE_SDK}" \
+              "build-tools;${ANDROID_BUILD_TOOLS}" \
+              "ndk;${ANDROID_NDK_VERSION}" \
+              "cmake;${ANDROID_CMAKE_VERSION}"
+
+          ndk_root="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          cmake_bin="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin"
+          test -f "${ndk_root}/source.properties"
+          test -x "${cmake_bin}/cmake"
+          test -x "${cmake_bin}/ninja"
+
+          printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}" >> "${GITHUB_ENV}"
+          printf '%s\n' "${cmake_bin}" >> "${GITHUB_PATH}"
+
+      - name: Verify installed Android toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_ndk="$(sed -n 's/^Pkg.Revision[[:space:]]*=[[:space:]]*//p' \
+              "${ANDROID_NDK_HOME}/source.properties")"
+          if [[ "${actual_ndk}" != "${ANDROID_NDK_VERSION}" ]]; then
+              printf 'NDK mismatch: expected %s, found %s.\n' \
+                  "${ANDROID_NDK_VERSION}" "${actual_ndk}" >&2
+              exit 1
+          fi
+
+          actual_cmake="$(cmake --version | sed -n '1s/^cmake version //p')"
+          if [[ "${actual_cmake}" != "${ANDROID_CMAKE_VERSION}" ]]; then
+              printf 'CMake mismatch: expected %s, found %s.\n' \
+                  "${ANDROID_CMAKE_VERSION}" "${actual_cmake}" >&2
+              exit 1
+          fi
+
+          python3 scripts/verify_toolchain.py --manifest-only
+
+      - name: Check out pinned MuJoCo source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="${RUNNER_TEMP}/mujoco"
+          git init "${source_dir}"
+          git -C "${source_dir}" remote add origin "${MUJOCO_REPOSITORY}"
+          git -C "${source_dir}" fetch --depth=1 origin "${MUJOCO_COMMIT}"
+          git -C "${source_dir}" checkout --detach FETCH_HEAD
+          python3 scripts/verify_source_checkout.py \
+              --source "${source_dir}" \
+              --lock third_party/mujoco-source.lock.json
+          printf 'MUJOCO_SOURCE_DIR=%s\n' "${source_dir}" >> "${GITHUB_ENV}"
+
+      - name: Cross-compile MuJoCo and the probe for Android ARM64
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="${RUNNER_TEMP}/weachy-mujoco-android-arm64"
+          printf 'MUJOCO_ARTIFACT_DIR=%s\n' "${artifact_dir}" >> "${GITHUB_ENV}"
+
+          MUJOCO_ANDROID_PLATFORM="${ANDROID_PLATFORM}" \
+          MUJOCO_ANDROID_BUILD_DIR="${RUNNER_TEMP}/mujoco-build-arm64" \
+          MUJOCO_ANDROID_OUTPUT_DIR="${artifact_dir}" \
+          REACHY_PROBE_ANDROID_BUILD_DIR="${RUNNER_TEMP}/probe-build-arm64" \
+              ./scripts/build_mujoco_android.sh
+
+      - name: Verify ARM64 artifact architecture and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          prebuilt_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt"
+          mapfile -t readelf_candidates < <(
+              find "${prebuilt_root}" -type f -path '*/bin/llvm-readelf' -print
+          )
+          if [[ "${#readelf_candidates[@]}" -ne 1 ]]; then
+              printf 'Expected one NDK llvm-readelf, found %s.\n' \
+                  "${#readelf_candidates[@]}" >&2
+              exit 1
+          fi
+          readelf="${readelf_candidates[0]}"
+
+          "${readelf}" -h "${MUJOCO_ARTIFACT_DIR}/libmujoco.so" \
+              | tee "${MUJOCO_ARTIFACT_DIR}/libmujoco.elf-header.txt"
+          grep -F 'Machine:' "${MUJOCO_ARTIFACT_DIR}/libmujoco.elf-header.txt" \
+              | grep -F 'AArch64'
+          grep -F "MuJoCo commit: ${MUJOCO_COMMIT}" \
+              "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
+          test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.exports.txt"
+          test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.dynamic.txt"
+          test -x "${MUJOCO_ARTIFACT_DIR}/reachy_mujoco_probe_runner"
+
+      - name: Upload Android ARM64 feasibility artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-mujoco-android-arm64-${{ github.sha }}
+          path: ${{ env.MUJOCO_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+  device-probe:
+    name: Run probe on physical ARM64 Android device
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_device_probe }}
+    needs: build-arm64
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Android ARM64 feasibility artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weachy-mujoco-android-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/weachy-mujoco-android-arm64
+
+      - name: Verify connected device and run the long probe
+        shell: bash
+        env:
+          MUJOCO_ANDROID_OUTPUT_DIR: ${{ runner.temp }}/weachy-mujoco-android-arm64
+          REACHY_PROBE_REPORT_DIR: ${{ runner.temp }}/weachy-mujoco-probe-report
+          REACHY_PROBE_STEP_COUNT: '900000'
+        run: |
+          set -euo pipefail
+          command -v adb >/dev/null
+          device_count="$(adb devices | awk 'NR > 1 && $2 == "device" {count += 1} END {print count + 0}')"
+          if [[ "${device_count}" != "1" ]]; then
+              printf 'Exactly one authorized Android device is required; found %s.\n' \
+                  "${device_count}" >&2
+              exit 1
+          fi
+
+          device_abi="$(adb shell getprop ro.product.cpu.abi | tr -d '\r')"
+          if [[ "${device_abi}" != "arm64-v8a" ]]; then
+              printf 'Physical device must report arm64-v8a; found %s.\n' \
+                  "${device_abi}" >&2
+              exit 1
+          fi
+
+          ./scripts/run_mujoco_probe_android.sh
+
+      - name: Upload physical-device probe report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-mujoco-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/weachy-mujoco-probe-report
+          if-no-files-found: error
+          retention-days: 30
