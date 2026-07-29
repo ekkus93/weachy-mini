@@ -16,7 +16,9 @@ def validate_commit_sha(commit: object) -> str:
     if not isinstance(commit, str) or len(commit) != 40 or any(
         character not in "0123456789abcdef" for character in commit
     ):
-        raise SourceCheckoutError("Pinned commit must be a lowercase 40-character SHA-1.")
+        raise SourceCheckoutError(
+            "Pinned commit must be a lowercase 40-character SHA-1."
+        )
     return commit
 
 
@@ -35,7 +37,9 @@ def run_git(source: Path, *arguments: str) -> str:
         raise SourceCheckoutError(f"Cannot inspect source Git checkout: {exc}") from exc
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()
-        raise SourceCheckoutError(f"Git command failed ({' '.join(arguments)}): {detail}")
+        raise SourceCheckoutError(
+            f"Git command failed ({' '.join(arguments)}): {detail}"
+        )
     return completed.stdout.strip()
 
 
