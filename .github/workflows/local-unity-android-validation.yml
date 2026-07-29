@@ -1,9 +1,6 @@
 name: Local Unity Android Validation
 
 on:
-  push:
-    branches:
-      - master
   workflow_dispatch:
     inputs:
       run_unity_tests:
@@ -11,28 +8,23 @@ on:
         required: true
         default: true
         type: boolean
-      build_emulator_apk:
-        description: Build the x86_64 Android emulator APK
+      build_device_apk:
+        description: Build the ARM64 API-26 physical-device feasibility APK
         required: true
         default: true
         type: boolean
-      start_emulator:
-        description: Boot an existing AVD, install the APK, and launch the app
+      install_physical_device:
+        description: Install and launch the APK on the sole connected physical ARM64 device
         required: true
         default: false
         type: boolean
-      avd_name:
-        description: Existing Android Virtual Device name used when start_emulator is enabled
-        required: false
-        default: ''
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: local-unity-android-validation
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -96,35 +88,16 @@ jobs:
           if [[ -z "${unity_editor}" ]]; then
             printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
             printf '%s\n' 'Executable Unity editors visible to the runner:' >&2
-            editor_found=false
-            for editor_root in \
+            find \
               "${HOME}/Unity/Hub/Editor" \
               "${HOME}/UnityHub/Editors" \
               "${HOME}/.local/share/UnityHub/Editors" \
               "/opt/Unity/Hub/Editor" \
-              "/opt/unity/editors"; do
-              if [[ ! -d "${editor_root}" ]]; then
-                continue
-              fi
-              while IFS= read -r candidate; do
-                printf '  %s\n' "${candidate}" >&2
-                editor_found=true
-              done < <(
-                find "${editor_root}" \
-                  -mindepth 3 \
-                  -maxdepth 3 \
-                  -type f \
-                  -path '*/Editor/Unity' \
-                  -perm -u+x \
-                  -print \
-                  | sort
-              )
-            done
-            if [[ "${editor_found}" != true ]]; then
-              printf '%s\n' '  none found in the supported Unity Hub locations' >&2
-            fi
-            printf '%s\n' \
-              'Install the pinned editor or set UNITY_EDITOR to its absolute executable path in the runner .env file, then restart the runner.' >&2
+              "/opt/unity/editors" \
+              -type f \
+              -path '*/Editor/Unity' \
+              -perm -u+x \
+              -print 2>/dev/null | sort >&2 || true
             exit 1
           fi
 
@@ -134,27 +107,26 @@ jobs:
               "${android_sdk_root}" >&2
             exit 1
           fi
-          if [[ ! -x "${android_sdk_root}/emulator/emulator" ]]; then
-            printf 'Android emulator was not found under %s.\n' \
-              "${android_sdk_root}" >&2
-            exit 1
-          fi
 
           printf 'UNITY_EDITOR=%s\n' "${unity_editor}" >> "${GITHUB_ENV}"
           printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}" >> "${GITHUB_ENV}"
           printf 'ANDROID_HOME=%s\n' "${android_sdk_root}" >> "${GITHUB_ENV}"
           printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
-          printf '%s\n' "${android_sdk_root}/emulator" >> "${GITHUB_PATH}"
 
           printf 'resolved_unity_editor=%s\n' "${unity_editor}"
           printf 'resolved_android_sdk=%s\n' "${android_sdk_root}"
-          "${unity_editor}" -version -batchmode -quit
+          unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
+          printf '%s\n' "${unity_version_output}"
+          if [[ "${unity_version_output}" != *"${project_version}"* ]]; then
+            printf 'Unity executable does not match pinned version %s.\n' \
+              "${project_version}" >&2
+            exit 1
+          fi
           "${android_sdk_root}/platform-tools/adb" version
-          "${android_sdk_root}/emulator/emulator" -accel-check
 
       - name: Run Unity tests
         id: unity_tests
-        if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
+        if: ${{ inputs.run_unity_tests }}
         shell: bash
         env:
           UNITY_TEST_RESULTS_DIR: ${{ runner.temp }}/unity-test-results
@@ -169,138 +141,83 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build x86_64 emulator APK
-        if: ${{ github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator }}
+      - name: Build ARM64 API-26 device APK
+        if: ${{ inputs.build_device_apk || inputs.install_physical_device }}
         shell: bash
-        run: bash scripts/build_unity_android.sh emulator
+        run: bash scripts/build_unity_android.sh device-feasibility
 
-      - name: Verify emulator APK
-        if: ${{ github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator }}
+      - name: Verify ARM64 API-26 device APK
+        if: ${{ inputs.build_device_apk || inputs.install_physical_device }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s Builds/Android/weachy-mini-emulator-x86_64.apk
+          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
-      - name: Start configured Android emulator
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator }}
+      - name: Select physical ARM64 Android device
+        if: ${{ inputs.install_physical_device }}
         shell: bash
-        env:
-          AVD_NAME: ${{ inputs.avd_name }}
-          EMULATOR_SERIAL: emulator-5580
         run: |
           set -euo pipefail
-          if [[ -z "${AVD_NAME}" ]]; then
-            printf '%s\n' 'avd_name is required when start_emulator is enabled.' >&2
-            exit 1
-          fi
-
-          mapfile -t avds < <("${ANDROID_SDK_ROOT}/emulator/emulator" -list-avds)
-          avd_found=false
-          for configured_avd in "${avds[@]}"; do
-            if [[ "${configured_avd}" == "${AVD_NAME}" ]]; then
-              avd_found=true
-              break
+          mapfile -t physical_serials < <(
+            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          arm64_serials=()
+          for serial in "${physical_serials[@]}"; do
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            printf 'physical_device=%s abi=%s sdk=%s\n' "${serial}" "${abi}" "${sdk}"
+            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ && "${sdk}" -ge 26 ]]; then
+              arm64_serials+=("${serial}")
             fi
           done
-          if [[ "${avd_found}" != true ]]; then
-            printf 'AVD %s was not found. Available AVDs:\n' "${AVD_NAME}" >&2
-            printf '  %s\n' "${avds[@]}" >&2
+          if [[ "${#arm64_serials[@]}" -ne 1 ]]; then
+            printf 'Exactly one physical arm64-v8a device at API 26 or newer is required; found %s.\n' \
+              "${#arm64_serials[@]}" >&2
+            adb devices -l >&2
             exit 1
           fi
+          printf 'DEVICE_SERIAL=%s\n' "${arm64_serials[0]}" >> "${GITHUB_ENV}"
 
-          emulator_log="${RUNNER_TEMP}/android-emulator.log"
-          "${ANDROID_SDK_ROOT}/emulator/emulator" \
-            "@${AVD_NAME}" \
-            -port 5580 \
-            -no-window \
-            -no-audio \
-            -no-boot-anim \
-            -no-snapshot-save \
-            > "${emulator_log}" 2>&1 &
-          printf 'EMULATOR_PID=%s\n' "$!" >> "${GITHUB_ENV}"
-          printf 'EMULATOR_LOG=%s\n' "${emulator_log}" >> "${GITHUB_ENV}"
-
-          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
-          "${adb_path}" -s "${EMULATOR_SERIAL}" wait-for-device
-
-          boot_deadline=$((SECONDS + 300))
-          while [[ "$("${adb_path}" -s "${EMULATOR_SERIAL}" shell getprop sys.boot_completed | tr -d '\r')" != "1" ]]; do
-            if (( SECONDS >= boot_deadline )); then
-              printf '%s\n' 'Android emulator did not finish booting within 300 seconds.' >&2
-              cat "${emulator_log}" >&2
-              exit 1
-            fi
-            sleep 2
-          done
-
-          "${adb_path}" -s "${EMULATOR_SERIAL}" devices -l
-          printf 'android_abi=%s\n' \
-            "$("${adb_path}" -s "${EMULATOR_SERIAL}" shell getprop ro.product.cpu.abi | tr -d '\r')"
-
-      - name: Install and launch emulator APK
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator }}
+      - name: Install and launch physical-device APK
+        if: ${{ inputs.install_physical_device }}
         shell: bash
-        env:
-          EMULATOR_SERIAL: emulator-5580
         run: |
           set -euo pipefail
-          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
-          apk_path="Builds/Android/weachy-mini-emulator-x86_64.apk"
-          package_name="com.ekkus.weachymini"
-
-          "${adb_path}" -s "${EMULATOR_SERIAL}" install -r "${apk_path}"
-          "${adb_path}" -s "${EMULATOR_SERIAL}" shell pm path "${package_name}"
-          "${adb_path}" -s "${EMULATOR_SERIAL}" shell monkey \
+          apk_path='Builds/Android/weachy-mini-device-arm64-api26.apk'
+          package_name='com.ekkus.weachymini'
+          adb -s "${DEVICE_SERIAL}" install -r "${apk_path}"
+          adb -s "${DEVICE_SERIAL}" shell pm path "${package_name}"
+          adb -s "${DEVICE_SERIAL}" shell monkey \
             -p "${package_name}" \
             -c android.intent.category.LAUNCHER \
             1
           sleep 5
-          "${adb_path}" -s "${EMULATOR_SERIAL}" shell pidof "${package_name}"
+          adb -s "${DEVICE_SERIAL}" shell pidof "${package_name}"
 
-      - name: Capture emulator diagnostics after failure
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && failure() }}
+      - name: Capture physical-device diagnostics after failure
+        if: ${{ inputs.install_physical_device && failure() }}
         shell: bash
-        env:
-          EMULATOR_SERIAL: emulator-5580
         run: |
           set +e
-          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
-          "${adb_path}" -s "${EMULATOR_SERIAL}" logcat -d \
-            > "${RUNNER_TEMP}/android-emulator-logcat.txt"
-          if [[ -f "${EMULATOR_LOG:-}" ]]; then
-            cp "${EMULATOR_LOG}" "${RUNNER_TEMP}/android-emulator-console.txt"
+          if [[ -n "${DEVICE_SERIAL:-}" ]]; then
+            adb -s "${DEVICE_SERIAL}" logcat -d \
+              > "${RUNNER_TEMP}/android-device-logcat.txt"
           fi
 
-      - name: Upload emulator diagnostics
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && failure() }}
+      - name: Upload physical-device diagnostics
+        if: ${{ inputs.install_physical_device && failure() }}
         uses: actions/upload-artifact@v4
         with:
-          name: local-android-emulator-failure-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/android-emulator-logcat.txt
-            ${{ runner.temp }}/android-emulator-console.txt
+          name: local-android-device-failure-${{ github.sha }}
+          path: ${{ runner.temp }}/android-device-logcat.txt
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Stop Android emulator
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.start_emulator && always() }}
-        shell: bash
-        env:
-          EMULATOR_SERIAL: emulator-5580
-        run: |
-          set +e
-          "${ANDROID_SDK_ROOT}/platform-tools/adb" \
-            -s "${EMULATOR_SERIAL}" \
-            emu kill
-          if [[ -n "${EMULATOR_PID:-}" ]]; then
-            wait "${EMULATOR_PID}" 2>/dev/null
-          fi
-
-      - name: Upload emulator APK
-        if: ${{ success() && (github.event_name == 'push' || inputs.build_emulator_apk || inputs.start_emulator) }}
+      - name: Upload ARM64 API-26 device APK
+        if: ${{ success() && (inputs.build_device_apk || inputs.install_physical_device) }}
         uses: actions/upload-artifact@v4
         with:
-          name: local-unity-emulator-apk-${{ github.sha }}
-          path: Builds/Android/weachy-mini-emulator-x86_64.apk
+          name: local-unity-device-apk-${{ github.sha }}
+          path: Builds/Android/weachy-mini-device-arm64-api26.apk
           if-no-files-found: error
           retention-days: 14
