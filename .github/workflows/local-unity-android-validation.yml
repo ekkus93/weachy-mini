@@ -1,6 +1,9 @@
 name: Local Unity Android Validation
 
 on:
+  push:
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       run_unity_tests:
@@ -88,16 +91,42 @@ jobs:
           if [[ -z "${unity_editor}" ]]; then
             printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
             printf '%s\n' 'Executable Unity editors visible to the runner:' >&2
-            find \
+            editor_found=false
+            for editor_root in \
               "${HOME}/Unity/Hub/Editor" \
               "${HOME}/UnityHub/Editors" \
               "${HOME}/.local/share/UnityHub/Editors" \
               "/opt/Unity/Hub/Editor" \
-              "/opt/unity/editors" \
-              -type f \
-              -path '*/Editor/Unity' \
-              -perm -u+x \
-              -print 2>/dev/null | sort >&2 || true
+              "/opt/unity/editors"; do
+              if [[ ! -d "${editor_root}" ]]; then
+                continue
+              fi
+              while IFS= read -r candidate; do
+                printf '  %s\n' "${candidate}" >&2
+                editor_found=true
+              done < <(
+                find "${editor_root}" \
+                  -mindepth 3 \
+                  -maxdepth 3 \
+                  -type f \
+                  -path '*/Editor/Unity' \
+                  -perm -u+x \
+                  -print \
+                  | sort
+              )
+            done
+            if [[ "${editor_found}" != true ]]; then
+              printf '%s\n' '  none found in the supported Unity Hub locations' >&2
+            fi
+            exit 1
+          fi
+
+          android_player_dir="$(dirname "${unity_editor}")/Data/PlaybackEngines/AndroidPlayer"
+          if [[ ! -d "${android_player_dir}" ]]; then
+            printf 'Unity Android Build Support is missing: %s\n' \
+              "${android_player_dir}" >&2
+            printf 'Install Android Build Support for Unity %s through Unity Hub.\n' \
+              "${project_version}" >&2
             exit 1
           fi
 
@@ -114,6 +143,7 @@ jobs:
           printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
 
           printf 'resolved_unity_editor=%s\n' "${unity_editor}"
+          printf 'resolved_unity_android_player=%s\n' "${android_player_dir}"
           printf 'resolved_android_sdk=%s\n' "${android_sdk_root}"
           unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
           printf '%s\n' "${unity_version_output}"
@@ -126,7 +156,7 @@ jobs:
 
       - name: Run Unity tests
         id: unity_tests
-        if: ${{ inputs.run_unity_tests }}
+        if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
         shell: bash
         env:
           UNITY_TEST_RESULTS_DIR: ${{ runner.temp }}/unity-test-results
@@ -142,19 +172,19 @@ jobs:
           retention-days: 14
 
       - name: Build ARM64 API-26 device APK
-        if: ${{ inputs.build_device_apk || inputs.install_physical_device }}
+        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
         shell: bash
         run: bash scripts/build_unity_android.sh device-feasibility
 
       - name: Verify ARM64 API-26 device APK
-        if: ${{ inputs.build_device_apk || inputs.install_physical_device }}
+        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
         shell: bash
         run: |
           set -euo pipefail
           test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
       - name: Select physical ARM64 Android device
-        if: ${{ inputs.install_physical_device }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device }}
         shell: bash
         run: |
           set -euo pipefail
@@ -166,7 +196,8 @@ jobs:
             abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
             sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
             printf 'physical_device=%s abi=%s sdk=%s\n' "${serial}" "${abi}" "${sdk}"
-            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ && "${sdk}" -ge 26 ]]; then
+            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && \
+               (( sdk >= 26 )); then
               arm64_serials+=("${serial}")
             fi
           done
@@ -179,7 +210,7 @@ jobs:
           printf 'DEVICE_SERIAL=%s\n' "${arm64_serials[0]}" >> "${GITHUB_ENV}"
 
       - name: Install and launch physical-device APK
-        if: ${{ inputs.install_physical_device }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device }}
         shell: bash
         run: |
           set -euo pipefail
@@ -195,7 +226,7 @@ jobs:
           adb -s "${DEVICE_SERIAL}" shell pidof "${package_name}"
 
       - name: Capture physical-device diagnostics after failure
-        if: ${{ inputs.install_physical_device && failure() }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device && failure() }}
         shell: bash
         run: |
           set +e
@@ -205,7 +236,7 @@ jobs:
           fi
 
       - name: Upload physical-device diagnostics
-        if: ${{ inputs.install_physical_device && failure() }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device && failure() }}
         uses: actions/upload-artifact@v4
         with:
           name: local-android-device-failure-${{ github.sha }}
@@ -214,7 +245,7 @@ jobs:
           retention-days: 14
 
       - name: Upload ARM64 API-26 device APK
-        if: ${{ success() && (inputs.build_device_apk || inputs.install_physical_device) }}
+        if: ${{ success() && (github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device) }}
         uses: actions/upload-artifact@v4
         with:
           name: local-unity-device-apk-${{ github.sha }}
