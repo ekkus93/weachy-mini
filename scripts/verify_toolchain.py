@@ -61,6 +61,7 @@ def load_manifest() -> dict[str, Any]:
         "native_feasibility_min_sdk",
         "unity_device_feasibility_min_sdk",
         "compile_sdk",
+        "compile_sdk_package",
         "target_sdk",
         "android_gradle_plugin",
         "gradle",
@@ -85,6 +86,20 @@ def load_manifest() -> dict[str, Any]:
             raise ToolchainError(
                 f"Toolchain manifest android {key!r} must be a positive integer."
             )
+
+    compile_sdk_package = android["compile_sdk_package"]
+    if not isinstance(compile_sdk_package, str) or re.fullmatch(
+        r"\d+(?:\.\d+)?", compile_sdk_package
+    ) is None:
+        raise ToolchainError(
+            "Toolchain manifest android 'compile_sdk_package' must be a numeric "
+            "SDK package suffix such as '37.0'."
+        )
+    package_api_level = int(compile_sdk_package.split(".", maxsplit=1)[0])
+    if package_api_level != android["compile_sdk"]:
+        raise ToolchainError(
+            "Android compile_sdk_package must identify the same API level as compile_sdk."
+        )
 
     for key in ("native_feasibility_min_sdk", "unity_device_feasibility_min_sdk"):
         value = android[key]
@@ -226,7 +241,7 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
         raise ToolchainError("ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK.")
     sdk_root = Path(android_home)
     required_paths = [
-        sdk_root / "platforms" / f"android-{android['compile_sdk']}",
+        sdk_root / "platforms" / f"android-{android['compile_sdk_package']}",
         sdk_root / "build-tools" / android["build_tools"],
         sdk_root / "ndk" / android["ndk"],
         sdk_root / "cmake" / android["cmake"],
