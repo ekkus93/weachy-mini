@@ -11,7 +11,7 @@ _Static_assert(sizeof(ReachySimCapabilities) == 40U, "ReachySimCapabilities layo
 _Static_assert(sizeof(ReachySimStateHeader) == 48U, "ReachySimStateHeader layout changed");
 _Static_assert(sizeof(ReachySimCommandBatchHeader) == 24U, "ReachySimCommandBatchHeader layout changed");
 _Static_assert(sizeof(ReachySimWrenchCommand) == 96U, "ReachySimWrenchCommand layout changed");
-_Static_assert(sizeof(ReachySimSnapshotHeader) == 40U, "ReachySimSnapshotHeader layout changed");
+_Static_assert(sizeof(ReachySimSnapshotHeader) == 48U, "ReachySimSnapshotHeader layout changed");
 _Static_assert(sizeof(ReachySimErrorInfo) == 272U, "ReachySimErrorInfo layout changed");
 
 static int g_failures = 0;
@@ -76,15 +76,36 @@ static ReachySimHandle create_valid_handle(void)
     return handle;
 }
 
+static ReachySimStateHeader copy_state(ReachySimHandle handle, const char* message)
+{
+    ReachySimStateHeader state = {0};
+    size_t required_size = 0U;
+    check_status(
+        reachy_sim_copy_state(
+            handle,
+            &state,
+            sizeof(state),
+            &required_size),
+        REACHY_SIM_STATUS_OK,
+        message);
+    check_true(
+        required_size == sizeof(state),
+        "state copy reported unexpected size");
+    return state;
+}
+
 static void test_metadata(void)
 {
     check_true(
         reachy_sim_abi_version() == REACHY_SIM_ABI_VERSION,
         "ABI version query");
     check_true(
+        REACHY_SIM_SNAPSHOT_FORMAT_VERSION == 1U,
+        "snapshot format version");
+    check_true(
         strcmp(
             reachy_sim_version_string(),
-            "0.2.0-abi-contract") == 0,
+            "0.3.0-deterministic-snapshot") == 0,
         "version string query");
     check_true(
         reachy_sim_status_recoverability(
@@ -200,8 +221,8 @@ static void test_state_commands_wrench_and_snapshots(void)
         "handle capabilities");
     check_true(
         (handle_capabilities.capability_flags &
-         REACHY_SIM_CAPABILITY_STEP) != 0U,
-        "handle step capability");
+         REACHY_SIM_CAPABILITY_SNAPSHOT) != 0U,
+        "handle snapshot capability");
 
     size_t required_size = 0U;
     check_status(
@@ -216,29 +237,14 @@ static void test_state_commands_wrench_and_snapshots(void)
         required_size == sizeof(ReachySimStateHeader),
         "state size query result");
 
-    ReachySimStateHeader state = {0};
-    check_status(
-        reachy_sim_copy_state(
-            handle,
-            &state,
-            sizeof(state),
-            &required_size),
-        REACHY_SIM_STATUS_OK,
-        "initial state copy");
+    ReachySimStateHeader state = copy_state(handle, "initial state copy");
     check_true(state.sequence == 0U, "initial state sequence");
 
     check_status(
         reachy_sim_step(handle, 10U),
         REACHY_SIM_STATUS_OK,
         "step ten times");
-    check_status(
-        reachy_sim_copy_state(
-            handle,
-            &state,
-            sizeof(state),
-            &required_size),
-        REACHY_SIM_STATUS_OK,
-        "stepped state copy");
+    state = copy_state(handle, "stepped state copy");
     check_true(state.sequence == 10U, "stepped state sequence");
     check_true(
         fabs(state.simulation_time - 0.02) < 1e-12,
@@ -308,54 +314,159 @@ static void test_state_commands_wrench_and_snapshots(void)
         REACHY_SIM_STATUS_BUFFER_TOO_SMALL,
         "snapshot size query");
     check_true(
-        required_size == sizeof(ReachySimSnapshotHeader),
-        "snapshot size query result");
+        required_size > sizeof(ReachySimSnapshotHeader),
+        "snapshot includes backend payload");
 
-    ReachySimSnapshotHeader snapshot = {0};
-    check_status(
-        reachy_sim_copy_snapshot(
-            handle,
-            &snapshot,
-            sizeof(snapshot),
-            &required_size),
-        REACHY_SIM_STATUS_OK,
-        "snapshot copy");
-    check_status(
-        reachy_sim_step(handle, 5U),
-        REACHY_SIM_STATUS_OK,
-        "step after snapshot");
-    check_status(
-        reachy_sim_restore_snapshot(
-            handle,
-            &snapshot,
-            sizeof(snapshot)),
-        REACHY_SIM_STATUS_OK,
-        "snapshot restore");
-    check_status(
-        reachy_sim_copy_state(
-            handle,
-            &state,
-            sizeof(state),
-            &required_size),
-        REACHY_SIM_STATUS_OK,
-        "restored state copy");
+    uint8_t snapshot_bytes[256] = {0};
     check_true(
-        state.sequence == snapshot.sequence,
-        "restored state sequence");
+        required_size <= sizeof(snapshot_bytes),
+        "snapshot fits contract-test buffer");
+    if(required_size <= sizeof(snapshot_bytes))
+    {
+        check_status(
+            reachy_sim_copy_snapshot(
+                handle,
+                snapshot_bytes,
+                sizeof(snapshot_bytes),
+                &required_size),
+            REACHY_SIM_STATUS_OK,
+            "snapshot copy");
 
-    snapshot.model_hash ^= UINT64_C(1);
+        ReachySimSnapshotHeader snapshot_header = {0};
+        memcpy(
+            &snapshot_header,
+            snapshot_bytes,
+            sizeof(snapshot_header));
+        check_true(
+            snapshot_header.snapshot_version ==
+                REACHY_SIM_SNAPSHOT_FORMAT_VERSION,
+            "snapshot format is explicit");
+        check_true(
+            snapshot_header.calibration_profile_id ==
+                REACHY_SIM_CALIBRATION_PROFILE_UNCALIBRATED,
+            "snapshot calibration profile is explicit");
+        check_true(
+            snapshot_header.payload_size ==
+                required_size - sizeof(snapshot_header),
+            "snapshot payload size matches envelope");
+
+        ReachySimCommandBatchHeader replay_commands = commands;
+        replay_commands.sequence = 2U;
+        check_status(
+            reachy_sim_submit_commands(
+                handle,
+                &replay_commands,
+                sizeof(replay_commands)),
+            REACHY_SIM_STATUS_OK,
+            "first replay command application");
+        check_status(
+            reachy_sim_step(handle, 5U),
+            REACHY_SIM_STATUS_OK,
+            "first replay trajectory");
+        const ReachySimStateHeader expected_state =
+            copy_state(handle, "first replay state");
+
+        check_status(
+            reachy_sim_restore_snapshot(
+                handle,
+                snapshot_bytes,
+                required_size),
+            REACHY_SIM_STATUS_OK,
+            "snapshot restore");
+        check_status(
+            reachy_sim_submit_commands(
+                handle,
+                &replay_commands,
+                sizeof(replay_commands)),
+            REACHY_SIM_STATUS_OK,
+            "replayed command accepted after restore");
+        check_status(
+            reachy_sim_step(handle, 5U),
+            REACHY_SIM_STATUS_OK,
+            "replayed trajectory");
+        const ReachySimStateHeader replayed_state =
+            copy_state(handle, "replayed state");
+        check_true(
+            memcmp(
+                &expected_state,
+                &replayed_state,
+                sizeof(expected_state)) == 0,
+            "snapshot restore reproduces trajectory");
+
+        ReachySimSnapshotHeader incompatible_header = snapshot_header;
+        incompatible_header.model_hash ^= UINT64_C(1);
+        memcpy(
+            snapshot_bytes,
+            &incompatible_header,
+            sizeof(incompatible_header));
+        check_status(
+            reachy_sim_restore_snapshot(
+                handle,
+                snapshot_bytes,
+                required_size),
+            REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE,
+            "snapshot model mismatch");
+
+        incompatible_header = snapshot_header;
+        incompatible_header.snapshot_version += 1U;
+        memcpy(
+            snapshot_bytes,
+            &incompatible_header,
+            sizeof(incompatible_header));
+        check_status(
+            reachy_sim_restore_snapshot(
+                handle,
+                snapshot_bytes,
+                required_size),
+            REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE,
+            "snapshot version mismatch");
+
+        incompatible_header = snapshot_header;
+        incompatible_header.calibration_profile_id += UINT64_C(1);
+        memcpy(
+            snapshot_bytes,
+            &incompatible_header,
+            sizeof(incompatible_header));
+        check_status(
+            reachy_sim_restore_snapshot(
+                handle,
+                snapshot_bytes,
+                required_size),
+            REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE,
+            "snapshot calibration mismatch");
+
+        memcpy(
+            snapshot_bytes,
+            &snapshot_header,
+            sizeof(snapshot_header));
+    }
+
     check_status(
-        reachy_sim_restore_snapshot(
+        reachy_sim_reset(
             handle,
-            &snapshot,
-            sizeof(snapshot)),
-        REACHY_SIM_STATUS_SNAPSHOT_INCOMPATIBLE,
-        "snapshot model mismatch");
+            (uint32_t)REACHY_SIM_RESET_POSE_SLEEP_REST),
+        REACHY_SIM_STATUS_OK,
+        "sleep/rest reset");
+    state = copy_state(handle, "sleep/rest reset state");
+    check_true(
+        (state.health_flags & REACHY_SIM_HEALTH_FLAG_SLEEPING) != 0U,
+        "sleep/rest reset marks sleeping state");
 
     check_status(
-        reachy_sim_reset(handle, 0U),
+        reachy_sim_reset(
+            handle,
+            (uint32_t)REACHY_SIM_RESET_POSE_NEUTRAL_AWAKE),
         REACHY_SIM_STATUS_OK,
-        "neutral reset");
+        "neutral-awake reset");
+    state = copy_state(handle, "neutral-awake reset state");
+    check_true(
+        (state.health_flags & REACHY_SIM_HEALTH_FLAG_SLEEPING) == 0U,
+        "neutral-awake reset clears sleeping state");
+    check_status(
+        reachy_sim_reset(handle, UINT32_C(99)),
+        REACHY_SIM_STATUS_INVALID_ARGUMENT,
+        "unknown reset pose rejection");
+
     check_status(
         reachy_sim_destroy(handle),
         REACHY_SIM_STATUS_OK,
