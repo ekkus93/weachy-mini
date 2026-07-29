@@ -1,6 +1,8 @@
 using System.Collections;
+using System.Linq;
 using NUnit.Framework;
 using ReachyMini.Core;
+using ReachyMini.Presentation;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -9,14 +11,15 @@ namespace ReachyMini.Tests
 {
     public sealed class BootstrapScenePlayModeTests
     {
-        private const string BootstrapScenePath =
-            "Assets/ReachyMini/Scenes/Bootstrap.unity";
+        private const string PresentationScenePath =
+            "Assets/Generated/ReachyMini/UnityPresentation/" +
+            "ReachyMiniPresentation.unity";
 
         [UnityTest]
-        public IEnumerator BootstrapSceneLoadsWithoutUnityPhysicsFallback()
+        public IEnumerator GeneratedPresentationSceneLoadsWithoutPhysicsFallback()
         {
             AsyncOperation loadOperation = SceneManager.LoadSceneAsync(
-                BootstrapScenePath,
+                PresentationScenePath,
                 LoadSceneMode.Single);
             Assert.That(loadOperation, Is.Not.Null);
 
@@ -24,10 +27,50 @@ namespace ReachyMini.Tests
             yield return null;
 
             Scene activeScene = SceneManager.GetActiveScene();
-            Assert.That(activeScene.path, Is.EqualTo(BootstrapScenePath));
+            Assert.That(activeScene.path, Is.EqualTo(PresentationScenePath));
             Assert.That(
                 ProjectMetadata.InitialFidelity,
                 Is.EqualTo(SimulationFidelity.Unavailable));
+
+            ReachyPresentationRoot[] roots =
+                UnityEngine.Object.FindObjectsByType<ReachyPresentationRoot>(
+                    FindObjectsInactive.Include);
+            Assert.That(roots, Has.Length.EqualTo(1));
+            ReachyPresentationRoot root = roots[0];
+            Assert.That(root.BodyCount, Is.EqualTo(18));
+            Assert.That(root.VisualGeometryCount, Is.GreaterThan(0));
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<ReachyPresentationBody>(
+                    FindObjectsInactive.Include),
+                Has.Length.EqualTo(root.BodyCount));
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<MeshRenderer>(
+                    FindObjectsInactive.Include),
+                Has.Length.EqualTo(root.VisualGeometryCount));
+
+            ReachyPresentationCamera[] presentationCameras =
+                UnityEngine.Object.FindObjectsByType<ReachyPresentationCamera>(
+                    FindObjectsInactive.Include);
+            Assert.That(presentationCameras, Has.Length.EqualTo(1));
+            Assert.That(
+                presentationCameras[0].Framing,
+                Is.EqualTo("fixed_front_three_quarter"));
+            Assert.That(presentationCameras[0].AcceptsUserNavigation, Is.False);
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<Camera>(
+                    FindObjectsInactive.Include),
+                Has.Length.EqualTo(1));
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<Light>(
+                    FindObjectsInactive.Include),
+                Has.Length.EqualTo(1));
+            Assert.That(
+                activeScene.GetRootGameObjects().Select(gameObject => gameObject.name),
+                Does.Not.Contain("studio_close"));
+            Assert.That(
+                activeScene.GetRootGameObjects().Select(gameObject => gameObject.name),
+                Does.Not.Contain("eye_camera"));
+
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<Rigidbody>(
                     FindObjectsInactive.Include),
