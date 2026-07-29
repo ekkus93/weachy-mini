@@ -5,7 +5,7 @@ namespace ReachyMini.Interop
 {
     internal sealed class ReachySimSafeHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
-        private ReachySimSafeHandle()
+        internal ReachySimSafeHandle()
             : base(ownsHandle: true)
         {
         }
