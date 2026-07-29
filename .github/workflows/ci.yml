@@ -77,6 +77,7 @@ jobs:
           print(f"commit={reachy['commit']}")
           print(f"model_file={reachy['model_file']}")
           print(f"model_directory={PurePosixPath(reachy['model_file']).parent}")
+          print(f"license_file={reachy['license_file']}")
           print(f"mujoco_version={mujoco['version']}")
           PY
       - name: Check out pinned Reachy MJCF and meshes
@@ -88,7 +89,9 @@ jobs:
           fetch-depth: 1
           lfs: true
           persist-credentials: false
-          sparse-checkout: ${{ steps.reachy_source.outputs.model_directory }}
+          sparse-checkout: |
+            ${{ steps.reachy_source.outputs.model_directory }}
+            ${{ steps.reachy_source.outputs.license_file }}
           sparse-checkout-cone-mode: false
       - name: Verify pinned source, topology, and parameter audit
         shell: bash
@@ -123,6 +126,112 @@ jobs:
             build/reachy-model/MODEL_PARAMETER_AUDIT.json
           cp models/reachy-mini/reference-scenario.json \
             build/reachy-model/REFERENCE_SCENARIO.json
+      - name: Convert official Reachy visual assets for Unity
+        shell: bash
+        run: |
+          set -euo pipefail
+          import_root="${RUNNER_TEMP}/reachy-unity-import"
+          presentation_root="${RUNNER_TEMP}/reachy-unity-presentation"
+          rm -rf -- "${import_root}" "${presentation_root}"
+
+          python3 scripts/import_reachy_assets.py \
+            --source upstream/reachy-mini \
+            --output-root "${import_root}"
+
+          source_subdirectory="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          lock = json.loads(
+              Path("third_party/reachy-mini-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          print(lock["output_subdirectory"])
+          PY
+          )"
+          source_root="${import_root}/${source_subdirectory}"
+          python3 scripts/prepare_reachy_unity_assets.py \
+            --source "${source_root}" \
+            --output "${presentation_root}"
+
+          python3 - "${presentation_root}" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1]).resolve()
+          manifest_path = root / "UNITY_RENDER_MAP.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          if manifest.get("schema_version") != 1:
+              raise SystemExit("Unity render manifest schema mismatch")
+          bodies = manifest.get("bodies")
+          if not isinstance(bodies, list) or len(bodies) != 18:
+              raise SystemExit("Unity render manifest must contain 18 model bodies")
+          named_bodies = [body for body in bodies if body.get("name") is not None]
+          if len(named_bodies) != 17:
+              raise SystemExit("Unity render manifest must contain 17 named bodies")
+          cameras = manifest.get("source_cameras")
+          if not isinstance(cameras, list):
+              raise SystemExit("Unity render manifest source_cameras must be an array")
+          camera_names = {camera.get("name") for camera in cameras}
+          if camera_names != {"studio_close", "eye_camera"}:
+              raise SystemExit(f"Unexpected source camera set: {sorted(camera_names)}")
+          if any(camera.get("included_in_presentation") is not False for camera in cameras):
+              raise SystemExit("MuJoCo source cameras must not enter Unity presentation")
+          presentation = manifest.get("presentation")
+          if not isinstance(presentation, dict):
+              raise SystemExit("Unity render manifest presentation must be an object")
+          if presentation.get("source_cameras_included") is not False:
+              raise SystemExit("Unity presentation must explicitly exclude source cameras")
+          if presentation.get("authoritative_transform_source") != "MuJoCo body snapshots only":
+              raise SystemExit("Unity presentation transform authority is incorrect")
+
+          body_paths = {body.get("path") for body in bodies}
+          meshes = manifest.get("meshes")
+          materials = manifest.get("materials")
+          visual_geoms = manifest.get("visual_geoms")
+          if not isinstance(meshes, list) or not meshes:
+              raise SystemExit("Unity render manifest contains no meshes")
+          if not isinstance(materials, list) or not materials:
+              raise SystemExit("Unity render manifest contains no materials")
+          if not isinstance(visual_geoms, list) or not visual_geoms:
+              raise SystemExit("Unity render manifest contains no visual geoms")
+          mesh_names = {mesh.get("name") for mesh in meshes}
+          material_names = {material.get("name") for material in materials}
+          for mesh in meshes:
+              relative = mesh.get("output_path")
+              if not isinstance(relative, str):
+                  raise SystemExit("Converted mesh output_path must be a string")
+              path = (root / relative).resolve()
+              try:
+                  path.relative_to(root)
+              except ValueError as exc:
+                  raise SystemExit(f"Converted mesh escapes output root: {relative}") from exc
+              if not path.is_file():
+                  raise SystemExit(f"Converted mesh is missing: {relative}")
+              actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+              if actual_hash != mesh.get("output_sha256"):
+                  raise SystemExit(f"Converted mesh hash mismatch: {relative}")
+              if not isinstance(mesh.get("triangle_count"), int) or mesh["triangle_count"] <= 0:
+                  raise SystemExit(f"Converted mesh has no triangles: {relative}")
+          for geom in visual_geoms:
+              if geom.get("body_path") not in body_paths:
+                  raise SystemExit(f"Visual geom has unknown body path: {geom.get('path')}")
+              if geom.get("mesh") not in mesh_names:
+                  raise SystemExit(f"Visual geom has unknown mesh: {geom.get('path')}")
+              if geom.get("material") not in material_names:
+                  raise SystemExit(f"Visual geom has unknown material: {geom.get('path')}")
+
+          evidence = Path("build/reachy-model/UNITY_RENDER_MAP.json")
+          evidence.write_bytes(manifest_path.read_bytes())
+          print(
+              "Official Unity render conversion passed: "
+              f"bodies={len(bodies)} meshes={len(meshes)} "
+              f"materials={len(materials)} visual_geoms={len(visual_geoms)}"
+          )
+          PY
       - name: Install pinned desktop MuJoCo runtime
         env:
           MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
