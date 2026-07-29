@@ -8,7 +8,7 @@ permissions:
 
 concurrency:
   group: unity-validation-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   unity-tests:
@@ -32,7 +32,7 @@ jobs:
         uses: game-ci/unity-test-runner@v4
         with:
           projectPath: .
-          unityVersion: 6000.3.18f1
+          unityVersion: 6000.5.2f1
           testMode: all
 
       - name: Upload Unity test results
@@ -53,6 +53,9 @@ jobs:
       max-parallel: 1
       matrix:
         include:
+          - name: device-feasibility-apk
+            build_method: ReachyMini.Editor.AndroidBuild.BuildDeviceFeasibilityApk
+            artifact_path: Builds/Android/weachy-mini-device-arm64-api26.apk
           - name: development-apk
             build_method: ReachyMini.Editor.AndroidBuild.BuildDevelopmentApk
             artifact_path: Builds/Android/weachy-mini-development.apk
@@ -75,7 +78,7 @@ jobs:
         uses: game-ci/unity-builder@v4
         with:
           projectPath: .
-          unityVersion: 6000.3.18f1
+          unityVersion: 6000.5.2f1
           targetPlatform: Android
           buildMethod: ${{ matrix.build_method }}
 
