@@ -1,13 +1,18 @@
 #include <mujoco/mujoco.h>
 
 #include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-static mjtNum* allocate_values(int count)
+static mjtNum* allocate_values(mjtSize count)
 {
     if(count <= 0)
+    {
+        return NULL;
+    }
+    if((uint64_t)count > (uint64_t)(SIZE_MAX / sizeof(mjtNum)))
     {
         return NULL;
     }
