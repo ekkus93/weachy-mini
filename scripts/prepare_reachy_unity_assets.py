@@ -67,9 +67,7 @@ def checked_relative_file(root: Path, relative_text: str) -> Path:
     try:
         resolved.relative_to(root.resolve())
     except ValueError as exc:
-        raise UnityAssetError(
-            f"Source path escapes imported package: {relative_text}"
-        ) from exc
+        raise UnityAssetError(f"Source path escapes imported package: {relative_text}") from exc
     if not resolved.is_file():
         raise UnityAssetError(f"Required source file does not exist: {relative_text}")
     return resolved
@@ -94,9 +92,7 @@ def parse_vector(
         return default
     fields = text.split()
     if len(fields) != count:
-        raise UnityAssetError(
-            f"{label} must contain {count} values, found {len(fields)}"
-        )
+        raise UnityAssetError(f"{label} must contain {count} values, found {len(fields)}")
     try:
         return finite_vector((float(field) for field in fields), label)
     except ValueError as exc:
@@ -169,35 +165,25 @@ def parse_ascii_stl(data: bytes, path: Path) -> list[Triangle]:
             continue
         if line.startswith("facet normal "):
             if current_normal is not None:
-                raise UnityAssetError(
-                    f"Nested ASCII STL facet at {path}:{line_number}"
-                )
+                raise UnityAssetError(f"Nested ASCII STL facet at {path}:{line_number}")
             fields = number.findall(line.removeprefix("facet normal "))
             if len(fields) != 3:
-                raise UnityAssetError(
-                    f"Invalid ASCII STL normal at {path}:{line_number}"
-                )
+                raise UnityAssetError(f"Invalid ASCII STL normal at {path}:{line_number}")
             current_normal = tuple(float(field) for field in fields)
             finite_vector(current_normal, f"{path}:{line_number} normal")
             vertices = []
         elif line.startswith("vertex "):
             if current_normal is None:
-                raise UnityAssetError(
-                    f"ASCII STL vertex outside facet at {path}:{line_number}"
-                )
+                raise UnityAssetError(f"ASCII STL vertex outside facet at {path}:{line_number}")
             fields = number.findall(line.removeprefix("vertex "))
             if len(fields) != 3:
-                raise UnityAssetError(
-                    f"Invalid ASCII STL vertex at {path}:{line_number}"
-                )
+                raise UnityAssetError(f"Invalid ASCII STL vertex at {path}:{line_number}")
             vertex = tuple(float(field) for field in fields)
             finite_vector(vertex, f"{path}:{line_number} vertex")
             vertices.append(vertex)
         elif line == "endfacet":
             if current_normal is None or len(vertices) != 3:
-                raise UnityAssetError(
-                    f"Incomplete ASCII STL facet at {path}:{line_number}"
-                )
+                raise UnityAssetError(f"Incomplete ASCII STL facet at {path}:{line_number}")
             triangles.append(
                 Triangle(
                     normal=current_normal,
@@ -207,9 +193,7 @@ def parse_ascii_stl(data: bytes, path: Path) -> list[Triangle]:
             current_normal = None
             vertices = []
         elif line not in {"outer loop", "endloop"}:
-            raise UnityAssetError(
-                f"Unsupported ASCII STL syntax at {path}:{line_number}: {line}"
-            )
+            raise UnityAssetError(f"Unsupported ASCII STL syntax at {path}:{line_number}: {line}")
     if current_normal is not None:
         raise UnityAssetError(f"Unclosed ASCII STL facet: {path}")
     if not triangles:
@@ -280,15 +264,11 @@ def write_obj(
     normal_index = 1
     for triangle in triangles:
         converted_vertices = tuple(
-            coordinate_vector(
-                tuple(vertex[axis] * scale[axis] for axis in range(3))
-            )
+            coordinate_vector(tuple(vertex[axis] * scale[axis] for axis in range(3)))
             for vertex in triangle.vertices
         )
         source_normal = normalize(triangle.normal)
-        converted_normal = normalize(
-            (-source_normal[0], -source_normal[2], -source_normal[1])
-        )
+        converted_normal = normalize((-source_normal[0], -source_normal[2], -source_normal[1]))
         if converted_normal == (0.0, 0.0, 0.0):
             converted_normal = normalize(
                 cross(
@@ -298,9 +278,7 @@ def write_obj(
             )
         for vertex in converted_vertices:
             lines.append("v " + " ".join(format_number(value) for value in vertex))
-        lines.append(
-            "vn " + " ".join(format_number(value) for value in converted_normal)
-        )
+        lines.append("vn " + " ".join(format_number(value) for value in converted_normal))
         lines.append(
             "f "
             f"{vertex_index}//{normal_index} "
@@ -335,13 +313,9 @@ def unity_pose(element: ET.Element, label: str) -> dict[str, list[float]]:
         f"{label} quat",
     )
     return {
-        "position_metres": list(
-            coordinate_vector((position[0], position[1], position[2]))
-        ),
+        "position_metres": list(coordinate_vector((position[0], position[1], position[2]))),
         "quaternion_wxyz": list(
-            coordinate_quaternion(
-                (quaternion[0], quaternion[1], quaternion[2], quaternion[3])
-            )
+            coordinate_quaternion((quaternion[0], quaternion[1], quaternion[2], quaternion[3]))
         ),
     }
 
@@ -391,9 +365,7 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
         mesh_file = mesh.attrib.get("file")
         mesh_name = mesh.attrib.get("name") or Path(mesh_file or "").stem
         if not mesh_name or not mesh_file:
-            raise UnityAssetError(
-                f"Mesh asset {index} is missing name/file identity"
-            )
+            raise UnityAssetError(f"Mesh asset {index} is missing name/file identity")
         if mesh_name in mesh_assets:
             raise UnityAssetError(f"Duplicate mesh asset name: {mesh_name}")
         source_relative = (Path(mesh_directory) / mesh_file).as_posix()
@@ -404,9 +376,7 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
             (1.0, 1.0, 1.0),
             f"mesh {mesh_name} scale",
         )
-        output_relative = (
-            Path("Meshes") / Path(mesh_file).with_suffix(".obj")
-        ).as_posix()
+        output_relative = (Path("Meshes") / Path(mesh_file).with_suffix(".obj")).as_posix()
         output_path = staging / output_relative
         triangle_count = write_obj(
             output_path,
@@ -429,9 +399,7 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
     for index, material in enumerate(asset_root.findall("material")):
         name = material.attrib.get("name")
         if not name or name in material_names:
-            raise UnityAssetError(
-                f"Material {index} has missing or duplicate name"
-            )
+            raise UnityAssetError(f"Material {index} has missing or duplicate name")
         material_names.add(name)
         rgba = parse_vector(
             material.attrib.get("rgba"),
@@ -468,13 +436,11 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
             material_name = geom.attrib.get("material")
             if not mesh_name or mesh_name not in mesh_assets:
                 raise UnityAssetError(
-                    f"Visual geom {path}[{geom_index}] has unknown mesh "
-                    f"{mesh_name!r}"
+                    f"Visual geom {path}[{geom_index}] has unknown mesh {mesh_name!r}"
                 )
             if not material_name or material_name not in material_names:
                 raise UnityAssetError(
-                    f"Visual geom {path}[{geom_index}] has unknown material "
-                    f"{material_name!r}"
+                    f"Visual geom {path}[{geom_index}] has unknown material {material_name!r}"
                 )
             visual_geoms.append(
                 {
@@ -599,9 +565,7 @@ def main() -> int:
     try:
         source = args.source.resolve()
         if not source.is_dir():
-            raise UnityAssetError(
-                f"Imported Reachy source directory does not exist: {source}"
-            )
+            raise UnityAssetError(f"Imported Reachy source directory does not exist: {source}")
         output = args.output.resolve()
         if output == source or source in output.parents:
             raise UnityAssetError(
