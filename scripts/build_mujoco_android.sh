@@ -8,6 +8,10 @@ LOCK_FILE="${ROOT_DIR}/third_party/mujoco-source.lock.json"
 TOOLCHAIN_FILE="${ROOT_DIR}/toolchain.lock.json"
 BUILD_DIR="${MUJOCO_ANDROID_BUILD_DIR:-${ROOT_DIR}/build/mujoco-android-arm64}"
 OUTPUT_DIR="${MUJOCO_ANDROID_OUTPUT_DIR:-${ROOT_DIR}/Assets/Plugins/Android/libs/arm64-v8a}"
+COMPAT_DIR="${ROOT_DIR}/native/reachy_sim/compat/android_api26"
+COMPAT_CMAKE="${COMPAT_DIR}/reachy_mujoco_android_api26.cmake"
+COMPAT_SOURCE="${COMPAT_DIR}/reachy_android_api26_compat.c"
+COMPAT_HEADER="${COMPAT_DIR}/reachy_android_api26_compat.h"
 DEFAULT_ANDROID_PLATFORM="$(python3 - "${TOOLCHAIN_FILE}" <<'PY'
 import json
 import sys
@@ -24,6 +28,17 @@ if [[ -z "${SOURCE_DIR}" ]]; then
     printf '%s\n' "usage: MUJOCO_SOURCE_DIR=/path/to/mujoco $0" >&2
     exit 2
 fi
+
+for compatibility_file in \
+    "${COMPAT_CMAKE}" \
+    "${COMPAT_SOURCE}" \
+    "${COMPAT_HEADER}"; do
+    if [[ ! -f "${compatibility_file}" ]]; then
+        printf 'Required Android compatibility file is missing: %s\n' \
+            "${compatibility_file}" >&2
+        exit 1
+    fi
+done
 
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 if [[ -z "${NDK_ROOT}" ]]; then
@@ -56,6 +71,9 @@ cmake \
     -B "${BUILD_DIR}" \
     -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="${NDK_TOOLCHAIN_FILE}" \
+    -DCMAKE_PROJECT_INCLUDE="${COMPAT_CMAKE}" \
+    -DREACHY_MUJOCO_ANDROID_COMPAT_SOURCE="${COMPAT_SOURCE}" \
+    -DREACHY_MUJOCO_ANDROID_COMPAT_HEADER="${COMPAT_HEADER}" \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
     -DANDROID_STL=c++_static \
@@ -133,6 +151,11 @@ if grep -E 'lib(GL|GLX|X11|glfw)' "${OUTPUT_DIR}/libmujoco.dynamic.txt"; then
     printf '%s\n' "Desktop-only dependency detected in Android MuJoCo library." >&2
     exit 1
 fi
+if ! grep -F 'reachy_android_api26_aligned_alloc' \
+    "${OUTPUT_DIR}/libmujoco.exports.txt" >/dev/null; then
+    printf '%s\n' "Android API 26 allocation compatibility symbol is missing." >&2
+    exit 1
+fi
 
 cat > "${OUTPUT_DIR}/BUILD_INFO.txt" <<INFO
 MuJoCo version: 3.9.0
@@ -142,6 +165,8 @@ Android platform: ${ANDROID_PLATFORM}
 Android NDK: ${ACTUAL_NDK}
 Build type: Release
 Android STL: c++_static
+Android API 26 allocation compatibility: posix_memalign shim
+POSIX time feature level: 200809L
 Third-party source modified: no
 INFO
 
