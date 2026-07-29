@@ -12,6 +12,10 @@ typedef double mjtNum;
 typedef int64_t mjtSize;
 
 enum { mjNWARNING = 8 };
+enum {
+    mjCNSTR_EQUALITY = 0,
+    mjCNSTR_CONTACT_FRICTIONLESS = 5
+};
 
 typedef struct mjVFS {
     const void* buffer;
@@ -49,6 +53,7 @@ typedef struct mjData {
     mjtNum* act;
     mjtNum* ctrl;
     mjtNum* efc_pos;
+    int* efc_type;
     mjWarningStat warning[mjNWARNING];
 } mjData;
 
