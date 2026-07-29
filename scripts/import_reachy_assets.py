@@ -4,15 +4,21 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import shutil
 import sys
 import tempfile
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+from reachy_model_map import (
+    ModelMapError,
+    build_model_map,
+    load_mjcf,
+    sha256,
+    validate_model_requirements,
+    write_model_map,
+)
 from source_checkout import SourceCheckoutError, validate_clean_checkout
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +52,7 @@ def validate_lock(lock: dict[str, Any]) -> None:
         "output_subdirectory",
         "asset_license",
         "software_license",
+        "model_requirements",
     }
     missing = sorted(required.difference(lock))
     if missing:
@@ -69,14 +76,13 @@ def checked_source_path(source_root: Path, relative_text: str) -> Path:
     return resolved
 
 
-def discover_model_files(source: Path, model_relative: str) -> list[tuple[str, Path]]:
-    """Discover the model, license-independent mesh inputs, and their output paths."""
+def discover_model_files(
+    source: Path,
+    model_relative: str,
+    root: Any,
+) -> list[tuple[str, Path]]:
+    """Discover the model, license-independent mesh inputs, and output paths."""
     model_path = checked_source_path(source, model_relative)
-    try:
-        root = ET.fromstring(model_path.read_bytes())
-    except (OSError, ET.ParseError) as exc:
-        raise AssetImportError(f"Cannot parse Reachy MJCF {model_relative}: {exc}") from exc
-
     compiler = root.find("compiler")
     mesh_directory = ""
     if compiler is not None:
@@ -98,15 +104,6 @@ def discover_model_files(source: Path, model_relative: str) -> list[tuple[str, P
     return sorted(discovered.items())
 
 
-def sha256(path: Path) -> str:
-    """Return a file's SHA-256 digest."""
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def write_import(
     source: Path,
     lock_path: Path,
@@ -123,7 +120,12 @@ def write_import(
     except ValueError as exc:
         raise AssetImportError("Output directory escapes configured output root.") from exc
 
-    inputs = discover_model_files(source, lock["model_file"])
+    model_path = checked_source_path(source, lock["model_file"])
+    model_root = load_mjcf(model_path, lock["model_file"])
+    model_map = build_model_map(model_root, model_path, lock["model_file"])
+    validate_model_requirements(model_map, lock["model_requirements"])
+
+    inputs = discover_model_files(source, lock["model_file"], model_root)
     license_source = checked_source_path(source, lock["license_file"])
     inputs.append(("UPSTREAM_LICENSE", license_source))
     inputs.sort()
@@ -169,6 +171,17 @@ def write_import(
                 "sha256": sha256(attribution_path),
             }
         )
+
+        model_map_path = staging / "MODEL_MAP.json"
+        write_model_map(model_map_path, model_map)
+        provenance_files.append(
+            {
+                "path": "MODEL_MAP.json",
+                "size": model_map_path.stat().st_size,
+                "sha256": sha256(model_map_path),
+            }
+        )
+
         report = {
             "schema_version": 1,
             "source_repository": lock["repository"],
@@ -217,7 +230,7 @@ def main() -> int:
         output_root = args.output_root.resolve()
         output_root.mkdir(parents=True, exist_ok=True)
         destination = write_import(source, lock_path, lock, output_root)
-    except (AssetImportError, SourceCheckoutError) as exc:
+    except (AssetImportError, ModelMapError, SourceCheckoutError) as exc:
         print(f"Reachy asset import failed: {exc}", file=sys.stderr)
         return 1
 
