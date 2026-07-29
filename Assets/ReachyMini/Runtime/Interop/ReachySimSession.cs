@@ -162,6 +162,98 @@ namespace ReachyMini.Interop
             }
         }
 
+        internal int ResetRaw(uint resetId)
+        {
+            lock (gate)
+            {
+                ReachySimSafeHandle activeHandle = RequireActiveHandle();
+                return NativeReachySim.Reset(activeHandle.Token, resetId);
+            }
+        }
+
+        internal int StepRaw(uint stepCount)
+        {
+            lock (gate)
+            {
+                ReachySimSafeHandle activeHandle = RequireActiveHandle();
+                return NativeReachySim.Step(activeHandle.Token, stepCount);
+            }
+        }
+
+        internal int SubmitCommandsRaw(
+            IntPtr bytes,
+            int byteCount)
+        {
+            if (bytes == IntPtr.Zero)
+            {
+                throw new ArgumentException(
+                    "The command buffer pointer cannot be zero.",
+                    nameof(bytes));
+            }
+            if (byteCount <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(byteCount),
+                    "The command buffer must contain at least one byte.");
+            }
+
+            lock (gate)
+            {
+                ReachySimSafeHandle activeHandle = RequireActiveHandle();
+                return NativeReachySim.SubmitCommands(
+                    activeHandle.Token,
+                    bytes,
+                    new UIntPtr(checked((uint)byteCount)));
+            }
+        }
+
+        internal int CopyStateRaw(
+            IntPtr bytes,
+            int byteCapacity,
+            out int requiredSize)
+        {
+            if (bytes == IntPtr.Zero)
+            {
+                throw new ArgumentException(
+                    "The state buffer pointer cannot be zero.",
+                    nameof(bytes));
+            }
+            if (byteCapacity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(byteCapacity),
+                    "The state buffer capacity must be positive.");
+            }
+
+            lock (gate)
+            {
+                ReachySimSafeHandle activeHandle = RequireActiveHandle();
+                int status = NativeReachySim.CopyState(
+                    activeHandle.Token,
+                    bytes,
+                    new UIntPtr(checked((uint)byteCapacity)),
+                    out UIntPtr nativeRequiredSize);
+                ulong requiredSizeValue = nativeRequiredSize.ToUInt64();
+                if (requiredSizeValue > int.MaxValue)
+                {
+                    throw new InvalidOperationException(
+                        $"Native state requires {requiredSizeValue} bytes, which exceeds the managed buffer limit.");
+                }
+
+                requiredSize = checked((int)requiredSizeValue);
+                return status;
+            }
+        }
+
+        internal ReachySimError GetErrorForStatus(int status)
+        {
+            lock (gate)
+            {
+                ReachySimSafeHandle activeHandle = RequireActiveHandle();
+                return ErrorFromStatus(activeHandle, status);
+            }
+        }
+
         public ReachySimOperationResult Close()
         {
             lock (gate)
@@ -259,6 +351,14 @@ namespace ReachyMini.Interop
                 return ReachySimOperationResult.Success();
             }
 
+            return ReachySimOperationResult.Failure(
+                ErrorFromStatus(activeHandle, status));
+        }
+
+        private static ReachySimError ErrorFromStatus(
+            ReachySimSafeHandle activeHandle,
+            int status)
+        {
             NativeReachySimErrorInfo nativeError =
                 NativeReachySimErrorInfo.Create();
             int errorStatus = NativeReachySim.GetLastError(
@@ -266,15 +366,13 @@ namespace ReachyMini.Interop
                 ref nativeError);
             if (errorStatus == (int)NativeReachySimStatus.Ok)
             {
-                return ReachySimOperationResult.Failure(
-                    ConvertNativeError(status, nativeError));
+                return ConvertNativeError(status, nativeError);
             }
 
-            return ReachySimOperationResult.Failure(
-                new ReachySimError(
-                    (ReachySimErrorCode)status,
-                    (ReachySimRecoverability)NativeReachySim.StatusRecoverability(status),
-                    $"{NativeStatusMessage(status)} Last-error query failed with {NativeStatusMessage(errorStatus)}"));
+            return new ReachySimError(
+                (ReachySimErrorCode)status,
+                (ReachySimRecoverability)NativeReachySim.StatusRecoverability(status),
+                $"{NativeStatusMessage(status)} Last-error query failed with {NativeStatusMessage(errorStatus)}");
         }
     }
 }
