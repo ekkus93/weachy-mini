@@ -18,7 +18,7 @@ namespace ReachyMini.Tests
         [TestCase(typeof(NativeReachySimStateHeader), 48)]
         [TestCase(typeof(NativeReachySimCommandBatchHeader), 24)]
         [TestCase(typeof(NativeReachySimWrenchCommand), 96)]
-        [TestCase(typeof(NativeReachySimSnapshotHeader), 40)]
+        [TestCase(typeof(NativeReachySimSnapshotHeader), 48)]
         [TestCase(typeof(NativeReachySimErrorInfo), 272)]
         public void ManagedStructuresMatchNativeSizes(
             Type structureType,
@@ -40,6 +40,10 @@ namespace ReachyMini.Tests
                 Marshal.OffsetOf<NativeReachySimStateHeader>(
                     nameof(NativeReachySimStateHeader.SimulationTime)),
                 Is.EqualTo(new IntPtr(16)));
+            Assert.That(
+                Marshal.OffsetOf<NativeReachySimSnapshotHeader>(
+                    nameof(NativeReachySimSnapshotHeader.CalibrationProfileId)),
+                Is.EqualTo(new IntPtr(40)));
             Assert.That(
                 Marshal.OffsetOf<NativeReachySimErrorInfo>(
                     nameof(NativeReachySimErrorInfo.Message)),
