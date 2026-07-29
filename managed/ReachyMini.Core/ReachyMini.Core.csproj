@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="../../Assets/ReachyMini/Runtime/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../../Assets/ReachyMini/Runtime/Interop/**/*.cs" Link="Interop/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../Assets/ReachyMini/Runtime/Simulation/**/*.cs" Link="Simulation/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
