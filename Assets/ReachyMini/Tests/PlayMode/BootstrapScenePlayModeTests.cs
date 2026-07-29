@@ -30,18 +30,15 @@ namespace ReachyMini.Tests
                 Is.EqualTo(SimulationFidelity.Unavailable));
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<Rigidbody>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None),
+                    FindObjectsInactive.Include),
                 Is.Empty);
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<Joint>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None),
+                    FindObjectsInactive.Include),
                 Is.Empty);
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<ArticulationBody>(
-                    FindObjectsInactive.Include,
-                    FindObjectsSortMode.None),
+                    FindObjectsInactive.Include),
                 Is.Empty);
         }
     }
