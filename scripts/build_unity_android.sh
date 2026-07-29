@@ -20,11 +20,14 @@ case "${MODE}" in
     development)
         METHOD='ReachyMini.Editor.AndroidBuild.BuildDevelopmentApk'
         ;;
+    emulator)
+        METHOD='ReachyMini.Editor.AndroidBuild.BuildEmulatorApk'
+        ;;
     release)
         METHOD='ReachyMini.Editor.AndroidBuild.BuildReleaseAab'
         ;;
     *)
-        printf '%s\n' 'usage: build_unity_android.sh development|release' >&2
+        printf '%s\n' 'usage: build_unity_android.sh development|emulator|release' >&2
         exit 2
         ;;
 esac
