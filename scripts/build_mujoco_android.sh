@@ -5,9 +5,19 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_DIR="${MUJOCO_SOURCE_DIR:-${1:-}}"
 LOCK_FILE="${ROOT_DIR}/third_party/mujoco-source.lock.json"
+TOOLCHAIN_FILE="${ROOT_DIR}/toolchain.lock.json"
 BUILD_DIR="${MUJOCO_ANDROID_BUILD_DIR:-${ROOT_DIR}/build/mujoco-android-arm64}"
 OUTPUT_DIR="${MUJOCO_ANDROID_OUTPUT_DIR:-${ROOT_DIR}/Assets/Plugins/Android/libs/arm64-v8a}"
-ANDROID_PLATFORM="${MUJOCO_ANDROID_PLATFORM:-android-31}"
+DEFAULT_ANDROID_PLATFORM="$(python3 - "${TOOLCHAIN_FILE}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(f"android-{manifest['android']['native_feasibility_min_sdk']}")
+PY
+)"
+ANDROID_PLATFORM="${MUJOCO_ANDROID_PLATFORM:-${DEFAULT_ANDROID_PLATFORM}}"
 EXPECTED_NDK="28.2.13676358"
 
 if [[ -z "${SOURCE_DIR}" ]]; then
@@ -22,8 +32,8 @@ if [[ -z "${NDK_ROOT}" ]]; then
 fi
 
 SOURCE_PROPERTIES="${NDK_ROOT}/source.properties"
-TOOLCHAIN_FILE="${NDK_ROOT}/build/cmake/android.toolchain.cmake"
-if [[ ! -f "${SOURCE_PROPERTIES}" || ! -f "${TOOLCHAIN_FILE}" ]]; then
+NDK_TOOLCHAIN_FILE="${NDK_ROOT}/build/cmake/android.toolchain.cmake"
+if [[ ! -f "${SOURCE_PROPERTIES}" || ! -f "${NDK_TOOLCHAIN_FILE}" ]]; then
     printf 'Android NDK is incomplete at %s.\n' "${NDK_ROOT}" >&2
     exit 1
 fi
@@ -45,7 +55,7 @@ cmake \
     -S "${SOURCE_DIR}" \
     -B "${BUILD_DIR}" \
     -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
+    -DCMAKE_TOOLCHAIN_FILE="${NDK_TOOLCHAIN_FILE}" \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
     -DANDROID_STL=c++_static \
@@ -74,7 +84,7 @@ cmake \
     -S "${ROOT_DIR}" \
     -B "${PROBE_BUILD_DIR}" \
     -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
+    -DCMAKE_TOOLCHAIN_FILE="${NDK_TOOLCHAIN_FILE}" \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
     -DANDROID_STL=c++_static \
