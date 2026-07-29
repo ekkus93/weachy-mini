@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "unity-editor",
+      "name": "Unity 6.3 LTS Editor",
+      "owner": "Unity Technologies",
+      "license": "Unity Software Terms",
+      "source_url": "https://unity.com/releases/editor/whats-new/6000.3.18f1",
+      "source_revision": "6000.3.18f1",
+      "status": "developer_tool",
+      "modification_status": "unmodified",
+      "redistribution_status": "not_redistributed",
+      "required_notice": "Package-specific Unity notices at release."
+    },
+    {
+      "id": "mujoco",
+      "name": "MuJoCo",
+      "owner": "Google DeepMind",
+      "license": "Apache-2.0",
+      "source_url": "https://github.com/google-deepmind/mujoco",
+      "source_revision": null,
+      "status": "planned",
+      "modification_status": "not_imported",
+      "redistribution_status": "allowed_with_notice",
+      "required_notice": "Apache License 2.0 and upstream NOTICE when pinned and packaged."
+    },
+    {
+      "id": "reachy-mini-software",
+      "name": "Reachy Mini software",
+      "owner": "Pollen Robotics / Hugging Face",
+      "license": "Apache-2.0",
+      "source_url": "https://github.com/pollen-robotics/reachy_mini",
+      "source_revision": null,
+      "status": "planned",
+      "modification_status": "not_imported",
+      "redistribution_status": "allowed_with_notice",
+      "required_notice": "Pin exact paths and retain upstream notices."
+    },
+    {
+      "id": "reachy-mini-hardware-assets",
+      "name": "Reachy Mini hardware and model assets",
+      "owner": "Pollen Robotics",
+      "license": "CC-BY-NC-SA",
+      "source_url": "https://github.com/pollen-robotics/reachy_mini",
+      "source_revision": null,
+      "status": "planned",
+      "modification_status": "not_imported",
+      "redistribution_status": "blocked_pending_asset_audit",
+      "required_notice": "Attribution, noncommercial restriction, ShareAlike, modification notice, and exact asset audit."
+    },
+    {
+      "id": "llama-cpp",
+      "name": "llama.cpp",
+      "owner": "ggml-org contributors",
+      "license": "MIT",
+      "source_url": "https://github.com/ggml-org/llama.cpp",
+      "source_revision": null,
+      "status": "planned",
+      "modification_status": "not_imported",
+      "redistribution_status": "allowed_with_notice",
+      "required_notice": "MIT license text after revision is pinned."
+    },
+    {
+      "id": "local-llm-candidate",
+      "name": "Sub-1B local language model",
+      "owner": "Not selected",
+      "license": "Not selected",
+      "source_url": "about:blank",
+      "source_revision": null,
+      "status": "candidate",
+      "modification_status": "not_imported",
+      "redistribution_status": "blocked_pending_selection",
+      "required_notice": "Select through benchmark and licensing review; do not package candidate binaries."
+    },
+    {
+      "id": "androidx-camerax",
+      "name": "AndroidX CameraX",
+      "owner": "Android Open Source Project / Google",
+      "license": "Apache-2.0",
+      "source_url": "https://developer.android.com/jetpack/androidx/releases/camera",
+      "source_revision": null,
+      "status": "planned",
+      "modification_status": "not_imported",
+      "redistribution_status": "allowed_with_notice",
+      "required_notice": "Pin modules and versions during CameraX implementation."
+    },
+    {
+      "id": "mobile-cv-provider",
+      "name": "Mobile computer-vision provider",
+      "owner": "Not selected",
+      "license": "Not selected",
+      "source_url": "about:blank",
+      "source_revision": null,
+      "status": "candidate",
+      "modification_status": "not_imported",
+      "redistribution_status": "blocked_pending_selection",
+      "required_notice": "Record SDK terms before dependency is added."
+    }
+  ]
+}

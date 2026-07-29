@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Python lint tooling
+        run: python -m pip install --disable-pip-version-check ruff==0.12.0
+      - name: Ruff lint
+        run: ruff check scripts
+      - name: Ruff format
+        run: ruff format --check scripts
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh
+      - name: Static repository checks
+        run: ./scripts/ci.sh --static-only
+
+  native:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native warnings-as-errors build and tests
+        run: ./scripts/build_native.sh
+      - name: Native sanitizer build and tests
+        env:
+          REACHY_ENABLE_SANITIZERS: 'ON'
+          REACHY_NATIVE_BUILD_DIR: build/native-sanitized
+        run: ./scripts/build_native.sh
+
+  managed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Managed warnings-as-errors build and tests
+        run: |
+          dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+          dotnet run --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj --configuration Release --no-restore
+
+  android-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify Android Gradle configuration pins
+        run: |
+          grep -F 'id("com.android.library") version "9.3.1"' android-plugin/build.gradle.kts
+          grep -F 'compileSdk = 37' android-plugin/build.gradle.kts
+          grep -F 'ndkVersion = "28.2.13676358"' android-plugin/build.gradle.kts
+          grep -F 'gradle-9.5.0-bin.zip' android-plugin/gradle/wrapper/gradle-wrapper.properties

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "updated_utc": "2026-07-29T05:56:00Z",
+  "unity": {
+    "editor_version": "6000.3.18f1",
+    "release_line": "Unity 6.3 LTS",
+    "scripting_backend": "IL2CPP",
+    "architectures": ["ARM64"],
+    "graphics_apis": ["Vulkan", "OpenGLES3"]
+  },
+  "android": {
+    "min_sdk": 31,
+    "min_sdk_status": "provisional_until_compatibility_spike",
+    "compile_sdk": 37,
+    "target_sdk": 37,
+    "build_tools": "36.0.0",
+    "android_gradle_plugin": "9.3.1",
+    "gradle": "9.5.0",
+    "gradle_distribution_sha256": "553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746",
+    "jdk_major": 17,
+    "ndk": "28.2.13676358",
+    "cmake": "3.31.6",
+    "abi": "arm64-v8a"
+  },
+  "quality_tools": {
+    "python_minimum": "3.11",
+    "cmake_minimum": "3.25",
+    "dotnet_channel": "8.0",
+    "clang_format_major": 18,
+    "ruff": "0.12.0",
+    "shellcheck": "0.10.0"
+  }
+}
