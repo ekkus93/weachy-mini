@@ -13,6 +13,9 @@ python3 "${SCRIPT_DIR}/validate_model_parameter_audit.py" \
     --audit "${ROOT_DIR}/models/reachy-mini/model-parameter-audit.json" \
     --lock "${ROOT_DIR}/third_party/reachy-mini-source.lock.json" \
     --baseline "${ROOT_DIR}/models/reachy-mini/model-baseline.json"
+python3 "${SCRIPT_DIR}/validate_reference_trace_lock.py" \
+    --scenario "${ROOT_DIR}/models/reachy-mini/reference-scenario.json" \
+    --lock "${ROOT_DIR}/models/reachy-mini/reference-trace-desktop.lock.json"
 python3 -m compileall -q "${SCRIPT_DIR}"
 python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -v
 
