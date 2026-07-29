@@ -10,30 +10,45 @@ namespace ReachyMini.Editor
     public static class AndroidBuild
     {
         private const string DevelopmentOutput = "Builds/Android/weachy-mini-development.apk";
-        private const string EmulatorOutput = "Builds/Android/weachy-mini-emulator-x86_64.apk";
+        private const string DeviceFeasibilityOutput =
+            "Builds/Android/weachy-mini-device-arm64-api26.apk";
         private const string ReleaseOutput = "Builds/Android/weachy-mini-release.aab";
+
+        private const int ApplicationMinimumApiLevel = 31;
+        private const int DeviceFeasibilityMinimumApiLevel = 26;
+        private const int TargetApiLevel = 37;
 
         public static void BuildDevelopmentApk()
         {
-            ConfigureAndroid(buildAppBundle: false, AndroidArchitecture.ARM64);
+            ConfigureAndroid(
+                buildAppBundle: false,
+                AndroidArchitecture.ARM64,
+                ApplicationMinimumApiLevel);
             Build(DevelopmentOutput, BuildOptions.Development);
         }
 
-        public static void BuildEmulatorApk()
+        public static void BuildDeviceFeasibilityApk()
         {
-            ConfigureAndroid(buildAppBundle: false, AndroidArchitecture.X86_64);
-            Build(EmulatorOutput, BuildOptions.Development);
+            ConfigureAndroid(
+                buildAppBundle: false,
+                AndroidArchitecture.ARM64,
+                DeviceFeasibilityMinimumApiLevel);
+            Build(DeviceFeasibilityOutput, BuildOptions.Development);
         }
 
         public static void BuildReleaseAab()
         {
-            ConfigureAndroid(buildAppBundle: true, AndroidArchitecture.ARM64);
+            ConfigureAndroid(
+                buildAppBundle: true,
+                AndroidArchitecture.ARM64,
+                ApplicationMinimumApiLevel);
             Build(ReleaseOutput, BuildOptions.None);
         }
 
         private static void ConfigureAndroid(
             bool buildAppBundle,
-            AndroidArchitecture targetArchitecture)
+            AndroidArchitecture targetArchitecture,
+            int minimumApiLevel)
         {
             if (!EditorUserBuildSettings.SwitchActiveBuildTarget(
                     BuildTargetGroup.Android,
@@ -46,8 +61,10 @@ namespace ReachyMini.Editor
                 NamedBuildTarget.Android,
                 ScriptingImplementation.IL2CPP);
             PlayerSettings.Android.targetArchitectures = targetArchitecture;
-            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel31;
-            PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)37;
+            PlayerSettings.Android.minSdkVersion =
+                (AndroidSdkVersions)minimumApiLevel;
+            PlayerSettings.Android.targetSdkVersion =
+                (AndroidSdkVersions)TargetApiLevel;
             PlayerSettings.SetApplicationIdentifier(
                 NamedBuildTarget.Android,
                 "com.ekkus.weachymini");
