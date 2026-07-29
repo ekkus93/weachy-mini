@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Runtime.InteropServices;
 using ReachyMini.Core;
@@ -143,7 +145,7 @@ namespace ReachyMini.Interop
         internal uint Recoverability;
 
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MessageCapacity)]
-        internal string Message;
+        internal string? Message;
 
         internal static NativeReachySimErrorInfo Create()
         {
