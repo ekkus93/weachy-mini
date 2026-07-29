@@ -9,6 +9,10 @@ python3 "${SCRIPT_DIR}/verify_toolchain.py" --manifest-only
 python3 "${SCRIPT_DIR}/validate_scaffold.py"
 python3 "${SCRIPT_DIR}/check_docs_links.py"
 python3 "${SCRIPT_DIR}/validate_inventory.py"
+python3 "${SCRIPT_DIR}/validate_model_parameter_audit.py" \
+    --audit "${ROOT_DIR}/models/reachy-mini/model-parameter-audit.json" \
+    --lock "${ROOT_DIR}/third_party/reachy-mini-source.lock.json" \
+    --baseline "${ROOT_DIR}/models/reachy-mini/model-baseline.json"
 python3 -m compileall -q "${SCRIPT_DIR}"
 python3 -m unittest discover -s "${SCRIPT_DIR}/tests" -v
 
