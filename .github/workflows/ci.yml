@@ -55,10 +55,38 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Managed warnings-as-errors build and tests
+      - name: Build test-only native interop library
+        shell: bash
         run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/managed-native \
+            -G Ninja \
+            -DBUILD_TESTING=ON
+          cmake \
+            --build build/managed-native \
+            --target reachy_sim_managed_contract \
+            --parallel
+
+          native_library="$(find build/managed-native -type f -name 'libreachy_sim.so' -print -quit)"
+          if [[ -z "${native_library}" ]]; then
+            printf '%s\n' 'Managed contract build did not produce libreachy_sim.so.' >&2
+            exit 1
+          fi
+          printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n' \
+            "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
+      - name: Managed warnings-as-errors build and native lifecycle tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${REACHY_MANAGED_NATIVE_LIBRARY_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          export REACHY_MANAGED_NATIVE_TESTS=1
           dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
-          dotnet run --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj --configuration Release --no-restore
+          dotnet run \
+            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release \
+            --no-restore
 
   android:
     runs-on: ubuntu-24.04
