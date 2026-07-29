@@ -21,7 +21,7 @@ int main(void)
     }
 
     if(version == NULL ||
-       strcmp(version, "0.2.0-abi-contract") != 0)
+       strcmp(version, "0.3.0-deterministic-snapshot") != 0)
     {
         (void)fprintf(
             stderr,
