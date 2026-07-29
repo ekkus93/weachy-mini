@@ -22,9 +22,7 @@ class ReachyAssetImportTests(unittest.TestCase):
         self.source = self.root / "source"
         self.output = self.root / "output"
         self.lock_path = self.root / "source.lock.json"
-        self.model_directory = (
-            self.source / "src/reachy_mini/descriptions/reachy_mini/mjcf"
-        )
+        self.model_directory = self.source / "src/reachy_mini/descriptions/reachy_mini/mjcf"
         asset_directory = self.model_directory / "assets" / "collision/coarse"
         asset_directory.mkdir(parents=True)
         (self.source / "LICENSE").write_text("test license\n", encoding="utf-8")
@@ -111,9 +109,7 @@ class ReachyAssetImportTests(unittest.TestCase):
             "repository": "https://example.invalid/reachy_mini.git",
             "commit": commit,
             "license_file": "LICENSE",
-            "model_file": (
-                "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml"
-            ),
+            "model_file": ("src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml"),
             "output_subdirectory": "ReachyMini/Source",
             "asset_license": "CC-BY-NC-SA",
             "software_license": "Apache-2.0",
@@ -249,9 +245,7 @@ class ReachyAssetImportTests(unittest.TestCase):
             model_map["counts"],
         )
         eye_camera = next(
-            camera
-            for camera in model_map["cameras"]
-            if camera["name"] == "eye_camera"
+            camera for camera in model_map["cameras"] if camera["name"] == "eye_camera"
         )
         self.assertEqual(
             "/world/base/stewart_arm/rod/head/@body[0]",
@@ -259,11 +253,7 @@ class ReachyAssetImportTests(unittest.TestCase):
         )
         self.assertEqual(
             "passive_1",
-            next(
-                joint["name"]
-                for joint in model_map["joints"]
-                if joint["type"] == "ball"
-            ),
+            next(joint["name"] for joint in model_map["joints"] if joint["type"] == "ball"),
         )
         provenance = json.loads(second_files["PROVENANCE.json"])
         provenance_paths = {entry["path"] for entry in provenance["files"]}
