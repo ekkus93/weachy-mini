@@ -136,10 +136,7 @@ def main() -> int:
         print(f"Reference trace lock validation failed: {exc}", file=sys.stderr)
         return 1
     mode = "lock-and-trace" if args.trace is not None else "lock"
-    print(
-        "Reference trace lock validation passed: "
-        f"mode={mode} scenario={scenario['scenario_id']}"
-    )
+    print(f"Reference trace lock validation passed: mode={mode} scenario={scenario['scenario_id']}")
     return 0
 
 
