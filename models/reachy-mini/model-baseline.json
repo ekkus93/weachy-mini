@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/pollen-robotics/reachy_mini.git",
+    "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_path": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46"
+  },
+  "mujoco_version": "3.9.0",
+  "coordinate_convention": {
+    "position_frame": "MuJoCo world frame",
+    "length_unit": "metre",
+    "angle_unit": "radian",
+    "quaternion_component_order": "wxyz",
+    "source_compiler_attributes": {
+      "angle": "radian",
+      "autolimits": "true",
+      "meshdir": "assets"
+    },
+    "unity_conversion": "Not defined by RMA-040; Unity conversion is an explicit RMA-050/RMA-051 presentation-layer contract."
+  },
+  "compiled_counts": {
+    "actuators": 9,
+    "bodies_including_world": 19,
+    "cameras": 2,
+    "equalities": 5,
+    "joints": 16,
+    "nq": 37,
+    "nv": 30,
+    "sites": 13
+  },
+  "reference_pose": {
+    "body": "xl_330",
+    "initial_position_metres": [
+      0.020648028915145465,
+      -0.021763667226951566,
+      0.1495711268380908
+    ],
+    "initial_quaternion_wxyz": [
+      -0.46515074403640877,
+      0.7243709070536742,
+      -0.18296789147040485,
+      -0.4748097777294465
+    ],
+    "absolute_position_tolerance_metres": 1e-09,
+    "absolute_quaternion_component_tolerance": 1e-09
+  },
+  "validation": {
+    "forward_dynamics_calls": 1,
+    "uncommanded_steps": 100,
+    "finite_state_required": true
+  }
+}
