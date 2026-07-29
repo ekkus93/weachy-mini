@@ -54,6 +54,8 @@ COMPILE_SDK="${ANDROID_PINS[0]}"
 COMPILE_SDK_PACKAGE="${ANDROID_PINS[1]}"
 BUILD_TOOLS="${ANDROID_PINS[2]}"
 PLATFORM_PACKAGE="platforms;android-${COMPILE_SDK_PACKAGE}"
+COMMAND_LINE_TOOLS_PACKAGE="cmdline-tools;latest"
+EXTERNAL_SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
 REQUIRED_PLATFORM="${ANDROID_SDK_ROOT}/platforms/android-${COMPILE_SDK_PACKAGE}/android.jar"
 REQUIRED_BUILD_TOOLS="${ANDROID_SDK_ROOT}/build-tools/${BUILD_TOOLS}"
 UNITY_ANDROID_PLAYER_DIR="$(dirname "${UNITY_EDITOR}")/Data/PlaybackEngines/AndroidPlayer"
@@ -86,8 +88,8 @@ find_newest_sdkmanager()
 }
 
 SDKMANAGER=""
-if [[ -x "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" ]]; then
-    SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+if [[ -x "${EXTERNAL_SDKMANAGER}" ]]; then
+    SDKMANAGER="${EXTERNAL_SDKMANAGER}"
 else
     SDKMANAGER="$(find_newest_sdkmanager "${ANDROID_SDK_ROOT}/cmdline-tools" || true)"
 fi
@@ -112,20 +114,63 @@ fi
 
 SDKMANAGER_PATH="${UNITY_JAVA_HOME}/bin:${PATH}"
 
+run_sdkmanager()
+{
+    env \
+        JAVA_HOME="${UNITY_JAVA_HOME}" \
+        PATH="${SDKMANAGER_PATH}" \
+        "${SDKMANAGER}" \
+        --sdk_root="${ANDROID_SDK_ROOT}" \
+        "$@"
+}
+
+accept_android_licenses()
+{
+    local status
+
+    set +o pipefail
+    yes 2>/dev/null | run_sdkmanager --licenses >/dev/null
+    status="${PIPESTATUS[1]}"
+    set -o pipefail
+    if [[ "${status}" -ne 0 ]]; then
+        printf 'Android SDK license acceptance failed with status %s.\n' \
+            "${status}" >&2
+        exit "${status}"
+    fi
+}
+
+if [[ ! -x "${EXTERNAL_SDKMANAGER}" ]]; then
+    printf 'Provisioning %s in %s using %s.\n' \
+        "${COMMAND_LINE_TOOLS_PACKAGE}" "${ANDROID_SDK_ROOT}" "${SDKMANAGER}"
+
+    SDK_LIST="$(run_sdkmanager --channel=3 --list)"
+    if ! grep -Fq "${COMMAND_LINE_TOOLS_PACKAGE}" <<<"${SDK_LIST}"; then
+        printf 'Android SDK package %s is not visible to %s.\n' \
+            "${COMMAND_LINE_TOOLS_PACKAGE}" "${SDKMANAGER}" >&2
+        exit 1
+    fi
+
+    accept_android_licenses
+    run_sdkmanager \
+        --channel=3 \
+        --install \
+        "${COMMAND_LINE_TOOLS_PACKAGE}"
+
+    if [[ ! -x "${EXTERNAL_SDKMANAGER}" ]]; then
+        printf 'Android Command-line Tools installation did not create %s.\n' \
+            "${EXTERNAL_SDKMANAGER}" >&2
+        exit 1
+    fi
+
+    SDKMANAGER="${EXTERNAL_SDKMANAGER}"
+fi
+
 if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
     printf 'Provisioning Android API %s package %s and Build Tools %s in %s.\n' \
         "${COMPILE_SDK}" "${PLATFORM_PACKAGE}" "${BUILD_TOOLS}" "${ANDROID_SDK_ROOT}"
     printf 'sdkmanager=%s\n' "${SDKMANAGER}"
 
-    SDK_LIST="$(
-        env \
-            JAVA_HOME="${UNITY_JAVA_HOME}" \
-            PATH="${SDKMANAGER_PATH}" \
-            "${SDKMANAGER}" \
-            --sdk_root="${ANDROID_SDK_ROOT}" \
-            --channel=3 \
-            --list
-    )"
+    SDK_LIST="$(run_sdkmanager --channel=3 --list)"
     if ! grep -Fq "${PLATFORM_PACKAGE}" <<<"${SDK_LIST}"; then
         printf 'Android SDK package %s is not visible to %s.\n' \
             "${PLATFORM_PACKAGE}" "${SDKMANAGER}" >&2
@@ -135,30 +180,18 @@ if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
         exit 1
     fi
 
-    set +o pipefail
-    yes 2>/dev/null | env \
-        JAVA_HOME="${UNITY_JAVA_HOME}" \
-        PATH="${SDKMANAGER_PATH}" \
-        "${SDKMANAGER}" \
-        --sdk_root="${ANDROID_SDK_ROOT}" \
-        --licenses >/dev/null
-    LICENSE_STATUS="${PIPESTATUS[1]}"
-    set -o pipefail
-    if [[ "${LICENSE_STATUS}" -ne 0 ]]; then
-        printf 'Android SDK license acceptance failed with status %s.\n' \
-            "${LICENSE_STATUS}" >&2
-        exit "${LICENSE_STATUS}"
-    fi
-
-    env \
-        JAVA_HOME="${UNITY_JAVA_HOME}" \
-        PATH="${SDKMANAGER_PATH}" \
-        "${SDKMANAGER}" \
-        --sdk_root="${ANDROID_SDK_ROOT}" \
+    accept_android_licenses
+    run_sdkmanager \
         --channel=3 \
         --install \
         "${PLATFORM_PACKAGE}" \
         "build-tools;${BUILD_TOOLS}"
+fi
+
+if [[ ! -x "${EXTERNAL_SDKMANAGER}" ]]; then
+    printf 'Android Command-line Tools are incomplete: %s\n' \
+        "${EXTERNAL_SDKMANAGER}" >&2
+    exit 1
 fi
 
 if [[ ! -f "${REQUIRED_PLATFORM}" ]]; then
