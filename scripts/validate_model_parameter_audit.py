@@ -375,11 +375,13 @@ def validate_source_defaults(root: ET.Element, audit: dict[str, Any]) -> None:
         source = defaults.get(source_class)
         if source is None:
             raise AuditValidationError(f"Pinned model lacks class {source_class}")
-        if model_id == "chosen_actuator":
-            if source.find("default[@class='chosen_actuator']") is None:
-                raise AuditValidationError(
-                    "chosen_actuator no longer inherits perfect_actuator"
-                )
+        if (
+            model_id == "chosen_actuator"
+            and source.find("default[@class='chosen_actuator']") is None
+        ):
+            raise AuditValidationError(
+                "chosen_actuator no longer inherits perfect_actuator"
+            )
         source_joint = source.find("joint")
         source_position = source.find("position")
         if source_joint is None or source_position is None:
