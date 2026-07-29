@@ -8,7 +8,6 @@ import hashlib
 import json
 import math
 import re
-import shutil
 import struct
 import sys
 import tempfile
@@ -60,7 +59,7 @@ def read_json(path: Path) -> dict[str, Any]:
 
 
 def checked_relative_file(root: Path, relative_text: str) -> Path:
-    """Resolve one required file without allowing traversal or symlink escape."""
+    """Resolve one required file without traversal or symlink escape."""
     relative = Path(relative_text)
     if relative.is_absolute() or ".." in relative.parts:
         raise UnityAssetError(f"Unsafe source-relative path: {relative_text}")
@@ -107,102 +106,23 @@ def parse_vector(
 def coordinate_vector(
     vector: tuple[float, float, float],
 ) -> tuple[float, float, float]:
-    """Map MuJoCo (x, y, z) to Unity (x, z, y)."""
+    """Map MuJoCo right-handed Z-up coordinates to Unity left-handed Y-up."""
     return vector[0], vector[2], vector[1]
-
-
-def matrix_from_quaternion(
-    quaternion: tuple[float, float, float, float],
-) -> tuple[tuple[float, ...], ...]:
-    """Convert a normalized wxyz quaternion to a 3x3 rotation matrix."""
-    w, x, y, z = quaternion
-    norm = math.sqrt(w * w + x * x + y * y + z * z)
-    if norm <= 0.0 or not math.isfinite(norm):
-        raise UnityAssetError("MJCF quaternion has zero or invalid norm")
-    w, x, y, z = (value / norm for value in quaternion)
-    return (
-        (
-            1.0 - 2.0 * (y * y + z * z),
-            2.0 * (x * y - z * w),
-            2.0 * (x * z + y * w),
-        ),
-        (
-            2.0 * (x * y + z * w),
-            1.0 - 2.0 * (x * x + z * z),
-            2.0 * (y * z - x * w),
-        ),
-        (
-            2.0 * (x * z - y * w),
-            2.0 * (y * z + x * w),
-            1.0 - 2.0 * (x * x + y * y),
-        ),
-    )
-
-
-def quaternion_from_matrix(
-    matrix: tuple[tuple[float, ...], ...],
-) -> tuple[float, float, float, float]:
-    """Convert a proper 3x3 rotation matrix to canonical wxyz form."""
-    trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
-    if trace > 0.0:
-        scale = math.sqrt(trace + 1.0) * 2.0
-        quaternion = (
-            0.25 * scale,
-            (matrix[2][1] - matrix[1][2]) / scale,
-            (matrix[0][2] - matrix[2][0]) / scale,
-            (matrix[1][0] - matrix[0][1]) / scale,
-        )
-    elif matrix[0][0] > matrix[1][1] and matrix[0][0] > matrix[2][2]:
-        scale = math.sqrt(
-            1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]
-        ) * 2.0
-        quaternion = (
-            (matrix[2][1] - matrix[1][2]) / scale,
-            0.25 * scale,
-            (matrix[0][1] + matrix[1][0]) / scale,
-            (matrix[0][2] + matrix[2][0]) / scale,
-        )
-    elif matrix[1][1] > matrix[2][2]:
-        scale = math.sqrt(
-            1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]
-        ) * 2.0
-        quaternion = (
-            (matrix[0][2] - matrix[2][0]) / scale,
-            (matrix[0][1] + matrix[1][0]) / scale,
-            0.25 * scale,
-            (matrix[1][2] + matrix[2][1]) / scale,
-        )
-    else:
-        scale = math.sqrt(
-            1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]
-        ) * 2.0
-        quaternion = (
-            (matrix[1][0] - matrix[0][1]) / scale,
-            (matrix[0][2] + matrix[2][0]) / scale,
-            (matrix[1][2] + matrix[2][1]) / scale,
-            0.25 * scale,
-        )
-    norm = math.sqrt(sum(value * value for value in quaternion))
-    result = tuple(value / norm for value in quaternion)
-    for value in result:
-        if abs(value) > 1e-15:
-            if value < 0.0:
-                result = tuple(-component for component in result)
-            break
-    return result
 
 
 def coordinate_quaternion(
     quaternion: tuple[float, float, float, float],
 ) -> tuple[float, float, float, float]:
-    """Conjugate a MuJoCo rotation by the x/z/y reflection basis change."""
-    source = matrix_from_quaternion(quaternion)
-    order = (0, 2, 1)
-    converted = tuple(
-        tuple(source[order[row]][order[column]] for column in range(3))
-        for row in range(3)
-    )
-    return quaternion_from_matrix(converted)
+    """Map one normalized MuJoCo wxyz quaternion into the Unity basis."""
+    norm = math.sqrt(sum(value * value for value in quaternion))
+    if norm <= 0.0 or not math.isfinite(norm):
+        raise UnityAssetError("MJCF quaternion has zero or invalid norm")
+    w, x, y, z = (value / norm for value in quaternion)
+    result = (w, -x, -z, -y)
+    for value in result:
+        if abs(value) > 1e-15:
+            return tuple(-component for component in result) if value < 0.0 else result
+    raise UnityAssetError("Converted quaternion is invalid")
 
 
 def parse_binary_stl(data: bytes, path: Path) -> list[Triangle] | None:
@@ -436,8 +356,7 @@ def validate_import_identity(
     source_model = model_map.get("source_model")
     if not isinstance(source_model, dict):
         raise UnityAssetError("MODEL_MAP.json source_model must be an object")
-    actual_model_sha = sha256(model_path)
-    if source_model.get("sha256") != actual_model_sha:
+    if source_model.get("sha256") != sha256(model_path):
         raise UnityAssetError("MODEL_MAP.json does not identify the imported MJCF bytes")
     provenance_path = checked_relative_file(source_root, "PROVENANCE.json")
     provenance = read_json(provenance_path)
@@ -608,10 +527,7 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
                 "mujoco": "right-handed; +Z up; quaternion wxyz",
                 "unity": "left-handed; +Y up; quaternion stored wxyz in manifest",
                 "vector_rule": "unity(x,y,z) = mujoco(x,z,y)",
-                "rotation_rule": (
-                    "R_unity = M * R_mujoco * inverse(M), "
-                    "M maps (x,y,z) to (x,z,y)"
-                ),
+                "quaternion_rule": "unity_wxyz = (w, -x, -z, -y)",
                 "mesh_winding_reversed": True,
             },
         },
