@@ -33,6 +33,14 @@ static int test_valid_probe(void)
         (void)fprintf(stderr, "valid probe report was outside expected bounds\n");
         return 1;
     }
+    if(report.body_count != 3U || report.joint_count != 2U ||
+       report.actuator_count != 0U || report.equality_count != 1U ||
+       report.site_count != 2U || report.camera_count != 0U ||
+       report.position_count != 2U || report.velocity_count != 2U)
+    {
+        (void)fprintf(stderr, "valid probe compiled counts were incorrect\n");
+        return 1;
+    }
     return 0;
 }
 
