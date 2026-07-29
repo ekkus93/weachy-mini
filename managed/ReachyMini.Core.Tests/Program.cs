@@ -36,6 +36,14 @@ namespace ReachyMini.Core.Tests
                 ProjectMetadata.InitialFidelity,
                 "initial fidelity");
             AssertEqual(
+                1U,
+                ProjectMetadata.NativeSnapshotFormatVersion,
+                "snapshot format version");
+            AssertEqual(
+                0UL,
+                ProjectMetadata.UncalibratedCalibrationProfileId,
+                "uncalibrated profile identifier");
+            AssertEqual(
                 true,
                 ProjectMetadata.IsSupportedPhysicsTimestep(0.002),
                 "500 Hz timestep");
@@ -70,7 +78,7 @@ namespace ReachyMini.Core.Tests
                 Marshal.SizeOf<NativeReachySimWrenchCommand>(),
                 "wrench command size");
             AssertEqual(
-                40,
+                48,
                 Marshal.SizeOf<NativeReachySimSnapshotHeader>(),
                 "snapshot header size");
             AssertEqual(
@@ -88,6 +96,11 @@ namespace ReachyMini.Core.Tests
                 Marshal.OffsetOf<NativeReachySimStateHeader>(
                     nameof(NativeReachySimStateHeader.SimulationTime)),
                 "state time offset");
+            AssertEqual(
+                new IntPtr(40),
+                Marshal.OffsetOf<NativeReachySimSnapshotHeader>(
+                    nameof(NativeReachySimSnapshotHeader.CalibrationProfileId)),
+                "snapshot calibration offset");
             AssertEqual(
                 new IntPtr(16),
                 Marshal.OffsetOf<NativeReachySimErrorInfo>(
@@ -109,6 +122,57 @@ namespace ReachyMini.Core.Tests
             ReachySimOperationResult stepResult = session.Step(10U);
             AssertEqual(true, stepResult.IsSuccess, "native step result");
 
+            ReachySimSnapshotCaptureResult captureResult =
+                session.CaptureSnapshot();
+            AssertEqual(true, captureResult.IsSuccess, "snapshot capture result");
+            ReachySimSnapshot snapshot = captureResult.Snapshot ??
+                throw new InvalidOperationException(
+                    $"Snapshot capture failed: {captureResult.Error.Code}: {captureResult.Error.Message}");
+            AssertEqual(
+                ProjectMetadata.NativeSnapshotFormatVersion,
+                snapshot.SnapshotVersion,
+                "snapshot version");
+            AssertEqual(
+                ProjectMetadata.UncalibratedCalibrationProfileId,
+                snapshot.CalibrationProfileId,
+                "snapshot calibration profile");
+            AssertEqual(10UL, snapshot.Sequence, "snapshot sequence");
+            AssertEqual(0.02, snapshot.SimulationTime, "snapshot time");
+            if (snapshot.ByteCount <=
+                Marshal.SizeOf<NativeReachySimSnapshotHeader>())
+            {
+                throw new InvalidOperationException(
+                    "Managed test failed: snapshot does not contain a backend payload.");
+            }
+
+            byte[] exportedSnapshot = snapshot.ToArray();
+            exportedSnapshot[0] ^= 0xff;
+            AssertEqual(
+                ProjectMetadata.NativeAbiVersion,
+                (uint)snapshot.ToArray()[0],
+                "snapshot export is defensive");
+
+            ReachySimOperationResult advanceResult = session.Step(5U);
+            AssertEqual(true, advanceResult.IsSuccess, "advance after snapshot");
+            ReachySimOperationResult restoreResult =
+                session.RestoreSnapshot(snapshot);
+            AssertEqual(true, restoreResult.IsSuccess, "snapshot restore result");
+
+            ReachySimSnapshotCaptureResult recaptureResult =
+                session.CaptureSnapshot();
+            ReachySimSnapshot recaptured = recaptureResult.Snapshot ??
+                throw new InvalidOperationException(
+                    $"Snapshot recapture failed: {recaptureResult.Error.Code}: {recaptureResult.Error.Message}");
+            AssertEqual(snapshot.Sequence, recaptured.Sequence, "restored sequence");
+            AssertEqual(
+                snapshot.SimulationTime,
+                recaptured.SimulationTime,
+                "restored simulation time");
+            AssertBytesEqual(
+                snapshot.ToArray(),
+                recaptured.ToArray(),
+                "restored snapshot bytes");
+
             ReachySimOperationResult zeroStepResult = session.Step(0U);
             AssertEqual(false, zeroStepResult.IsSuccess, "zero-step failure");
             AssertEqual(
@@ -116,8 +180,18 @@ namespace ReachyMini.Core.Tests
                 zeroStepResult.Error.Code,
                 "zero-step error code");
 
-            ReachySimOperationResult resetResult = session.Reset(0U);
-            AssertEqual(true, resetResult.IsSuccess, "native reset result");
+            ReachySimOperationResult sleepReset =
+                session.Reset(ReachySimResetPose.SleepRest);
+            AssertEqual(true, sleepReset.IsSuccess, "sleep/rest reset result");
+            ReachySimOperationResult neutralReset =
+                session.Reset(ReachySimResetPose.NeutralAwake);
+            AssertEqual(true, neutralReset.IsSuccess, "neutral-awake reset result");
+            ReachySimOperationResult unknownReset = session.Reset(99U);
+            AssertEqual(false, unknownReset.IsSuccess, "unknown reset failure");
+            AssertEqual(
+                ReachySimErrorCode.InvalidArgument,
+                unknownReset.Error.Code,
+                "unknown reset error code");
 
             ReachySimOperationResult closeResult = session.Close();
             AssertEqual(true, closeResult.IsSuccess, "native close result");
@@ -255,7 +329,7 @@ namespace ReachyMini.Core.Tests
                     "command queued before reset");
 
                 ReachySimulationControlResult reset = worker.Reset(
-                    resetId: 0U,
+                    resetId: (uint)ReachySimResetPose.SleepRest,
                     timeout: TimeSpan.FromSeconds(5.0));
                 AssertControlSuccess(reset, "worker reset");
                 AssertEqual(
@@ -350,6 +424,27 @@ namespace ReachyMini.Core.Tests
         {
             WriteUInt32(destination, offset, (uint)value);
             WriteUInt32(destination, offset + 4, (uint)(value >> 32));
+        }
+
+        private static void AssertBytesEqual(
+            byte[] expected,
+            byte[] actual,
+            string description)
+        {
+            if (expected.Length != actual.Length)
+            {
+                throw new InvalidOperationException(
+                    $"Managed test failed for {description}: expected {expected.Length} bytes, actual {actual.Length}.");
+            }
+
+            for (int index = 0; index < expected.Length; ++index)
+            {
+                if (expected[index] != actual[index])
+                {
+                    throw new InvalidOperationException(
+                        $"Managed test failed for {description}: byte {index} differs.");
+                }
+            }
         }
 
         private static void AssertControlSuccess(
