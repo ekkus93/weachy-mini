@@ -40,6 +40,76 @@ jobs:
       - name: Static repository checks
         run: ./scripts/ci.sh --static-only
 
+  reachy-model:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read pinned Reachy source
+        id: reachy_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          lock = json.loads(
+              Path("third_party/reachy-mini-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          repository_path = urlparse(lock["repository"]).path
+          repository = repository_path.removesuffix(".git").strip("/")
+          if repository.count("/") != 1:
+              raise SystemExit(f"Invalid pinned GitHub repository: {repository!r}")
+          print(f"repository={repository}")
+          print(f"commit={lock['commit']}")
+          print(f"model_file={lock['model_file']}")
+          PY
+      - name: Check out pinned Reachy MJCF
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.reachy_source.outputs.repository }}
+          ref: ${{ steps.reachy_source.outputs.commit }}
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: false
+          sparse-checkout: ${{ steps.reachy_source.outputs.model_file }}
+          sparse-checkout-cone-mode: false
+      - name: Verify pinned source and model topology
+        shell: bash
+        env:
+          EXPECTED_REACHY_COMMIT: ${{ steps.reachy_source.outputs.commit }}
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          actual_commit="$(git -C upstream/reachy-mini rev-parse HEAD)"
+          if [[ "${actual_commit}" != "${EXPECTED_REACHY_COMMIT}" ]]; then
+            printf 'Reachy source mismatch: expected %s, found %s.\n' \
+              "${EXPECTED_REACHY_COMMIT}" "${actual_commit}" >&2
+            exit 1
+          fi
+          if [[ -n "$(git -C upstream/reachy-mini status --porcelain --untracked-files=all)" ]]; then
+            printf '%s\n' 'Pinned Reachy source checkout is not clean.' >&2
+            exit 1
+          fi
+          python3 scripts/validate_reachy_model.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --output build/reachy-model/MODEL_MAP.json
+      - name: Upload pinned Reachy model map
+        uses: actions/upload-artifact@v4
+        with:
+          name: reachy-model-map-${{ github.sha }}
+          path: build/reachy-model/MODEL_MAP.json
+          if-no-files-found: error
+          retention-days: 14
+
   native:
     runs-on: ubuntu-24.04
     steps:
