@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Runtime.InteropServices;
 using ReachyMini.Core;
@@ -114,19 +116,9 @@ namespace ReachyMini.Interop
                             "Native creation reported success but returned an invalid zero handle."));
                 }
 
-                ReachySimSafeHandle safeHandle;
-                try
-                {
-                    safeHandle = ReachySimSafeHandle.FromToken(token);
-                }
-                catch
-                {
-                    _ = NativeReachySim.Destroy(token);
-                    throw;
-                }
-
                 return ReachySimCreateResult.Success(
-                    new ReachySimSession(safeHandle));
+                    new ReachySimSession(
+                        ReachySimSafeHandle.FromToken(token)));
             }
             catch (DllNotFoundException exception)
             {
@@ -174,19 +166,20 @@ namespace ReachyMini.Interop
         {
             lock (gate)
             {
-                if (handle == null)
+                ReachySimSafeHandle? activeHandle = handle;
+                if (activeHandle == null)
                 {
                     disposed = true;
                     return ReachySimOperationResult.Success();
                 }
 
-                int status = handle.CloseExplicitly();
+                int status = activeHandle.CloseExplicitly();
                 if (status != (int)NativeReachySimStatus.Ok)
                 {
-                    return ResultFromStatus(handle, status);
+                    return ResultFromStatus(activeHandle, status);
                 }
 
-                handle.Dispose();
+                activeHandle.Dispose();
                 handle = null;
                 disposed = true;
                 return ReachySimOperationResult.Success();
@@ -246,11 +239,15 @@ namespace ReachyMini.Interop
 
         private ReachySimSafeHandle RequireActiveHandle()
         {
-            if (disposed || handle == null || handle.IsClosed || handle.IsInvalid)
+            ReachySimSafeHandle? activeHandle = handle;
+            if (disposed ||
+                activeHandle == null ||
+                activeHandle.IsClosed ||
+                activeHandle.IsInvalid)
             {
                 throw new ObjectDisposedException(nameof(ReachySimSession));
             }
-            return handle;
+            return activeHandle;
         }
 
         private static ReachySimOperationResult ResultFromStatus(
