@@ -72,11 +72,7 @@ def require_close_vector(
     """Require a finite numeric vector to match an absolute tolerance."""
     if not isinstance(expected, list) or not expected:
         raise MujocoValidationError(f"Baseline {label} must be a nonempty array")
-    if (
-        not isinstance(tolerance, int | float)
-        or isinstance(tolerance, bool)
-        or tolerance < 0
-    ):
+    if not isinstance(tolerance, int | float) or isinstance(tolerance, bool) or tolerance < 0:
         raise MujocoValidationError(f"Baseline {label} tolerance must be nonnegative")
     expected_array = np.asarray(expected, dtype=np.float64)
     if actual.shape != expected_array.shape:
@@ -107,9 +103,7 @@ def require_compiler_attributes(model_path: Path, baseline: dict[str, Any]) -> N
         raise MujocoValidationError("Baseline coordinate_convention must be an object")
     expected_attributes = coordinate_convention.get("source_compiler_attributes")
     if not isinstance(expected_attributes, dict):
-        raise MujocoValidationError(
-            "Baseline source_compiler_attributes must be an object"
-        )
+        raise MujocoValidationError("Baseline source_compiler_attributes must be an object")
     for name, expected in expected_attributes.items():
         actual = compiler.attrib.get(name)
         if actual != expected:
