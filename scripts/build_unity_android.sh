@@ -5,9 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 MODE="${1:-}"
 UNITY_EDITOR="${UNITY_EDITOR:-}"
+PINNED_UNITY_VERSION="$(sed -n 's/^m_EditorVersion: //p' "${ROOT_DIR}/ProjectSettings/ProjectVersion.txt")"
 
 if [[ -z "${UNITY_EDITOR}" ]]; then
-    printf '%s\n' 'UNITY_EDITOR must point to Unity 6000.3.18f1.' >&2
+    printf 'UNITY_EDITOR must point to Unity %s.\n' "${PINNED_UNITY_VERSION}" >&2
     exit 1
 fi
 
@@ -20,14 +21,15 @@ case "${MODE}" in
     development)
         METHOD='ReachyMini.Editor.AndroidBuild.BuildDevelopmentApk'
         ;;
-    emulator)
-        METHOD='ReachyMini.Editor.AndroidBuild.BuildEmulatorApk'
+    device-feasibility)
+        METHOD='ReachyMini.Editor.AndroidBuild.BuildDeviceFeasibilityApk'
         ;;
     release)
         METHOD='ReachyMini.Editor.AndroidBuild.BuildReleaseAab'
         ;;
-    *)
-        printf '%s\n' 'usage: build_unity_android.sh development|emulator|release' >&2
+n    *)
+        printf '%s\n' \
+            'usage: build_unity_android.sh development|device-feasibility|release' >&2
         exit 2
         ;;
 esac
