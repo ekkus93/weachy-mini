@@ -8,13 +8,19 @@ on:
       - '.github/workflows/android-feasibility.yml'
       - 'CMakeLists.txt'
       - 'models/reachy-mini/model-baseline.json'
+      - 'models/reachy-mini/reference-scenario.json'
+      - 'models/reachy-mini/reference-trace-desktop.lock.json'
       - 'native/**'
       - 'scripts/build_mujoco_android.sh'
+      - 'scripts/compare_reachy_reference_trace.py'
+      - 'scripts/generate_reachy_reference_header.py'
+      - 'scripts/generate_reachy_reference_trace.py'
       - 'scripts/import_reachy_assets.py'
       - 'scripts/reachy_model_map.py'
       - 'scripts/run_mujoco_probe_android.sh'
       - 'scripts/source_checkout.py'
       - 'scripts/validate_reachy_mujoco.py'
+      - 'scripts/validate_reference_trace_lock.py'
       - 'scripts/verify_source_checkout.py'
       - 'third_party/mujoco-source.lock.json'
       - 'third_party/reachy-mini-source.lock.json'
@@ -79,6 +85,7 @@ jobs:
               "ANDROID_PLATFORM": f"android-{android['native_feasibility_min_sdk']}",
               "MUJOCO_COMMIT": mujoco["commit"],
               "MUJOCO_REPOSITORY": mujoco["repository"],
+              "MUJOCO_VERSION": mujoco["version"],
           }
           for key, value in values.items():
               print(f"{key}={value}")
@@ -216,7 +223,28 @@ jobs:
           printf 'REACHY_IMPORTED_MODEL_DIR=%s\n' \
             "${imported_model}" >> "${GITHUB_ENV}"
 
-      - name: Cross-compile MuJoCo and the probe for Android ARM64
+      - name: Generate locked desktop reference trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install \
+            --disable-pip-version-check \
+            "mujoco==${MUJOCO_VERSION}"
+          reference_dir="${RUNNER_TEMP}/reachy-reference"
+          mkdir -p "${reference_dir}"
+          desktop_trace="${reference_dir}/REFERENCE_TRACE_DESKTOP.json"
+          python3 scripts/generate_reachy_reference_trace.py \
+            --model "${REACHY_IMPORTED_MODEL_DIR}/reachy_mini.xml" \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --output "${desktop_trace}"
+          python3 scripts/validate_reference_trace_lock.py \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --lock models/reachy-mini/reference-trace-desktop.lock.json \
+            --trace "${desktop_trace}"
+          printf 'REACHY_DESKTOP_REFERENCE_TRACE=%s\n' \
+            "${desktop_trace}" >> "${GITHUB_ENV}"
+
+      - name: Cross-compile MuJoCo and the probes for Android ARM64
         shell: bash
         run: |
           set -euo pipefail
@@ -230,6 +258,10 @@ jobs:
             ./scripts/build_mujoco_android.sh
 
           cp -a "${REACHY_IMPORTED_MODEL_DIR}" "${artifact_dir}/reachy-model"
+          cp "${REACHY_DESKTOP_REFERENCE_TRACE}" \
+            "${artifact_dir}/REFERENCE_TRACE_DESKTOP.json"
+          cp models/reachy-mini/reference-trace-desktop.lock.json \
+            "${artifact_dir}/reference-trace-desktop.lock.json"
 
       - name: Verify ARM64 artifact architecture and provenance
         shell: bash
@@ -261,9 +293,15 @@ jobs:
             "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
           grep -F "Android platform: ${ANDROID_PLATFORM}" \
             "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
+          grep -F 'Reference scenario: rma042_representative_motion_v1' \
+            "${MUJOCO_ARTIFACT_DIR}/BUILD_INFO.txt"
           test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.exports.txt"
           test -s "${MUJOCO_ARTIFACT_DIR}/libmujoco.dynamic.txt"
           test -x "${MUJOCO_ARTIFACT_DIR}/reachy_mujoco_probe_runner"
+          test -x "${MUJOCO_ARTIFACT_DIR}/reachy_mujoco_reference_runner"
+          test -s "${MUJOCO_ARTIFACT_DIR}/reference-scenario.json"
+          test -s "${MUJOCO_ARTIFACT_DIR}/REFERENCE_TRACE_DESKTOP.json"
+          test -s "${MUJOCO_ARTIFACT_DIR}/reference-trace-desktop.lock.json"
           test -s "${MUJOCO_ARTIFACT_DIR}/reachy-model/reachy_mini.xml"
           test -s "${MUJOCO_ARTIFACT_DIR}/reachy-model/MODEL_MAP.json"
           test -s "${MUJOCO_ARTIFACT_DIR}/reachy-model/model-baseline.json"
