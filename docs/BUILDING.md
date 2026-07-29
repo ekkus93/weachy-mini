@@ -2,7 +2,7 @@
 
 ## Pinned toolchain
 
-The authoritative machine-readable versions are in `toolchain.lock.json`. The initial pins are Unity 6000.3.18f1, Android Gradle Plugin 9.3.1, Gradle 9.5.0, JDK 17, Android API 37, Build Tools 36.0.0, NDK 28.2.13676358, and CMake 3.31.6.
+The authoritative machine-readable versions are in `toolchain.lock.json`. The current pins are Unity 6000.5.2f1, Android Gradle Plugin 9.3.1, Gradle 9.5.0, JDK 17, Android API 37, Build Tools 36.0.0, NDK 28.2.13676358, and CMake 3.31.6.
 
 Run:
 
@@ -39,6 +39,8 @@ MUJOCO_SOURCE_DIR=/path/to/mujoco \
 ./scripts/build_mujoco_android.sh
 ```
 
+The native feasibility artifacts target `arm64-v8a` with API 26 so they can run on the LG G6 test phone. This does not lower the provisional API 31 minimum for normal development or release application builds.
+
 ## Android bridge
 
 The bridge uses a pinned Gradle distribution. The wrapper properties and distribution checksum are committed, but the binary wrapper JAR must be generated and verified before the first bridge build:
@@ -55,22 +57,28 @@ After generation, verify the wrapper JAR against Gradle's published checksum bef
 Set `UNITY_EDITOR` to the exact pinned Unity executable and ensure at least one scene is enabled in Build Settings.
 
 ```bash
+export UNITY_EDITOR=/home/phil/Unity/Hub/Editor/6000.5.2f1/Editor/Unity
+
+./scripts/build_unity_android.sh device-feasibility
 ./scripts/build_unity_android.sh development
 ./scripts/build_unity_android.sh release
 ```
 
-The development command produces an APK. The release command produces an AAB. Release uses IL2CPP and ARM64. The current scaffold intentionally fails if no scene is configured rather than silently generating or selecting one.
+The `device-feasibility` command produces an ARM64 APK with a test-only API 26 floor for the connected LG G6. The normal development APK and release AAB retain the provisional API 31 floor. All Android builds use IL2CPP and ARM64; no Android x86_64 player target exists in Unity 6000.5.
 
-## Current limitations
-
-The repository has not yet passed the two-machine Unity build acceptance criterion, Android bridge wrapper generation, physical-phone build, or MuJoCo Android feasibility gate. Those items remain incomplete in the authoritative TODO.
+The scaffold intentionally fails if no scene is configured rather than silently generating or selecting one.
 
 ## Run the MuJoCo feasibility probe on a phone
 
-After a successful Android MuJoCo/probe build, connect exactly one authorized ARM64 Android phone and run:
+After a successful Android MuJoCo/probe build, connect one authorized physical ARM64 Android phone and run:
 
 ```bash
+REACHY_ANDROID_SERIAL=LGH87250967ab9 \
 ./scripts/run_mujoco_probe_android.sh
 ```
 
-The default run performs 900,000 steps at a model timestep of 0.002 seconds and writes machine-readable timing plus device identification under `diagnostics-output/mujoco-probe/`. A first-party contract mock is used only for desktop boundary tests and does not satisfy the real-solver acceptance gate.
+Other ADB targets, including emulators, may remain online when `REACHY_ANDROID_SERIAL` identifies the physical phone. The default run performs 900,000 steps at a model timestep of 0.002 seconds and writes machine-readable timing plus device identification under `diagnostics-output/mujoco-probe/`. A first-party contract mock is used only for desktop boundary tests and does not satisfy the real-solver acceptance gate.
+
+## Current limitations
+
+The repository has not yet passed the two-machine Unity build acceptance criterion, Android bridge wrapper generation, physical-phone Unity installation, or MuJoCo Android feasibility gate. Those items remain incomplete in the authoritative TODO.
