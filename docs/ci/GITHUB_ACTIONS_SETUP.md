@@ -34,11 +34,11 @@ It:
 2. installs the exact Android SDK, NDK, and CMake packages through `sdkmanager`;
 3. checks out the exact pinned MuJoCo commit;
 4. validates that the checkout is clean and matches the lock file;
-5. cross-compiles MuJoCo and the first-party probe for `arm64-v8a`;
-6. verifies the produced ELF architecture, dynamic dependencies, symbols, and provenance;
+5. cross-compiles MuJoCo and the first-party probe for `arm64-v8a` at the separately pinned native-feasibility API floor;
+6. verifies the produced ELF architecture, API floor, dynamic dependencies, symbols, and provenance;
 7. uploads the staged library, runner, fixtures, and reports as a GitHub Actions artifact.
 
-The optional `device-probe` job downloads that exact artifact and runs the 900,000-step probe on one physical ARM64 phone.
+The optional `device-probe` job downloads that exact artifact and runs the 900,000-step probe on one physical ARM64 phone. The current native-feasibility floor is API 26, independently of the full Unity application's provisional API 31 minimum.
 
 ### `.github/workflows/unity-validation.yml`
 
@@ -65,16 +65,16 @@ Use a trusted Ubuntu machine controlled by the repository owner. Do not expose t
 
 5. Install Android platform tools so `adb` is available to the runner account.
 6. Configure USB permissions for the phone.
-7. Connect exactly one ARM64 Android phone and approve its ADB authorization prompt.
+7. Connect and authorize one physical ARM64 Android phone. An emulator may remain connected; the device-probe workflow ignores emulator serials and selects the sole physical `arm64-v8a` device explicitly.
 8. Verify from the runner account:
 
    ```bash
-   adb devices
-   adb shell getprop ro.product.cpu.abi
+   adb devices -l
+   adb -d shell getprop ro.product.cpu.abi
+   adb -d shell getprop ro.build.version.sdk
    ```
 
-   The second command must report `arm64-v8a`.
-
+   The ABI must report `arm64-v8a`. The device API level must be at least the `android.native_feasibility_min_sdk` value in `toolchain.lock.json`.
 9. Keep the runner disabled or offline when it is not being used for trusted manual device validation.
 
 The physical-device job is available only through `workflow_dispatch` with `run_device_probe` selected. It is not triggered by pull requests.
@@ -98,7 +98,7 @@ Open **Actions → Android MuJoCo Feasibility → Run workflow** and leave `run_
 
 ### Hosted build followed by physical-phone probe
 
-Open **Actions → Android MuJoCo Feasibility → Run workflow** and enable `run_device_probe`. The hosted build must complete first; the device job then waits for a matching online self-hosted runner.
+Open **Actions → Android MuJoCo Feasibility → Run workflow** and enable `run_device_probe`. The hosted build must complete first; the device job then waits for a matching online self-hosted runner. The job selects the physical ARM64 phone by serial even when an emulator is also online.
 
 ### Unity validation
 
