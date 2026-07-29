@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "source": {
+    "repository": "https://github.com/pollen-robotics/reachy_mini.git",
+    "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_path": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "generator": "onshape-to-robot",
+    "cad_document": "https://cad.onshape.com/documents/7836ed39be931c6ece17e007/w/39d557f31a0ba179c9e7bd5b/e/c82436d68c7d00e142abc581"
+  },
+  "fidelity": {
+    "profile_id": "upstream_geometric_baseline",
+    "display_name": "Upstream geometric baseline",
+    "classification": "geometric_baseline",
+    "calibrated": false,
+    "may_be_labeled_calibrated": false,
+    "diagnostics_status": "uncalibrated_upstream_baseline",
+    "summary": "CAD-derived geometry and inertias with upstream generic or estimated dynamics. Active actuators use the upstream chosen_actuator class, which inherits perfect_actuator placeholder constants.",
+    "required_next_level": "Measured and held-out-validated actuator, friction, backlash, compliance, power, thermal, collision, and joint-limit evidence."
+  },
+  "parameter_groups": [
+    {
+      "id": "body_geometry_transforms_mass_and_inertia",
+      "classification": "cad_derived",
+      "applies_to": [
+        "body hierarchy",
+        "body transforms",
+        "visual meshes",
+        "collision meshes",
+        "mass",
+        "center of mass",
+        "full inertia tensors"
+      ],
+      "evidence": [
+        "The pinned MJCF states that it was generated using onshape-to-robot.",
+        "The pinned MJCF records the source Onshape document."
+      ],
+      "limitations": [
+        "CAD-derived does not mean measured on the specific physical robot.",
+        "Mesh, mass, center-of-mass, and inertia values have not yet been checked against a physical unit.",
+        "The source selects coarse collision meshes and notes that finer alternatives exist."
+      ]
+    },
+    {
+      "id": "explicit_joint_ranges",
+      "classification": "upstream_approximation",
+      "applies_to": [
+        "yaw_body range",
+        "stewart_1 through stewart_6 ranges"
+      ],
+      "evidence": [
+        "Exact radian ranges are present in the pinned upstream MJCF."
+      ],
+      "limitations": [
+        "The pinned source does not link these limits to a manufacturer specification or a physical measurement report.",
+        "The limits must not be described as calibrated mechanical hard stops."
+      ]
+    },
+    {
+      "id": "unbounded_antenna_joints",
+      "classification": "placeholder",
+      "applies_to": [
+        "right_antenna range",
+        "left_antenna range"
+      ],
+      "evidence": [
+        "The pinned MJCF defines both antenna hinges without a range attribute."
+      ],
+      "limitations": [
+        "The resulting model does not encode physical antenna hard stops.",
+        "A bounded behavior/controller command is not a substitute for a mechanical limit model."
+      ]
+    },
+    {
+      "id": "passive_ball_joint_limits",
+      "classification": "upstream_approximation",
+      "applies_to": [
+        "passive_1 through passive_7"
+      ],
+      "evidence": [
+        "The pinned MJCF models all seven passive joints as unrestricted MuJoCo ball joints."
+      ],
+      "limitations": [
+        "No cone, articulation, compliance, or hard-stop limits are encoded for the passive joints.",
+        "Physical linkage limits remain unvalidated."
+      ]
+    },
+    {
+      "id": "active_position_actuator_dynamics",
+      "classification": "placeholder",
+      "applies_to": [
+        "yaw_body actuator",
+        "stewart_1 through stewart_6 actuators",
+        "right_antenna actuator",
+        "left_antenna actuator"
+      ],
+      "evidence": [
+        "All nine active position actuators use class chosen_actuator.",
+        "chosen_actuator is nested under and inherits the upstream perfect_actuator defaults."
+      ],
+      "limitations": [
+        "The values are generic solver/controller constants, not a physical servo identification.",
+        "No latency, quantization, torque-speed curve, voltage dependence, current limit, backlash, temperature, or fault behavior is represented."
+      ]
+    },
+    {
+      "id": "loop_closure_solver_parameters",
+      "classification": "upstream_approximation",
+      "applies_to": [
+        "five Stewart-platform connect equalities"
+      ],
+      "evidence": [
+        "The pinned MJCF supplies one shared solref and solimp default for equality constraints."
+      ],
+      "limitations": [
+        "These are numerical solver settings rather than measured linkage compliance.",
+        "They must not be interpreted as calibrated structural stiffness or damping."
+      ]
+    }
+  ],
+  "actuator_models": [
+    {
+      "id": "chosen_actuator",
+      "source_default_class": "perfect_actuator",
+      "active_in_pinned_model": true,
+      "classification": "placeholder",
+      "joint": {
+        "damping": 0.15,
+        "frictionloss": 0.1,
+        "armature": 0.001
+      },
+      "position": {
+        "kp": 10.0,
+        "kv": 0.1,
+        "forcerange": [
+          -20.0,
+          20.0
+        ]
+      },
+      "source_comment": null,
+      "rationale": "The class is explicitly named perfect_actuator and is the inherited class used by every active actuator in the pinned model."
+    },
+    {
+      "id": "xc330m288t",
+      "source_default_class": "xc330m288t",
+      "active_in_pinned_model": false,
+      "classification": "placeholder",
+      "joint": {
+        "damping": 0.095,
+        "frictionloss": 0.058,
+        "armature": 0.0018
+      },
+      "position": {
+        "kp": 2.54,
+        "kv": 0.0,
+        "forcerange": [
+          -0.8,
+          0.8
+        ]
+      },
+      "source_comment": "probably wrong, would need to re-identify",
+      "rationale": "The upstream source explicitly states that the values are probably wrong and require re-identification."
+    },
+    {
+      "id": "sts3215_345",
+      "source_default_class": "sts3215_345",
+      "active_in_pinned_model": false,
+      "classification": "upstream_approximation",
+      "joint": {
+        "damping": 0.56,
+        "frictionloss": 0.068,
+        "armature": 0.027
+      },
+      "position": {
+        "kp": 17.11,
+        "kv": 0.0,
+        "forcerange": [
+          -3.23,
+          3.23
+        ]
+      },
+      "source_comment": "Confident that this is realistic (mini duck walks with these values)",
+      "rationale": "The source expresses behavioral confidence but does not provide manufacturer or measured identification evidence."
+    },
+    {
+      "id": "sts3215_147",
+      "source_default_class": "sts3215_147",
+      "active_in_pinned_model": false,
+      "classification": "upstream_approximation",
+      "joint": {
+        "damping": 0.1,
+        "frictionloss": 0.028,
+        "armature": 0.011
+      },
+      "position": {
+        "kp": 17.11,
+        "kv": 0.0,
+        "forcerange": [
+          -1.35,
+          1.35
+        ]
+      },
+      "source_comment": "Estimation based on the gear ratio difference",
+      "rationale": "The upstream source explicitly labels the values as an estimate."
+    }
+  ],
+  "joints": [
+    {
+      "name": "yaw_body",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -2.792526803190975,
+        2.792526803190879
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_1",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -0.8377580409572196,
+        1.3962634015955222
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_2",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -1.396263401595614,
+        1.2217304763958803
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_3",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -0.8377580409572173,
+        1.3962634015955244
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_4",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -1.3962634015953894,
+        0.8377580409573525
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_5",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -1.2217304763962082,
+        1.396263401595286
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "stewart_6",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": [
+        -1.3962634015954123,
+        0.8377580409573296
+      ],
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_1",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_2",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_3",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_4",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_5",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_6",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "passive_7",
+      "type": "ball",
+      "actuated": false,
+      "range_radians": null,
+      "range_classification": "upstream_approximation"
+    },
+    {
+      "name": "right_antenna",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": null,
+      "range_classification": "placeholder"
+    },
+    {
+      "name": "left_antenna",
+      "type": "hinge",
+      "actuated": true,
+      "range_radians": null,
+      "range_classification": "placeholder"
+    }
+  ],
+  "actuators": [
+    {
+      "name": "yaw_body",
+      "joint": "yaw_body",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_1",
+      "joint": "stewart_1",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_2",
+      "joint": "stewart_2",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_3",
+      "joint": "stewart_3",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_4",
+      "joint": "stewart_4",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_5",
+      "joint": "stewart_5",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "stewart_6",
+      "joint": "stewart_6",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "right_antenna",
+      "joint": "right_antenna",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    },
+    {
+      "name": "left_antenna",
+      "joint": "left_antenna",
+      "source_class": "chosen_actuator",
+      "classification": "placeholder"
+    }
+  ],
+  "equality_solver": {
+    "classification": "upstream_approximation",
+    "constraint_type": "connect",
+    "count": 5,
+    "solref": [
+      0.002,
+      1.0
+    ],
+    "solimp": [
+      0.99,
+      0.999,
+      0.0005,
+      0.5,
+      2.0
+    ]
+  },
+  "uncertainty_notes": [
+    "probably wrong, would need to re-identify",
+    "Confident that this is realistic (mini duck walks with these values)",
+    "Estimation based on the gear ratio difference",
+    "Collision models defualt: coarse - there is also fine (but much more detailed models)"
+  ],
+  "evidence_absent": {
+    "manufacturer_specification": [],
+    "measured": [],
+    "fitted": [],
+    "calibrated_profiles": []
+  }
+}
