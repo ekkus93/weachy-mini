@@ -29,6 +29,50 @@ static void copy_error(char* destination, size_t capacity, const char* message)
     }
 }
 
+static void initialize_output(
+    ReachyMujocoProbeReport* report,
+    char* error_buffer,
+    size_t error_buffer_size)
+{
+    if(report != NULL)
+    {
+        memset(report, 0, sizeof(*report));
+        report->struct_size = (uint32_t)sizeof(*report);
+    }
+    if(error_buffer != NULL && error_buffer_size > 0U)
+    {
+        error_buffer[0] = '\0';
+    }
+}
+
+static ReachyMujocoProbeStatus validate_common_arguments(
+    const ReachyMujocoProbeConfig* config,
+    ReachyMujocoProbeReport* report,
+    char* error_buffer,
+    size_t error_buffer_size)
+{
+    if(config == NULL || report == NULL || config->struct_size != sizeof(*config) ||
+       config->step_count == 0U || !isfinite(config->expected_timestep_seconds) ||
+       config->expected_timestep_seconds <= 0.0 ||
+       !isfinite(config->maximum_constraint_residual) ||
+       config->maximum_constraint_residual < 0.0)
+    {
+        copy_error(error_buffer, error_buffer_size, "invalid probe argument or structure size");
+        if(report != NULL)
+        {
+            report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+        }
+        return REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+    }
+    if(config->step_count > (uint64_t)(SIZE_MAX / sizeof(double)))
+    {
+        copy_error(error_buffer, error_buffer_size, "step timing allocation would overflow");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_ALLOCATION_FAILED;
+        return REACHY_MUJOCO_PROBE_ALLOCATION_FAILED;
+    }
+    return REACHY_MUJOCO_PROBE_OK;
+}
+
 static double monotonic_seconds(void)
 {
     struct timespec timestamp;
@@ -129,82 +173,35 @@ static uint64_t total_warning_count(const mjData* data)
     return total;
 }
 
-ReachyMujocoProbeConfig reachy_mujoco_probe_default_config(void)
+static void write_model_counts(
+    const mjModel* model,
+    ReachyMujocoProbeReport* report)
 {
-    ReachyMujocoProbeConfig config;
-    config.struct_size = (uint32_t)sizeof(config);
-    config.step_count = 900000U;
-    config.expected_timestep_seconds = 0.002;
-    config.maximum_constraint_residual = 0.001;
-    return config;
+    report->body_count = (uint32_t)model->nbody;
+    report->joint_count = (uint32_t)model->njnt;
+    report->actuator_count = (uint32_t)model->nu;
+    report->equality_count = (uint32_t)model->neq;
+    report->site_count = (uint32_t)model->nsite;
+    report->camera_count = (uint32_t)model->ncam;
+    report->position_count = (uint32_t)model->nq;
+    report->velocity_count = (uint32_t)model->nv;
 }
 
-const char* reachy_mujoco_probe_status_string(ReachyMujocoProbeStatus status)
-{
-    switch(status)
-    {
-        case REACHY_MUJOCO_PROBE_OK:
-            return "ok";
-        case REACHY_MUJOCO_PROBE_INVALID_ARGUMENT:
-            return "invalid_argument";
-        case REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED:
-            return "model_load_failed";
-        case REACHY_MUJOCO_PROBE_DATA_ALLOCATION_FAILED:
-            return "data_allocation_failed";
-        case REACHY_MUJOCO_PROBE_NONFINITE_STATE:
-            return "nonfinite_state";
-        case REACHY_MUJOCO_PROBE_CONSTRAINT_DIVERGENCE:
-            return "constraint_divergence";
-        case REACHY_MUJOCO_PROBE_TIME_DID_NOT_ADVANCE:
-            return "time_did_not_advance";
-        case REACHY_MUJOCO_PROBE_ALLOCATION_FAILED:
-            return "allocation_failed";
-        case REACHY_MUJOCO_PROBE_VFS_FAILED:
-            return "vfs_failed";
-        default:
-            return "unknown";
-    }
-}
-
-ReachyMujocoProbeStatus reachy_mujoco_probe_run_xml(
-    const char* xml,
-    size_t xml_size,
+static ReachyMujocoProbeStatus run_loaded_model(
+    mjModel* model,
     const ReachyMujocoProbeConfig* config,
     ReachyMujocoProbeReport* report,
     char* error_buffer,
     size_t error_buffer_size)
 {
-    if(report != NULL)
+    write_model_counts(model, report);
+    const double timestep_difference =
+        fabs((double)model->opt.timestep - config->expected_timestep_seconds);
+    if(timestep_difference > 1e-12)
     {
-        memset(report, 0, sizeof(*report));
-        report->struct_size = (uint32_t)sizeof(*report);
-    }
-    if(error_buffer != NULL && error_buffer_size > 0U)
-    {
-        error_buffer[0] = '\0';
-    }
-
-    if(xml == NULL || xml_size == 0U || xml_size > (size_t)INT_MAX || config == NULL ||
-       report == NULL || config->struct_size != sizeof(*config) ||
-       report->struct_size != sizeof(*report) || config->step_count == 0U ||
-       !isfinite(config->expected_timestep_seconds) ||
-       config->expected_timestep_seconds <= 0.0 ||
-       !isfinite(config->maximum_constraint_residual) ||
-       config->maximum_constraint_residual < 0.0)
-    {
-        copy_error(error_buffer, error_buffer_size, "invalid probe argument or structure size");
-        if(report != NULL)
-        {
-            report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
-        }
+        copy_error(error_buffer, error_buffer_size, "model timestep does not match probe config");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
         return REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
-    }
-
-    if(config->step_count > (uint64_t)(SIZE_MAX / sizeof(double)))
-    {
-        copy_error(error_buffer, error_buffer_size, "step timing allocation would overflow");
-        report->status = (uint32_t)REACHY_MUJOCO_PROBE_ALLOCATION_FAILED;
-        return REACHY_MUJOCO_PROBE_ALLOCATION_FAILED;
     }
 
     double* step_microseconds = calloc((size_t)config->step_count, sizeof(*step_microseconds));
@@ -215,47 +212,16 @@ ReachyMujocoProbeStatus reachy_mujoco_probe_run_xml(
         return REACHY_MUJOCO_PROBE_ALLOCATION_FAILED;
     }
 
-    ReachyMujocoProbeStatus status = REACHY_MUJOCO_PROBE_OK;
-    mjVFS vfs;
-    mj_defaultVFS(&vfs);
-    const int add_result = mj_addBufferVFS(&vfs, REACHY_PROBE_MODEL_NAME, xml, (int)xml_size);
-    if(add_result != 0)
-    {
-        copy_error(error_buffer, error_buffer_size, "cannot add model buffer to MuJoCo VFS");
-        status = REACHY_MUJOCO_PROBE_VFS_FAILED;
-        goto cleanup_timing;
-    }
-
-    char model_error[REACHY_PROBE_ERROR_CAPACITY] = {0};
-    mjModel* model = mj_loadXML(
-        REACHY_PROBE_MODEL_NAME,
-        &vfs,
-        model_error,
-        (int)sizeof(model_error));
-    if(model == NULL)
-    {
-        copy_error(error_buffer, error_buffer_size, model_error);
-        status = REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED;
-        goto cleanup_vfs;
-    }
-
-    const double timestep_difference =
-        fabs((double)model->opt.timestep - config->expected_timestep_seconds);
-    if(timestep_difference > 1e-12)
-    {
-        copy_error(error_buffer, error_buffer_size, "model timestep does not match probe config");
-        status = REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
-        goto cleanup_model;
-    }
-
     mjData* data = mj_makeData(model);
     if(data == NULL)
     {
         copy_error(error_buffer, error_buffer_size, "MuJoCo data allocation failed");
-        status = REACHY_MUJOCO_PROBE_DATA_ALLOCATION_FAILED;
-        goto cleanup_model;
+        free(step_microseconds);
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_DATA_ALLOCATION_FAILED;
+        return REACHY_MUJOCO_PROBE_DATA_ALLOCATION_FAILED;
     }
 
+    ReachyMujocoProbeStatus status = REACHY_MUJOCO_PROBE_OK;
     double maximum_residual = 0.0;
     for(uint64_t step = 0U; step < config->step_count; ++step)
     {
@@ -325,12 +291,138 @@ ReachyMujocoProbeStatus reachy_mujoco_probe_run_xml(
     }
 
     mj_deleteData(data);
-cleanup_model:
-    mj_deleteModel(model);
-cleanup_vfs:
-    mj_deleteVFS(&vfs);
-cleanup_timing:
     free(step_microseconds);
     report->status = (uint32_t)status;
+    return status;
+}
+
+ReachyMujocoProbeConfig reachy_mujoco_probe_default_config(void)
+{
+    ReachyMujocoProbeConfig config;
+    config.struct_size = (uint32_t)sizeof(config);
+    config.step_count = 900000U;
+    config.expected_timestep_seconds = 0.002;
+    config.maximum_constraint_residual = 0.001;
+    return config;
+}
+
+const char* reachy_mujoco_probe_status_string(ReachyMujocoProbeStatus status)
+{
+    switch(status)
+    {
+        case REACHY_MUJOCO_PROBE_OK:
+            return "ok";
+        case REACHY_MUJOCO_PROBE_INVALID_ARGUMENT:
+            return "invalid_argument";
+        case REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED:
+            return "model_load_failed";
+        case REACHY_MUJOCO_PROBE_DATA_ALLOCATION_FAILED:
+            return "data_allocation_failed";
+        case REACHY_MUJOCO_PROBE_NONFINITE_STATE:
+            return "nonfinite_state";
+        case REACHY_MUJOCO_PROBE_CONSTRAINT_DIVERGENCE:
+            return "constraint_divergence";
+        case REACHY_MUJOCO_PROBE_TIME_DID_NOT_ADVANCE:
+            return "time_did_not_advance";
+        case REACHY_MUJOCO_PROBE_ALLOCATION_FAILED:
+            return "allocation_failed";
+        case REACHY_MUJOCO_PROBE_VFS_FAILED:
+            return "vfs_failed";
+        default:
+            return "unknown";
+    }
+}
+
+ReachyMujocoProbeStatus reachy_mujoco_probe_run_xml(
+    const char* xml,
+    size_t xml_size,
+    const ReachyMujocoProbeConfig* config,
+    ReachyMujocoProbeReport* report,
+    char* error_buffer,
+    size_t error_buffer_size)
+{
+    initialize_output(report, error_buffer, error_buffer_size);
+    ReachyMujocoProbeStatus status = validate_common_arguments(
+        config,
+        report,
+        error_buffer,
+        error_buffer_size);
+    if(status != REACHY_MUJOCO_PROBE_OK)
+    {
+        return status;
+    }
+    if(xml == NULL || xml_size == 0U || xml_size > (size_t)INT_MAX)
+    {
+        copy_error(error_buffer, error_buffer_size, "invalid XML buffer");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+        return REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+    }
+
+    mjVFS vfs;
+    mj_defaultVFS(&vfs);
+    const int add_result = mj_addBufferVFS(&vfs, REACHY_PROBE_MODEL_NAME, xml, (int)xml_size);
+    if(add_result != 0)
+    {
+        copy_error(error_buffer, error_buffer_size, "cannot add model buffer to MuJoCo VFS");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_VFS_FAILED;
+        mj_deleteVFS(&vfs);
+        return REACHY_MUJOCO_PROBE_VFS_FAILED;
+    }
+
+    char model_error[REACHY_PROBE_ERROR_CAPACITY] = {0};
+    mjModel* model = mj_loadXML(
+        REACHY_PROBE_MODEL_NAME,
+        &vfs,
+        model_error,
+        (int)sizeof(model_error));
+    if(model == NULL)
+    {
+        copy_error(error_buffer, error_buffer_size, model_error);
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED;
+        mj_deleteVFS(&vfs);
+        return REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED;
+    }
+
+    status = run_loaded_model(model, config, report, error_buffer, error_buffer_size);
+    mj_deleteModel(model);
+    mj_deleteVFS(&vfs);
+    return status;
+}
+
+ReachyMujocoProbeStatus reachy_mujoco_probe_run_path(
+    const char* model_path,
+    const ReachyMujocoProbeConfig* config,
+    ReachyMujocoProbeReport* report,
+    char* error_buffer,
+    size_t error_buffer_size)
+{
+    initialize_output(report, error_buffer, error_buffer_size);
+    ReachyMujocoProbeStatus status = validate_common_arguments(
+        config,
+        report,
+        error_buffer,
+        error_buffer_size);
+    if(status != REACHY_MUJOCO_PROBE_OK)
+    {
+        return status;
+    }
+    if(model_path == NULL || model_path[0] == '\0')
+    {
+        copy_error(error_buffer, error_buffer_size, "model path is empty");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+        return REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+    }
+
+    char model_error[REACHY_PROBE_ERROR_CAPACITY] = {0};
+    mjModel* model = mj_loadXML(model_path, NULL, model_error, (int)sizeof(model_error));
+    if(model == NULL)
+    {
+        copy_error(error_buffer, error_buffer_size, model_error);
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED;
+        return REACHY_MUJOCO_PROBE_MODEL_LOAD_FAILED;
+    }
+
+    status = run_loaded_model(model, config, report, error_buffer, error_buffer_size);
+    mj_deleteModel(model);
     return status;
 }
