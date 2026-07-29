@@ -6,5 +6,149 @@
   "model_file": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
   "output_subdirectory": "ReachyMini/Source",
   "asset_license": "CC-BY-NC-SA",
-  "software_license": "Apache-2.0"
+  "software_license": "Apache-2.0",
+  "model_requirements": {
+    "model_name": "reachy_mini",
+    "exact_counts": {
+      "actuators": 9,
+      "bodies": 18,
+      "cameras": 2,
+      "equalities": 5,
+      "joints": 16,
+      "named_bodies": 17,
+      "sites": 13
+    },
+    "required_names": {
+      "bodies": [
+        "body_foot_3dprint",
+        "body_down_3dprint",
+        "xl_330",
+        "dc15_a01_horn_dummy_7",
+        "dc15_a01_horn_dummy_8"
+      ],
+      "joints": [
+        "yaw_body",
+        "stewart_1",
+        "stewart_2",
+        "stewart_3",
+        "stewart_4",
+        "stewart_5",
+        "stewart_6",
+        "passive_1",
+        "passive_2",
+        "passive_3",
+        "passive_4",
+        "passive_5",
+        "passive_6",
+        "passive_7",
+        "right_antenna",
+        "left_antenna"
+      ],
+      "actuators": [
+        "yaw_body",
+        "stewart_1",
+        "stewart_2",
+        "stewart_3",
+        "stewart_4",
+        "stewart_5",
+        "stewart_6",
+        "right_antenna",
+        "left_antenna"
+      ],
+      "sites": [
+        "closing_1_1",
+        "closing_2_1",
+        "closing_3_1",
+        "closing_4_1",
+        "closing_5_1",
+        "closing_1_2",
+        "closing_2_2",
+        "closing_3_2",
+        "closing_4_2",
+        "closing_5_2",
+        "camera_optical",
+        "camera",
+        "head"
+      ],
+      "cameras": [
+        "studio_close",
+        "eye_camera"
+      ]
+    },
+    "required_joint_types": {
+      "yaw_body": "hinge",
+      "stewart_1": "hinge",
+      "stewart_2": "hinge",
+      "stewart_3": "hinge",
+      "stewart_4": "hinge",
+      "stewart_5": "hinge",
+      "stewart_6": "hinge",
+      "passive_1": "ball",
+      "passive_2": "ball",
+      "passive_3": "ball",
+      "passive_4": "ball",
+      "passive_5": "ball",
+      "passive_6": "ball",
+      "passive_7": "ball",
+      "right_antenna": "hinge",
+      "left_antenna": "hinge"
+    },
+    "required_actuator_joints": {
+      "yaw_body": "yaw_body",
+      "stewart_1": "stewart_1",
+      "stewart_2": "stewart_2",
+      "stewart_3": "stewart_3",
+      "stewart_4": "stewart_4",
+      "stewart_5": "stewart_5",
+      "stewart_6": "stewart_6",
+      "right_antenna": "right_antenna",
+      "left_antenna": "left_antenna"
+    },
+    "required_equalities": [
+      {
+        "type": "connect",
+        "attributes": {
+          "site1": "closing_1_1",
+          "site2": "closing_1_2"
+        }
+      },
+      {
+        "type": "connect",
+        "attributes": {
+          "site1": "closing_2_1",
+          "site2": "closing_2_2"
+        }
+      },
+      {
+        "type": "connect",
+        "attributes": {
+          "site1": "closing_3_1",
+          "site2": "closing_3_2"
+        }
+      },
+      {
+        "type": "connect",
+        "attributes": {
+          "site1": "closing_4_1",
+          "site2": "closing_4_2"
+        }
+      },
+      {
+        "type": "connect",
+        "attributes": {
+          "site1": "closing_5_1",
+          "site2": "closing_5_2"
+        }
+      }
+    ],
+    "required_camera_attributes": {
+      "studio_close": {
+        "mode": "targetbodycom",
+        "target": "xl_330"
+      },
+      "eye_camera": {
+        "mode": "fixed"
+      }
+    }
+  }
 }
