@@ -14,6 +14,9 @@ REQUESTED_SERIAL="${REACHY_ANDROID_SERIAL:-${ANDROID_SERIAL:-}}"
 REACHY_MODEL_DIR="${STAGING_DIR}/reachy-model"
 REACHY_MODEL_PATH="${REACHY_MODEL_DIR}/reachy_mini.xml"
 REACHY_BASELINE_PATH="${REACHY_MODEL_DIR}/model-baseline.json"
+REFERENCE_SCENARIO_PATH="${STAGING_DIR}/reference-scenario.json"
+DESKTOP_TRACE_PATH="${STAGING_DIR}/REFERENCE_TRACE_DESKTOP.json"
+TRACE_LOCK_PATH="${STAGING_DIR}/reference-trace-desktop.lock.json"
 DEVICE_SERIAL=""
 
 dump_failure_diagnostics()
@@ -45,8 +48,12 @@ trap dump_failure_diagnostics EXIT
 for required_file in \
     libmujoco.so \
     reachy_mujoco_probe_runner \
+    reachy_mujoco_reference_runner \
     closed_loop_probe.xml \
-    malformed_probe.xml; do
+    malformed_probe.xml \
+    reference-scenario.json \
+    REFERENCE_TRACE_DESKTOP.json \
+    reference-trace-desktop.lock.json; do
     if [[ ! -f "${STAGING_DIR}/${required_file}" ]]; then
         printf 'Missing staged probe file: %s\n' "${STAGING_DIR}/${required_file}" >&2
         exit 1
@@ -64,6 +71,10 @@ for required_file in \
 done
 
 command -v "${ADB_BIN}" >/dev/null
+python3 "${SCRIPT_DIR}/validate_reference_trace_lock.py" \
+    --scenario "${REFERENCE_SCENARIO_PATH}" \
+    --lock "${TRACE_LOCK_PATH}" \
+    --trace "${DESKTOP_TRACE_PATH}"
 
 select_device_serial()
 {
@@ -170,6 +181,8 @@ mkdir -p "${REPORT_DIR}"
 TIMESTAMP="$(date -u +'%Y%m%dT%H%M%SZ')"
 CONSTRAINED_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-closed-loop.json"
 REACHY_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-reachy-model.json"
+ANDROID_TRACE_PATH="${REPORT_DIR}/${TIMESTAMP}-reference-trace-android.json"
+TRACE_COMPARISON_PATH="${REPORT_DIR}/${TIMESTAMP}-reference-comparison.json"
 DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
 
 {
@@ -191,6 +204,9 @@ DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
     "${STAGING_DIR}/reachy_mujoco_probe_runner" \
     "${REMOTE_DIR}/reachy_mujoco_probe_runner" >/dev/null
 "${ADB_COMMAND[@]}" push \
+    "${STAGING_DIR}/reachy_mujoco_reference_runner" \
+    "${REMOTE_DIR}/reachy_mujoco_reference_runner" >/dev/null
+"${ADB_COMMAND[@]}" push \
     "${STAGING_DIR}/closed_loop_probe.xml" \
     "${REMOTE_DIR}/closed_loop_probe.xml" >/dev/null
 "${ADB_COMMAND[@]}" push \
@@ -200,7 +216,7 @@ DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
     "${REACHY_MODEL_DIR}/." \
     "${REMOTE_MODEL_DIR}/" >/dev/null
 "${ADB_COMMAND[@]}" shell \
-    "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner'"
+    "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner' '${REMOTE_DIR}/reachy_mujoco_reference_runner'"
 
 for remote_required_file in \
     "${REMOTE_MODEL_DIR}/reachy_mini.xml" \
@@ -232,8 +248,19 @@ validate_probe_report "${CONSTRAINED_REPORT_PATH}" "${STEP_COUNT}"
     | tr -d '\r' > "${REACHY_REPORT_PATH}"
 validate_reachy_report "${REACHY_REPORT_PATH}" "${REACHY_MODEL_STEP_COUNT}"
 
+"${ADB_COMMAND[@]}" shell \
+    "cd '${REMOTE_DIR}' && LD_LIBRARY_PATH='${REMOTE_DIR}' ./reachy_mujoco_reference_runner reachy-model/reachy_mini.xml android_arm64_api26" \
+    | tr -d '\r' > "${ANDROID_TRACE_PATH}"
+python3 "${SCRIPT_DIR}/compare_reachy_reference_trace.py" \
+    --scenario "${REFERENCE_SCENARIO_PATH}" \
+    --desktop "${DESKTOP_TRACE_PATH}" \
+    --android "${ANDROID_TRACE_PATH}" \
+    --output "${TRACE_COMPARISON_PATH}"
+
 trap - EXIT
-printf 'Constrained probe report: %s\nReachy model report: %s\nDevice report: %s\n' \
-    "${CONSTRAINED_REPORT_PATH}" \
-    "${REACHY_REPORT_PATH}" \
-    "${DEVICE_PATH}"
+printf '%s\n' \
+    "Constrained probe report: ${CONSTRAINED_REPORT_PATH}" \
+    "Reachy model report: ${REACHY_REPORT_PATH}" \
+    "Android reference trace: ${ANDROID_TRACE_PATH}" \
+    "Reference comparison: ${TRACE_COMPARISON_PATH}" \
+    "Device report: ${DEVICE_PATH}"
