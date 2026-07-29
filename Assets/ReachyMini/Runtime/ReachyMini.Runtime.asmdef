@@ -1,9 +1,7 @@
 {
   "name": "ReachyMini.Runtime",
   "rootNamespace": "ReachyMini",
-  "references": [
-    "UnityEngine.DirectorModule"
-  ],
+  "references": [],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
