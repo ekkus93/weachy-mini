@@ -3,6 +3,7 @@ using System.Linq;
 using NUnit.Framework;
 using ReachyMini.Core;
 using ReachyMini.Presentation;
+using ReachyMini.Rendering;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -48,6 +49,21 @@ namespace ReachyMini.Tests
                     FindObjectsInactive.Include),
                 Has.Length.EqualTo(root.VisualGeometryCount));
 
+            ReachyAuthoritativeRenderer[] authoritativeRenderers =
+                UnityEngine.Object.FindObjectsByType<ReachyAuthoritativeRenderer>(
+                    FindObjectsInactive.Include);
+            Assert.That(authoritativeRenderers, Has.Length.EqualTo(1));
+            Assert.That(
+                authoritativeRenderers[0].AuthoritativeBodyCount,
+                Is.EqualTo(root.BodyCount));
+            Assert.That(
+                authoritativeRenderers[0].Status,
+                Is.EqualTo(ReachyAuthoritativeRendererStatus.Unbound));
+            Assert.That(authoritativeRenderers[0].enabled, Is.False);
+            Assert.That(
+                authoritativeRenderers[0].ValidateAuthoritativeStructure(),
+                Is.True);
+
             ReachyPresentationCamera[] presentationCameras =
                 UnityEngine.Object.FindObjectsByType<ReachyPresentationCamera>(
                     FindObjectsInactive.Include);
@@ -81,6 +97,10 @@ namespace ReachyMini.Tests
                 Is.Empty);
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<ArticulationBody>(
+                    FindObjectsInactive.Include),
+                Is.Empty);
+            Assert.That(
+                UnityEngine.Object.FindObjectsByType<Animator>(
                     FindObjectsInactive.Include),
                 Is.Empty);
         }

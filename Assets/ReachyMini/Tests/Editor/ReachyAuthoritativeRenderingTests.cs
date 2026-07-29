@@ -13,6 +13,9 @@ namespace ReachyMini.Tests
 {
     public sealed class ReachyAuthoritativeRenderingTests
     {
+        private const string TestModelSha256 =
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
         private GameObject? root;
         private ReachyAuthoritativeRenderer? renderer;
         private ReachyPresentationBody[] bodies =
@@ -23,19 +26,7 @@ namespace ReachyMini.Tests
         {
             root = new GameObject("ReachyRendererTest");
             renderer = root.AddComponent<ReachyAuthoritativeRenderer>();
-            bodies = new ReachyPresentationBody[2];
-            for (int index = 0; index < bodies.Length; ++index)
-            {
-                GameObject bodyObject = new GameObject($"body_{index}");
-                bodyObject.transform.SetParent(root.transform, false);
-                ReachyPresentationBody body =
-                    bodyObject.AddComponent<ReachyPresentationBody>();
-                body.ConfigureGeneratedBody(
-                    index,
-                    $"/world/body_{index}",
-                    $"body_{index}");
-                bodies[index] = body;
-            }
+            bodies = CreateBodies(root, 2);
             renderer.ConfigureBodies(bodies);
         }
 
@@ -45,6 +36,42 @@ namespace ReachyMini.Tests
             if (root != null)
             {
                 Object.DestroyImmediate(root);
+            }
+        }
+
+        [Test]
+        public void GeneratedMetadataConfiguresCanonicalDisabledRenderer()
+        {
+            GameObject generatedRoot = new GameObject("GeneratedPresentationTest");
+            try
+            {
+                ReachyPresentationRoot metadata =
+                    generatedRoot.AddComponent<ReachyPresentationRoot>();
+                metadata.ConfigureGeneratedPresentation(
+                    1,
+                    TestModelSha256,
+                    2,
+                    1);
+                ReachyPresentationBody[] generatedBodies =
+                    CreateBodies(generatedRoot, 2);
+
+                ReachyAuthoritativeRenderer generatedRenderer =
+                    generatedRoot.GetComponent<ReachyAuthoritativeRenderer>();
+                Assert.That(generatedRenderer, Is.Not.Null);
+                Assert.That(
+                    generatedRenderer.AuthoritativeBodyCount,
+                    Is.EqualTo(generatedBodies.Length));
+                Assert.That(
+                    generatedRenderer.Status,
+                    Is.EqualTo(ReachyAuthoritativeRendererStatus.Unbound));
+                Assert.That(generatedRenderer.enabled, Is.False);
+                Assert.That(
+                    generatedRenderer.ValidateAuthoritativeStructure(),
+                    Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(generatedRoot);
             }
         }
 
@@ -83,6 +110,24 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void CoordinateConversionRejectsFloatOverflow()
+        {
+            ReachyMujocoBodyPose pose = new ReachyMujocoBodyPose(
+                0,
+                "body",
+                double.MaxValue,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0);
+
+            Assert.Throws<ArgumentException>(() =>
+                ReachyCoordinateConverter.ToUnityPosition(pose));
+        }
+
+        [Test]
         public void InterpolationUsesSimulationTimestamps()
         {
             ReachyAuthoritativePoseSnapshot older = Snapshot(
@@ -111,6 +156,39 @@ namespace ReachyMini.Tests
             Assert.That(
                 bodies[1].transform.position.x,
                 Is.EqualTo(2.0f).Within(1.0e-5f));
+        }
+
+        [Test]
+        public void RenderCadenceDoesNotChangeTimestampResult()
+        {
+            ReachyAuthoritativePoseSnapshot older = Snapshot(
+                sequence: 10UL,
+                simulationTime: 1.0,
+                discontinuityId: 4U,
+                xOffset: 0.0);
+            ReachyAuthoritativePoseSnapshot newer = Snapshot(
+                sequence: 11UL,
+                simulationTime: 1.002,
+                discontinuityId: 4U,
+                xOffset: 2.0);
+
+            Assert.That(
+                renderer!.RenderAtSimulationTime(older, newer, 1.0005),
+                Is.True);
+            Assert.That(
+                renderer.RenderAtSimulationTime(older, newer, 1.001),
+                Is.True);
+            Vector3[] multiFramePositions = CaptureBodyPositions();
+
+            Assert.That(
+                renderer.RenderAtSimulationTime(older, newer, 1.0),
+                Is.True);
+            Assert.That(
+                renderer.RenderAtSimulationTime(older, newer, 1.001),
+                Is.True);
+            Vector3[] directPositions = CaptureBodyPositions();
+
+            Assert.That(directPositions, Is.EqualTo(multiFramePositions));
         }
 
         [Test]
@@ -196,6 +274,24 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void AnimatorIsRejectedVisibly()
+        {
+            bodies[0].gameObject.AddComponent<Animator>();
+            LogAssert.Expect(
+                LogType.Error,
+                new Regex(
+                    "prohibited transform writer Animator",
+                    RegexOptions.CultureInvariant));
+
+            bool valid = renderer!.ValidateAuthoritativeStructure();
+
+            Assert.That(valid, Is.False);
+            Assert.That(
+                renderer.Status,
+                Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
+        }
+
+        [Test]
         public void PoseBufferRequiresOrderedPublicationWithinEpoch()
         {
             ReachyAuthoritativePoseBuffer buffer =
@@ -212,6 +308,37 @@ namespace ReachyMini.Tests
             Assert.That(newer.Sequence, Is.EqualTo(2UL));
             Assert.Throws<InvalidOperationException>(() =>
                 buffer.Publish(Snapshot(2UL, 0.006, 1U, 2.0)));
+        }
+
+        private static ReachyPresentationBody[] CreateBodies(
+            GameObject parent,
+            int count)
+        {
+            ReachyPresentationBody[] result =
+                new ReachyPresentationBody[count];
+            for (int index = 0; index < count; ++index)
+            {
+                GameObject bodyObject = new GameObject($"body_{index}");
+                bodyObject.transform.SetParent(parent.transform, false);
+                ReachyPresentationBody body =
+                    bodyObject.AddComponent<ReachyPresentationBody>();
+                body.ConfigureGeneratedBody(
+                    index,
+                    $"/world/body_{index}",
+                    $"body_{index}");
+                result[index] = body;
+            }
+            return result;
+        }
+
+        private Vector3[] CaptureBodyPositions()
+        {
+            Vector3[] result = new Vector3[bodies.Length];
+            for (int index = 0; index < bodies.Length; ++index)
+            {
+                result[index] = bodies[index].transform.position;
+            }
+            return result;
         }
 
         private static ReachyAuthoritativePoseSnapshot Snapshot(

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using NUnit.Framework;
 using ReachyMini.Presentation;
+using ReachyMini.Rendering;
 using UnityEditor;
 using UnityEngine;
 
@@ -54,6 +55,20 @@ namespace ReachyMini.Tests
                         StringComparison.Ordinal)),
                     Is.True);
 
+                ReachyAuthoritativeRenderer authoritativeRenderer =
+                    contents.GetComponent<ReachyAuthoritativeRenderer>();
+                Assert.That(authoritativeRenderer, Is.Not.Null);
+                Assert.That(
+                    authoritativeRenderer.AuthoritativeBodyCount,
+                    Is.EqualTo(root.BodyCount));
+                Assert.That(
+                    authoritativeRenderer.Status,
+                    Is.EqualTo(ReachyAuthoritativeRendererStatus.Unbound));
+                Assert.That(authoritativeRenderer.enabled, Is.False);
+                Assert.That(
+                    authoritativeRenderer.ValidateAuthoritativeStructure(),
+                    Is.True);
+
                 MeshRenderer[] renderers =
                     contents.GetComponentsInChildren<MeshRenderer>(true);
                 MeshFilter[] filters =
@@ -79,6 +94,9 @@ namespace ReachyMini.Tests
                     Is.Empty);
                 Assert.That(
                     contents.GetComponentsInChildren<ArticulationBody>(true),
+                    Is.Empty);
+                Assert.That(
+                    contents.GetComponentsInChildren<Animator>(true),
                     Is.Empty);
                 Assert.That(
                     contents.GetComponentsInChildren<Transform>(true)

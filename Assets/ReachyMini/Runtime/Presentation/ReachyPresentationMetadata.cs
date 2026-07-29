@@ -1,4 +1,5 @@
 using System;
+using ReachyMini.Rendering;
 using UnityEngine;
 
 namespace ReachyMini.Presentation
@@ -64,6 +65,73 @@ namespace ReachyMini.Presentation
             sourceModelSha256 = generatedSourceModelSha256;
             bodyCount = generatedBodyCount;
             visualGeometryCount = generatedVisualGeometryCount;
+            TryConfigureAuthoritativeRenderer();
+        }
+
+        internal void TryConfigureAuthoritativeRenderer()
+        {
+            if (bodyCount <= 0)
+            {
+                return;
+            }
+
+            ReachyPresentationBody[] discoveredBodies =
+                GetComponentsInChildren<ReachyPresentationBody>(true);
+            if (discoveredBodies.Length < bodyCount)
+            {
+                return;
+            }
+            if (discoveredBodies.Length > bodyCount)
+            {
+                throw new InvalidOperationException(
+                    $"Generated presentation contains {discoveredBodies.Length} " +
+                    $"body mappings, expected {bodyCount}.");
+            }
+
+            ReachyPresentationBody[] canonicalBodies =
+                new ReachyPresentationBody[bodyCount];
+            for (int index = 0; index < discoveredBodies.Length; ++index)
+            {
+                ReachyPresentationBody body = discoveredBodies[index];
+                if (body.BodyIndex < 0 || body.BodyIndex >= bodyCount)
+                {
+                    throw new InvalidOperationException(
+                        $"Generated presentation body index {body.BodyIndex} " +
+                        $"is outside 0..{bodyCount - 1}.");
+                }
+                if (canonicalBodies[body.BodyIndex] != null)
+                {
+                    throw new InvalidOperationException(
+                        $"Generated presentation contains duplicate body index " +
+                        $"{body.BodyIndex}.");
+                }
+                canonicalBodies[body.BodyIndex] = body;
+            }
+
+            for (int index = 0; index < canonicalBodies.Length; ++index)
+            {
+                if (canonicalBodies[index] == null)
+                {
+                    throw new InvalidOperationException(
+                        $"Generated presentation is missing body index {index}.");
+                }
+            }
+
+            ReachyAuthoritativeRenderer renderer =
+                GetComponent<ReachyAuthoritativeRenderer>();
+            if (renderer == null)
+            {
+                renderer = gameObject.AddComponent<ReachyAuthoritativeRenderer>();
+            }
+            renderer.ConfigureBodies(canonicalBodies);
+            if (!renderer.ValidateAuthoritativeStructure())
+            {
+                throw new InvalidOperationException(
+                    $"Generated authoritative renderer is invalid: " +
+                    $"{renderer.Fault}");
+            }
+
+            renderer.enabled = false;
         }
     }
 
@@ -107,6 +175,12 @@ namespace ReachyMini.Presentation
             bodyIndex = generatedBodyIndex;
             bodyPath = generatedBodyPath;
             bodyName = generatedBodyName ?? string.Empty;
+            ReachyPresentationRoot root =
+                GetComponentInParent<ReachyPresentationRoot>();
+            if (root != null)
+            {
+                root.TryConfigureAuthoritativeRenderer();
+            }
         }
     }
 

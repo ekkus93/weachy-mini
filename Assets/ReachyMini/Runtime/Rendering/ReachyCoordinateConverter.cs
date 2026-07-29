@@ -10,10 +10,19 @@ namespace ReachyMini.Rendering
         public static Vector3 ToUnityPosition(
             ReachyMujocoBodyPose pose)
         {
-            return new Vector3(
-                checked((float)pose.PositionX),
-                checked((float)pose.PositionZ),
-                checked((float)pose.PositionY));
+            Vector3 position = new Vector3(
+                (float)pose.PositionX,
+                (float)pose.PositionZ,
+                (float)pose.PositionY);
+            if (!IsFinite(position.x) ||
+                !IsFinite(position.y) ||
+                !IsFinite(position.z))
+            {
+                throw new ArgumentException(
+                    "MuJoCo body position cannot be represented as finite Unity floats.",
+                    nameof(pose));
+            }
+            return position;
         }
 
         public static Quaternion ToUnityRotation(
@@ -34,11 +43,26 @@ namespace ReachyMini.Rendering
             }
 
             double inverseNorm = 1.0 / norm;
-            return new Quaternion(
-                checked((float)(-pose.QuaternionX * inverseNorm)),
-                checked((float)(-pose.QuaternionZ * inverseNorm)),
-                checked((float)(-pose.QuaternionY * inverseNorm)),
-                checked((float)(pose.QuaternionW * inverseNorm)));
+            Quaternion rotation = new Quaternion(
+                (float)(-pose.QuaternionX * inverseNorm),
+                (float)(-pose.QuaternionZ * inverseNorm),
+                (float)(-pose.QuaternionY * inverseNorm),
+                (float)(pose.QuaternionW * inverseNorm));
+            if (!IsFinite(rotation.x) ||
+                !IsFinite(rotation.y) ||
+                !IsFinite(rotation.z) ||
+                !IsFinite(rotation.w))
+            {
+                throw new ArgumentException(
+                    "MuJoCo body rotation cannot be represented as finite Unity floats.",
+                    nameof(pose));
+            }
+            return rotation;
+        }
+
+        private static bool IsFinite(float value)
+        {
+            return !float.IsNaN(value) && !float.IsInfinity(value);
         }
     }
 }
