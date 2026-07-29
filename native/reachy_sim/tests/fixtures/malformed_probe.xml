@@ -1,0 +1,5 @@
+<mujoco model="malformed">
+  <worldbody>
+    <body name="missing-close">
+  </worldbody>
+</mujoco>

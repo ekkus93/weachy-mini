@@ -2,78 +2,68 @@
 
 **Updated:** 2026-07-28  
 **Branch:** `master`  
-**Scaffold commit:** `ef97e022b28df3843a4c7f0d5a359d5acd3b13a8`
+**Current implementation series:** Phase 1 foundation, source provenance, and MuJoCo feasibility preparation
 
-## Completed in the current Ralph-loop pass
+## Repository rules in force
+
+- Work directly on `master`; do not create branches or pull requests unless the user explicitly changes that instruction.
+- Every lint warning, analyzer warning, compiler warning, or error in first-party code is a bug and must be fixed at its source.
+- Do not hide first-party warnings through pragmas, blanket suppressions, lint baselines, fake generated-code labels, or reduced warning levels.
+- Do not modify third-party source to satisfy first-party lint policy. Keep third-party builds isolated and preserve upstream source.
+
+## Implemented
 
 ### RMA-001 — Repository structure
 
-Implemented the initial Unity, Android bridge, native wrapper, managed-test, model-manifest, calibration-schema, documentation, script, and third-party inventory layout.
+The initial Unity, Android bridge, native wrapper, managed-test, model-manifest, calibration-schema, documentation, script, and third-party inventory layout exists. README, ignore rules, text/LFS policy, and asset policy are present.
 
-Added:
+### RMA-002 — Toolchain and build entry points
 
-- root project README with supported platform, maturity, build entry points, and links to the specification and TODO;
-- Unity/Android/native/model/calibration credential and generated-output exclusions;
-- text normalization and approved Git LFS patterns;
-- an explicit asset and large-file policy.
+The repository pins Unity 6000.3.18f1, Android API/AGP/Gradle/JDK/NDK/CMake versions, IL2CPP ARM64 configuration, and development/release build entry points. Toolchain validation fails visibly when required installations differ or are absent.
 
-### RMA-002 — Toolchain pins and build entry points
-
-Pinned the initial compatibility-spike toolchain in `toolchain.lock.json`:
-
-- Unity `6000.3.18f1` / Unity 6.3 LTS;
-- Android API 37 compile/target and provisional API 31 minimum;
-- Android Gradle Plugin 9.3.1;
-- Gradle 9.5.0 with distribution checksum;
-- JDK 17;
-- Android NDK 28.2.13676358;
-- CMake 3.31.6;
-- Android ARM64 and Unity IL2CPP release configuration.
-
-Added manifest validation plus native and Unity Android build entry-point scripts. The minimum Android API remains provisional until representative-device testing.
+The two-machine Unity/Android reproducibility acceptance criterion remains open.
 
 ### RMA-003 — Baseline quality gates
 
-Implemented first-party warning and lint policy:
+First-party C, Java, managed, Python, and shell warning/lint policies are configured. Native normal and ASan/UBSan test builds pass locally with warnings-as-errors. Static repository, documentation, inventory, Python, Java, shell-syntax, and deterministic-import checks pass in the available environment.
 
-- C warnings-as-errors with strict GCC/Clang/MSVC settings;
-- desktop AddressSanitizer and UndefinedBehaviorSanitizer option for first-party native code;
-- Java `-Xlint:all -Werror` and Android Lint warnings-as-errors;
-- .NET analyzers and warnings-as-errors for the managed test harness;
-- Ruff and ShellCheck CI jobs;
-- repository structure, documentation link, inventory, and toolchain validators;
-- GitHub Actions jobs for static, native, managed, and Android configuration checks.
+GitHub has not exposed status contexts for the pushed commits through the connected interface, and Unity, Android Lint, Ruff, ShellCheck, and .NET execution are not all locally available. Those checks are not claimed as passed.
 
-No blanket warning suppression, lint baseline, or third-party source modification was added.
+### RMA-010/RMA-011 — Third-party inventory and Reachy provenance
 
-### RMA-010 — Initial third-party inventory
+Reachy Mini source is pinned at commit `a739a6e461eb6d722901f1cfc225265ffc85c28d`. The deterministic importer rejects dirty/mismatched sources, copies all MJCF-referenced meshes and the upstream license, and emits attribution plus per-file SHA-256 provenance. Fixture tests cover repeated deterministic output and visible failures.
 
-Added human-readable notices and a machine-readable inventory. Planned dependencies and candidate models are marked as not imported or blocked pending selection. No third-party source or binary is currently vendored or packaged.
+Actual upstream asset import/release packaging and the in-app licenses screen remain open.
 
-## Validation performed in the implementation environment
+### RMA-020/RMA-021 preparation — MuJoCo and constrained probe
 
-Passed:
+MuJoCo 3.9.0 is pinned at commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. The Android ARM64 build script preserves upstream source and isolates third-party warnings. A closed-loop equality-constraint fixture, malformed fixture, first-party probe, 900,000-step contract test, Android runner, timing report, and device-evidence path are implemented.
+
+The real NDK cross-build and physical-phone run remain blocked and incomplete. See `docs/blockers/RMA-020_ANDROID_TOOLCHAIN_BLOCKER.md`.
+
+## Locally verified evidence
 
 - toolchain manifest validation;
 - repository scaffold validation;
 - local Markdown link validation;
 - third-party inventory validation;
 - Python byte-code compilation;
+- importer and probe-fixture Python tests;
 - shell syntax validation;
-- Java compilation with all lint warnings treated as errors;
-- native GCC warnings-as-errors configure/build/test;
-- native AddressSanitizer and UndefinedBehaviorSanitizer configure/build/test.
+- Java `-Xlint:all -Werror` compilation for the bridge scaffold;
+- first-party native strict warnings-as-errors build and tests;
+- first-party native ASan/UBSan build and tests;
+- 900,000-step probe contract test and malformed-model structured failure using the first-party API mock.
 
-## Gates not yet claimed complete
+## Open hard gates
 
-The following cannot be marked complete until their required environment or evidence exists:
+- Unity editor import/compilation and Unity tests;
+- development APK and release AAB builds;
+- Android Gradle wrapper generation and Android Lint/test execution;
+- two-machine reproducible build evidence;
+- real MuJoCo Android ARM64 cross-build;
+- physical-phone library load and 900,000-step timing;
+- pause/resume and shutdown lifecycle validation;
+- in-app licenses and attribution screen.
 
-- Unity editor import/compilation and Unity test execution;
-- development APK and release AAB build;
-- Android Gradle wrapper JAR generation and full Android Lint/test execution;
-- two-machine reproducible Unity/Android build evidence;
-- physical ARM64 Android phone validation;
-- MuJoCo Android cross-compilation and constrained-mechanism feasibility testing;
-- in-app licenses screen.
-
-Failures in these areas must remain visible. They must not be replaced by cosmetic Unity behavior, hidden provider changes, warning suppressions, or fabricated acceptance evidence.
+No open gate may be converted into a completed checkbox by substituting a mock, cosmetic Unity animation, hidden fallback, suppressed warning, or fabricated measurement.

@@ -18,7 +18,7 @@ Use `--manifest-only` to validate the lock file without requiring the SDKs to be
 ./scripts/ci.sh --static-only
 ```
 
-This validates the repository layout, Markdown links, third-party inventory, JSON files, Python syntax, and deterministic import tests. CI additionally runs Ruff, ShellCheck, managed tests, and the native compiler warnings-as-errors build.
+This validates the repository layout, Markdown links, third-party inventory, JSON files, and Python syntax. CI additionally runs Ruff, ShellCheck, managed tests, and the native compiler warnings-as-errors build.
 
 ## Native desktop build
 
@@ -64,3 +64,13 @@ The development command produces an APK. The release command produces an AAB. Re
 ## Current limitations
 
 The repository has not yet passed the two-machine Unity build acceptance criterion, Android bridge wrapper generation, physical-phone build, or MuJoCo Android feasibility gate. Those items remain incomplete in the authoritative TODO.
+
+## Run the MuJoCo feasibility probe on a phone
+
+After a successful Android MuJoCo/probe build, connect exactly one authorized ARM64 Android phone and run:
+
+```bash
+./scripts/run_mujoco_probe_android.sh
+```
+
+The default run performs 900,000 steps at a model timestep of 0.002 seconds and writes machine-readable timing plus device identification under `diagnostics-output/mujoco-probe/`. A first-party contract mock is used only for desktop boundary tests and does not satisfy the real-solver acceptance gate.

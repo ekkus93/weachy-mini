@@ -25,3 +25,5 @@ if(BUILD_TESTING)
     reachy_enable_sanitizers(reachy_sim_version_test)
     add_test(NAME reachy_sim_version_test COMMAND reachy_sim_version_test)
 endif()
+
+add_subdirectory(feasibility)

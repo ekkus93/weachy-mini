@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<mujoco model="reachy_closed_loop_probe">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast"/>
+  <default>
+    <joint damping="0.05" armature="0.001"/>
+    <geom density="500" friction="0.8 0.01 0.001"/>
+  </default>
+  <worldbody>
+    <geom name="ground" type="plane" size="1 1 0.05"/>
+    <body name="left_link" pos="-0.2 0 0.55">
+      <joint name="left_hinge" type="hinge" axis="0 1 0" damping="0.1"/>
+      <geom name="left_rod" type="capsule" fromto="0 0 0 0.2 0 -0.2" size="0.025"/>
+      <site name="left_tip" pos="0.2 0 -0.2" size="0.01"/>
+    </body>
+    <body name="right_link" pos="0.2 0 0.55">
+      <joint name="right_hinge" type="hinge" axis="0 1 0" damping="0.1"/>
+      <geom name="right_rod" type="capsule" fromto="0 0 0 -0.2 0 -0.2" size="0.025"/>
+      <site name="right_tip" pos="-0.2 0 -0.2" size="0.01"/>
+    </body>
+  </worldbody>
+  <equality>
+    <connect name="tip_loop_closure" site1="left_tip" site2="right_tip" solref="0.002 1"/>
+  </equality>
+</mujoco>

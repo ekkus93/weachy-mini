@@ -48,7 +48,7 @@ cmake \
     -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
     -DANDROID_ABI=arm64-v8a \
     -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
-    -DANDROID_STL=c++_shared \
+    -DANDROID_STL=c++_static \
     -DCMAKE_BUILD_TYPE=Release \
     -DMUJOCO_BUILD_EXAMPLES=OFF \
     -DMUJOCO_BUILD_SIMULATE=OFF \
@@ -68,6 +68,35 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 cp "${LIBRARY_PATH}" "${OUTPUT_DIR}/libmujoco.so"
+
+PROBE_BUILD_DIR="${REACHY_PROBE_ANDROID_BUILD_DIR:-${ROOT_DIR}/build/reachy-probe-android-arm64}"
+cmake \
+    -S "${ROOT_DIR}" \
+    -B "${PROBE_BUILD_DIR}" \
+    -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE="${TOOLCHAIN_FILE}" \
+    -DANDROID_ABI=arm64-v8a \
+    -DANDROID_PLATFORM="${ANDROID_PLATFORM}" \
+    -DANDROID_STL=c++_static \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=OFF \
+    -DREACHY_BUILD_MUJOCO_PROBE=ON \
+    -DREACHY_MUJOCO_INCLUDE_DIR="${SOURCE_DIR}/include" \
+    -DREACHY_MUJOCO_LIBRARY="${OUTPUT_DIR}/libmujoco.so"
+cmake --build "${PROBE_BUILD_DIR}" --target reachy_mujoco_probe_runner --parallel
+
+PROBE_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_probe_runner' -print -quit)"
+if [[ -z "${PROBE_PATH}" ]]; then
+    printf '%s\n' "Probe build completed without producing reachy_mujoco_probe_runner." >&2
+    exit 1
+fi
+cp "${PROBE_PATH}" "${OUTPUT_DIR}/reachy_mujoco_probe_runner"
+cp \
+    "${ROOT_DIR}/native/reachy_sim/tests/fixtures/closed_loop_probe.xml" \
+    "${OUTPUT_DIR}/closed_loop_probe.xml"
+cp \
+    "${ROOT_DIR}/native/reachy_sim/tests/fixtures/malformed_probe.xml" \
+    "${OUTPUT_DIR}/malformed_probe.xml"
 
 HOST_TAG="$(python3 - "${NDK_ROOT}" <<'PY'
 from pathlib import Path
@@ -102,7 +131,8 @@ Android ABI: arm64-v8a
 Android platform: ${ANDROID_PLATFORM}
 Android NDK: ${ACTUAL_NDK}
 Build type: Release
+Android STL: c++_static
 Third-party source modified: no
 INFO
 
-printf 'MuJoCo Android library staged at %s\n' "${OUTPUT_DIR}/libmujoco.so"
+printf 'MuJoCo Android library and probe staged in %s\n' "${OUTPUT_DIR}"
