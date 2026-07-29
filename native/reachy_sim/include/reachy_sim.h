@@ -22,11 +22,15 @@ extern "C" {
 
 enum {
     REACHY_SIM_ABI_VERSION = 1,
+    REACHY_SIM_SNAPSHOT_FORMAT_VERSION = 1,
     REACHY_SIM_ERROR_MESSAGE_CAPACITY = 256
 };
 
 typedef uint64_t ReachySimHandle;
 #define REACHY_SIM_INVALID_HANDLE UINT64_C(0)
+
+typedef uint64_t ReachySimCalibrationProfileId;
+#define REACHY_SIM_CALIBRATION_PROFILE_UNCALIBRATED UINT64_C(0)
 
 typedef enum ReachySimStatus {
     REACHY_SIM_STATUS_OK = 0,
@@ -65,6 +69,15 @@ typedef enum ReachySimCapabilityFlag {
     REACHY_SIM_CAPABILITY_WRENCH = UINT64_C(1) << 4,
     REACHY_SIM_CAPABILITY_SNAPSHOT = UINT64_C(1) << 5
 } ReachySimCapabilityFlag;
+
+typedef enum ReachySimResetPose {
+    REACHY_SIM_RESET_POSE_SLEEP_REST = 0,
+    REACHY_SIM_RESET_POSE_NEUTRAL_AWAKE = 1
+} ReachySimResetPose;
+
+typedef enum ReachySimHealthFlag {
+    REACHY_SIM_HEALTH_FLAG_SLEEPING = UINT32_C(1) << 0
+} ReachySimHealthFlag;
 
 typedef struct ReachySimConfig {
     uint32_t abi_version;
@@ -121,7 +134,8 @@ typedef struct ReachySimSnapshotHeader {
     uint64_t sequence;
     double simulation_time;
     uint32_t payload_size;
-    uint32_t reserved;
+    uint32_t snapshot_version;
+    ReachySimCalibrationProfileId calibration_profile_id;
 } ReachySimSnapshotHeader;
 
 typedef struct ReachySimErrorInfo {
