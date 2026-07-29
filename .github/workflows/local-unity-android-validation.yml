@@ -156,6 +156,12 @@ jobs:
           fi
           "${android_sdk_root}/platform-tools/adb" version
 
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
       - name: Run Unity tests
         id: unity_tests
         if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
