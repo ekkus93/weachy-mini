@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -9,5 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Assets/ReachyMini/Runtime/Core/**/*.cs" Link="Core/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../Assets/ReachyMini/Runtime/Interop/**/*.cs" Link="Interop/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
