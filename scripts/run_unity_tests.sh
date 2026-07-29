@@ -5,9 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 UNITY_EDITOR="${UNITY_EDITOR:-}"
 RESULTS_DIR="${UNITY_TEST_RESULTS_DIR:-${ROOT_DIR}/test-results/unity}"
+PINNED_UNITY_VERSION="$(sed -n 's/^m_EditorVersion: //p' "${ROOT_DIR}/ProjectSettings/ProjectVersion.txt")"
 
 if [[ -z "${UNITY_EDITOR}" ]]; then
-    printf '%s\n' 'UNITY_EDITOR must point to Unity 6000.3.18f1.' >&2
+    printf 'UNITY_EDITOR must point to Unity %s.\n' "${PINNED_UNITY_VERSION}" >&2
     exit 1
 fi
 
