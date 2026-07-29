@@ -126,13 +126,17 @@ namespace ReachyMini.Core.Tests
             {
                 ReachySimCreateResult stressCreate =
                     ReachySimSession.Create(modelBytes);
-                if (!stressCreate.IsSuccess || stressCreate.Session == null)
+                ReachySimSession? stressSessionCandidate =
+                    stressCreate.Session;
+                if (!stressCreate.IsSuccess ||
+                    stressSessionCandidate == null)
                 {
                     throw new InvalidOperationException(
                         $"Lifecycle create {iteration} failed: {stressCreate.Error.Code}: {stressCreate.Error.Message}");
                 }
 
-                using (ReachySimSession stressSession = stressCreate.Session)
+                using (ReachySimSession stressSession =
+                    stressSessionCandidate)
                 {
                     ReachySimOperationResult stressStep =
                         stressSession.Step(1U);
