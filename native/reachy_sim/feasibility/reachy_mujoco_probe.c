@@ -119,7 +119,7 @@ static double percentile(const double* sorted_values, size_t count, double fract
            ((sorted_values[upper_index] - sorted_values[lower_index]) * interpolation);
 }
 
-static int array_is_finite(const mjtNum* values, int count)
+static int array_is_finite(const mjtNum* values, mjtSize count)
 {
     if(count <= 0)
     {
@@ -130,7 +130,7 @@ static int array_is_finite(const mjtNum* values, int count)
         return 0;
     }
 
-    for(int index = 0; index < count; ++index)
+    for(mjtSize index = 0; index < count; ++index)
     {
         if(!isfinite((double)values[index]))
         {
@@ -140,7 +140,7 @@ static int array_is_finite(const mjtNum* values, int count)
     return 1;
 }
 
-static double maximum_absolute_value(const mjtNum* values, int count)
+static double maximum_absolute_value(const mjtNum* values, mjtSize count)
 {
     double maximum = 0.0;
     if(values == NULL || count <= 0)
@@ -148,7 +148,7 @@ static double maximum_absolute_value(const mjtNum* values, int count)
         return maximum;
     }
 
-    for(int index = 0; index < count; ++index)
+    for(mjtSize index = 0; index < count; ++index)
     {
         const double absolute_value = fabs((double)values[index]);
         if(absolute_value > maximum)
@@ -173,18 +173,28 @@ static uint64_t total_warning_count(const mjData* data)
     return total;
 }
 
-static void write_model_counts(
+static int write_u32_count(mjtSize value, uint32_t* output)
+{
+    if(value < 0 || (uint64_t)value > UINT32_MAX)
+    {
+        return 0;
+    }
+    *output = (uint32_t)value;
+    return 1;
+}
+
+static int write_model_counts(
     const mjModel* model,
     ReachyMujocoProbeReport* report)
 {
-    report->body_count = (uint32_t)model->nbody;
-    report->joint_count = (uint32_t)model->njnt;
-    report->actuator_count = (uint32_t)model->nu;
-    report->equality_count = (uint32_t)model->neq;
-    report->site_count = (uint32_t)model->nsite;
-    report->camera_count = (uint32_t)model->ncam;
-    report->position_count = (uint32_t)model->nq;
-    report->velocity_count = (uint32_t)model->nv;
+    return write_u32_count(model->nbody, &report->body_count) &&
+           write_u32_count(model->njnt, &report->joint_count) &&
+           write_u32_count(model->nu, &report->actuator_count) &&
+           write_u32_count(model->neq, &report->equality_count) &&
+           write_u32_count(model->nsite, &report->site_count) &&
+           write_u32_count(model->ncam, &report->camera_count) &&
+           write_u32_count(model->nq, &report->position_count) &&
+           write_u32_count(model->nv, &report->velocity_count);
 }
 
 static ReachyMujocoProbeStatus run_loaded_model(
@@ -194,7 +204,16 @@ static ReachyMujocoProbeStatus run_loaded_model(
     char* error_buffer,
     size_t error_buffer_size)
 {
-    write_model_counts(model, report);
+    if(!write_model_counts(model, report))
+    {
+        copy_error(
+            error_buffer,
+            error_buffer_size,
+            "compiled model dimensions exceed the fixed-width probe report");
+        report->status = (uint32_t)REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+        return REACHY_MUJOCO_PROBE_INVALID_ARGUMENT;
+    }
+
     const double timestep_difference =
         fabs((double)model->opt.timestep - config->expected_timestep_seconds);
     if(timestep_difference > 1e-12)
