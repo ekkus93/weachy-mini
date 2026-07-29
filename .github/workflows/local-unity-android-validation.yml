@@ -73,10 +73,18 @@ jobs:
           fi
 
           unity_editor="${UNITY_EDITOR:-}"
+          if [[ -n "${unity_editor}" && ! -x "${unity_editor}" ]]; then
+            printf 'Configured UNITY_EDITOR is not executable: %s\n' \
+              "${unity_editor}" >&2
+            exit 1
+          fi
+
           if [[ -z "${unity_editor}" ]]; then
             for candidate in \
               "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
               "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
               "/opt/unity/editors/${project_version}/Editor/Unity"; do
               if [[ -x "${candidate}" ]]; then
                 unity_editor="${candidate}"
@@ -84,9 +92,39 @@ jobs:
               fi
             done
           fi
-          if [[ ! -x "${unity_editor}" ]]; then
-            printf 'Unity %s was not found. Set UNITY_EDITOR in the runner .env file.\n' \
-              "${project_version}" >&2
+
+          if [[ -z "${unity_editor}" ]]; then
+            printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+            printf '%s\n' 'Executable Unity editors visible to the runner:' >&2
+            editor_found=false
+            for editor_root in \
+              "${HOME}/Unity/Hub/Editor" \
+              "${HOME}/UnityHub/Editors" \
+              "${HOME}/.local/share/UnityHub/Editors" \
+              "/opt/Unity/Hub/Editor" \
+              "/opt/unity/editors"; do
+              if [[ ! -d "${editor_root}" ]]; then
+                continue
+              fi
+              while IFS= read -r candidate; do
+                printf '  %s\n' "${candidate}" >&2
+                editor_found=true
+              done < <(
+                find "${editor_root}" \
+                  -mindepth 3 \
+                  -maxdepth 3 \
+                  -type f \
+                  -path '*/Editor/Unity' \
+                  -perm -u+x \
+                  -print \
+                  | sort
+              )
+            done
+            if [[ "${editor_found}" != true ]]; then
+              printf '%s\n' '  none found in the supported Unity Hub locations' >&2
+            fi
+            printf '%s\n' \
+              'Install the pinned editor or set UNITY_EDITOR to its absolute executable path in the runner .env file, then restart the runner.' >&2
             exit 1
           fi
 
@@ -108,11 +146,14 @@ jobs:
           printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
           printf '%s\n' "${android_sdk_root}/emulator" >> "${GITHUB_PATH}"
 
+          printf 'resolved_unity_editor=%s\n' "${unity_editor}"
+          printf 'resolved_android_sdk=%s\n' "${android_sdk_root}"
           "${unity_editor}" -version -batchmode -quit
           "${android_sdk_root}/platform-tools/adb" version
           "${android_sdk_root}/emulator/emulator" -accel-check
 
       - name: Run Unity tests
+        id: unity_tests
         if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
         shell: bash
         env:
@@ -120,7 +161,7 @@ jobs:
         run: bash scripts/run_unity_tests.sh
 
       - name: Upload Unity test results
-        if: ${{ always() && (github.event_name == 'push' || inputs.run_unity_tests) }}
+        if: ${{ always() && steps.unity_tests.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
           name: local-unity-test-results-${{ github.sha }}
