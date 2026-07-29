@@ -53,33 +53,72 @@ COMPILE_SDK="${ANDROID_PINS[0]}"
 BUILD_TOOLS="${ANDROID_PINS[1]}"
 REQUIRED_PLATFORM="${ANDROID_SDK_ROOT}/platforms/android-${COMPILE_SDK}/android.jar"
 REQUIRED_BUILD_TOOLS="${ANDROID_SDK_ROOT}/build-tools/${BUILD_TOOLS}"
+UNITY_ANDROID_PLAYER_DIR="$(dirname "${UNITY_EDITOR}")/Data/PlaybackEngines/AndroidPlayer"
+UNITY_ANDROID_SDK_DIR="${UNITY_ANDROID_PLAYER_DIR}/SDK"
+UNITY_JAVA_HOME="${UNITY_ANDROID_PLAYER_DIR}/OpenJDK"
 
-SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-if [[ ! -x "${SDKMANAGER}" ]]; then
-    mapfile -t SDKMANAGER_CANDIDATES < <(
-        find "${ANDROID_SDK_ROOT}/cmdline-tools" \
-            -mindepth 3 \
-            -maxdepth 3 \
+find_newest_sdkmanager()
+{
+    local search_root="$1"
+    local -a candidates=()
+
+    if [[ ! -d "${search_root}" ]]; then
+        return 1
+    fi
+
+    mapfile -t candidates < <(
+        find "${search_root}" \
             -type f \
             -path '*/bin/sdkmanager' \
             -perm -u+x \
             -print 2>/dev/null \
             | sort -V
     )
-    if [[ "${#SDKMANAGER_CANDIDATES[@]}" -eq 0 ]]; then
-        printf 'Android sdkmanager was not found under %s/cmdline-tools.\n' \
-            "${ANDROID_SDK_ROOT}" >&2
-        exit 1
+
+    if [[ "${#candidates[@]}" -eq 0 ]]; then
+        return 1
     fi
-    SDKMANAGER="${SDKMANAGER_CANDIDATES[-1]}"
+
+    printf '%s\n' "${candidates[-1]}"
+}
+
+SDKMANAGER=""
+if [[ -x "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" ]]; then
+    SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+else
+    SDKMANAGER="$(find_newest_sdkmanager "${ANDROID_SDK_ROOT}/cmdline-tools" || true)"
 fi
+
+if [[ -z "${SDKMANAGER}" ]]; then
+    SDKMANAGER="$(command -v sdkmanager || true)"
+fi
+
+if [[ -z "${SDKMANAGER}" ]]; then
+    SDKMANAGER="$(find_newest_sdkmanager "${UNITY_ANDROID_SDK_DIR}/cmdline-tools" || true)"
+fi
+
+if [[ -z "${SDKMANAGER}" || ! -x "${SDKMANAGER}" ]]; then
+    printf '%s\n' 'Android sdkmanager was not found in the external SDK, on PATH, or in the Unity Android module.' >&2
+    exit 1
+fi
+
+if [[ ! -x "${UNITY_JAVA_HOME}/bin/java" ]]; then
+    printf 'Unity OpenJDK was not found: %s\n' "${UNITY_JAVA_HOME}" >&2
+    exit 1
+fi
+
+SDKMANAGER_PATH="${UNITY_JAVA_HOME}/bin:${PATH}"
 
 if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
     printf 'Provisioning Android platform %s and Build Tools %s in %s.\n' \
         "${COMPILE_SDK}" "${BUILD_TOOLS}" "${ANDROID_SDK_ROOT}"
+    printf 'sdkmanager=%s\n' "${SDKMANAGER}"
 
     set +o pipefail
-    yes | "${SDKMANAGER}" \
+    yes | env \
+        JAVA_HOME="${UNITY_JAVA_HOME}" \
+        PATH="${SDKMANAGER_PATH}" \
+        "${SDKMANAGER}" \
         --sdk_root="${ANDROID_SDK_ROOT}" \
         --licenses >/dev/null
     LICENSE_STATUS="${PIPESTATUS[1]}"
@@ -90,7 +129,10 @@ if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
         exit "${LICENSE_STATUS}"
     fi
 
-    "${SDKMANAGER}" \
+    env \
+        JAVA_HOME="${UNITY_JAVA_HOME}" \
+        PATH="${SDKMANAGER_PATH}" \
+        "${SDKMANAGER}" \
         --sdk_root="${ANDROID_SDK_ROOT}" \
         --channel=3 \
         --install \
@@ -113,6 +155,7 @@ fi
 printf 'android_sdk=%s\n' "${ANDROID_SDK_ROOT}"
 printf 'android_platform=%s\n' "${COMPILE_SDK}"
 printf 'android_build_tools=%s\n' "${BUILD_TOOLS}"
+printf 'android_sdkmanager=%s\n' "${SDKMANAGER}"
 
 case "${MODE}" in
     development)
