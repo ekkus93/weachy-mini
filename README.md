@@ -19,6 +19,7 @@ The minimum Android version is provisional until the device compatibility spike 
 - [Implementation specification](docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md)
 - [Ordered implementation TODO](docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md)
 - [Build instructions](docs/BUILDING.md)
+- [GitHub Actions setup](docs/ci/GITHUB_ACTIONS_SETUP.md)
 - [Asset policy](docs/ASSET_POLICY.md)
 - [Warning policy](docs/WARNING_POLICY.md)
 
