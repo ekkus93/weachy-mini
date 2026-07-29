@@ -103,7 +103,11 @@ def collect_classifications(
     if isinstance(value, dict):
         for key, child in value.items():
             child_path = f"{path}.{key}"
-            if key == "classification" or key.endswith("_classification"):
+            is_parameter_classification = key == "classification" or key.endswith(
+                "_classification"
+            )
+            is_fidelity_level = child_path == "audit.fidelity.classification"
+            if is_parameter_classification and not is_fidelity_level:
                 if not isinstance(child, str):
                     raise AuditValidationError(f"{child_path} must be a string")
                 found.append((child_path, child))
@@ -143,13 +147,10 @@ def require_close(actual: list[float], expected: list[float], label: str) -> Non
         raise AuditValidationError(
             f"{label} length mismatch: expected {len(expected)}, found {len(actual)}"
         )
-    for index, (actual_value, expected_value) in enumerate(
-        zip(actual, expected, strict=True)
-    ):
+    for index, (actual_value, expected_value) in enumerate(zip(actual, expected, strict=True)):
         if abs(actual_value - expected_value) > FLOAT_TOLERANCE:
             raise AuditValidationError(
-                f"{label}[{index}] mismatch: expected {expected_value}, "
-                f"found {actual_value}"
+                f"{label}[{index}] mismatch: expected {expected_value}, found {actual_value}"
             )
 
 
@@ -198,9 +199,7 @@ def validate_fidelity(audit: dict[str, Any]) -> None:
     if fidelity.get("classification") != "geometric_baseline":
         raise AuditValidationError("Fidelity classification must be geometric_baseline")
     if fidelity.get("diagnostics_status") != "uncalibrated_upstream_baseline":
-        raise AuditValidationError(
-            "Diagnostics status must be uncalibrated_upstream_baseline"
-        )
+        raise AuditValidationError("Diagnostics status must be uncalibrated_upstream_baseline")
 
     classifications = collect_classifications(audit)
     for path, classification in classifications:
@@ -208,9 +207,7 @@ def validate_fidelity(audit: dict[str, Any]) -> None:
             raise AuditValidationError(
                 f"Unknown parameter classification {classification!r} at {path}"
             )
-    has_placeholder = any(
-        classification == "placeholder" for _, classification in classifications
-    )
+    has_placeholder = any(classification == "placeholder" for _, classification in classifications)
     if has_placeholder and (calibrated or may_label):
         raise AuditValidationError(
             "Audit contains placeholder parameters but permits a calibrated label"
@@ -227,9 +224,7 @@ def validate_groups(audit: dict[str, Any]) -> None:
         key="id",
     )
     if set(groups) != REQUIRED_GROUPS:
-        raise AuditValidationError(
-            f"Parameter groups differ from required set: {sorted(groups)}"
-        )
+        raise AuditValidationError(f"Parameter groups differ from required set: {sorted(groups)}")
     for group_id, group in groups.items():
         for field in ("applies_to", "evidence", "limitations"):
             values = require_list(group.get(field), f"group {group_id}.{field}")
@@ -344,9 +339,7 @@ def validate_static_audit(
 
     equality = require_dict(audit.get("equality_solver"), "audit.equality_solver")
     exact_counts = require_dict(
-        require_dict(lock.get("model_requirements"), "lock requirements").get(
-            "exact_counts"
-        ),
+        require_dict(lock.get("model_requirements"), "lock requirements").get("exact_counts"),
         "lock exact counts",
     )
     if equality.get("count") != exact_counts.get("equalities"):
@@ -379,9 +372,7 @@ def validate_source_defaults(root: ET.Element, audit: dict[str, Any]) -> None:
             model_id == "chosen_actuator"
             and source.find("default[@class='chosen_actuator']") is None
         ):
-            raise AuditValidationError(
-                "chosen_actuator no longer inherits perfect_actuator"
-            )
+            raise AuditValidationError("chosen_actuator no longer inherits perfect_actuator")
         source_joint = source.find("joint")
         source_position = source.find("position")
         if source_joint is None or source_position is None:
@@ -502,9 +493,7 @@ def validate_pinned_model(model_path: Path, audit: dict[str, Any]) -> None:
         model_bytes = model_path.read_bytes()
     except OSError as exc:
         raise AuditValidationError(f"Cannot read pinned model {model_path}: {exc}") from exc
-    expected_sha = require_dict(audit.get("source"), "audit.source").get(
-        "model_sha256"
-    )
+    expected_sha = require_dict(audit.get("source"), "audit.source").get("model_sha256")
     actual_sha = hashlib.sha256(model_bytes).hexdigest()
     if actual_sha != expected_sha:
         raise AuditValidationError(
@@ -513,9 +502,7 @@ def validate_pinned_model(model_path: Path, audit: dict[str, Any]) -> None:
     source_text = model_bytes.decode("utf-8")
     for note in REQUIRED_UNCERTAINTY_NOTES:
         if note not in source_text:
-            raise AuditValidationError(
-                f"Pinned source lacks audited uncertainty note: {note!r}"
-            )
+            raise AuditValidationError(f"Pinned source lacks audited uncertainty note: {note!r}")
     try:
         root = ET.fromstring(model_bytes)
     except ET.ParseError as exc:
