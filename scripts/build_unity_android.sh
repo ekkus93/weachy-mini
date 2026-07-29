@@ -40,18 +40,21 @@ import sys
 manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 android = manifest["android"]
 print(android["compile_sdk"])
+print(android["compile_sdk_package"])
 print(android["build_tools"])
 PY
 )
 
-if [[ "${#ANDROID_PINS[@]}" -ne 2 ]]; then
+if [[ "${#ANDROID_PINS[@]}" -ne 3 ]]; then
     printf '%s\n' 'Could not read Android SDK pins from toolchain.lock.json.' >&2
     exit 1
 fi
 
 COMPILE_SDK="${ANDROID_PINS[0]}"
-BUILD_TOOLS="${ANDROID_PINS[1]}"
-REQUIRED_PLATFORM="${ANDROID_SDK_ROOT}/platforms/android-${COMPILE_SDK}/android.jar"
+COMPILE_SDK_PACKAGE="${ANDROID_PINS[1]}"
+BUILD_TOOLS="${ANDROID_PINS[2]}"
+PLATFORM_PACKAGE="platforms;android-${COMPILE_SDK_PACKAGE}"
+REQUIRED_PLATFORM="${ANDROID_SDK_ROOT}/platforms/android-${COMPILE_SDK_PACKAGE}/android.jar"
 REQUIRED_BUILD_TOOLS="${ANDROID_SDK_ROOT}/build-tools/${BUILD_TOOLS}"
 UNITY_ANDROID_PLAYER_DIR="$(dirname "${UNITY_EDITOR}")/Data/PlaybackEngines/AndroidPlayer"
 UNITY_ANDROID_SDK_DIR="${UNITY_ANDROID_PLAYER_DIR}/SDK"
@@ -90,15 +93,15 @@ else
 fi
 
 if [[ -z "${SDKMANAGER}" ]]; then
-    SDKMANAGER="$(command -v sdkmanager || true)"
-fi
-
-if [[ -z "${SDKMANAGER}" ]]; then
     SDKMANAGER="$(find_newest_sdkmanager "${UNITY_ANDROID_SDK_DIR}/cmdline-tools" || true)"
 fi
 
+if [[ -z "${SDKMANAGER}" ]]; then
+    SDKMANAGER="$(command -v sdkmanager || true)"
+fi
+
 if [[ -z "${SDKMANAGER}" || ! -x "${SDKMANAGER}" ]]; then
-    printf '%s\n' 'Android sdkmanager was not found in the external SDK, on PATH, or in the Unity Android module.' >&2
+    printf '%s\n' 'Android sdkmanager was not found in the external SDK, Unity Android module, or PATH.' >&2
     exit 1
 fi
 
@@ -110,12 +113,30 @@ fi
 SDKMANAGER_PATH="${UNITY_JAVA_HOME}/bin:${PATH}"
 
 if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
-    printf 'Provisioning Android platform %s and Build Tools %s in %s.\n' \
-        "${COMPILE_SDK}" "${BUILD_TOOLS}" "${ANDROID_SDK_ROOT}"
+    printf 'Provisioning Android API %s package %s and Build Tools %s in %s.\n' \
+        "${COMPILE_SDK}" "${PLATFORM_PACKAGE}" "${BUILD_TOOLS}" "${ANDROID_SDK_ROOT}"
     printf 'sdkmanager=%s\n' "${SDKMANAGER}"
 
+    SDK_LIST="$(
+        env \
+            JAVA_HOME="${UNITY_JAVA_HOME}" \
+            PATH="${SDKMANAGER_PATH}" \
+            "${SDKMANAGER}" \
+            --sdk_root="${ANDROID_SDK_ROOT}" \
+            --channel=3 \
+            --list
+    )"
+    if ! grep -Fq "${PLATFORM_PACKAGE}" <<<"${SDK_LIST}"; then
+        printf 'Android SDK package %s is not visible to %s.\n' \
+            "${PLATFORM_PACKAGE}" "${SDKMANAGER}" >&2
+        printf '%s\n' 'Visible Android 17 platform candidates:' >&2
+        grep -E 'platforms;android-(37|CinnamonBun)' <<<"${SDK_LIST}" >&2 || \
+            printf '%s\n' '  none' >&2
+        exit 1
+    fi
+
     set +o pipefail
-    yes | env \
+    yes 2>/dev/null | env \
         JAVA_HOME="${UNITY_JAVA_HOME}" \
         PATH="${SDKMANAGER_PATH}" \
         "${SDKMANAGER}" \
@@ -136,13 +157,13 @@ if [[ ! -f "${REQUIRED_PLATFORM}" || ! -d "${REQUIRED_BUILD_TOOLS}" ]]; then
         --sdk_root="${ANDROID_SDK_ROOT}" \
         --channel=3 \
         --install \
-        "platforms;android-${COMPILE_SDK}" \
+        "${PLATFORM_PACKAGE}" \
         "build-tools;${BUILD_TOOLS}"
 fi
 
 if [[ ! -f "${REQUIRED_PLATFORM}" ]]; then
-    printf 'Android platform %s was not installed: %s\n' \
-        "${COMPILE_SDK}" "${REQUIRED_PLATFORM}" >&2
+    printf 'Android API %s package %s was not installed: %s\n' \
+        "${COMPILE_SDK}" "${PLATFORM_PACKAGE}" "${REQUIRED_PLATFORM}" >&2
     exit 1
 fi
 
@@ -153,7 +174,8 @@ if [[ ! -x "${REQUIRED_BUILD_TOOLS}/aapt2" ]]; then
 fi
 
 printf 'android_sdk=%s\n' "${ANDROID_SDK_ROOT}"
-printf 'android_platform=%s\n' "${COMPILE_SDK}"
+printf 'android_compile_sdk=%s\n' "${COMPILE_SDK}"
+printf 'android_platform_package=%s\n' "${PLATFORM_PACKAGE}"
 printf 'android_build_tools=%s\n' "${BUILD_TOOLS}"
 printf 'android_sdkmanager=%s\n' "${SDKMANAGER}"
 
