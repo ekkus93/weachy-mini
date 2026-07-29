@@ -6,6 +6,7 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_DIR="${MUJOCO_SOURCE_DIR:-${1:-}}"
 LOCK_FILE="${ROOT_DIR}/third_party/mujoco-source.lock.json"
 TOOLCHAIN_FILE="${ROOT_DIR}/toolchain.lock.json"
+REFERENCE_SCENARIO="${ROOT_DIR}/models/reachy-mini/reference-scenario.json"
 BUILD_DIR="${MUJOCO_ANDROID_BUILD_DIR:-${ROOT_DIR}/build/mujoco-android-arm64}"
 OUTPUT_DIR="${MUJOCO_ANDROID_OUTPUT_DIR:-${ROOT_DIR}/Assets/Plugins/Android/libs/arm64-v8a}"
 COMPAT_DIR="${ROOT_DIR}/native/reachy_sim/compat/android_api26"
@@ -29,13 +30,14 @@ if [[ -z "${SOURCE_DIR}" ]]; then
     exit 2
 fi
 
-for compatibility_file in \
+for required_file in \
     "${COMPAT_CMAKE}" \
     "${COMPAT_SOURCE}" \
-    "${COMPAT_HEADER}"; do
-    if [[ ! -f "${compatibility_file}" ]]; then
-        printf 'Required Android compatibility file is missing: %s\n' \
-            "${compatibility_file}" >&2
+    "${COMPAT_HEADER}" \
+    "${REFERENCE_SCENARIO}"; do
+    if [[ ! -f "${required_file}" ]]; then
+        printf 'Required Android build input is missing: %s\n' \
+            "${required_file}" >&2
         exit 1
     fi
 done
@@ -62,9 +64,14 @@ fi
 python3 "${SCRIPT_DIR}/verify_source_checkout.py" \
     --source "${SOURCE_DIR}" \
     --lock "${LOCK_FILE}"
+python3 "${SCRIPT_DIR}/generate_reachy_reference_header.py" \
+    --scenario "${REFERENCE_SCENARIO}" \
+    --output "${ROOT_DIR}/native/reachy_sim/feasibility/reachy_reference_scenario.generated.h" \
+    --check
 
 command -v cmake >/dev/null
 command -v ninja >/dev/null
+command -v sha256sum >/dev/null
 
 cmake \
     -S "${SOURCE_DIR}" \
@@ -111,14 +118,26 @@ cmake \
     -DREACHY_BUILD_MUJOCO_PROBE=ON \
     -DREACHY_MUJOCO_INCLUDE_DIR="${SOURCE_DIR}/include" \
     -DREACHY_MUJOCO_LIBRARY="${OUTPUT_DIR}/libmujoco.so"
-cmake --build "${PROBE_BUILD_DIR}" --target reachy_mujoco_probe_runner --parallel
+cmake --build \
+    "${PROBE_BUILD_DIR}" \
+    --target \
+        reachy_mujoco_probe_runner \
+        reachy_mujoco_reference_runner \
+    --parallel
 
 PROBE_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_probe_runner' -print -quit)"
+REFERENCE_RUNNER_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_reference_runner' -print -quit)"
 if [[ -z "${PROBE_PATH}" ]]; then
     printf '%s\n' "Probe build completed without producing reachy_mujoco_probe_runner." >&2
     exit 1
 fi
+if [[ -z "${REFERENCE_RUNNER_PATH}" ]]; then
+    printf '%s\n' "Probe build completed without producing reachy_mujoco_reference_runner." >&2
+    exit 1
+fi
 cp "${PROBE_PATH}" "${OUTPUT_DIR}/reachy_mujoco_probe_runner"
+cp "${REFERENCE_RUNNER_PATH}" "${OUTPUT_DIR}/reachy_mujoco_reference_runner"
+cp "${REFERENCE_SCENARIO}" "${OUTPUT_DIR}/reference-scenario.json"
 cp \
     "${ROOT_DIR}/native/reachy_sim/tests/fixtures/closed_loop_probe.xml" \
     "${OUTPUT_DIR}/closed_loop_probe.xml"
@@ -164,6 +183,7 @@ if grep -E '[[:space:]]aligned_alloc$' \
     exit 1
 fi
 
+REFERENCE_SCENARIO_SHA256="$(sha256sum "${REFERENCE_SCENARIO}" | awk '{print $1}')"
 cat > "${OUTPUT_DIR}/BUILD_INFO.txt" <<INFO
 MuJoCo version: 3.9.0
 MuJoCo commit: 237c17e48539b6c90bf90d3161547cbdcbfaa1e0
@@ -174,7 +194,9 @@ Build type: Release
 Android STL: c++_static
 Android API 26 allocation compatibility: hidden posix_memalign shim
 POSIX time feature level: 200809L
+Reference scenario: rma042_representative_motion_v1
+Reference scenario SHA-256: ${REFERENCE_SCENARIO_SHA256}
 Third-party source modified: no
 INFO
 
-printf 'MuJoCo Android library and probe staged in %s\n' "${OUTPUT_DIR}"
+printf 'MuJoCo Android library and probes staged in %s\n' "${OUTPUT_DIR}"
