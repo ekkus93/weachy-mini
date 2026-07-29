@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 
@@ -50,6 +51,8 @@ namespace ReachyMini.Editor
             AndroidArchitecture targetArchitecture,
             int minimumApiLevel)
         {
+            ConfigureAndroidSdk();
+
             if (!EditorUserBuildSettings.SwitchActiveBuildTarget(
                     BuildTargetGroup.Android,
                     BuildTarget.Android))
@@ -69,6 +72,44 @@ namespace ReachyMini.Editor
                 NamedBuildTarget.Android,
                 "com.ekkus.weachymini");
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
+        }
+
+        private static void ConfigureAndroidSdk()
+        {
+            string sdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+            if (string.IsNullOrWhiteSpace(sdkRoot))
+            {
+                sdkRoot = Environment.GetEnvironmentVariable("ANDROID_HOME");
+            }
+
+            if (string.IsNullOrWhiteSpace(sdkRoot))
+            {
+                throw new InvalidOperationException(
+                    "ANDROID_SDK_ROOT or ANDROID_HOME must identify the provisioned Android SDK.");
+            }
+
+            string normalizedSdkRoot = Path.GetFullPath(sdkRoot);
+            string requiredPlatform = Path.Combine(
+                normalizedSdkRoot,
+                "platforms",
+                $"android-{TargetApiLevel}");
+            if (!Directory.Exists(requiredPlatform))
+            {
+                throw new DirectoryNotFoundException(
+                    $"Android SDK platform {TargetApiLevel} is missing: {requiredPlatform}");
+            }
+
+            AndroidExternalToolsSettings.sdkRootPath = normalizedSdkRoot;
+            string configuredSdkRoot = Path.GetFullPath(AndroidExternalToolsSettings.sdkRootPath);
+            if (!string.Equals(
+                    configuredSdkRoot.TrimEnd(Path.DirectorySeparatorChar),
+                    normalizedSdkRoot.TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Unity did not retain the requested Android SDK path. " +
+                    $"Expected {normalizedSdkRoot}, found {configuredSdkRoot}.");
+            }
         }
 
         private static void Build(string outputPath, BuildOptions options)
