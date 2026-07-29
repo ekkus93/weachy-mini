@@ -1,5 +1,6 @@
 #include <mujoco/mujoco.h>
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,51 @@ static mjtNum* allocate_values(int count)
         return NULL;
     }
     return calloc((size_t)count, sizeof(mjtNum));
+}
+
+static void write_error(char* error, int error_size, const char* message)
+{
+    if(error != NULL && error_size > 0)
+    {
+        (void)snprintf(error, (size_t)error_size, "%s", message);
+    }
+}
+
+static char* read_model_file(const char* filename)
+{
+    FILE* stream = fopen(filename, "rb");
+    if(stream == NULL)
+    {
+        return NULL;
+    }
+    if(fseek(stream, 0L, SEEK_END) != 0)
+    {
+        (void)fclose(stream);
+        return NULL;
+    }
+    const long length = ftell(stream);
+    if(length <= 0L || fseek(stream, 0L, SEEK_SET) != 0)
+    {
+        (void)fclose(stream);
+        return NULL;
+    }
+
+    char* bytes = malloc((size_t)length + 1U);
+    if(bytes == NULL)
+    {
+        (void)fclose(stream);
+        return NULL;
+    }
+    const size_t byte_count = (size_t)length;
+    const size_t read_count = fread(bytes, 1U, byte_count, stream);
+    const int close_result = fclose(stream);
+    if(read_count != byte_count || close_result != 0)
+    {
+        free(bytes);
+        return NULL;
+    }
+    bytes[byte_count] = '\0';
+    return bytes;
 }
 
 void mj_defaultVFS(mjVFS* vfs)
@@ -41,28 +87,44 @@ void mj_deleteVFS(mjVFS* vfs)
 
 mjModel* mj_loadXML(const char* filename, const mjVFS* vfs, char* error, int error_size)
 {
-    if(filename == NULL || vfs == NULL || vfs->buffer == NULL || vfs->buffer_size <= 0)
+    char* owned_xml = NULL;
+    const char* xml = NULL;
+    if(vfs != NULL && vfs->buffer != NULL && vfs->buffer_size > 0)
     {
-        if(error != NULL && error_size > 0)
-        {
-            (void)snprintf(error, (size_t)error_size, "%s", "missing model buffer");
-        }
+        xml = vfs->buffer;
+    }
+    else if(filename != NULL)
+    {
+        owned_xml = read_model_file(filename);
+        xml = owned_xml;
+    }
+    if(xml == NULL)
+    {
+        char message[256];
+        const int result = snprintf(
+            message,
+            sizeof(message),
+            "cannot read model: %s",
+            errno == 0 ? "missing model buffer or file" : strerror(errno));
+        write_error(
+            error,
+            error_size,
+            result < 0 ? "cannot read model" : message);
+        free(owned_xml);
         return NULL;
     }
 
-    const char* const xml = vfs->buffer;
     if(strstr(xml, "malformed") != NULL || strstr(xml, "missing-close") != NULL)
     {
-        if(error != NULL && error_size > 0)
-        {
-            (void)snprintf(error, (size_t)error_size, "%s", "XML parse error");
-        }
+        write_error(error, error_size, "XML parse error");
+        free(owned_xml);
         return NULL;
     }
 
     mjModel* model = calloc(1U, sizeof(*model));
     if(model == NULL)
     {
+        free(owned_xml);
         return NULL;
     }
     model->opt.timestep = 0.002;
@@ -71,6 +133,11 @@ mjModel* mj_loadXML(const char* filename, const mjVFS* vfs, char* error, int err
     model->na = 0;
     model->nu = 0;
     model->neq = 1;
+    model->nbody = 3;
+    model->njnt = 2;
+    model->nsite = 2;
+    model->ncam = 0;
+    free(owned_xml);
     return model;
 }
 
