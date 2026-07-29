@@ -2,12 +2,14 @@
 #define REACHY_FAKE_MUJOCO_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 typedef double mjtNum;
+typedef int64_t mjtSize;
 
 enum { mjNWARNING = 8 };
 
@@ -22,15 +24,15 @@ typedef struct mjOption {
 
 typedef struct mjModel {
     mjOption opt;
-    int nq;
-    int nv;
-    int na;
-    int nu;
-    int neq;
-    int nbody;
-    int njnt;
-    int nsite;
-    int ncam;
+    mjtSize nq;
+    mjtSize nv;
+    mjtSize na;
+    mjtSize nu;
+    mjtSize neq;
+    mjtSize nbody;
+    mjtSize njnt;
+    mjtSize nsite;
+    mjtSize ncam;
 } mjModel;
 
 typedef struct mjWarningStat {
@@ -40,7 +42,7 @@ typedef struct mjWarningStat {
 
 typedef struct mjData {
     mjtNum time;
-    int nefc;
+    mjtSize nefc;
     mjtNum* qpos;
     mjtNum* qvel;
     mjtNum* qacc;
