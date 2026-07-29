@@ -114,6 +114,47 @@ if(BUILD_TESTING)
         target_link_libraries(reachy_sim_contract PRIVATE m)
     endif()
 
+    add_library(reachy_sim_managed_contract SHARED)
+    target_sources(
+        reachy_sim_managed_contract
+        PRIVATE
+            src/reachy_sim.c
+            src/reachy_sim_version.c
+            tests/reachy_sim_fake_backend.c
+    )
+    target_include_directories(
+        reachy_sim_managed_contract
+        PUBLIC
+            include
+        PRIVATE
+            src
+    )
+    target_compile_features(
+        reachy_sim_managed_contract
+        PUBLIC
+            c_std_17
+    )
+    set_target_properties(
+        reachy_sim_managed_contract
+        PROPERTIES
+            C_EXTENSIONS OFF
+            OUTPUT_NAME reachy_sim
+            ARCHIVE_OUTPUT_NAME reachy_sim_managed_contract
+    )
+    reachy_enable_strict_warnings(
+        reachy_sim_managed_contract
+    )
+    reachy_enable_sanitizers(
+        reachy_sim_managed_contract
+    )
+    if(NOT MSVC)
+        target_link_libraries(
+            reachy_sim_managed_contract
+            PRIVATE
+                m
+        )
+    endif()
+
     add_executable(
         reachy_sim_contract_test
         tests/reachy_sim_contract_test.c
