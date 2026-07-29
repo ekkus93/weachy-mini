@@ -37,6 +37,14 @@ typedef struct ReachyMujocoProbeReport {
     double p95_step_microseconds;
     double maximum_step_microseconds;
     uint64_t warning_count;
+    uint32_t body_count;
+    uint32_t joint_count;
+    uint32_t actuator_count;
+    uint32_t equality_count;
+    uint32_t site_count;
+    uint32_t camera_count;
+    uint32_t position_count;
+    uint32_t velocity_count;
 } ReachyMujocoProbeReport;
 
 ReachyMujocoProbeConfig reachy_mujoco_probe_default_config(void);
@@ -44,6 +52,13 @@ ReachyMujocoProbeConfig reachy_mujoco_probe_default_config(void);
 ReachyMujocoProbeStatus reachy_mujoco_probe_run_xml(
     const char* xml,
     size_t xml_size,
+    const ReachyMujocoProbeConfig* config,
+    ReachyMujocoProbeReport* report,
+    char* error_buffer,
+    size_t error_buffer_size);
+
+ReachyMujocoProbeStatus reachy_mujoco_probe_run_path(
+    const char* model_path,
     const ReachyMujocoProbeConfig* config,
     ReachyMujocoProbeReport* report,
     char* error_buffer,
