@@ -146,14 +146,21 @@ fi
 
 "${READELF}" -d "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.dynamic.txt"
 "${NM}" -D --defined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.exports.txt"
+"${NM}" -D --undefined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.imports.txt"
+"${NM}" --defined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.symbols.txt"
 
 if grep -E 'lib(GL|GLX|X11|glfw)' "${OUTPUT_DIR}/libmujoco.dynamic.txt"; then
     printf '%s\n' "Desktop-only dependency detected in Android MuJoCo library." >&2
     exit 1
 fi
-if ! grep -F 'reachy_android_api26_aligned_alloc' \
-    "${OUTPUT_DIR}/libmujoco.exports.txt" >/dev/null; then
+if ! grep -E '[[:space:]]reachy_android_api26_aligned_alloc$' \
+    "${OUTPUT_DIR}/libmujoco.symbols.txt" >/dev/null; then
     printf '%s\n' "Android API 26 allocation compatibility symbol is missing." >&2
+    exit 1
+fi
+if grep -E '[[:space:]]aligned_alloc$' \
+    "${OUTPUT_DIR}/libmujoco.imports.txt" >/dev/null; then
+    printf '%s\n' "Android MuJoCo library still imports unavailable aligned_alloc." >&2
     exit 1
 fi
 
@@ -165,7 +172,7 @@ Android platform: ${ANDROID_PLATFORM}
 Android NDK: ${ACTUAL_NDK}
 Build type: Release
 Android STL: c++_static
-Android API 26 allocation compatibility: posix_memalign shim
+Android API 26 allocation compatibility: hidden posix_memalign shim
 POSIX time feature level: 200809L
 Third-party source modified: no
 INFO
