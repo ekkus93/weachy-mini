@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   static:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -29,7 +29,7 @@ jobs:
         run: ./scripts/ci.sh --static-only
 
   native:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Native warnings-as-errors build and tests
@@ -41,7 +41,7 @@ jobs:
         run: ./scripts/build_native.sh
 
   managed:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -52,17 +52,74 @@ jobs:
           dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
           dotnet run --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj --configuration Release --no-restore
 
-  android-static:
-    runs-on: ubuntu-latest
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Verify Android Gradle configuration pins
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Export pinned Android SDK versions
+        shell: bash
         run: |
-          grep -F 'id("com.android.library") version "9.3.1"' android-plugin/build.gradle.kts
-          grep -F 'compileSdk = 37' android-plugin/build.gradle.kts
-          grep -F 'ndkVersion = "28.2.13676358"' android-plugin/build.gradle.kts
-          grep -F 'gradle-9.5.0-bin.zip' android-plugin/gradle/wrapper/gradle-wrapper.properties
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))
+          android = manifest["android"]
+          values = {
+              "ANDROID_BUILD_TOOLS": android["build_tools"],
+              "ANDROID_COMPILE_SDK": android["compile_sdk"],
+              "ANDROID_GRADLE_VERSION": android["gradle"],
+              "ANDROID_JDK_MAJOR": android["jdk_major"],
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+              sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" --install \
+              "platform-tools" \
+              "platforms;android-${ANDROID_COMPILE_SDK}" \
+              "build-tools;${ANDROID_BUILD_TOOLS}"
+
+      - name: Verify Android and Gradle pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_toolchain.py --manifest-only
+
+          actual_gradle="$(gradle --version | sed -n 's/^Gradle //p' | head -n 1)"
+          if [[ "${actual_gradle}" != "${ANDROID_GRADLE_VERSION}" ]]; then
+              printf 'Gradle mismatch: expected %s, found %s.\n' \
+                  "${ANDROID_GRADLE_VERSION}" "${actual_gradle}" >&2
+              exit 1
+          fi
+
+          actual_java="$(java -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')"
+          if [[ "${actual_java}" != "${ANDROID_JDK_MAJOR}" ]]; then
+              printf 'JDK mismatch: expected %s, found %s.\n' \
+                  "${ANDROID_JDK_MAJOR}" "${actual_java}" >&2
+              exit 1
+          fi
+
+      - name: Android lint, Java warnings, and tests
+        run: gradle --no-daemon -p android-plugin lint test
