@@ -13,9 +13,10 @@ import struct
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 SCHEMA_VERSION = 1
 TRANSFORMATION_ID = "reachy_stl_to_unity_obj_v1"
@@ -67,7 +68,9 @@ def checked_relative_file(root: Path, relative_text: str) -> Path:
     try:
         resolved.relative_to(root.resolve())
     except ValueError as exc:
-        raise UnityAssetError(f"Source path escapes imported package: {relative_text}") from exc
+        raise UnityAssetError(
+            f"Source path escapes imported package: {relative_text}"
+        ) from exc
     if not resolved.is_file():
         raise UnityAssetError(f"Required source file does not exist: {relative_text}")
     return resolved
@@ -81,26 +84,36 @@ def finite_vector(values: Iterable[float], label: str) -> tuple[float, ...]:
     return result
 
 
-def parse_vector(text: str | None, count: int, default: tuple[float, ...], label: str) -> tuple[float, ...]:
+def parse_vector(
+    text: str | None,
+    count: int,
+    default: tuple[float, ...],
+    label: str,
+) -> tuple[float, ...]:
     """Parse a fixed-width MJCF vector."""
     if text is None:
         return default
     fields = text.split()
     if len(fields) != count:
-        raise UnityAssetError(f"{label} must contain {count} values, found {len(fields)}")
+        raise UnityAssetError(
+            f"{label} must contain {count} values, found {len(fields)}"
+        )
     try:
-        values = finite_vector((float(field) for field in fields), label)
+        return finite_vector((float(field) for field in fields), label)
     except ValueError as exc:
         raise UnityAssetError(f"{label} contains a non-numeric value") from exc
-    return values
 
 
-def coordinate_vector(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+def coordinate_vector(
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
     """Map MuJoCo (x, y, z) to Unity (x, z, y)."""
     return vector[0], vector[2], vector[1]
 
 
-def matrix_from_quaternion(quaternion: tuple[float, float, float, float]) -> tuple[tuple[float, ...], ...]:
+def matrix_from_quaternion(
+    quaternion: tuple[float, float, float, float],
+) -> tuple[tuple[float, ...], ...]:
     """Convert a normalized wxyz quaternion to a 3x3 rotation matrix."""
     w, x, y, z = quaternion
     norm = math.sqrt(w * w + x * x + y * y + z * z)
@@ -108,14 +121,28 @@ def matrix_from_quaternion(quaternion: tuple[float, float, float, float]) -> tup
         raise UnityAssetError("MJCF quaternion has zero or invalid norm")
     w, x, y, z = (value / norm for value in quaternion)
     return (
-        (1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)),
-        (2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)),
-        (2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)),
+        (
+            1.0 - 2.0 * (y * y + z * z),
+            2.0 * (x * y - z * w),
+            2.0 * (x * z + y * w),
+        ),
+        (
+            2.0 * (x * y + z * w),
+            1.0 - 2.0 * (x * x + z * z),
+            2.0 * (y * z - x * w),
+        ),
+        (
+            2.0 * (x * z - y * w),
+            2.0 * (y * z + x * w),
+            1.0 - 2.0 * (x * x + y * y),
+        ),
     )
 
 
-def quaternion_from_matrix(matrix: tuple[tuple[float, ...], ...]) -> tuple[float, float, float, float]:
-    """Convert a proper 3x3 rotation matrix to canonical wxyz quaternion form."""
+def quaternion_from_matrix(
+    matrix: tuple[tuple[float, ...], ...],
+) -> tuple[float, float, float, float]:
+    """Convert a proper 3x3 rotation matrix to canonical wxyz form."""
     trace = matrix[0][0] + matrix[1][1] + matrix[2][2]
     if trace > 0.0:
         scale = math.sqrt(trace + 1.0) * 2.0
@@ -126,7 +153,9 @@ def quaternion_from_matrix(matrix: tuple[tuple[float, ...], ...]) -> tuple[float
             (matrix[1][0] - matrix[0][1]) / scale,
         )
     elif matrix[0][0] > matrix[1][1] and matrix[0][0] > matrix[2][2]:
-        scale = math.sqrt(1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]) * 2.0
+        scale = math.sqrt(
+            1.0 + matrix[0][0] - matrix[1][1] - matrix[2][2]
+        ) * 2.0
         quaternion = (
             (matrix[2][1] - matrix[1][2]) / scale,
             0.25 * scale,
@@ -134,7 +163,9 @@ def quaternion_from_matrix(matrix: tuple[tuple[float, ...], ...]) -> tuple[float
             (matrix[0][2] + matrix[2][0]) / scale,
         )
     elif matrix[1][1] > matrix[2][2]:
-        scale = math.sqrt(1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]) * 2.0
+        scale = math.sqrt(
+            1.0 + matrix[1][1] - matrix[0][0] - matrix[2][2]
+        ) * 2.0
         quaternion = (
             (matrix[0][2] - matrix[2][0]) / scale,
             (matrix[0][1] + matrix[1][0]) / scale,
@@ -142,7 +173,9 @@ def quaternion_from_matrix(matrix: tuple[tuple[float, ...], ...]) -> tuple[float
             (matrix[1][2] + matrix[2][1]) / scale,
         )
     else:
-        scale = math.sqrt(1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]) * 2.0
+        scale = math.sqrt(
+            1.0 + matrix[2][2] - matrix[0][0] - matrix[1][1]
+        ) * 2.0
         quaternion = (
             (matrix[1][0] - matrix[0][1]) / scale,
             (matrix[0][2] + matrix[2][0]) / scale,
@@ -159,11 +192,16 @@ def quaternion_from_matrix(matrix: tuple[tuple[float, ...], ...]) -> tuple[float
     return result
 
 
-def coordinate_quaternion(quaternion: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+def coordinate_quaternion(
+    quaternion: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
     """Conjugate a MuJoCo rotation by the x/z/y reflection basis change."""
     source = matrix_from_quaternion(quaternion)
     order = (0, 2, 1)
-    converted = tuple(tuple(source[order[row]][order[column]] for column in range(3)) for row in range(3))
+    converted = tuple(
+        tuple(source[order[row]][order[column]] for column in range(3))
+        for row in range(3)
+    )
     return quaternion_from_matrix(converted)
 
 
@@ -172,13 +210,15 @@ def parse_binary_stl(data: bytes, path: Path) -> list[Triangle] | None:
     if len(data) < 84:
         return None
     triangle_count = struct.unpack_from("<I", data, 80)[0]
-    expected_size = 84 + triangle_count * 50
-    if expected_size != len(data):
+    if 84 + triangle_count * 50 != len(data):
         return None
     triangles: list[Triangle] = []
     offset = 84
     for index in range(triangle_count):
-        values = finite_vector(struct.unpack_from("<12f", data, offset), f"{path} triangle {index}")
+        values = finite_vector(
+            struct.unpack_from("<12f", data, offset),
+            f"{path} triangle {index}",
+        )
         triangles.append(
             Triangle(
                 normal=(values[0], values[1], values[2]),
@@ -209,25 +249,35 @@ def parse_ascii_stl(data: bytes, path: Path) -> list[Triangle]:
             continue
         if line.startswith("facet normal "):
             if current_normal is not None:
-                raise UnityAssetError(f"Nested ASCII STL facet at {path}:{line_number}")
+                raise UnityAssetError(
+                    f"Nested ASCII STL facet at {path}:{line_number}"
+                )
             fields = number.findall(line.removeprefix("facet normal "))
             if len(fields) != 3:
-                raise UnityAssetError(f"Invalid ASCII STL normal at {path}:{line_number}")
+                raise UnityAssetError(
+                    f"Invalid ASCII STL normal at {path}:{line_number}"
+                )
             current_normal = tuple(float(field) for field in fields)
             finite_vector(current_normal, f"{path}:{line_number} normal")
             vertices = []
         elif line.startswith("vertex "):
             if current_normal is None:
-                raise UnityAssetError(f"ASCII STL vertex outside facet at {path}:{line_number}")
+                raise UnityAssetError(
+                    f"ASCII STL vertex outside facet at {path}:{line_number}"
+                )
             fields = number.findall(line.removeprefix("vertex "))
             if len(fields) != 3:
-                raise UnityAssetError(f"Invalid ASCII STL vertex at {path}:{line_number}")
+                raise UnityAssetError(
+                    f"Invalid ASCII STL vertex at {path}:{line_number}"
+                )
             vertex = tuple(float(field) for field in fields)
             finite_vector(vertex, f"{path}:{line_number} vertex")
             vertices.append(vertex)
         elif line == "endfacet":
             if current_normal is None or len(vertices) != 3:
-                raise UnityAssetError(f"Incomplete ASCII STL facet at {path}:{line_number}")
+                raise UnityAssetError(
+                    f"Incomplete ASCII STL facet at {path}:{line_number}"
+                )
             triangles.append(
                 Triangle(
                     normal=current_normal,
@@ -237,7 +287,9 @@ def parse_ascii_stl(data: bytes, path: Path) -> list[Triangle]:
             current_normal = None
             vertices = []
         elif line not in {"outer loop", "endloop"}:
-            raise UnityAssetError(f"Unsupported ASCII STL syntax at {path}:{line_number}: {line}")
+            raise UnityAssetError(
+                f"Unsupported ASCII STL syntax at {path}:{line_number}: {line}"
+            )
     if current_normal is not None:
         raise UnityAssetError(f"Unclosed ASCII STL facet: {path}")
     if not triangles:
@@ -255,7 +307,9 @@ def read_stl(path: Path) -> list[Triangle]:
     return triangles if triangles is not None else parse_ascii_stl(data, path)
 
 
-def normalize(vector: tuple[float, float, float]) -> tuple[float, float, float]:
+def normalize(
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
     """Normalize a vector, retaining zero for a missing STL normal."""
     length = math.sqrt(sum(value * value for value in vector))
     if length <= 0.0:
@@ -263,7 +317,10 @@ def normalize(vector: tuple[float, float, float]) -> tuple[float, float, float]:
     return tuple(value / length for value in vector)
 
 
-def cross(left: tuple[float, float, float], right: tuple[float, float, float]) -> tuple[float, float, float]:
+def cross(
+    left: tuple[float, float, float],
+    right: tuple[float, float, float],
+) -> tuple[float, float, float]:
     """Return the vector cross product."""
     return (
         left[1] * right[2] - left[2] * right[1],
@@ -272,7 +329,10 @@ def cross(left: tuple[float, float, float], right: tuple[float, float, float]) -
     )
 
 
-def subtract(left: tuple[float, float, float], right: tuple[float, float, float]) -> tuple[float, float, float]:
+def subtract(
+    left: tuple[float, float, float],
+    right: tuple[float, float, float],
+) -> tuple[float, float, float]:
     """Subtract two vectors."""
     return tuple(left[index] - right[index] for index in range(3))
 
@@ -281,12 +341,14 @@ def format_number(value: float) -> str:
     """Render deterministic finite OBJ numeric text."""
     if not math.isfinite(value):
         raise UnityAssetError("Attempted to write non-finite OBJ coordinate")
-    if value == 0.0:
-        value = 0.0
-    return format(value, ".17g")
+    return format(0.0 if value == 0.0 else value, ".17g")
 
 
-def write_obj(path: Path, source_path: Path, scale: tuple[float, float, float]) -> int:
+def write_obj(
+    path: Path,
+    source_path: Path,
+    scale: tuple[float, float, float],
+) -> int:
     """Convert one STL to a Unity-coordinate OBJ and return triangle count."""
     triangles = read_stl(source_path)
     lines = [
@@ -298,11 +360,15 @@ def write_obj(path: Path, source_path: Path, scale: tuple[float, float, float]) 
     normal_index = 1
     for triangle in triangles:
         converted_vertices = tuple(
-            coordinate_vector(tuple(vertex[axis] * scale[axis] for axis in range(3)))
+            coordinate_vector(
+                tuple(vertex[axis] * scale[axis] for axis in range(3))
+            )
             for vertex in triangle.vertices
         )
         source_normal = normalize(triangle.normal)
-        converted_normal = normalize((-source_normal[0], -source_normal[2], -source_normal[1]))
+        converted_normal = normalize(
+            (-source_normal[0], -source_normal[2], -source_normal[1])
+        )
         if converted_normal == (0.0, 0.0, 0.0):
             converted_normal = normalize(
                 cross(
@@ -312,7 +378,9 @@ def write_obj(path: Path, source_path: Path, scale: tuple[float, float, float]) 
             )
         for vertex in converted_vertices:
             lines.append("v " + " ".join(format_number(value) for value in vertex))
-        lines.append("vn " + " ".join(format_number(value) for value in converted_normal))
+        lines.append(
+            "vn " + " ".join(format_number(value) for value in converted_normal)
+        )
         lines.append(
             "f "
             f"{vertex_index}//{normal_index} "
@@ -328,21 +396,54 @@ def write_obj(path: Path, source_path: Path, scale: tuple[float, float, float]) 
 
 def body_path(parent_path: str, index: int, name: str | None) -> str:
     """Create the stable body path used by MODEL_MAP.json."""
-    return f"{parent_path}/{name if name else f'@body[{index}]'}"
+    segment = name if name else f"@body[{index}]"
+    return f"{parent_path}/{segment}"
 
 
 def unity_pose(element: ET.Element, label: str) -> dict[str, list[float]]:
     """Convert one MJCF local pose to Unity coordinates."""
-    position = parse_vector(element.attrib.get("pos"), 3, (0.0, 0.0, 0.0), f"{label} pos")
-    quaternion = parse_vector(element.attrib.get("quat"), 4, (1.0, 0.0, 0.0, 0.0), f"{label} quat")
-    converted_position = coordinate_vector((position[0], position[1], position[2]))
-    converted_quaternion = coordinate_quaternion(
-        (quaternion[0], quaternion[1], quaternion[2], quaternion[3])
+    position = parse_vector(
+        element.attrib.get("pos"),
+        3,
+        (0.0, 0.0, 0.0),
+        f"{label} pos",
+    )
+    quaternion = parse_vector(
+        element.attrib.get("quat"),
+        4,
+        (1.0, 0.0, 0.0, 0.0),
+        f"{label} quat",
     )
     return {
-        "position_metres": list(converted_position),
-        "quaternion_wxyz": list(converted_quaternion),
+        "position_metres": list(
+            coordinate_vector((position[0], position[1], position[2]))
+        ),
+        "quaternion_wxyz": list(
+            coordinate_quaternion(
+                (quaternion[0], quaternion[1], quaternion[2], quaternion[3])
+            )
+        ),
     }
+
+
+def validate_import_identity(
+    source_root: Path,
+    model_path: Path,
+) -> tuple[Path, dict[str, Any], Path, dict[str, Any]]:
+    """Require source provenance and model-map identity before conversion."""
+    model_map_path = checked_relative_file(source_root, "MODEL_MAP.json")
+    model_map = read_json(model_map_path)
+    source_model = model_map.get("source_model")
+    if not isinstance(source_model, dict):
+        raise UnityAssetError("MODEL_MAP.json source_model must be an object")
+    actual_model_sha = sha256(model_path)
+    if source_model.get("sha256") != actual_model_sha:
+        raise UnityAssetError("MODEL_MAP.json does not identify the imported MJCF bytes")
+    provenance_path = checked_relative_file(source_root, "PROVENANCE.json")
+    provenance = read_json(provenance_path)
+    if provenance.get("content_modified") is not False:
+        raise UnityAssetError("Imported source provenance must report unmodified content")
+    return model_map_path, model_map, provenance_path, provenance
 
 
 def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
@@ -354,25 +455,39 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
         raise UnityAssetError(f"Cannot parse imported Reachy MJCF: {exc}") from exc
     if root.tag != "mujoco" or root.attrib.get("model") != "reachy_mini":
         raise UnityAssetError("Imported MJCF is not the pinned Reachy Mini model")
+    model_map_path, model_map, provenance_path, provenance = validate_import_identity(
+        source_root,
+        model_path,
+    )
 
     compiler = root.find("compiler")
     mesh_directory = compiler.attrib.get("meshdir", "") if compiler is not None else ""
-    mesh_assets: dict[str, dict[str, Any]] = {}
-    outputs: list[dict[str, Any]] = []
     asset_root = root.find("asset")
     if asset_root is None:
         raise UnityAssetError("Imported MJCF has no asset section")
+
+    mesh_assets: dict[str, dict[str, Any]] = {}
+    outputs: list[dict[str, Any]] = []
     for index, mesh in enumerate(asset_root.findall("mesh")):
-        mesh_name = mesh.attrib.get("name") or Path(mesh.attrib.get("file", "")).stem
         mesh_file = mesh.attrib.get("file")
+        mesh_name = mesh.attrib.get("name") or Path(mesh_file or "").stem
         if not mesh_name or not mesh_file:
-            raise UnityAssetError(f"Mesh asset {index} is missing name/file identity")
+            raise UnityAssetError(
+                f"Mesh asset {index} is missing name/file identity"
+            )
         if mesh_name in mesh_assets:
             raise UnityAssetError(f"Duplicate mesh asset name: {mesh_name}")
         source_relative = (Path(mesh_directory) / mesh_file).as_posix()
         source_path = checked_relative_file(source_root, source_relative)
-        scale_values = parse_vector(mesh.attrib.get("scale"), 3, (1.0, 1.0, 1.0), f"mesh {mesh_name} scale")
-        output_relative = (Path("Meshes") / Path(mesh_file).with_suffix(".obj")).as_posix()
+        scale_values = parse_vector(
+            mesh.attrib.get("scale"),
+            3,
+            (1.0, 1.0, 1.0),
+            f"mesh {mesh_name} scale",
+        )
+        output_relative = (
+            Path("Meshes") / Path(mesh_file).with_suffix(".obj")
+        ).as_posix()
         output_path = staging / output_relative
         triangle_count = write_obj(
             output_path,
@@ -395,15 +510,26 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
     for index, material in enumerate(asset_root.findall("material")):
         name = material.attrib.get("name")
         if not name or name in material_names:
-            raise UnityAssetError(f"Material {index} has missing or duplicate name")
+            raise UnityAssetError(
+                f"Material {index} has missing or duplicate name"
+            )
         material_names.add(name)
-        rgba = parse_vector(material.attrib.get("rgba"), 4, (1.0, 1.0, 1.0, 1.0), f"material {name} rgba")
+        rgba = parse_vector(
+            material.attrib.get("rgba"),
+            4,
+            (1.0, 1.0, 1.0, 1.0),
+            f"material {name} rgba",
+        )
         materials.append({"name": name, "rgba": list(rgba)})
 
     bodies: list[dict[str, Any]] = []
     visual_geoms: list[dict[str, Any]] = []
 
-    def walk_body(body: ET.Element, parent_path: str, sibling_index: int) -> None:
+    def walk_body(
+        body: ET.Element,
+        parent_path: str,
+        sibling_index: int,
+    ) -> None:
         name = body.attrib.get("name")
         path = body_path(parent_path, sibling_index, name)
         bodies.append(
@@ -422,10 +548,14 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
             mesh_name = geom.attrib.get("mesh")
             material_name = geom.attrib.get("material")
             if not mesh_name or mesh_name not in mesh_assets:
-                raise UnityAssetError(f"Visual geom {path}[{geom_index}] has unknown mesh {mesh_name!r}")
+                raise UnityAssetError(
+                    f"Visual geom {path}[{geom_index}] has unknown mesh "
+                    f"{mesh_name!r}"
+                )
             if not material_name or material_name not in material_names:
                 raise UnityAssetError(
-                    f"Visual geom {path}[{geom_index}] has unknown material {material_name!r}"
+                    f"Visual geom {path}[{geom_index}] has unknown material "
+                    f"{material_name!r}"
                 )
             visual_geoms.append(
                 {
@@ -435,7 +565,10 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
                     "mesh": mesh_name,
                     "mesh_output_path": mesh_assets[mesh_name]["output_path"],
                     "material": material_name,
-                    "local_pose_unity": unity_pose(geom, f"visual geom {path}[{geom_index}]"),
+                    "local_pose_unity": unity_pose(
+                        geom,
+                        f"visual geom {path}[{geom_index}]",
+                    ),
                 }
             )
         child_bodies = [child for child in body if child.tag == "body"]
@@ -448,18 +581,24 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
     for index, body in enumerate(worldbody.findall("body")):
         walk_body(body, "/world", index)
 
-    source_cameras = []
-    for camera in root.findall(".//camera"):
-        source_cameras.append(
-            {
-                "name": camera.attrib.get("name"),
-                "included_in_presentation": False,
-                "reason": "MuJoCo source camera is solver/model metadata; Unity presentation camera is independent.",
-            }
+    expected_body_count = model_map.get("counts", {}).get("bodies")
+    if expected_body_count != len(bodies):
+        raise UnityAssetError(
+            "Converted body count differs from MODEL_MAP.json: "
+            f"expected {expected_body_count}, found {len(bodies)}"
         )
 
-    provenance_path = checked_relative_file(source_root, "PROVENANCE.json")
-    source_provenance = read_json(provenance_path)
+    source_cameras = [
+        {
+            "name": camera.attrib.get("name"),
+            "included_in_presentation": False,
+            "reason": (
+                "MuJoCo source camera is solver/model metadata; "
+                "Unity presentation camera is independent."
+            ),
+        }
+        for camera in root.findall(".//camera")
+    ]
     return {
         "schema_version": SCHEMA_VERSION,
         "transformation": {
@@ -469,15 +608,19 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
                 "mujoco": "right-handed; +Z up; quaternion wxyz",
                 "unity": "left-handed; +Y up; quaternion stored wxyz in manifest",
                 "vector_rule": "unity(x,y,z) = mujoco(x,z,y)",
-                "rotation_rule": "R_unity = M * R_mujoco * inverse(M), M maps (x,y,z) to (x,z,y)",
+                "rotation_rule": (
+                    "R_unity = M * R_mujoco * inverse(M), "
+                    "M maps (x,y,z) to (x,z,y)"
+                ),
                 "mesh_winding_reversed": True,
             },
         },
         "source": {
             "model_path": "reachy_mini.xml",
             "model_sha256": sha256(model_path),
+            "model_map_sha256": sha256(model_map_path),
             "provenance_sha256": sha256(provenance_path),
-            "source_commit": source_provenance.get("source_commit"),
+            "source_commit": provenance.get("source_commit"),
         },
         "meshes": sorted(outputs, key=lambda item: item["name"]),
         "materials": sorted(materials, key=lambda item: item["name"]),
@@ -492,21 +635,37 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
     }
 
 
+def replace_output(staging: Path, output_root: Path, temp_root: Path) -> None:
+    """Replace output with rollback if the final rename fails."""
+    backup = temp_root / "previous-output"
+    had_previous = output_root.exists()
+    if had_previous:
+        output_root.rename(backup)
+    try:
+        staging.rename(output_root)
+    except OSError:
+        if had_previous and backup.exists() and not output_root.exists():
+            backup.rename(output_root)
+        raise
+
+
 def write_conversion(source_root: Path, output_root: Path) -> Path:
     """Write a transactional conversion, preserving prior output on failure."""
-    with tempfile.TemporaryDirectory(prefix="reachy-unity-", dir=output_root.parent) as temp_text:
-        staging = Path(temp_text) / output_root.name
-        staging.mkdir(parents=True)
+    output_root.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="reachy-unity-",
+        dir=output_root.parent,
+    ) as temp_text:
+        temp_root = Path(temp_text)
+        staging = temp_root / "new-output"
+        staging.mkdir()
         manifest = build_render_manifest(source_root, staging)
         (staging / "UNITY_RENDER_MAP.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
             newline="\n",
         )
-        if output_root.exists():
-            shutil.rmtree(output_root)
-        output_root.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(staging), output_root)
+        replace_output(staging, output_root, temp_root)
     return output_root
 
 
@@ -524,10 +683,14 @@ def main() -> int:
     try:
         source = args.source.resolve()
         if not source.is_dir():
-            raise UnityAssetError(f"Imported Reachy source directory does not exist: {source}")
+            raise UnityAssetError(
+                f"Imported Reachy source directory does not exist: {source}"
+            )
         output = args.output.resolve()
         if output == source or source in output.parents:
-            raise UnityAssetError("Unity conversion output must not overwrite the imported source package")
+            raise UnityAssetError(
+                "Unity conversion output must not overwrite the imported source package"
+            )
         destination = write_conversion(source, output)
     except (UnityAssetError, OSError) as exc:
         print(f"Reachy Unity asset preparation failed: {exc}", file=sys.stderr)
