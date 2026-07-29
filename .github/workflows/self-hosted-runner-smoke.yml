@@ -1,0 +1,122 @@
+name: Self-Hosted Runner Smoke Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      require_android_sdk:
+        description: Require ANDROID_SDK_ROOT and Android command-line tools
+        required: true
+        default: false
+        type: boolean
+      require_android_target:
+        description: Require exactly one online Android device or emulator
+        required: true
+        default: false
+        type: boolean
+      require_unity_editor:
+        description: Require UNITY_EDITOR to identify an executable Unity editor
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-runner-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Verify kawa self-hosted runner
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify runner identity and workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'runner_name=%s\n' "${RUNNER_NAME}"
+          printf 'runner_os=%s\n' "${RUNNER_OS}"
+          printf 'runner_arch=%s\n' "${RUNNER_ARCH}"
+          printf 'user=%s\n' "$(id -un)"
+          printf 'host=%s\n' "$(hostname)"
+          printf 'workspace=%s\n' "${GITHUB_WORKSPACE}"
+          uname -a
+
+          test "${RUNNER_OS}" = "Linux"
+          test "${RUNNER_ARCH}" = "X64"
+          test -d "${GITHUB_WORKSPACE}"
+          test -w "${GITHUB_WORKSPACE}"
+
+          probe_path="${RUNNER_TEMP}/weachy-runner-write-probe"
+          printf '%s\n' "runner write test" > "${probe_path}"
+          grep -F "runner write test" "${probe_path}"
+          rm "${probe_path}"
+
+      - name: Verify required host tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          for tool in bash git python3; do
+            tool_path="$(command -v "${tool}")"
+            printf '%s=%s\n' "${tool}" "${tool_path}"
+          done
+          git --version
+          python3 --version
+
+      - name: Verify Android SDK
+        if: ${{ inputs.require_android_sdk }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set for the runner process}"
+          test -d "${ANDROID_SDK_ROOT}"
+          test -x "${ANDROID_SDK_ROOT}/platform-tools/adb"
+          test -x "${ANDROID_SDK_ROOT}/emulator/emulator"
+          printf 'ANDROID_SDK_ROOT=%s\n' "${ANDROID_SDK_ROOT}"
+          "${ANDROID_SDK_ROOT}/platform-tools/adb" version
+          "${ANDROID_SDK_ROOT}/emulator/emulator" -version | head -n 5
+
+      - name: Verify Android target
+        if: ${{ inputs.require_android_target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${ANDROID_SDK_ROOT:?ANDROID_SDK_ROOT is not set for the runner process}"
+          adb_path="${ANDROID_SDK_ROOT}/platform-tools/adb"
+          test -x "${adb_path}"
+
+          device_count="$(${adb_path} devices | awk 'NR > 1 && $2 == "device" {count += 1} END {print count + 0}')"
+          if [[ "${device_count}" != "1" ]]; then
+            printf 'Exactly one online Android target is required; found %s.\n' \
+              "${device_count}" >&2
+            "${adb_path}" devices -l >&2
+            exit 1
+          fi
+
+          "${adb_path}" devices -l
+          printf 'android_abi=%s\n' \
+            "$("${adb_path}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+          printf 'android_sdk=%s\n' \
+            "$("${adb_path}" shell getprop ro.build.version.sdk | tr -d '\r')"
+          printf 'android_model=%s\n' \
+            "$("${adb_path}" shell getprop ro.product.model | tr -d '\r')"
+
+      - name: Verify Unity editor
+        if: ${{ inputs.require_unity_editor }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${UNITY_EDITOR:?UNITY_EDITOR is not set for the runner process}"
+          test -x "${UNITY_EDITOR}"
+          printf 'UNITY_EDITOR=%s\n' "${UNITY_EDITOR}"
+          "${UNITY_EDITOR}" -version -batchmode -quit
