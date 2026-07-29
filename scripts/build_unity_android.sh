@@ -196,7 +196,9 @@ case "${MODE}" in
         ;;
 esac
 
-"${UNITY_EDITOR}" \
+env \
+    WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" \
+    "${UNITY_EDITOR}" \
     -batchmode \
     -nographics \
     -quit \
