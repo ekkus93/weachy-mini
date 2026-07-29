@@ -247,7 +247,7 @@ uint32_t reachy_sim_abi_version(void)
 
 const char* reachy_sim_version_string(void)
 {
-    return "0.2.0-abi-contract";
+    return "0.3.0-deterministic-snapshot";
 }
 
 const char* reachy_sim_status_string(int32_t status)
