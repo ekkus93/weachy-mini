@@ -337,7 +337,12 @@ def maximum_contact_penetration(data: Any) -> float:
     return maximum
 
 
-def validate_model(config: StabilityConfig, model_path: Path, model: Any, mujoco: Any) -> list[int]:
+def validate_model(
+    config: StabilityConfig,
+    model_path: Path,
+    model: Any,
+    mujoco: Any,
+) -> list[int]:
     """Require exact source/runtime/topology/actuator identity."""
     source = config.raw["source"]
     actual_hash = file_sha256(model_path)
@@ -448,9 +453,11 @@ def monitor_step(
     mujoco.mj_energyVel(model, data)
     total_energy = float(data.energy[0] + data.energy[1])
     if not math.isfinite(total_energy):
-        raise StabilityError(
-            f"Non-finite total energy in phase {phase_name} at step {global_step}"
+        message = (
+            f"Non-finite total energy in phase {phase_name} "
+            f"at step {global_step}"
         )
+        raise StabilityError(message)
 
     metrics.completed_steps += 1
     metrics.maximum_equality_residual = max(
@@ -515,33 +522,28 @@ def monitor_step(
 def metrics_report(metrics: Metrics, timings: list[float]) -> dict[str, Any]:
     """Render deterministic JSON-compatible metrics."""
     sorted_timings = sorted(timings)
-    minimum_energy = (
-        metrics.minimum_total_energy
-        if math.isfinite(metrics.minimum_total_energy)
-        else 0.0
-    )
-    maximum_energy = (
-        metrics.maximum_total_energy
-        if math.isfinite(metrics.maximum_total_energy)
-        else 0.0
-    )
+    if math.isfinite(metrics.minimum_total_energy):
+        minimum_energy = metrics.minimum_total_energy
+    else:
+        minimum_energy = 0.0
+    if math.isfinite(metrics.maximum_total_energy):
+        maximum_energy = metrics.maximum_total_energy
+    else:
+        maximum_energy = 0.0
+    maximum_joint_violation = metrics.maximum_joint_limit_violation
+    maximum_absolute_energy = metrics.maximum_absolute_total_energy
+    median_step = statistics.median(sorted_timings) if sorted_timings else 0.0
     return {
         "completed_steps": metrics.completed_steps,
         "maximum_equality_residual": metrics.maximum_equality_residual,
-        "maximum_scalar_joint_limit_violation_radians": (
-            metrics.maximum_joint_limit_violation
-        ),
+        "maximum_scalar_joint_limit_violation_radians": maximum_joint_violation,
         "maximum_contact_penetration_metres": metrics.maximum_contact_penetration,
         "maximum_contact_count": metrics.maximum_contact_count,
         "minimum_total_energy_joules": minimum_energy,
         "maximum_total_energy_joules": maximum_energy,
-        "maximum_absolute_total_energy_joules": (
-            metrics.maximum_absolute_total_energy
-        ),
+        "maximum_absolute_total_energy_joules": maximum_absolute_energy,
         "warning_count": metrics.warning_count,
-        "median_step_microseconds": (
-            statistics.median(sorted_timings) if sorted_timings else 0.0
-        ),
+        "median_step_microseconds": median_step,
         "p95_step_microseconds": percentile(sorted_timings, 0.95),
         "maximum_step_microseconds": max(sorted_timings, default=0.0),
     }
@@ -592,9 +594,10 @@ def run_suite(
                 else:
                     blend = 1.0
                 for index, actuator_id in enumerate(actuator_ids):
-                    data.ctrl[actuator_id] = previous_targets[index] + (
-                        targets[index] - previous_targets[index]
-                    ) * blend
+                    target_delta = targets[index] - previous_targets[index]
+                    data.ctrl[actuator_id] = (
+                        previous_targets[index] + target_delta * blend
+                    )
 
                 start = time.perf_counter_ns()
                 mujoco.mj_step(model, data)
