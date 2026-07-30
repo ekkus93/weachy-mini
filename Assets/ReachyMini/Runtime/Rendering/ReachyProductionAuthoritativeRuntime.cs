@@ -55,6 +55,39 @@ namespace ReachyMini.Rendering
         public ReachyAuthoritativeRendererStatus RendererStatus =>
             renderer?.Status ?? ReachyAuthoritativeRendererStatus.Unbound;
 
+        public ulong PublishedWorkerSequence
+        {
+            get
+            {
+                return worker != null && worker.TryGetLatestSnapshot(
+                    out ReachyPublishedSimulationSnapshot snapshot)
+                        ? snapshot.State.Sequence
+                        : 0UL;
+            }
+        }
+
+        public ulong WorkerPublicationSequence
+        {
+            get
+            {
+                return worker != null && worker.TryGetLatestSnapshot(
+                    out ReachyPublishedSimulationSnapshot snapshot)
+                        ? snapshot.PublicationSequence
+                        : 0UL;
+            }
+        }
+
+        public ulong WorkerStepCount
+        {
+            get
+            {
+                return worker != null && worker.TryGetLatestSnapshot(
+                    out ReachyPublishedSimulationSnapshot snapshot)
+                        ? snapshot.Timing.TotalStepCount
+                        : 0UL;
+            }
+        }
+
         public ReachyPresentationBody[] GetCanonicalBodies()
         {
             ReachyPresentationBody[] copy =
@@ -248,19 +281,26 @@ namespace ReachyMini.Rendering
                 ReachySimAuthoritativeStateReader reader =
                     new ReachySimAuthoritativeStateReader(session);
                 ValidateLayout(reader.Layout, manifest!);
+                try
+                {
+                    worker = new ReachySimulationWorker(session, reader);
+                }
+                catch
+                {
+                    reader.Dispose();
+                    throw;
+                }
                 string[] bodyNames = new string[canonicalBodies.Length];
                 for (int index = 0; index < canonicalBodies.Length; ++index)
                 {
                     bodyNames[index] = canonicalBodies[index].BodyName;
                 }
                 poseSource = new ReachySimAuthoritativePoseSource(
-                    reader,
-                    bodyNames,
-                    ownsStateReader: true);
+                    worker,
+                    bodyNames);
                 boundPoseSource = new FaultCapturingPoseSource(poseSource);
                 renderer.BindPoseSource(boundPoseSource);
 
-                worker = new ReachySimulationWorker(session);
                 ReachySimulationControlResult startResult = worker.Start(ControlTimeout);
                 if (!startResult.IsSuccess)
                 {

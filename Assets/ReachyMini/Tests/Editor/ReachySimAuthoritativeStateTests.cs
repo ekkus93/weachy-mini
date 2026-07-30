@@ -142,6 +142,33 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void PoseSourceConsumesWorkerPublishedFrames()
+        {
+            byte[][] frames =
+            {
+                BuildPayload(4UL, 0.008, 1U, 0.4),
+                BuildPayload(5UL, 0.010, 1U, 0.5),
+            };
+            using (FakePublishedStateSource published =
+                new FakePublishedStateSource(frames))
+            using (ReachySimAuthoritativePoseSource source =
+                new ReachySimAuthoritativePoseSource(
+                    published,
+                    new[] { "base", "head" }))
+            {
+                Assert.That(source.TryGetLatestPair(out _, out _), Is.False);
+                Assert.That(
+                    source.TryGetLatestPair(
+                        out ReachyAuthoritativePoseSnapshot older,
+                        out ReachyAuthoritativePoseSnapshot newer),
+                    Is.True);
+                Assert.That(older.Sequence, Is.EqualTo(4UL));
+                Assert.That(newer.Sequence, Is.EqualTo(5UL));
+                Assert.That(newer.GetBodyPose(1).PositionX, Is.EqualTo(0.5));
+            }
+        }
+
+        [Test]
         public void PoseSourcePublishesOrderedPairsAndDiscontinuities()
         {
             byte[][] frames =

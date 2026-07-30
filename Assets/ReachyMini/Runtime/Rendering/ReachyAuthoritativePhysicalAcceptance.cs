@@ -114,6 +114,9 @@ namespace ReachyMini.Rendering
                         $"runtime={runtime.Status}, " +
                         $"simulation={runtime.SimulationState}, " +
                         $"renderer={renderer.Status}, " +
+                        $"worker_state_sequence={runtime.PublishedWorkerSequence}, " +
+                        $"worker_publication_sequence={runtime.WorkerPublicationSequence}, " +
+                        $"worker_steps={runtime.WorkerStepCount}, " +
                         $"runtime_fault={runtime.Fault}, " +
                         $"renderer_fault={renderer.Fault}.");
                     yield break;

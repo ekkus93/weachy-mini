@@ -6,6 +6,7 @@ using NUnit.Framework;
 using ReachyMini.Core;
 using ReachyMini.Interop;
 using ReachyMini.Rendering;
+using ReachyMini.Simulation;
 
 namespace ReachyMini.Tests
 {
@@ -181,6 +182,38 @@ namespace ReachyMini.Tests
                 }
                 Marshal.FreeHGlobal(Pointer);
                 Pointer = IntPtr.Zero;
+            }
+        }
+
+        private sealed class FakePublishedStateSource :
+            IReachyPublishedAuthoritativeStateSource,
+            IDisposable
+        {
+            private readonly FakeStateReader reader;
+
+            internal FakePublishedStateSource(byte[][] frames)
+            {
+                reader = new FakeStateReader(frames);
+            }
+
+            public ReachySimAuthoritativeStateLayout AuthoritativeStateLayout =>
+                reader.Layout;
+
+            public ReachySimAuthoritativeStateFrame CreateAuthoritativeStateFrame()
+            {
+                return reader.CreateFrame();
+            }
+
+            public bool TryCaptureLatestAuthoritativeState(
+                ReachySimAuthoritativeStateFrame destination)
+            {
+                reader.Capture(destination);
+                return true;
+            }
+
+            public void Dispose()
+            {
+                reader.Dispose();
             }
         }
 

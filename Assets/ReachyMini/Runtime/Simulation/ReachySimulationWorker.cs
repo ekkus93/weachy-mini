@@ -155,7 +155,8 @@ namespace ReachyMini.Simulation
         }
     }
 
-    public sealed class ReachySimulationWorker : IDisposable
+    public sealed class ReachySimulationWorker : IDisposable,
+        IReachyPublishedAuthoritativeStateSource
     {
         private const int CommandHeaderSize = 24;
         private const int MaximumCatchUpStepsPerCycle = 8;
@@ -165,7 +166,10 @@ namespace ReachyMini.Simulation
             ProjectMetadata.InitialPhysicsTimestepSeconds;
 
         private readonly object controlGate = new object();
+        private readonly object authoritativeStateGate = new object();
         private readonly ReachySimSession session;
+        private readonly IReachySimAuthoritativeStateReader? authoritativeStateReader;
+        private readonly ReachySimAuthoritativeStateFrame? authoritativeStateFrame;
         private readonly BoundedCommandQueue commandQueue;
         private readonly SnapshotPublicationBuffer snapshotBuffer =
             new SnapshotPublicationBuffer();
@@ -187,6 +191,7 @@ namespace ReachyMini.Simulation
         private ReachySimulationControlResult? completedRequestResult;
         private bool disposed;
         private bool unmanagedBuffersFreed;
+        private bool hasAuthoritativeState;
 
         private ulong publicationSequence;
         private ulong totalStepCount;
@@ -203,9 +208,43 @@ namespace ReachyMini.Simulation
             ReachySimSession session,
             int commandQueueCapacity = 64,
             int maximumCommandBytes = 1024 * 1024)
+            : this(
+                session,
+                authoritativeStateReader: null,
+                commandQueueCapacity,
+                maximumCommandBytes,
+                useAuthoritativeStateReader: false)
+        {
+        }
+
+        public ReachySimulationWorker(
+            ReachySimSession session,
+            IReachySimAuthoritativeStateReader authoritativeStateReader,
+            int commandQueueCapacity = 64,
+            int maximumCommandBytes = 1024 * 1024)
+            : this(
+                session,
+                authoritativeStateReader ??
+                    throw new ArgumentNullException(nameof(authoritativeStateReader)),
+                commandQueueCapacity,
+                maximumCommandBytes,
+                useAuthoritativeStateReader: true)
+        {
+        }
+
+        private ReachySimulationWorker(
+            ReachySimSession session,
+            IReachySimAuthoritativeStateReader? authoritativeStateReader,
+            int commandQueueCapacity,
+            int maximumCommandBytes,
+            bool useAuthoritativeStateReader)
         {
             this.session = session ??
                 throw new ArgumentNullException(nameof(session));
+            this.authoritativeStateReader = useAuthoritativeStateReader
+                ? authoritativeStateReader
+                : null;
+            authoritativeStateFrame = this.authoritativeStateReader?.CreateFrame();
             if (commandQueueCapacity <= 0)
             {
                 throw new ArgumentOutOfRangeException(
@@ -255,6 +294,43 @@ namespace ReachyMini.Simulation
                 {
                     return fault;
                 }
+            }
+        }
+
+        public ReachySimAuthoritativeStateLayout AuthoritativeStateLayout =>
+            authoritativeStateReader?.Layout ??
+            throw new InvalidOperationException(
+                "This simulation worker was not configured to publish authoritative state.");
+
+        public ReachySimAuthoritativeStateFrame CreateAuthoritativeStateFrame()
+        {
+            return new ReachySimAuthoritativeStateFrame(AuthoritativeStateLayout);
+        }
+
+        public bool TryCaptureLatestAuthoritativeState(
+            ReachySimAuthoritativeStateFrame destination)
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+            ReachySimAuthoritativeStateFrame? source = authoritativeStateFrame;
+            ReachySimAuthoritativeStateLayout layout = AuthoritativeStateLayout;
+            if (!layout.Matches(destination.Layout) || source == null)
+            {
+                throw new ArgumentException(
+                    "The destination frame was created for a different authoritative state layout.",
+                    nameof(destination));
+            }
+
+            lock (authoritativeStateGate)
+            {
+                if (!hasAuthoritativeState)
+                {
+                    return false;
+                }
+                CopyAuthoritativeState(source, destination);
+                return true;
             }
         }
 
@@ -513,6 +589,7 @@ namespace ReachyMini.Simulation
                     $"Simulation worker shutdown failed: {shutdownResult.Error.Code}: {shutdownResult.Error.Message}");
             }
 
+            authoritativeStateReader?.Dispose();
             session.Dispose();
             lock (controlGate)
             {
@@ -1120,6 +1197,31 @@ namespace ReachyMini.Simulation
                     stateBuffer);
             ReachySimStateSnapshot state =
                 ReachySimStateSnapshot.FromNative(nativeState);
+
+            IReachySimAuthoritativeStateReader? stateReader =
+                authoritativeStateReader;
+            ReachySimAuthoritativeStateFrame? stateFrame =
+                authoritativeStateFrame;
+            if (stateReader != null && stateFrame != null)
+            {
+                lock (authoritativeStateGate)
+                {
+                    stateReader.Capture(stateFrame);
+                    if (stateFrame.Sequence != state.Sequence ||
+                        stateFrame.SimulationTime != state.SimulationTime)
+                    {
+                        EnterNativeFault(
+                            "authoritative state publication",
+                            ControlError(
+                                ReachySimErrorCode.NumericFailure,
+                                ReachySimRecoverability.RecreateHandle,
+                                "Legacy and authoritative state captures disagree on sequence or simulation time."));
+                        return false;
+                    }
+                    hasAuthoritativeState = true;
+                }
+            }
+
             solverWarningCount = CountNewSolverWarningEpisodes(
                 solverWarningCount,
                 previousHealthFlags,
@@ -1148,6 +1250,43 @@ namespace ReachyMini.Simulation
                     timing);
             snapshotBuffer.Publish(published);
             return true;
+        }
+
+        private static void CopyAuthoritativeState(
+            ReachySimAuthoritativeStateFrame source,
+            ReachySimAuthoritativeStateFrame destination)
+        {
+            destination.Sequence = source.Sequence;
+            destination.SimulationTime = source.SimulationTime;
+            destination.ContinuityId = source.ContinuityId;
+            destination.JointCount = source.JointCount;
+            destination.ContactCount = source.ContactCount;
+            destination.HealthFlags = source.HealthFlags;
+            destination.CalibrationProfileId = source.CalibrationProfileId;
+            destination.WarningCount = source.WarningCount;
+            destination.ConstraintCount = source.ConstraintCount;
+            destination.EqualityConstraintCount = source.EqualityConstraintCount;
+            destination.MaximumConstraintResidual = source.MaximumConstraintResidual;
+            destination.MaximumEqualityConstraintResidual =
+                source.MaximumEqualityConstraintResidual;
+            Array.Copy(
+                source.QposStorage,
+                destination.QposStorage,
+                source.QposCount);
+            Array.Copy(
+                source.QvelStorage,
+                destination.QvelStorage,
+                source.QvelCount);
+            for (int index = 0; index < source.ActuatorObservationCount; ++index)
+            {
+                destination.SetActuatorObservation(
+                    index,
+                    source.GetActuatorObservation(index));
+            }
+            for (int index = 0; index < source.BodyPoseCount; ++index)
+            {
+                destination.SetBodyPose(index, source.GetBodyPose(index));
+            }
         }
 
         internal static ulong CountNewSolverWarningEpisodes(

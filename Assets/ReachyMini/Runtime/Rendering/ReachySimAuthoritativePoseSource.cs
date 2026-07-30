@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using ReachyMini.Interop;
 using ReachyMini.Presentation;
+using ReachyMini.Simulation;
 
 namespace ReachyMini.Rendering
 {
@@ -11,8 +12,10 @@ namespace ReachyMini.Rendering
         IReachyAuthoritativePoseSource,
         IDisposable
     {
-        private readonly IReachySimAuthoritativeStateReader stateReader;
+        private readonly IReachySimAuthoritativeStateReader? stateReader;
+        private readonly IReachyPublishedAuthoritativeStateSource? publishedStateSource;
         private readonly bool ownsStateReader;
+        private readonly ReachySimAuthoritativeStateLayout layout;
         private readonly string[] bodyNames;
         private readonly ReachySimAuthoritativeStateFrame stateFrame;
         private readonly ReachyAuthoritativePoseBuffer poseBuffer =
@@ -29,6 +32,7 @@ namespace ReachyMini.Rendering
             : this(
                 new ReachySimAuthoritativeStateReader(
                     session ?? throw new ArgumentNullException(nameof(session))),
+                publishedStateSource: null,
                 canonicalBodyNames,
                 ownsStateReader: true)
         {
@@ -38,20 +42,52 @@ namespace ReachyMini.Rendering
             IReachySimAuthoritativeStateReader stateReader,
             IReadOnlyList<string> canonicalBodyNames,
             bool ownsStateReader = false)
+            : this(
+                stateReader ?? throw new ArgumentNullException(nameof(stateReader)),
+                publishedStateSource: null,
+                canonicalBodyNames,
+                ownsStateReader)
         {
-            this.stateReader = stateReader ??
-                throw new ArgumentNullException(nameof(stateReader));
+        }
+
+        public ReachySimAuthoritativePoseSource(
+            IReachyPublishedAuthoritativeStateSource publishedStateSource,
+            IReadOnlyList<string> canonicalBodyNames)
+            : this(
+                stateReader: null,
+                publishedStateSource ??
+                    throw new ArgumentNullException(nameof(publishedStateSource)),
+                canonicalBodyNames,
+                ownsStateReader: false)
+        {
+        }
+
+        private ReachySimAuthoritativePoseSource(
+            IReachySimAuthoritativeStateReader? stateReader,
+            IReachyPublishedAuthoritativeStateSource? publishedStateSource,
+            IReadOnlyList<string> canonicalBodyNames,
+            bool ownsStateReader)
+        {
+            if ((stateReader == null) == (publishedStateSource == null))
+            {
+                throw new ArgumentException(
+                    "Exactly one authoritative state source must be provided.");
+            }
+            this.stateReader = stateReader;
+            this.publishedStateSource = publishedStateSource;
             this.ownsStateReader = ownsStateReader;
+            layout = stateReader?.Layout ??
+                publishedStateSource!.AuthoritativeStateLayout;
             if (canonicalBodyNames == null)
             {
                 throw new ArgumentNullException(nameof(canonicalBodyNames));
             }
-            if (canonicalBodyNames.Count != stateReader.Layout.BodyPoseCount)
+            if (canonicalBodyNames.Count != layout.BodyPoseCount)
             {
                 throw new ArgumentException(
                     $"The canonical body-name count {canonicalBodyNames.Count} " +
-                    $"does not match the native body-pose count " +
-                    $"{stateReader.Layout.BodyPoseCount}.",
+                    $"does not match the authoritative body-pose count " +
+                    $"{layout.BodyPoseCount}.",
                     nameof(canonicalBodyNames));
             }
 
@@ -67,10 +103,11 @@ namespace ReachyMini.Rendering
                 }
                 bodyNames[index] = name;
             }
-            stateFrame = stateReader.CreateFrame();
+            stateFrame = stateReader?.CreateFrame() ??
+                publishedStateSource!.CreateAuthoritativeStateFrame();
         }
 
-        public ulong ModelHash => stateReader.Layout.ModelHash;
+        public ulong ModelHash => layout.ModelHash;
 
         public int BodyCount => bodyNames.Length;
 
@@ -124,7 +161,20 @@ namespace ReachyMini.Rendering
             out ReachyAuthoritativePoseSnapshot newer)
         {
             ThrowIfDisposed();
-            stateReader.Capture(stateFrame);
+            if (publishedStateSource != null)
+            {
+                if (!publishedStateSource.TryCaptureLatestAuthoritativeState(
+                        stateFrame))
+                {
+                    older = null!;
+                    newer = null!;
+                    return false;
+                }
+            }
+            else
+            {
+                stateReader!.Capture(stateFrame);
+            }
             if (!hasPublishedState ||
                 stateFrame.Sequence != lastSequence ||
                 stateFrame.SimulationTime != lastSimulationTime ||
@@ -145,7 +195,7 @@ namespace ReachyMini.Rendering
             disposed = true;
             if (ownsStateReader)
             {
-                stateReader.Dispose();
+                stateReader?.Dispose();
             }
             GC.SuppressFinalize(this);
         }
