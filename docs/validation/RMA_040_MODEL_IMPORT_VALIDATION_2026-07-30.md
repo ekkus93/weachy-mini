@@ -1,7 +1,8 @@
 # RMA-040 official-model import validation
 
 **Date:** 2026-07-30  
-**Validated implementation commit:** `e1b1b64fedfb630b153a9f5e69df27796822590f`
+**Validated implementation commit:** `e1b1b64fedfb630b153a9f5e69df27796822590f`  
+**Checklist closure commit:** `86c9b965b9217ad901b07000c80c5bbbc63896fc`
 
 ## Scope
 
@@ -58,6 +59,10 @@ Self-hosted Unity/Android run `30567896601` passed on the same exact commit,
 including production ARM64 MuJoCo staging, Unity tests, ARM64/API-26 IL2CPP
 build/verification, installed LG G6 lifecycle acceptance, physical authoritative
 rendering, evidence uploads, and APK upload.
+
+The direct closure-stamp commit triggers the final exact-head hosted and
+self-hosted validation. The repository CI status records are authoritative for
+that final commit.
 
 ## Result
 
