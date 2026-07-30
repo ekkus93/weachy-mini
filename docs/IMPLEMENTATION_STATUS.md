@@ -2,7 +2,7 @@
 
 **Updated:** 2026-07-29  
 **Branch:** `master`  
-**Current implementation series:** Phase 6 Unity rendering; RMA-050 through RMA-052 implemented at the presentation-contract level, with production MuJoCo pose integration and physical acceptance still open
+**Current implementation series:** Production MuJoCo backend connected to the public simulation ABI and physically validated; ordered state-payload publication and Unity production pose binding remain open
 
 ## Repository rules in force
 
@@ -33,7 +33,7 @@ GitHub Actions contains:
 
 - hosted Android SDK installation, Android Lint, Java warnings-as-errors, and tests;
 - hosted Unity test/APK/AAB validation through a manual GameCI workflow after Unity secrets are configured;
-- hosted Android ARM64 MuJoCo cross-compilation;
+- hosted Android ARM64 MuJoCo and production-`reachy_sim` cross-compilation;
 - a trusted self-hosted `kawa` runner for local Unity validation and physical-phone jobs;
 - physical-phone selection that ignores emulator targets and requires the sole connected ARM64 hardware device;
 - stable issue-based status endpoints for hosted quality, local Unity, and Android MuJoCo feasibility workflows.
@@ -44,7 +44,7 @@ The two-machine Unity/Android reproducibility acceptance criterion remains open 
 
 First-party C, Java, managed, Python, shell, Android, and GitHub Actions workflow warning/lint policies are configured. The normal GitHub Actions workflow runs actionlint, Ruff lint/format, ShellCheck, native warnings-as-errors and sanitizer builds, managed analyzer/native-lifecycle tests, Android Lint, Java `-Werror`, Android tests, static repository validation, pinned Reachy topology and parameter-audit validation, desktop MuJoCo model loading, and desktop reference-trace generation.
 
-Hosted run `30498864452` passed all static, native, managed, Android, and official-model jobs for commit `501c7be0614dc19046d65abae9c787e560e44e7f`.
+Hosted run `30508016954` passed all static, native, managed, Android, and official-model jobs for commit `78105298959a4d6d37bd5ac6dc1838a331af3dd9`.
 
 ### RMA-010/RMA-011 — Third-party inventory and Reachy provenance
 
@@ -54,9 +54,9 @@ Release-package inventory reconciliation and the in-app licenses screen remain o
 
 ### RMA-020 — MuJoCo Android ARM64 build
 
-MuJoCo 3.9.0 is pinned at commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. The Android ARM64 build preserves upstream source, isolates third-party warnings, records compiler/provenance information, and produces an API-26 `arm64-v8a` shared library and probe executable. A first-party API-26 compatibility shim supplies checked `aligned_alloc` behavior through `posix_memalign` without modifying MuJoCo source.
+MuJoCo 3.9.0 is pinned at commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. The Android ARM64 build preserves upstream source, isolates third-party warnings, records compiler/provenance information, and produces API-26 `arm64-v8a` `libmujoco.so`, production `libreachy_sim.so`, a full-model MJB compiler, and probe executables. A first-party API-26 compatibility shim supplies checked `aligned_alloc` behavior through `posix_memalign` without modifying MuJoCo source.
 
-Android feasibility run `30498720239` built and verified the AArch64 artifact, uploaded it, loaded `libmujoco.so` on the LG G6, and completed the physical probe job successfully.
+Android feasibility run `30507410229` built and verified the AArch64 artifacts, uploaded them, loaded both shared libraries on the LG G6, compiled the complete pinned Reachy package to MJB using the same MuJoCo runtime, and completed the production public-ABI probe successfully.
 
 ### RMA-021 — Minimal constrained-mechanism physical test
 
@@ -75,9 +75,26 @@ On LG G6 `LGH87250967ab9` running Android 8.0/API 26, run `30498720239` complete
 
 The measured result leaves substantial median and p95 execution headroom relative to a 2,000-microsecond 500 Hz step budget on this fixture. It does not by itself establish full-model 500 Hz headroom under all application workloads.
 
-### RMA-030/RMA-031 — Native ABI and managed interop
+### RMA-030/RMA-031 — Native ABI, production MuJoCo backend, and managed interop
 
-The repository contains a versioned explicit-width C ABI, structured recoverability, stale-handle and bounded-buffer checks, native contract tests, exact managed layouts, deterministic handle ownership, typed managed errors, and native lifecycle stress coverage. The public C ABI is version 2 after the snapshot-header expansion. The production backend still fails visibly until the real MuJoCo backend is connected to the application ABI; the contract backend is test-only.
+The repository contains a versioned explicit-width C ABI, structured recoverability, stale-handle and bounded-buffer checks, native contract tests, exact managed layouts, deterministic handle ownership, typed managed errors, and native lifecycle stress coverage. The public C ABI remains version 2; additive model-format flags and an exact actuator-command record do not change existing layouts.
+
+Production builds can now select a real MuJoCo backend instead of the explicit unavailable backend. One handle owns `mjModel`, `mjData`, fixed-step sequence state, validated command sequencing, pending finite-duration wrench state, warning health, and preallocated integration-state buffers. The backend supports self-contained XML fixtures and version-matched MJB input; the official multi-file Reachy package is compiled to MJB rather than pretending that unresolved XML assets are self-contained.
+
+Command batches are fully validated before mutation and are never partially applied or silently clamped. Wrenches target non-world bodies for an explicit whole-step duration. MuJoCo warnings and non-finite state fail visibly. Neutral reset is implemented; sleep reset succeeds only when the model provides a named sleep/rest keyframe and otherwise returns `UNSUPPORTED` rather than fabricating a pose.
+
+Production snapshots are model-, calibration-, timestep-, format-, sequence-, command-, reset-, health-, and pending-wrench-bound. They preserve `mjSTATE_INTEGRATION`, reject warning-faulted or incompatible candidates, and restore transactionally: a failed candidate is rolled back instead of becoming partially live state. The backend behavior is documented in [Production MuJoCo backend](architecture/PRODUCTION_MUJOCO_BACKEND.md).
+
+Android feasibility run `30507410229`, physical job `90760316016`, exercised the public production ABI on the complete Reachy MJB and reported:
+
+- MuJoCo `3.9.0` and backend version `0.3.0-deterministic-snapshot`;
+- 18 non-world bodies, 16 joints, and 9 actuators;
+- all six public capability flags present;
+- 100 fixed steps and sequence 100;
+- `0.20000000000000015` simulated seconds;
+- byte-identical snapshot restore/replay;
+- explicit `unsupported` sleep reset because the pinned model has no named sleep keyframe;
+- successful neutral reset and clean destruction.
 
 Final caller-output-pointer validation and per-handle operation serialization or a typed `HANDLE_BUSY` result remain open safety-hardening items.
 
@@ -91,7 +108,7 @@ Hosted native/managed gates and the `kawa` Unity tests passed the implementation
 
 Named sleep/rest and neutral-awake reset identifiers, snapshot format version 1, model identity, calibration-profile identity, immutable managed snapshot ownership, compatibility rejection, and deterministic replay tests are implemented. The native ABI is version 2; snapshot serialization is independently versioned.
 
-The contract and failure behavior are documented in [Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md). The deterministic test backend has zero replay tolerance: recaptured state and snapshot bytes must match exactly after restore and identical replay. Production MuJoCo snapshot payloads remain part of the real application backend and must not be inferred from the test backend.
+The contract and failure behavior are documented in [Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md). The deterministic test backend has zero replay tolerance. The production MuJoCo backend now provides its own private versioned payload and also requires byte-identical recapture after restore and identical replay. The pinned upstream model currently provides no named sleep/rest keyframe, so the production backend reports that reset as unsupported rather than substituting guessed values.
 
 ### RMA-040 — Official Reachy Mini model integrity
 
@@ -142,7 +159,7 @@ The optional disabled-by-default `ReachyPresentationDebugOverlay` is generated f
 
 Automated acceptance coverage includes 30/60 FPS trajectory equivalence, reset discontinuity handling, head and antenna alignment, canonical generated mapping, prohibited-writer rejection, forced transform-drift detection, and no managed allocation in the steady-state render loop.
 
-The production `reachy_sim` backend still does not publish the ordered MuJoCo body-pose payload required by `IReachyAuthoritativePoseSource`. The renderer therefore remains visibly unbound in the generated prefab. Physical sleep/wake, head, Stewart-link, and antenna acceptance remains open and must not be replaced by test fixtures, cosmetic animation, or a hidden kinematic fallback.
+The production backend is now real, but ABI version 2 still publishes only `ReachySimStateHeader`; it does not yet publish ordered `qpos`, `qvel`, actuator observations, or MuJoCo body poses. The renderer therefore remains visibly unbound in the generated prefab. Physical sleep/wake, head, Stewart-link, and antenna acceptance remains open and must not be replaced by test fixtures, cosmetic animation, or a hidden kinematic fallback.
 
 ### Local Unity/Android validation
 
@@ -156,7 +173,9 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 - Java `-Xlint:all -Werror`, Android Lint, Gradle tests, and pinned Android SDK provisioning;
 - first-party native warnings-as-errors and ASan/UBSan builds/tests;
 - managed analyzers, 1,000-cycle native handle lifecycle coverage, and deterministic snapshot replay;
-- ARM64/API-26 MuJoCo build, AArch64/provenance verification, artifact upload, and physical library execution;
+- ARM64/API-26 MuJoCo and production-`reachy_sim` builds, AArch64/provenance verification, artifact upload, and physical library execution;
+- official multi-file Reachy package compilation to a version-matched MJB on the physical phone;
+- production public-ABI create, capabilities, state, commands, wrench, step, snapshot/restore/replay, reset, and destroy coverage;
 - 900,000-step constrained-model physical report and structured malformed-model failure;
 - official Reachy model desktop and Android load/step evidence with matching compiled counts;
 - source-linked machine-readable mechanical-parameter fidelity audit;
@@ -170,8 +189,8 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 ## Open hard gates
 
 - RMA-022 physical installation/launch of the Unity IL2CPP APK with real native-wrapper initialization, failure visibility, pause/resume, and shutdown validation;
-- connection of the production `reachy_sim` ABI backend to real MuJoCo model/state/command/snapshot operations;
-- publication of the ordered production MuJoCo body-pose payload and physical RMA-051/RMA-052 motion acceptance;
+- a versioned ordered production state payload containing `qpos`, `qvel`, actuator observations, body identity/order, body poses, continuity identity, and solver diagnostics;
+- managed parsing and publication of that payload through `IReachyAuthoritativePoseSource`, followed by physical RMA-051/RMA-052 motion acceptance;
 - caller-output-pointer validation and per-handle concurrency safety in the native ABI;
 - development APK and release AAB builds;
 - two-machine reproducible build evidence;
