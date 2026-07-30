@@ -36,6 +36,34 @@ All nine active position actuators use the upstream `chosen_actuator` class. Tha
 | `fitted` | Estimated from a recorded dataset with a fitting method and held-out validation. None are claimed in this baseline. |
 | `placeholder` | Generic, intentionally incomplete, explicitly uncertain, or missing physical behavior. |
 
+## Machine-readable diagnostics contract
+
+The audit schema is version `2` and identifies the contract as
+`rma041_parameter_fidelity_v2`. Its `diagnostics` object is intentionally small
+and display-ready: it carries the profile ID, status, warning severity, title,
+fidelity classification, calibration flag, summary, source-model SHA-256, and
+the classifications that block a calibrated claim. CI requires that payload to
+be an exact projection of the authoritative `fidelity` and `source` fields, so a
+future diagnostics screen cannot silently contradict the audit.
+
+The current payload reports `uncalibrated_upstream_baseline` with warning
+severity and `calibrated=false`.
+
+## Structured provenance and uncertainty binding
+
+`joint_limit_provenance` binds every range decision to the pinned MJCF commit,
+model SHA-256, `joint.range` attribute, and radian units. It separately lists
+explicit hinge ranges, unrestricted passive ball joints, and antenna joints that
+lack encoded hard stops. Each joint points back to the applicable policy group
+through `range_provenance_id`. No manufacturer specification or measurement
+report is claimed.
+
+`source_uncertainties` binds each upstream cautionary comment to its exact scope:
+the three retained actuator-default classes and the collision-mesh selection.
+For actuator classes, full source validation requires the comment to remain
+inside the matching `<default class=...>` block; moving the same text elsewhere
+no longer satisfies the audit.
+
 ## Source-derived geometry and inertias
 
 The MJCF states that it was generated using `onshape-to-robot` and records the originating Onshape document. Body hierarchy, transforms, visual meshes, collision meshes, masses, centers of mass, and full inertia tensors are therefore classified as `cad_derived`.
@@ -112,6 +140,14 @@ The machine-readable audit sets:
 ```
 
 CI rejects a calibrated label while any parameter remains classified as `placeholder`. A future calibrated profile must identify its robot, model hash, simulator version, dataset hashes, measurement conditions, fitted parameters, and held-out validation evidence.
+
+## Validation policy
+
+The validator now fails closed when a required classification or provenance ID
+is missing, when a parameter claims manufacturer, measured, or fitted evidence
+that the audit explicitly records as absent, when a source comment is reassigned
+to another model, when the diagnostics payload drifts from fidelity data, or when
+the pinned source moves an actuator uncertainty comment outside its class block.
 
 ## Required follow-on evidence
 
