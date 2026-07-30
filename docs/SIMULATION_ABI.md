@@ -13,7 +13,10 @@ state, and snapshot semantics are specified in
 arbitration and caller-owned output rules are specified in
 [Native handle concurrency and output ownership](architecture/NATIVE_HANDLE_CONCURRENCY.md).
 The managed P/Invoke, layout, ownership, error, and threading rules are specified
-in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md).
+in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md). The
+fixed-step scheduler, command boundary, immutable publication, diagnostics,
+fault, and lifecycle rules are specified in
+[Authoritative simulation worker](architecture/AUTHORITATIVE_SIMULATION_WORKER.md).
 
 ## Versioning
 
@@ -181,7 +184,12 @@ The native and managed suites verify:
 - deterministic same-handle `HANDLE_BUSY` for every public operation;
 - independent progress on another handle;
 - unchanged outputs on busy and undersized paths;
-- eight-thread contention with exact success/busy accounting.
+- eight-thread contention with exact success/busy accounting;
+- authoritative worker progress under 30 Hz, 60 Hz, and stalled readers;
+- visible bounded-queue overflow, pause/reset/resume handshakes, and no resume
+  catch-up burst;
+- over-budget native-step timing and deadline-miss publication;
+- step-boundary-only command application and retained typed command failure.
 
 The first-party contract runs under strict warnings-as-errors, ASan, and UBSan on
 desktop CI. Pinned Android ARM64 cross-compilation, physical native probing,
