@@ -413,9 +413,9 @@ namespace ReachyMini.Core.Tests
             ReachySimSession session = createResult.Session ??
                 throw new InvalidOperationException(
                     $"Published-state worker create failed: {createResult.Error.Code}: {createResult.Error.Message}");
-            SyntheticAuthoritativeStateReader reader =
-                new SyntheticAuthoritativeStateReader();
-
+            using (SyntheticAuthoritativeStateReader reader =
+                new SyntheticAuthoritativeStateReader())
+            {
             using (ReachySimulationWorker worker =
                 new ReachySimulationWorker(session, reader))
             {
@@ -467,6 +467,7 @@ namespace ReachyMini.Core.Tests
             }
 
             AssertEqual(true, reader.IsDisposed, "worker owns authoritative reader");
+            }
         }
 
         private static void TestAuthoritativeSimulationWorkerSnapshots()
