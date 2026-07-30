@@ -1,0 +1,31 @@
+name: RMA-033 Checklist Layout Fix
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma033-layout-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Move completion evidence into RMA-033
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwYXRoID0gUGF0aCgiZG9jcy9SRUFDSFlfTUlOSV9BTkRST0lEX0RJR0lUQUxfVFdJTl9UT0RPLm1kIikKdGV4dCA9IHBhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCnN0YXJ0ID0gdGV4dC5pbmRleCgiIyMgUk1BLTAzMyDigJQgQWRkIHNuYXBzaG90cyBhbmQgZGV0ZXJtaW5pc3RpYyByZXNldCIpCnJtYTA0MCA9IHRleHQuaW5kZXgoIiMjIFJNQS0wNDAg4oCUIExvYWQgdGhlIG9mZmljaWFsIFJlYWNoeSBNaW5pIE1KQ0YgYmFzZWxpbmUiLCBzdGFydCkKc2VnbWVudCA9IHRleHRbc3RhcnQ6cm1hMDQwXQpldmlkZW5jZV9tYXJrZXIgPSAiKipDb21wbGV0aW9uIGV2aWRlbmNlKipcblxuIgpldmlkZW5jZV9zdGFydCA9IHNlZ21lbnQuaW5kZXgoZXZpZGVuY2VfbWFya2VyKQpwaGFzZV9tYXJrZXIgPSAiLS0tXG5cbiMgUGhhc2UgNSDigJQgUmVhY2h5IG1vZGVsIGltcG9ydCBhbmQgaW50ZWdyaXR5IGdhdGVcblxuIgpwaGFzZV9zdGFydCA9IHNlZ21lbnQuaW5kZXgocGhhc2VfbWFya2VyKQppZiBldmlkZW5jZV9zdGFydCA8IHBoYXNlX3N0YXJ0OgogICAgcmFpc2UgU3lzdGVtRXhpdCgiUk1BLTAzMyBldmlkZW5jZSBpcyBhbHJlYWR5IGJlZm9yZSB0aGUgUGhhc2UgNSBzZXBhcmF0b3IiKQpwcmVmaXggPSBzZWdtZW50WzpwaGFzZV9zdGFydF0ucnN0cmlwKCkKZXZpZGVuY2UgPSBzZWdtZW50W2V2aWRlbmNlX3N0YXJ0Ol0uc3RyaXAoKQpyZWJ1aWx0ID0gcHJlZml4ICsgIlxuXG4iICsgZXZpZGVuY2UgKyAiXG5cbiIgKyBwaGFzZV9tYXJrZXIKdXBkYXRlZCA9IHRleHRbOnN0YXJ0XSArIHJlYnVpbHQgKyB0ZXh0W3JtYTA0MDpdCmNoZWNrID0gdXBkYXRlZFtzdGFydDp1cGRhdGVkLmluZGV4KCIjIyBSTUEtMDQwIOKAlCBMb2FkIHRoZSBvZmZpY2lhbCBSZWFjaHkgTWluaSBNSkNGIGJhc2VsaW5lIiwgc3RhcnQpXQppZiBjaGVjay5pbmRleChldmlkZW5jZV9tYXJrZXIpID4gY2hlY2suaW5kZXgocGhhc2VfbWFya2VyKToKICAgIHJhaXNlIFN5c3RlbUV4aXQoIlJNQS0wMzMgZXZpZGVuY2Ugd2FzIG5vdCBtb3ZlZCBiZWZvcmUgUGhhc2UgNSIpCnBhdGgud3JpdGVfdGV4dCh1cGRhdGVkLCBlbmNvZGluZz0idXRmLTgiKQo=' | base64 --decode > /tmp/rma033_layout.py
+          python3 /tmp/rma033_layout.py
+          git rm .github/workflows/rma033-layout-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git commit -m "RMA-033: place completion evidence correctly"
+          git push origin HEAD:master
