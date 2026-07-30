@@ -17,9 +17,9 @@ on:
         default: true
         type: boolean
       install_physical_device:
-        description: Install and launch the APK on the sole connected physical ARM64 device
+        description: Install, launch, and run authoritative rendering acceptance
         required: true
-        default: false
+        default: true
         type: boolean
 
 permissions:
@@ -162,6 +162,12 @@ jobs:
           REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
         run: bash scripts/prepare_reachy_unity_presentation.sh
 
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
       - name: Run Unity tests
         id: unity_tests
         if: ${{ github.event_name == 'push' || inputs.run_unity_tests }}
@@ -191,66 +197,22 @@ jobs:
           set -euo pipefail
           test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
-      - name: Select physical ARM64 Android device
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device }}
+      - name: Install and run authoritative rendering acceptance
+        id: physical_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
         shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t physical_serials < <(
-            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
-          )
-          arm64_serials=()
-          for serial in "${physical_serials[@]}"; do
-            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
-            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
-            printf 'physical_device=%s abi=%s sdk=%s\n' "${serial}" "${abi}" "${sdk}"
-            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && \
-               (( sdk >= 26 )); then
-              arm64_serials+=("${serial}")
-            fi
-          done
-          if [[ "${#arm64_serials[@]}" -ne 1 ]]; then
-            printf 'Exactly one physical arm64-v8a device at API 26 or newer is required; found %s.\n' \
-              "${#arm64_serials[@]}" >&2
-            adb devices -l >&2
-            exit 1
-          fi
-          printf 'DEVICE_SERIAL=%s\n' "${arm64_serials[0]}" >> "${GITHUB_ENV}"
+        env:
+          UNITY_AUTHORITATIVE_REPORT_DIR: ${{ runner.temp }}/unity-authoritative-device-report
+        run: bash scripts/run_unity_authoritative_rendering_acceptance_android.sh
 
-      - name: Install and launch physical-device APK
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          apk_path='Builds/Android/weachy-mini-device-arm64-api26.apk'
-          package_name='com.ekkus.weachymini'
-          adb -s "${DEVICE_SERIAL}" install -r "${apk_path}"
-          adb -s "${DEVICE_SERIAL}" shell pm path "${package_name}"
-          adb -s "${DEVICE_SERIAL}" shell monkey \
-            -p "${package_name}" \
-            -c android.intent.category.LAUNCHER \
-            1
-          sleep 5
-          adb -s "${DEVICE_SERIAL}" shell pidof "${package_name}"
-
-      - name: Capture physical-device diagnostics after failure
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device && failure() }}
-        shell: bash
-        run: |
-          set +e
-          if [[ -n "${DEVICE_SERIAL:-}" ]]; then
-            adb -s "${DEVICE_SERIAL}" logcat -d \
-              > "${RUNNER_TEMP}/android-device-logcat.txt"
-          fi
-
-      - name: Upload physical-device diagnostics
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.install_physical_device && failure() }}
+      - name: Upload authoritative rendering evidence
+        if: ${{ always() && steps.physical_acceptance.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
-          name: local-android-device-failure-${{ github.sha }}
-          path: ${{ runner.temp }}/android-device-logcat.txt
+          name: unity-authoritative-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/unity-authoritative-device-report
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 30
 
       - name: Upload ARM64 API-26 device APK
         if: ${{ success() && (github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device) }}

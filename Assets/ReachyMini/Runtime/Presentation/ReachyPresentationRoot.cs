@@ -68,6 +68,11 @@ namespace ReachyMini.Presentation
             TryConfigureAuthoritativeRenderer();
         }
 
+        public ReachyPresentationBody[] GetCanonicalBodies()
+        {
+            return BuildCanonicalBodies(requireComplete: true);
+        }
+
         internal void TryConfigureAuthoritativeRenderer()
         {
             if (bodyCount <= 0)
@@ -89,6 +94,48 @@ namespace ReachyMini.Presentation
             }
 
             ReachyPresentationBody[] canonicalBodies =
+                BuildCanonicalBodies(requireComplete: true);
+            ReachyAuthoritativeRenderer renderer =
+                GetComponent<ReachyAuthoritativeRenderer>();
+            if (renderer == null)
+            {
+                renderer = gameObject.AddComponent<ReachyAuthoritativeRenderer>();
+            }
+            renderer.ConfigureBodies(canonicalBodies);
+            if (!renderer.ValidateAuthoritativeStructure())
+            {
+                throw new InvalidOperationException(
+                    $"Generated authoritative renderer is invalid: " +
+                    $"{renderer.Fault}");
+            }
+            renderer.enabled = false;
+        }
+
+        private void Start()
+        {
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
+            TryConfigureAuthoritativeRenderer();
+            if (GetComponent<ReachyProductionAuthoritativeRuntime>() == null)
+            {
+                gameObject.AddComponent<ReachyProductionAuthoritativeRuntime>();
+            }
+#if WEACHY_PHYSICAL_ACCEPTANCE
+            if (GetComponent<ReachyAuthoritativePhysicalAcceptance>() == null)
+            {
+                gameObject.AddComponent<ReachyAuthoritativePhysicalAcceptance>();
+            }
+#endif
+        }
+
+        private ReachyPresentationBody[] BuildCanonicalBodies(bool requireComplete)
+        {
+            ReachyPresentationBody[] discoveredBodies =
+                GetComponentsInChildren<ReachyPresentationBody>(true);
+            ReachyPresentationBody[] canonicalBodies =
                 new ReachyPresentationBody[bodyCount];
             for (int index = 0; index < discoveredBodies.Length; ++index)
             {
@@ -108,29 +155,18 @@ namespace ReachyMini.Presentation
                 canonicalBodies[body.BodyIndex] = body;
             }
 
-            for (int index = 0; index < canonicalBodies.Length; ++index)
+            if (requireComplete)
             {
-                if (canonicalBodies[index] == null)
+                for (int index = 0; index < canonicalBodies.Length; ++index)
                 {
-                    throw new InvalidOperationException(
-                        $"Generated presentation is missing body index {index}.");
+                    if (canonicalBodies[index] == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Generated presentation is missing body index {index}.");
+                    }
                 }
             }
-
-            ReachyAuthoritativeRenderer renderer =
-                GetComponent<ReachyAuthoritativeRenderer>();
-            if (renderer == null)
-            {
-                renderer = gameObject.AddComponent<ReachyAuthoritativeRenderer>();
-            }
-            renderer.ConfigureBodies(canonicalBodies);
-            if (!renderer.ValidateAuthoritativeStructure())
-            {
-                throw new InvalidOperationException(
-                    $"Generated authoritative renderer is invalid: " +
-                    $"{renderer.Fault}");
-            }
-            renderer.enabled = false;
+            return canonicalBodies;
         }
     }
 }

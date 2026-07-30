@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -11,12 +12,20 @@ namespace ReachyMini.Editor
 {
     public static class AndroidBuild
     {
-        private const string DevelopmentOutput = "Builds/Android/weachy-mini-development.apk";
+        private const string DevelopmentOutput =
+            "Builds/Android/weachy-mini-development.apk";
         private const string DeviceFeasibilityOutput =
             "Builds/Android/weachy-mini-device-arm64-api26.apk";
-        private const string ReleaseOutput = "Builds/Android/weachy-mini-release.aab";
+        private const string ReleaseOutput =
+            "Builds/Android/weachy-mini-release.aab";
         private const string CompileSdkPackageEnvironmentVariable =
             "WEACHY_ANDROID_COMPILE_SDK_PACKAGE";
+        private const string PhysicalAcceptanceDefine =
+            "WEACHY_PHYSICAL_ACCEPTANCE";
+        private const string NativePluginDirectory =
+            "Assets/Plugins/Android/libs/arm64-v8a";
+        private const string RuntimeResourceDirectory =
+            "Assets/Generated/ReachyMini/UnityPresentation/Resources/ReachyMiniRuntime";
 
         private const int ApplicationMinimumApiLevel = 31;
         private const int DeviceFeasibilityMinimumApiLevel = 26;
@@ -27,7 +36,8 @@ namespace ReachyMini.Editor
             ConfigureAndroid(
                 buildAppBundle: false,
                 AndroidArchitecture.ARM64,
-                ApplicationMinimumApiLevel);
+                ApplicationMinimumApiLevel,
+                physicalAcceptance: false);
             Build(DevelopmentOutput, BuildOptions.Development);
         }
 
@@ -36,7 +46,8 @@ namespace ReachyMini.Editor
             ConfigureAndroid(
                 buildAppBundle: false,
                 AndroidArchitecture.ARM64,
-                DeviceFeasibilityMinimumApiLevel);
+                DeviceFeasibilityMinimumApiLevel,
+                physicalAcceptance: true);
             Build(DeviceFeasibilityOutput, BuildOptions.Development);
         }
 
@@ -45,14 +56,16 @@ namespace ReachyMini.Editor
             ConfigureAndroid(
                 buildAppBundle: true,
                 AndroidArchitecture.ARM64,
-                ApplicationMinimumApiLevel);
+                ApplicationMinimumApiLevel,
+                physicalAcceptance: false);
             Build(ReleaseOutput, BuildOptions.None);
         }
 
         private static void ConfigureAndroid(
             bool buildAppBundle,
             AndroidArchitecture targetArchitecture,
-            int minimumApiLevel)
+            int minimumApiLevel,
+            bool physicalAcceptance)
         {
             ConfigureAndroidSdk();
 
@@ -60,7 +73,8 @@ namespace ReachyMini.Editor
                     BuildTargetGroup.Android,
                     BuildTarget.Android))
             {
-                throw new InvalidOperationException("Unity could not activate the Android build target.");
+                throw new InvalidOperationException(
+                    "Unity could not activate the Android build target.");
             }
 
             PlayerSettings.SetScriptingBackend(
@@ -74,7 +88,30 @@ namespace ReachyMini.Editor
             PlayerSettings.SetApplicationIdentifier(
                 NamedBuildTarget.Android,
                 "com.ekkus.weachymini");
+            ConfigureScriptingDefines(physicalAcceptance);
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
+        }
+
+        private static void ConfigureScriptingDefines(bool physicalAcceptance)
+        {
+            string existing = PlayerSettings.GetScriptingDefineSymbols(
+                NamedBuildTarget.Android);
+            HashSet<string> defines = new HashSet<string>(
+                existing.Split(
+                    new[] { ';' },
+                    StringSplitOptions.RemoveEmptyEntries),
+                StringComparer.Ordinal);
+            if (physicalAcceptance)
+            {
+                defines.Add(PhysicalAcceptanceDefine);
+            }
+            else
+            {
+                defines.Remove(PhysicalAcceptanceDefine);
+            }
+            PlayerSettings.SetScriptingDefineSymbols(
+                NamedBuildTarget.Android,
+                defines.OrderBy(value => value, StringComparer.Ordinal).ToArray());
         }
 
         private static void ConfigureAndroidSdk()
@@ -110,7 +147,8 @@ namespace ReachyMini.Editor
                     $"Invalid Android SDK package version: {compileSdkPackage}");
             }
 
-            string expectedApiPrefix = TargetApiLevel.ToString(CultureInfo.InvariantCulture);
+            string expectedApiPrefix =
+                TargetApiLevel.ToString(CultureInfo.InvariantCulture);
             if (!string.Equals(
                     compileSdkPackage,
                     expectedApiPrefix,
@@ -138,14 +176,15 @@ namespace ReachyMini.Editor
             }
 
             AndroidExternalToolsSettings.sdkRootPath = normalizedSdkRoot;
-            string configuredSdkRoot = Path.GetFullPath(AndroidExternalToolsSettings.sdkRootPath);
+            string configuredSdkRoot =
+                Path.GetFullPath(AndroidExternalToolsSettings.sdkRootPath);
             if (!string.Equals(
                     configuredSdkRoot.TrimEnd(Path.DirectorySeparatorChar),
                     normalizedSdkRoot.TrimEnd(Path.DirectorySeparatorChar),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"Unity did not retain the requested Android SDK path. " +
+                    "Unity did not retain the requested Android SDK path. " +
                     $"Expected {normalizedSdkRoot}, found {configuredSdkRoot}.");
             }
         }
@@ -174,6 +213,7 @@ namespace ReachyMini.Editor
                     "The generated Reachy presentation scene must be the sole enabled " +
                     "Unity build scene.");
             }
+            ValidateProductionRuntimeAssets();
 
             string outputDirectory = Path.GetDirectoryName(outputPath);
             if (string.IsNullOrWhiteSpace(outputDirectory))
@@ -196,6 +236,27 @@ namespace ReachyMini.Editor
             {
                 throw new InvalidOperationException(
                     $"Android build failed with result {report.summary.result}.");
+            }
+        }
+
+        private static void ValidateProductionRuntimeAssets()
+        {
+            string[] requiredPaths =
+            {
+                $"{NativePluginDirectory}/libmujoco.so",
+                $"{NativePluginDirectory}/libreachy_sim.so",
+                $"{RuntimeResourceDirectory}/reachy_mini_mjb.bytes",
+                $"{RuntimeResourceDirectory}/runtime_manifest_json.bytes",
+            };
+            foreach (string path in requiredPaths)
+            {
+                FileInfo file = new FileInfo(path);
+                if (!file.Exists || file.Length <= 0)
+                {
+                    throw new FileNotFoundException(
+                        "The production Unity Android runtime was not staged.",
+                        path);
+                }
             }
         }
     }

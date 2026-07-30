@@ -26,6 +26,7 @@ namespace ReachyMini.Tests
 
             yield return loadOperation;
             yield return null;
+            yield return null;
 
             Scene activeScene = SceneManager.GetActiveScene();
             Assert.That(activeScene.path, Is.EqualTo(PresentationScenePath));
@@ -40,6 +41,7 @@ namespace ReachyMini.Tests
             ReachyPresentationRoot root = roots[0];
             Assert.That(root.BodyCount, Is.EqualTo(18));
             Assert.That(root.VisualGeometryCount, Is.GreaterThan(0));
+            Assert.That(root.GetCanonicalBodies(), Has.Length.EqualTo(root.BodyCount));
             Assert.That(
                 UnityEngine.Object.FindObjectsByType<ReachyPresentationBody>(
                     FindObjectsInactive.Include),
@@ -63,6 +65,16 @@ namespace ReachyMini.Tests
             Assert.That(
                 authoritativeRenderers[0].ValidateAuthoritativeStructure(),
                 Is.True);
+
+            ReachyProductionAuthoritativeRuntime[] runtimes =
+                UnityEngine.Object.FindObjectsByType<
+                    ReachyProductionAuthoritativeRuntime>(
+                    FindObjectsInactive.Include);
+            Assert.That(runtimes, Has.Length.EqualTo(1));
+            Assert.That(
+                runtimes[0].Status,
+                Is.EqualTo(ReachyProductionRuntimeStatus.Unavailable));
+            Assert.That(runtimes[0].Fault, Is.Empty);
 
             ReachyPresentationCamera[] presentationCameras =
                 UnityEngine.Object.FindObjectsByType<ReachyPresentationCamera>(
