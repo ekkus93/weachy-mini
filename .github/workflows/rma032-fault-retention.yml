@@ -1,0 +1,78 @@
+name: RMA-032 Fault Retention Coverage
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma032-fault-retention.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fault-retention-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add retained native-fault acceptance coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, description: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected exactly one {description} replacement target, found {count}"
+                  )
+              return text.replace(old, new, 1)
+
+          path = Path("managed/ReachyMini.Core.Tests/Program.cs")
+          text = path.read_text(encoding="utf-8")
+          text = replace_exact(
+              text,
+              """                TestAuthoritativeSimulationWorker();\n                TestAuthoritativeSimulationWorkerDeadlineMetrics();\n""",
+              """                TestAuthoritativeSimulationWorker();\n                TestAuthoritativeSimulationWorkerDeadlineMetrics();\n                TestAuthoritativeSimulationWorkerFaultRetention();\n""",
+              "fault-retention test registration",
+          )
+          text = replace_exact(
+              text,
+              """        private static void WaitForNativeStepEntry(TimeSpan timeout)\n""",
+              """        private static void TestAuthoritativeSimulationWorkerFaultRetention()\n        {\n            byte[] modelBytes = Encoding.UTF8.GetBytes(\n                \"simulation-worker-fault-model\");\n            ReachySimCreateResult createResult =\n                ReachySimSession.Create(modelBytes);\n            ReachySimSession session = createResult.Session ??\n                throw new InvalidOperationException(\n                    $\"Fault worker native create failed: {createResult.Error.Code}: {createResult.Error.Message}\");\n\n            using (ReachySimulationWorker worker =\n                new ReachySimulationWorker(\n                    session,\n                    commandQueueCapacity: 2,\n                    maximumCommandBytes: 64))\n            {\n                ReachySimulationControlResult start = worker.Start(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(start, \"fault worker start\");\n\n                ReachySimulationControlResult pause = worker.Pause(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(pause, \"fault worker initial pause\");\n                AssertEqual(\n                    ReachySimulationCommandEnqueueResult.Accepted,\n                    worker.EnqueueCommandBatch(CreateCommandBatch(sequence: 1UL)),\n                    \"command queued while paused\");\n                Thread.Sleep(50);\n                AssertEqual(\n                    ReachySimulationRunState.Paused,\n                    worker.State,\n                    \"queued command does not advance paused worker\");\n                AssertEqual<ReachySimulationFault?>(\n                    null,\n                    worker.Fault,\n                    \"queued command is not applied outside a step boundary\");\n\n                ReachySimulationControlResult resume = worker.Resume(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(resume, \"fault worker first resume\");\n                ReachyPublishedSimulationSnapshot applied = WaitForSnapshot(\n                    worker,\n                    snapshot => snapshot.State.Sequence >= 1UL,\n                    TimeSpan.FromSeconds(5.0),\n                    \"first command boundary application\");\n                AssertTrajectoryInvariant(\n                    applied,\n                    \"post-command authoritative trajectory\");\n\n                ReachySimulationControlResult secondPause = worker.Pause(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(secondPause, \"fault worker second pause\");\n                AssertEqual(\n                    ReachySimulationCommandEnqueueResult.Accepted,\n                    worker.EnqueueCommandBatch(CreateCommandBatch(sequence: 1UL)),\n                    \"stale command queued for boundary failure\");\n\n                ReachySimulationControlResult secondResume = worker.Resume(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(secondResume, \"fault worker second resume\");\n                ReachySimulationFault retainedFault = WaitForWorkerFault(\n                    worker,\n                    TimeSpan.FromSeconds(5.0),\n                    \"stale command fault retention\");\n                AssertEqual(\n                    \"submit commands\",\n                    retainedFault.Operation,\n                    \"retained command fault operation\");\n                AssertEqual(\n                    ReachySimErrorCode.CommandFormatError,\n                    retainedFault.Error.Code,\n                    \"retained command fault code\");\n                AssertEqual(\n                    ReachySimulationRunState.Faulted,\n                    worker.State,\n                    \"worker remains faulted after native rejection\");\n\n                ReachySimulationControlResult shutdown = worker.Shutdown(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(shutdown, \"fault worker shutdown\");\n            }\n        }\n\n        private static ReachySimulationFault WaitForWorkerFault(\n            ReachySimulationWorker worker,\n            TimeSpan timeout,\n            string description)\n        {\n            long deadline = Stopwatch.GetTimestamp() + checked(\n                (long)Math.Ceiling(\n                    timeout.TotalSeconds * Stopwatch.Frequency));\n            while (Stopwatch.GetTimestamp() < deadline)\n            {\n                ReachySimulationFault? fault = worker.Fault;\n                if (fault != null)\n                {\n                    return fault;\n                }\n                Thread.Sleep(1);\n            }\n\n            throw new InvalidOperationException(\n                $\"Managed test timed out waiting for {description}.\");\n        }\n\n        private static void WaitForNativeStepEntry(TimeSpan timeout)\n""",
+              "fault-retention method insertion",
+          )
+          path.write_text(text, encoding="utf-8")
+
+          design_path = Path(
+              "docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md"
+          )
+          design = design_path.read_text(encoding="utf-8")
+          design = replace_exact(
+              design,
+              """- reset queue discard and immutable reset publication;\n- sleeping-health publication without a false solver-warning count;\n""",
+              """- reset queue discard and immutable reset publication;\n- boundary-only command application and retained typed failure for a stale command;\n- sleeping-health publication without a false solver-warning count;\n""",
+              "fault acceptance documentation",
+          )
+          design_path.write_text(design, encoding="utf-8")
+          PY
+
+      - name: Verify and commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add \
+            managed/ReachyMini.Core.Tests/Program.cs \
+            docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "RMA-032: test retained native command faults"
+          git push origin HEAD:master
