@@ -21,14 +21,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 .github/rma040_prepare_publication_patch.py
-          python3 .github/rma040_publication_fix.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set +e
+          {
+            python3 .github/rma040_prepare_publication_patch.py
+            python3 .github/rma040_publication_fix.py
+          } > .github/rma040_patch_result.txt 2>&1
+          patch_status=$?
+          set -e
+          if (( patch_status != 0 )); then
+            git add .github/rma040_patch_result.txt
+            git commit -m "RMA-040: record publication patch guard failure"
+            git push origin HEAD:master
+            exit 0
+          fi
           git rm \
             .github/workflows/rma040-publication-fix.yml \
             .github/rma040_prepare_publication_patch.py \
             .github/rma040_publication_fix.py
+          rm .github/rma040_patch_result.txt
           git add \
             Assets/ReachyMini/Runtime/Simulation/IReachyPublishedAuthoritativeStateSource.cs \
             Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
