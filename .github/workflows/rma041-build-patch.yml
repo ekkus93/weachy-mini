@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   build-patch:
@@ -59,3 +60,10 @@ jobs:
             docs/model-parameter-audit.md
           if-no-files-found: error
           retention-days: 1
+      - name: Publish validated run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="Validated RMA-041 patch artifact is available.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-validated-patch-${GITHUB_SHA}\n"
+          gh issue edit 7 --repo "${GITHUB_REPOSITORY}" --body "${body}"
