@@ -123,12 +123,10 @@ namespace ReachyMini.Presentation
             {
                 gameObject.AddComponent<ReachyProductionAuthoritativeRuntime>();
             }
-#if WEACHY_PHYSICAL_ACCEPTANCE
             if (GetComponent<ReachyAuthoritativePhysicalAcceptance>() == null)
             {
                 gameObject.AddComponent<ReachyAuthoritativePhysicalAcceptance>();
             }
-#endif
         }
 
         private ReachyPresentationBody[] BuildCanonicalBodies(bool requireComplete)
