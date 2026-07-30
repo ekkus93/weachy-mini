@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** Managed ABI/layout startup preflight and
-RMA-031 completion after production MuJoCo state publication, Unity pose binding,
-and physical lifecycle/rendering acceptance
+**Current implementation series:** RMA-032 authoritative worker scheduling,
+diagnostics, fault retention, and acceptance after managed ABI/layout startup
+preflight and production MuJoCo/Unity physical validation
 
 ## Repository rules in force
 
@@ -97,13 +97,31 @@ The detailed contracts are in [Simulation ABI](SIMULATION_ABI.md),
 [Native handle concurrency](architecture/NATIVE_HANDLE_CONCURRENCY.md), and
 [Managed simulation interop](architecture/MANAGED_INTEROP.md).
 
-### RMA-032/RMA-033 — authoritative worker and snapshots
+### RMA-032 — authoritative simulation worker
 
-A managed-owned dedicated fixed-step worker owns mutable simulation work,
-applies commands at step boundaries, publishes immutable state, retains faults,
-and provides explicit pause/resume/reset/shutdown handshakes. Queue overflow is
-visible, rendering stalls do not own physics state, and resume does not execute a
-wall-time catch-up burst.
+RMA-032 is complete. A managed-owned dedicated thread schedules the 500 Hz native
+simulation with a monotonic fixed-step accumulator. Commands are admitted through
+a bounded preallocated queue and applied only at native step boundaries. Immutable
+state and timing snapshots are published through a versioned triple buffer, so
+30 Hz, 60 Hz, slow, and stalled readers cannot mutate or schedule physics work.
+
+Timing diagnostics include total steps, last and maximum native-step duration,
+deadline misses, accumulated lag, command overflow/discard counts, exact health
+flags, and MuJoCo-warning episodes. Individual over-budget native steps and bounded
+catch-up backlog are both visible. Sleeping health is preserved without being
+counted as a solver warning.
+
+Native command, step, reset, and state-copy errors become retained typed faults. A
+stale-command acceptance test proves that queued commands remain unapplied while
+paused, apply at the next step boundary, and fault visibly when native sequencing
+rejects them. Pause, resume, reset, shutdown, request timeout, and deterministic
+handle closure are explicit handshakes. Resume resets the accumulator and excludes
+suspended wall time rather than executing a catch-up burst.
+
+The design and acceptance contract are documented in
+[Authoritative simulation worker](architecture/AUTHORITATIVE_SIMULATION_WORKER.md).
+
+### RMA-033 — snapshots and deterministic reset
 
 Production snapshots are versioned, model/configuration/calibration bound,
 transactionally restored, and require byte-identical recapture/replay. Neutral
@@ -148,6 +166,9 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
+- Hosted RMA-032 code-quality run `30539234220`: native warnings/sanitizers,
+  managed warnings-as-errors and native-backed worker acceptance, static checks,
+  Android tests, and official-model validation passed on `ac961fce`.
 - Hosted RMA-031 code-quality run `30536538862`: native warnings/sanitizers,
   managed warnings-as-errors and lifecycle tests, static checks, Android tests,
   and official-model validation passed with the managed ABI/layout contract.
