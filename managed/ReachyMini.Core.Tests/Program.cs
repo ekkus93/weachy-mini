@@ -16,6 +16,7 @@ namespace ReachyMini.Core.Tests
         {
             TestProjectMetadata();
             TestNativeLayouts();
+            TestSimulationWorkerWarningAccounting();
 
             if (string.Equals(
                     Environment.GetEnvironmentVariable("REACHY_MANAGED_NATIVE_TESTS"),
@@ -24,6 +25,7 @@ namespace ReachyMini.Core.Tests
             {
                 TestNativeSessionLifecycle();
                 TestAuthoritativeSimulationWorker();
+                TestAuthoritativeSimulationWorkerDeadlineMetrics();
             }
 
             return 0;
@@ -254,6 +256,36 @@ namespace ReachyMini.Core.Tests
                     ReachySimulationRunState.Running,
                     worker.State,
                     "worker running state");
+                AssertTrajectoryInvariant(
+                    running,
+                    "initial authoritative worker trajectory");
+
+                ObserveWorkerAtCadence(
+                    worker,
+                    cadenceMilliseconds: 16,
+                    observationCount: 5,
+                    "60 Hz reader cadence");
+                ObserveWorkerAtCadence(
+                    worker,
+                    cadenceMilliseconds: 33,
+                    observationCount: 4,
+                    "30 Hz reader cadence");
+
+                AssertEqual(
+                    true,
+                    worker.TryGetLatestSnapshot(
+                        out ReachyPublishedSimulationSnapshot beforeRenderStall),
+                    "pre-stall snapshot availability");
+                Thread.Sleep(100);
+                ReachyPublishedSimulationSnapshot afterRenderStall = WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.State.Sequence >
+                        beforeRenderStall.State.Sequence,
+                    TimeSpan.FromSeconds(5.0),
+                    "progress across a stalled rendering reader");
+                AssertTrajectoryInvariant(
+                    afterRenderStall,
+                    "post-stall authoritative worker trajectory");
 
                 ReachySimulationControlResult pause = worker.Pause(
                     TimeSpan.FromSeconds(5.0));
@@ -348,6 +380,14 @@ namespace ReachyMini.Core.Tests
                     throw new InvalidOperationException(
                         "Managed test failed: discarded reset commands were not published in timing diagnostics.");
                 }
+                AssertEqual(
+                    1U,
+                    resetSnapshot.State.HealthFlags,
+                    "sleeping health flag publication");
+                AssertEqual(
+                    0UL,
+                    resetSnapshot.Timing.SolverWarningCount,
+                    "sleeping state is not a solver warning");
 
                 ReachySimulationControlResult shutdown = worker.Shutdown(
                     TimeSpan.FromSeconds(5.0));
@@ -360,6 +400,179 @@ namespace ReachyMini.Core.Tests
                     null,
                     worker.Fault,
                     "worker fault state");
+            }
+        }
+
+        private static void TestSimulationWorkerWarningAccounting()
+        {
+            const uint sleepingHealthFlag = 1U << 0;
+            const uint warningHealthFlag = 1U << 1;
+
+            ulong warningCount =
+                ReachySimulationWorker.CountNewSolverWarningEpisodes(
+                    currentCount: 0UL,
+                    previousHealthFlags: 0U,
+                    currentHealthFlags: sleepingHealthFlag);
+            AssertEqual(
+                0UL,
+                warningCount,
+                "sleeping health does not increment solver warnings");
+
+            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(
+                warningCount,
+                sleepingHealthFlag,
+                sleepingHealthFlag | warningHealthFlag);
+            AssertEqual(1UL, warningCount, "warning rising edge");
+
+            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(
+                warningCount,
+                sleepingHealthFlag | warningHealthFlag,
+                warningHealthFlag);
+            AssertEqual(1UL, warningCount, "persistent warning is not recounted");
+
+            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(
+                warningCount,
+                warningHealthFlag,
+                currentHealthFlags: 0U);
+            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(
+                warningCount,
+                previousHealthFlags: 0U,
+                currentHealthFlags: warningHealthFlag);
+            AssertEqual(2UL, warningCount, "second warning episode");
+        }
+
+        private static void TestAuthoritativeSimulationWorkerDeadlineMetrics()
+        {
+            ReachySimulationWorker? worker = null;
+            ReachySimSession? unownedSession = null;
+            Rma032NativeTestControls.ResetControls();
+            try
+            {
+                byte[] modelBytes = Encoding.UTF8.GetBytes(
+                    "simulation-worker-deadline-model");
+                ReachySimCreateResult createResult =
+                    ReachySimSession.Create(modelBytes);
+                unownedSession = createResult.Session ??
+                    throw new InvalidOperationException(
+                        $"Deadline worker native create failed: {createResult.Error.Code}: {createResult.Error.Message}");
+
+                worker = new ReachySimulationWorker(unownedSession);
+                unownedSession = null;
+                Rma032NativeTestControls.SetStepBlocked(blocked: true);
+
+                ReachySimulationControlResult start = worker.Start(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(start, "deadline worker start");
+                WaitForNativeStepEntry(TimeSpan.FromSeconds(5.0));
+                Thread.Sleep(40);
+                Rma032NativeTestControls.SetStepBlocked(blocked: false);
+
+                ReachyPublishedSimulationSnapshot timingSnapshot = WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.Timing.DeadlineMissCount >= 1UL &&
+                        snapshot.Timing.MaximumStepDurationSeconds >= 0.02,
+                    TimeSpan.FromSeconds(5.0),
+                    "over-budget step timing publication");
+                AssertTrajectoryInvariant(
+                    timingSnapshot,
+                    "deadline-miss authoritative trajectory");
+                if (timingSnapshot.Timing.LastStepDurationSeconds < 0.0 ||
+                    timingSnapshot.Timing.MaximumStepDurationSeconds <
+                        timingSnapshot.Timing.LastStepDurationSeconds)
+                {
+                    throw new InvalidOperationException(
+                        "Managed test failed: step-duration diagnostics are inconsistent.");
+                }
+
+                ReachySimulationControlResult shutdown = worker.Shutdown(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(shutdown, "deadline worker shutdown");
+            }
+            finally
+            {
+                Rma032NativeTestControls.SetStepBlocked(blocked: false);
+                Rma032NativeTestControls.ResetControls();
+                if (worker != null)
+                {
+                    worker.Dispose();
+                }
+                else
+                {
+                    unownedSession?.Dispose();
+                }
+            }
+        }
+
+        private static void WaitForNativeStepEntry(TimeSpan timeout)
+        {
+            long deadline = Stopwatch.GetTimestamp() + checked(
+                (long)Math.Ceiling(
+                    timeout.TotalSeconds * Stopwatch.Frequency));
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                if (Rma032NativeTestControls.StepEntered())
+                {
+                    return;
+                }
+                Thread.Sleep(1);
+            }
+
+            throw new InvalidOperationException(
+                "Managed test timed out waiting for the controlled native step.");
+        }
+
+        private static void ObserveWorkerAtCadence(
+            ReachySimulationWorker worker,
+            int cadenceMilliseconds,
+            int observationCount,
+            string description)
+        {
+            ulong firstSequence = 0UL;
+            ulong previousSequence = 0UL;
+            ulong previousPublication = 0UL;
+            for (int observation = 0; observation < observationCount; ++observation)
+            {
+                Thread.Sleep(cadenceMilliseconds);
+                if (!worker.TryGetLatestSnapshot(
+                        out ReachyPublishedSimulationSnapshot snapshot))
+                {
+                    throw new InvalidOperationException(
+                        $"Managed test failed for {description}: no snapshot was available.");
+                }
+                AssertTrajectoryInvariant(snapshot, description);
+                if (observation == 0)
+                {
+                    firstSequence = snapshot.State.Sequence;
+                }
+                else if (snapshot.State.Sequence < previousSequence ||
+                    snapshot.PublicationSequence < previousPublication)
+                {
+                    throw new InvalidOperationException(
+                        $"Managed test failed for {description}: publication regressed.");
+                }
+                previousSequence = snapshot.State.Sequence;
+                previousPublication = snapshot.PublicationSequence;
+            }
+
+            if (previousSequence <= firstSequence)
+            {
+                throw new InvalidOperationException(
+                    $"Managed test failed for {description}: simulation did not advance independently of the reader cadence.");
+            }
+        }
+
+        private static void AssertTrajectoryInvariant(
+            ReachyPublishedSimulationSnapshot snapshot,
+            string description)
+        {
+            double expectedSimulationTime = snapshot.State.Sequence *
+                ProjectMetadata.InitialPhysicsTimestepSeconds;
+            double error = Math.Abs(
+                snapshot.State.SimulationTime - expectedSimulationTime);
+            if (error > 1.0e-9)
+            {
+                throw new InvalidOperationException(
+                    $"Managed test failed for {description}: sequence {snapshot.State.Sequence} implies time {expectedSimulationTime}, actual {snapshot.State.SimulationTime}.");
             }
         }
 

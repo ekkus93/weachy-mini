@@ -153,6 +153,7 @@ namespace ReachyMini.Simulation
         private const int CommandHeaderSize = 24;
         private const int MaximumCatchUpStepsPerCycle = 8;
         private const int FaultWaitMilliseconds = 100;
+        private const uint MujocoWarningHealthFlag = 1U << 1;
         private const double TimestepSeconds =
             ProjectMetadata.InitialPhysicsTimestepSeconds;
 
@@ -189,6 +190,7 @@ namespace ReachyMini.Simulation
         private double accumulatedLagSeconds;
         private double lastStepDurationSeconds;
         private double maximumStepDurationSeconds;
+        private uint previousHealthFlags;
 
         public ReachySimulationWorker(
             ReachySimSession session,
@@ -734,6 +736,7 @@ namespace ReachyMini.Simulation
                 }
 
                 int cycleStepCount = 0;
+                bool deadlineMissRecordedThisCycle = false;
                 while (accumulatorSeconds >= TimestepSeconds &&
                     cycleStepCount < MaximumCatchUpStepsPerCycle)
                 {
@@ -766,6 +769,23 @@ namespace ReachyMini.Simulation
                             session.GetErrorForStatus(stepStatus));
                         break;
                     }
+                    if (stepDurationSeconds < 0.0 ||
+                        double.IsNaN(stepDurationSeconds) ||
+                        double.IsInfinity(stepDurationSeconds))
+                    {
+                        EnterNativeFault(
+                            "step timing",
+                            ControlError(
+                                ReachySimErrorCode.NumericFailure,
+                                ReachySimRecoverability.RecreateHandle,
+                                "The monotonic clock produced an invalid step duration."));
+                        break;
+                    }
+                    if (stepDurationSeconds > TimestepSeconds)
+                    {
+                        ++deadlineMissCount;
+                        deadlineMissRecordedThisCycle = true;
+                    }
 
                     lastStepDurationSeconds = stepDurationSeconds;
                     if (stepDurationSeconds > maximumStepDurationSeconds)
@@ -789,7 +809,10 @@ namespace ReachyMini.Simulation
                 if (accumulatorSeconds >= TimestepSeconds &&
                     State == ReachySimulationRunState.Running)
                 {
-                    ++deadlineMissCount;
+                    if (!deadlineMissRecordedThisCycle)
+                    {
+                        ++deadlineMissCount;
+                    }
                     accumulatedLagSeconds = accumulatorSeconds;
                     Thread.Yield();
                 }
@@ -944,10 +967,11 @@ namespace ReachyMini.Simulation
                     stateBuffer);
             ReachySimStateSnapshot state =
                 ReachySimStateSnapshot.FromNative(nativeState);
-            if (state.HealthFlags != 0U)
-            {
-                ++solverWarningCount;
-            }
+            solverWarningCount = CountNewSolverWarningEpisodes(
+                solverWarningCount,
+                previousHealthFlags,
+                state.HealthFlags);
+            previousHealthFlags = state.HealthFlags;
 
             lastStepDurationSeconds = stepDurationSeconds;
             ReachySimulationTimingSnapshot timing =
@@ -971,6 +995,20 @@ namespace ReachyMini.Simulation
                     timing);
             snapshotBuffer.Publish(published);
             return true;
+        }
+
+        internal static ulong CountNewSolverWarningEpisodes(
+            ulong currentCount,
+            uint previousHealthFlags,
+            uint currentHealthFlags)
+        {
+            bool warningWasActive =
+                (previousHealthFlags & MujocoWarningHealthFlag) != 0U;
+            bool warningIsActive =
+                (currentHealthFlags & MujocoWarningHealthFlag) != 0U;
+            return warningIsActive && !warningWasActive
+                ? checked(currentCount + 1UL)
+                : currentCount;
         }
 
         private void WaitForNextDeadline(double accumulatorSeconds)
