@@ -13,8 +13,6 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
       - name: Apply guarded worker publication repair
         shell: bash
         run: |
@@ -29,16 +27,8 @@ jobs:
           patch_status=$?
           set -e
 
-          git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git rm -f \
-            .github/workflows/rma040-publication-fix.yml \
-            .github/rma040_prepare_publication_patch.py \
-            .github/rma040_publication_fix.py
-
           if (( patch_status != 0 )); then
-            git add -f \
-              .github/workflows/ci.yml \
-              .github/rma040_patch_result.md
+            git add -f .github/rma040_patch_result.md
             git commit -m "RMA-040: record publication patch guard failure"
             git push origin HEAD:master
             exit 0
@@ -46,7 +36,6 @@ jobs:
 
           rm .github/rma040_patch_result.md
           git add \
-            .github/workflows/ci.yml \
             Assets/ReachyMini/Runtime/Simulation/IReachyPublishedAuthoritativeStateSource.cs \
             Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
             Assets/ReachyMini/Runtime/Rendering/ReachySimAuthoritativePoseSource.cs \
