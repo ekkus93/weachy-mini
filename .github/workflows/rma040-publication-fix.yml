@@ -1,0 +1,106 @@
+name: RMA-040 worker publication repair
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma040-publication-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Apply and compile publication repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/rma040_publication_fix.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '''                authoritativeStateReader: null,
+                commandQueueCapacity,
+                maximumCommandBytes)
+''',
+              '''                authoritativeStateReader: null,
+                commandQueueCapacity,
+                maximumCommandBytes,
+                useAuthoritativeStateReader: false)
+''',
+              1,
+          )
+          text = text.replace(
+              '''                commandQueueCapacity,
+                maximumCommandBytes)
+        {
+        }
+
+        private ReachySimulationWorker(
+''',
+              '''                commandQueueCapacity,
+                maximumCommandBytes,
+                useAuthoritativeStateReader: true)
+        {
+        }
+
+        private ReachySimulationWorker(
+''',
+              1,
+          )
+          text = text.replace(
+              '''            int commandQueueCapacity,
+            int maximumCommandBytes)
+        {
+            this.session = session ??
+                throw new ArgumentNullException(nameof(session));
+            this.authoritativeStateReader = authoritativeStateReader;
+            authoritativeStateFrame = authoritativeStateReader?.CreateFrame();
+''',
+              '''            int commandQueueCapacity,
+            int maximumCommandBytes,
+            bool useAuthoritativeStateReader)
+        {
+            this.session = session ??
+                throw new ArgumentNullException(nameof(session));
+            this.authoritativeStateReader = useAuthoritativeStateReader
+                ? authoritativeStateReader
+                : null;
+            authoritativeStateFrame = this.authoritativeStateReader?.CreateFrame();
+''',
+              1,
+          )
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          python3 .github/rma040_publication_fix.py
+          dotnet build managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release \
+            --nologo
+          python3 scripts/check_repo_static.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm \
+            .github/workflows/rma040-publication-fix.yml \
+            .github/rma040_publication_fix.py
+          git add \
+            Assets/ReachyMini/Runtime/Simulation/IReachyPublishedAuthoritativeStateSource.cs \
+            Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
+            Assets/ReachyMini/Runtime/Rendering/ReachySimAuthoritativePoseSource.cs \
+            Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs \
+            Assets/ReachyMini/Runtime/Rendering/ReachyAuthoritativePhysicalAcceptance.cs \
+            Assets/ReachyMini/Tests/Editor/ReachySimAuthoritativeStateTestSupport.cs \
+            Assets/ReachyMini/Tests/Editor/ReachySimAuthoritativeStateTests.cs \
+            managed/ReachyMini.Core.Tests/Program.cs
+          git commit -m "RMA-040: publish rendering state through worker"
+          git push origin HEAD:master
