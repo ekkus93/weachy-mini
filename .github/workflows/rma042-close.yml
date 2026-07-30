@@ -1,0 +1,33 @@
+name: RMA-042 Guarded Closure
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma042-close.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Close verified RMA-042 items
+        run: python3 scripts/rma042_close.py
+      - name: Commit guarded closure
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A \
+            docs/IMPLEMENTATION_STATUS.md \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            scripts/rma042_close.py
+          git diff --cached --check
+          git commit -m 'RMA-042: close reference-state comparison'
+          git push origin HEAD:master
