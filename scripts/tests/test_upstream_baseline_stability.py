@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,7 @@ spec = importlib.util.spec_from_file_location("reachy_stability", SCRIPT_PATH)
 if spec is None or spec.loader is None:
     raise RuntimeError("Cannot load stability runner module")
 stability = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = stability
 spec.loader.exec_module(stability)
 
 
@@ -69,9 +71,7 @@ class UpstreamBaselineStabilityTests(unittest.TestCase):
         self.assertEqual(0.0, values[0])
         self.assertEqual(1.0, values[-1])
         self.assertTrue(all(0.0 <= value <= 1.0 for value in values))
-        self.assertTrue(
-            all(values[index] <= values[index + 1] for index in range(len(values) - 1))
-        )
+        self.assertTrue(all(values[index] <= values[index + 1] for index in range(len(values) - 1)))
         self.assertEqual(0.0, stability.minimum_jerk(-1.0))
         self.assertEqual(1.0, stability.minimum_jerk(2.0))
 
@@ -92,9 +92,7 @@ class UpstreamBaselineStabilityTests(unittest.TestCase):
     def test_required_category_removal_is_rejected(self) -> None:
         """The suite cannot omit the sleep or boundary cases."""
         profile = copy.deepcopy(self.profile)
-        profile["phases"] = [
-            phase for phase in profile["phases"] if phase["category"] != "sleep"
-        ]
+        profile["phases"] = [phase for phase in profile["phases"] if phase["category"] != "sleep"]
         with self.assertRaisesRegex(stability.StabilityError, "missing categories"):
             stability.validate_config(profile)
 
