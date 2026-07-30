@@ -9,7 +9,7 @@ PACKAGE_NAME="com.ekkus.weachymini"
 LAUNCH_EXTRA_NAME="weachy_physical_acceptance"
 RESULT_FILE_NAME="weachy-authoritative-acceptance.json"
 REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
-TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-90}"
+TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-120}"
 
 if [[ ! -s "${APK_PATH}" ]]; then
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2

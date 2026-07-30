@@ -22,6 +22,7 @@ namespace ReachyMini.Rendering
         private const string FailureMarker =
             "WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE ";
         private const double PhaseDurationSeconds = 0.55;
+        private const float RuntimeBindingTimeoutSeconds = 60.0f;
         private const float PositionMotionThresholdMetres = 1.0e-5f;
         private const float RotationMotionThresholdDegrees = 0.05f;
         private static readonly double[] PoseA =
@@ -92,7 +93,8 @@ namespace ReachyMini.Rendering
             PublishProgress(
                 "waiting_for_runtime",
                 "Waiting for the production simulator and renderer to bind.");
-            float startupDeadline = Time.realtimeSinceStartup + 30.0f;
+            float startupDeadline =
+                Time.realtimeSinceStartup + RuntimeBindingTimeoutSeconds;
             while (runtime.Status != ReachyProductionRuntimeStatus.Running ||
                    renderer.Status !=
                        ReachyAuthoritativeRendererStatus.Rendering)
@@ -107,8 +109,13 @@ namespace ReachyMini.Rendering
                 if (Time.realtimeSinceStartup >= startupDeadline)
                 {
                     Fail(
-                        $"Timed out waiting for production rendering; " +
-                        $"runtime={runtime.Status}, renderer={renderer.Status}.");
+                        $"Timed out waiting for production rendering after " +
+                        $"{RuntimeBindingTimeoutSeconds} seconds; " +
+                        $"runtime={runtime.Status}, " +
+                        $"simulation={runtime.SimulationState}, " +
+                        $"renderer={renderer.Status}, " +
+                        $"runtime_fault={runtime.Fault}, " +
+                        $"renderer_fault={renderer.Fault}.");
                     yield break;
                 }
                 yield return null;
