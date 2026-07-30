@@ -337,13 +337,13 @@ internal static class NativeReachySim
 
 ## RMA-032 — Implement authoritative simulation thread
 
-- [ ] Create a native or managed-owned dedicated simulation thread; choose one design and document why.
-- [ ] Use monotonic time and a fixed-step accumulator.
-- [ ] Apply command batches only at step boundaries.
-- [ ] Publish immutable state snapshots using double/triple buffering.
-- [ ] Record step duration, deadline misses, accumulated lag, solver warnings, and health flags.
-- [ ] Do not catch and discard solver errors.
-- [ ] Define pause, resume, reset, and shutdown handshakes.
+- [x] Create a native or managed-owned dedicated simulation thread; choose one design and document why.
+- [x] Use monotonic time and a fixed-step accumulator.
+- [x] Apply command batches only at step boundaries.
+- [x] Publish immutable state snapshots using double/triple buffering.
+- [x] Record step duration, deadline misses, accumulated lag, solver warnings, and health flags.
+- [x] Do not catch and discard solver errors.
+- [x] Define pause, resume, reset, and shutdown handshakes.
 
 Pseudocode:
 
@@ -360,10 +360,33 @@ while running:
 
 **Acceptance criteria**
 
-- [ ] Unity frame-rate changes do not alter simulation time or trajectory.
-- [ ] Rendering stalls do not corrupt the physics state.
-- [ ] Command queue overflow is visible and does not overwrite newer/older commands silently.
-- [ ] Resume restarts from paused simulation time without a catch-up burst.
+- [x] Unity frame-rate changes do not alter simulation time or trajectory.
+- [x] Rendering stalls do not corrupt the physics state.
+- [x] Command queue overflow is visible and does not overwrite newer/older commands silently.
+- [x] Resume restarts from paused simulation time without a catch-up burst.
+
+**Completion evidence**
+
+- `ReachySimulationWorker` owns one dedicated managed thread while native MuJoCo
+  remains the sole owner of mutable physics state. The design rationale and lifecycle
+  contract are documented in
+  `docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md`.
+- The worker uses `Stopwatch.GetTimestamp()` and a 0.002-second accumulator, drains
+  bounded command batches only at native step boundaries, and publishes immutable
+  state/timing values through a versioned triple buffer.
+- Diagnostics publish total steps, last/maximum native-step duration, scheduler
+  deadline misses, accumulated lag, command overflow/discard counts, exact health
+  flags, and MuJoCo-warning episodes. Sleeping health is not mislabeled as a warning.
+- Native step, command, reset, and state-copy failures become retained typed worker
+  faults. A stale command test proves boundary-only application and visible
+  `CommandFormatError` retention before deterministic shutdown.
+- Managed-native acceptance covers 30 Hz and 60 Hz readers, a stalled reader,
+  trajectory invariants, visible queue overflow, pause stability, reset discard,
+  resume without suspended-time catch-up, and a controlled 40 ms native step that
+  must publish an over-budget duration and deadline miss.
+- Hosted quality run `30539234220` passed native warnings/sanitizers, managed
+  warnings-as-errors and native-backed worker tests, static checks, Android tests,
+  and official-model validation on `ac961fce3067c3724ba2638646251c52c78e62d3`.
 
 ## RMA-033 — Add snapshots and deterministic reset
 
