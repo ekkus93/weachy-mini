@@ -1,0 +1,61 @@
+name: RMA-041 Build Audit Patch
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma041-build-patch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply guarded RMA-041 patch
+        run: python3 scripts/rma041_apply.py
+      - name: Apply repository Python policy
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff format \
+            scripts/validate_model_parameter_audit.py \
+            scripts/tests/test_model_parameter_audit.py
+          ruff check --fix \
+            scripts/validate_model_parameter_audit.py \
+            scripts/tests/test_model_parameter_audit.py
+          ruff format \
+            scripts/validate_model_parameter_audit.py \
+            scripts/tests/test_model_parameter_audit.py
+          ruff check \
+            scripts/validate_model_parameter_audit.py \
+            scripts/tests/test_model_parameter_audit.py
+          ruff format --check \
+            scripts/validate_model_parameter_audit.py \
+            scripts/tests/test_model_parameter_audit.py
+      - name: Run focused audit tests
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_model_parameter_audit.py
+          python3 scripts/validate_model_parameter_audit.py \
+            --audit models/reachy-mini/model-parameter-audit.json \
+            --lock third_party/reachy-mini-source.lock.json \
+            --baseline models/reachy-mini/model-baseline.json
+      - name: Upload validated patch files
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma041-validated-patch-${{ github.sha }}
+          path: |
+            models/reachy-mini/model-parameter-audit.json
+            scripts/validate_model_parameter_audit.py
+            scripts/tests/test_model_parameter_audit.py
+            docs/model-parameter-audit.md
+          if-no-files-found: error
+          retention-days: 1
