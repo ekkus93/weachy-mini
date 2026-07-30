@@ -196,9 +196,7 @@ class ReferenceTraceToolTests(unittest.TestCase):
     def test_qpos_error_above_tolerance_fails_visibly(self) -> None:
         """A state mismatch must name the exceeded tolerance."""
         desktop, android = self.valid_trace_pair()
-        android["checkpoints"][1]["qpos"][0] = (
-            self.scenario["tolerances"]["qpos_absolute"] * 2.0
-        )
+        android["checkpoints"][1]["qpos"][0] = self.scenario["tolerances"]["qpos_absolute"] * 2.0
         result = self.run_comparator(desktop, android)
         self.assertNotEqual(0, result.returncode)
         self.assertIn("qpos_absolute", result.stderr)

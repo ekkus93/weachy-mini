@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
@@ -78,7 +77,10 @@ def validate_lock(
         raise TraceLockError("lock.trace_generation must be an object")
     if generation.get("script") != "scripts/generate_reachy_reference_trace.py":
         raise TraceLockError("Trace lock identifies an unexpected generator")
-    if generation.get("format") != "UTF-8 JSON, sorted keys, two-space indentation, trailing newline":
+    if (
+        generation.get("format")
+        != "UTF-8 JSON, sorted keys, two-space indentation, trailing newline"
+    ):
         raise TraceLockError("Trace lock identifies an unexpected serialization format")
     if generation.get("checkpoints") != len(scenario.get("checkpoint_steps", [])):
         raise TraceLockError("Trace lock checkpoint count differs from scenario")

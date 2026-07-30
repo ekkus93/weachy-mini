@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 QUATERNION_NORM_TOLERANCE = 1e-6
 
 
@@ -376,8 +375,7 @@ def compare_traces(
     for key in comparison_keys:
         if maxima[key] > float(tolerances[key]):
             raise TraceComparisonError(
-                f"{key} error {maxima[key]:.17g} exceeds tolerance "
-                f"{float(tolerances[key]):.17g}"
+                f"{key} error {maxima[key]:.17g} exceeds tolerance {float(tolerances[key]):.17g}"
             )
     if maxima["maximum_observed_equality_residual"] > float(
         tolerances["maximum_equality_residual"]
