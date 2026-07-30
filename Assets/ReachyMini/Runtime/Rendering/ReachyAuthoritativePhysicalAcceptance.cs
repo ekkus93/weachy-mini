@@ -15,9 +15,9 @@ namespace ReachyMini.Rendering
     {
         public const string ResultFileName =
             "weachy-authoritative-acceptance.json";
+        public const string LaunchExtraName =
+            "weachy_physical_acceptance";
 
-        private const string AcceptanceMarkerResourcePath =
-            "ReachyMiniRuntime/physical_acceptance_enabled";
         private const string SuccessMarker = "WEACHY_AUTHORITATIVE_ACCEPTANCE ";
         private const string FailureMarker =
             "WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE ";
@@ -48,9 +48,20 @@ namespace ReachyMini.Rendering
 
         private IEnumerator Start()
         {
-            TextAsset marker = Resources.Load<TextAsset>(
-                AcceptanceMarkerResourcePath);
-            if (Application.platform != RuntimePlatform.Android || marker == null)
+            if (Application.platform != RuntimePlatform.Android)
+            {
+                enabled = false;
+                yield break;
+            }
+
+            bool requested = TryReadAcceptanceRequest(out string requestError);
+            if (!string.IsNullOrEmpty(requestError))
+            {
+                acceptanceEnabled = true;
+                Fail(requestError);
+                yield break;
+            }
+            if (!requested)
             {
                 enabled = false;
                 yield break;
@@ -417,6 +428,38 @@ namespace ReachyMini.Rendering
                     PositionMotionThresholdMetres ||
                 Quaternion.Angle(before.Rotation, after.Rotation) >
                     RotationMotionThresholdDegrees;
+        }
+
+        private static bool TryReadAcceptanceRequest(out string error)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass(
+                    "com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity =
+                    unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (AndroidJavaObject intent =
+                    activity.Call<AndroidJavaObject>("getIntent"))
+                {
+                    error = string.Empty;
+                    return intent.Call<bool>(
+                        "getBooleanExtra",
+                        LaunchExtraName,
+                        false);
+                }
+            }
+            catch (Exception exception)
+            {
+                error =
+                    "Could not inspect the Android physical-acceptance " +
+                    $"launch intent: {exception.Message}";
+                return false;
+            }
+#else
+            error = string.Empty;
+            return false;
+#endif
         }
 
         private void PublishProgress(string stage, string message)
