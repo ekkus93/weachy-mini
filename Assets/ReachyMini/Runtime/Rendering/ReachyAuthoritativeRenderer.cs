@@ -400,7 +400,8 @@ namespace ReachyMini.Rendering
 
         private void EnsureExpectedStorage()
         {
-            if (expectedPositions.Length != authoritativeBodies.Length)
+            if (expectedPositions.Length != authoritativeBodies.Length ||
+                expectedRotations.Length != authoritativeBodies.Length)
             {
                 expectedPositions = new Vector3[authoritativeBodies.Length];
                 expectedRotations = new Quaternion[authoritativeBodies.Length];
