@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-033 authoritative snapshots,
-transactional restore, deterministic reset, and worker-owned persistence after
-RMA-032 fixed-step scheduling and production MuJoCo/Unity validation
+**Current implementation series:** RMA-040 official Reachy Mini model import,
+complete topology identity, immutable provenance, and Android/runtime acceptance
+after RMA-033 deterministic snapshot and reset closure
 
 ## Repository rules in force
 
@@ -149,17 +149,38 @@ instead of inventing a pose.
 The detailed contract is in
 [Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md).
 
-### RMA-040 through RMA-042 — official model integrity
+### RMA-040 — official model import and integrity
 
-The complete official model is imported and compiled with 19 bodies including
-world, 16 joints, 9 actuators, 5 equality constraints, 13 sites, `nq=37`, and
-`nv=30`. Desktop/Android reference traces compare qpos, qvel, all named body
-transforms, equality residuals, warnings, dimensions, hashes, and MuJoCo version
-within locked tolerances.
+RMA-040 is complete. The clean pinned Pollen Robotics checkout at
+`a739a6e461eb6d722901f1cfc225265ffc85c28d` is the immutable solver source. The
+importer copies the MJCF, every referenced visual/collision mesh, and license
+without content modification and emits deterministic per-file provenance.
 
-The mechanical audit explicitly classifies the generic actuator dynamics and
-missing antenna hard-stop evidence as uncalibrated placeholders. No calibrated
-claim is made.
+The topology gate now locks all 17 named bodies plus the complete ordered 18-body
+hierarchy, all joints and types, actuator mappings, sites, cameras, and equality
+pairs. This moves body reparenting or order drift into the import gate before
+native state indices or Unity transform identities can change. `MODEL_MAP.json`
+is the machine-readable model contract; the anonymous camera-frame body remains
+pinned at index 15 and receives only the presentation identity `__body_15`.
+
+The source MuJoCo cameras remain model metadata but are excluded from the Unity
+prefab. The versioned visual conversion is presentation-only and does not modify
+the solver MJCF, collisions, ranges, inertias, actuators, or equality constraints.
+MuJoCo 3.9.0 compiles the model with 19 bodies including world, 16 joints,
+9 actuators, 5 equality constraints, 13 sites, `nq=37`, and `nv=30`.
+
+The detailed import contract is in
+[Official Reachy Mini model import](architecture/OFFICIAL_REACHY_MODEL_IMPORT.md).
+
+### RMA-041/RMA-042 — parameter audit and reference comparison foundations
+
+The mechanical audit and cross-platform reference infrastructure already exist,
+but these tasks remain formally open until their individual requirements and
+acceptance criteria are audited and closed. The audit classifies generic actuator
+dynamics and missing antenna hard-stop evidence as uncalibrated placeholders; no
+calibrated claim is made. Desktop/Android reference traces compare qpos, qvel,
+named body transforms, equality residuals, warnings, dimensions, hashes, and
+MuJoCo version within locked tolerances.
 
 ### RMA-050 through RMA-052 — authoritative Unity rendering
 
@@ -187,6 +208,14 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
+- Hosted RMA-040 run `30567896524`: full pinned-source/topology import,
+  Unity visual conversion, MuJoCo compile/step and reference trace, static policy,
+  native warnings/sanitizers, managed tests, and Android tests passed on
+  `d096796c422e9d7e0353a1dca89295e490665b84`.
+- Self-hosted RMA-040 run `30567896601`: production ARM64 staging, Unity tests,
+  ARM64/API-26 IL2CPP build/verification, installed lifecycle acceptance,
+  authoritative rendering, evidence uploads, and APK upload passed on the exact
+  same commit.
 - Hosted RMA-033 run `30561792617`: native warnings/sanitizers, managed
   warnings-as-errors and worker-owned snapshot acceptance, static checks,
   Android tests, and official-model validation passed on `1606bb55`.

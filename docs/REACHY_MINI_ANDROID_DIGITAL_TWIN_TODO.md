@@ -437,17 +437,50 @@ while running:
 
 ## RMA-040 — Load the official Reachy Mini MJCF baseline
 
-- [ ] Import the pinned official MJCF and required mesh/collision assets.
-- [ ] Preserve body yaw, six Stewart actuators, passive ball joints, loop closures, head body, camera frame, and antennas.
-- [ ] Remove or isolate desktop-only cameras/rendering elements not required by the solver.
-- [ ] Do not alter source ranges or inertias without a tracked transformation and rationale.
-- [ ] Generate a machine-readable body/joint/actuator map.
+**Status:** Complete (2026-07-30)
+
+- [x] Import the pinned official MJCF and required mesh/collision assets.
+- [x] Preserve body yaw, six Stewart actuators, passive ball joints, loop closures, head body, camera frame, and antennas.
+- [x] Remove or isolate desktop-only cameras/rendering elements not required by the solver.
+- [x] Do not alter source ranges or inertias without a tracked transformation and rationale.
+- [x] Generate a machine-readable body/joint/actuator map.
 
 **Acceptance criteria**
 
-- [ ] The Android runtime loads the full model.
-- [ ] The expected body, joint, actuator, and equality-constraint counts match the pinned reference.
-- [ ] Every named transform required by Unity is present.
+- [x] The Android runtime loads the full model.
+- [x] The expected body, joint, actuator, and equality-constraint counts match the pinned reference.
+- [x] Every named transform required by Unity is present.
+
+**Completion evidence**
+
+- The solver input is the clean Pollen Robotics checkout at
+  `a739a6e461eb6d722901f1cfc225265ffc85c28d`; the pinned MJCF SHA-256 is
+  `efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46`.
+- The deterministic importer copies the MJCF, every referenced visual/collision
+  mesh, and the upstream license without modifying source bytes. Per-file sizes
+  and SHA-256 digests are recorded in `PROVENANCE.json`.
+- The source lock requires all 17 named bodies, the complete ordered 18-body
+  hierarchy, all 16 joints and types, all 9 actuator-to-joint mappings, 13 sites,
+  2 source cameras, and all 5 equality-constraint pairs. A regression test proves
+  that body reparenting fails even when counts and names remain unchanged.
+- `MODEL_MAP.json` is the machine-readable body/joint/actuator/equality/site/camera
+  map. Compiled MuJoCo 3.9.0 validation requires 19 bodies including world,
+  16 joints, 9 actuators, 5 equalities, 13 sites, `nq=37`, and `nv=30`.
+- MuJoCo cameras `studio_close` and `eye_camera` remain solver/model metadata but
+  are explicitly excluded from the Unity prefab. The independent Unity camera and
+  versioned visual-mesh conversion do not modify ranges, inertias, collision
+  geometry, actuators, or equality constraints.
+- Hosted run `30567896524` passed native warnings/sanitizers, managed tests,
+  Ruff/actionlint/ShellCheck/static policy, Android tests, pinned-source topology,
+  Unity visual conversion, official-model compile/step, and reference-trace
+  generation on `d096796c422e9d7e0353a1dca89295e490665b84`.
+- Self-hosted run `30567896601` passed production ARM64 MuJoCo staging, Unity
+  EditMode/PlayMode tests, ARM64/API-26 IL2CPP build/verification, installed LG G6
+  lifecycle acceptance, authoritative rendering, evidence uploads, and APK upload
+  on the same exact commit.
+- Detailed contracts and evidence are in
+  `docs/architecture/OFFICIAL_REACHY_MODEL_IMPORT.md` and
+  `docs/validation/RMA_040_MODEL_IMPORT_VALIDATION_2026-07-30.md`.
 
 ## RMA-041 — Audit mechanical parameters
 

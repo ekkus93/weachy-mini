@@ -47,5 +47,20 @@ The authoritative evidence consists of:
 - ARM64/API-26 IL2CPP APK build and verification;
 - installed physical-device lifecycle and authoritative-rendering acceptance.
 
-Exact run IDs and checklist-closure commit are added only after those gates finish
-on the closure head.
+## Automated evidence
+
+Hosted Quality Gates run `30567896524` passed on
+`d096796c422e9d7e0353a1dca89295e490665b84`, including the complete pinned-source
+model gate, Unity conversion, MuJoCo compile/step, reference trace, static checks,
+native warnings/sanitizers, managed tests, and Android tests.
+
+Self-hosted Unity/Android run `30567896601` passed on the same exact commit,
+including production ARM64 MuJoCo staging, Unity tests, ARM64/API-26 IL2CPP
+build/verification, installed LG G6 lifecycle acceptance, physical authoritative
+rendering, evidence uploads, and APK upload.
+
+## Result
+
+All eight RMA-040 checklist and acceptance items are supported by permanent
+implementation, regression tests, hosted validation, and exact-head physical
+Unity/Android validation. RMA-041 and later tasks remain unchanged.
