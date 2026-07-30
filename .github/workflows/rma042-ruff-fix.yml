@@ -1,0 +1,57 @@
+name: RMA-042 Ruff Fix
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma042-ruff-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply repository Ruff policy
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff check --fix \
+            scripts/compare_reachy_reference_trace.py \
+            scripts/validate_reference_trace_lock.py \
+            scripts/tests/test_reference_trace_tools.py
+          ruff format \
+            scripts/compare_reachy_reference_trace.py \
+            scripts/validate_reference_trace_lock.py \
+            scripts/tests/test_reference_trace_tools.py
+          ruff check \
+            scripts/compare_reachy_reference_trace.py \
+            scripts/validate_reference_trace_lock.py \
+            scripts/tests/test_reference_trace_tools.py
+          ruff format --check \
+            scripts/compare_reachy_reference_trace.py \
+            scripts/validate_reference_trace_lock.py \
+            scripts/tests/test_reference_trace_tools.py
+      - name: Commit deterministic formatter output
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            printf '%s\n' 'Ruff made no changes.'
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            scripts/compare_reachy_reference_trace.py \
+            scripts/validate_reference_trace_lock.py \
+            scripts/tests/test_reference_trace_tools.py
+          git commit -m 'RMA-042: apply repository Python formatting'
+          git push origin HEAD:master
