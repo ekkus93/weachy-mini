@@ -12,6 +12,8 @@ state, and snapshot semantics are specified in
 [Production MuJoCo backend](architecture/PRODUCTION_MUJOCO_BACKEND.md). Handle
 arbitration and caller-owned output rules are specified in
 [Native handle concurrency and output ownership](architecture/NATIVE_HANDLE_CONCURRENCY.md).
+The managed P/Invoke, layout, ownership, error, and threading rules are specified
+in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md).
 
 ## Versioning
 
@@ -32,6 +34,16 @@ The public function and fixed-structure ABI is version `2`. The authoritative
 state envelope has its own `REACHY_SIM_STATE_FORMAT_VERSION`, currently `1`, so
 ordered state fields can evolve without silently changing `ReachySimStateHeader`
 or the ABI-2 function signatures.
+
+## Managed preflight
+
+Android IL2CPP startup validates the managed process width, every fixed ABI and
+authoritative-state structure size, critical field offsets, native library
+availability, and the exact native ABI version before the first scene. A layout
+or version mismatch fails startup visibly; simulation and presentation do not
+continue through a mock, guessed packing, or cosmetic fallback. Hosted managed
+tests inject an incompatible ABI value and require a typed fatal `AbiMismatch`
+containing both version numbers.
 
 ## Handles and ownership
 
@@ -150,15 +162,17 @@ wrench when at least one non-world body exists.
 
 ## Contract tests
 
-The native suite verifies:
+The native and managed suites verify:
 
-- fixed C structure layouts and C/C++ compatibility;
+- fixed C and managed structure layouts and C/C++ compatibility;
 - ABI and structure-size mismatch rejection;
+- injected managed startup rejection for an incompatible native ABI;
 - initialized creation outputs and optional diagnostics;
 - null, invalid, and undersized output-buffer behavior;
 - exact legacy and authoritative state sizing;
 - explicit unavailable-backend failure;
-- create/destroy and 1,000-cycle lifecycle stress;
+- native and managed create/destroy lifecycle stress, including 1,000 managed
+  create/step/dispose cycles;
 - stale-generation rejection and double-destroy behavior;
 - exact command parsing, sequencing, duplicate rejection, and range validation;
 - wrench validation and fixed-step duration;
@@ -172,4 +186,5 @@ The native suite verifies:
 The first-party contract runs under strict warnings-as-errors, ASan, and UBSan on
 desktop CI. Pinned Android ARM64 cross-compilation, physical native probing,
 Unity lifecycle acceptance, and authoritative rendering are production regression
-gates.
+gates. The Android preflight makes exact ARM64 IL2CPP managed layout validation a
+startup requirement rather than an inference from later native calls.
