@@ -5,6 +5,10 @@ using UnityEngine;
 namespace ReachyMini.Presentation
 {
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(ReachyAuthoritativeRenderer))]
+    [RequireComponent(typeof(ReachyProductionAuthoritativeRuntime))]
+    [RequireComponent(typeof(ReachyAuthoritativePhysicalAcceptance))]
+    [RequireComponent(typeof(ReachyNativeLifecycleAcceptance))]
     public sealed class ReachyPresentationRoot : MonoBehaviour
     {
         [SerializeField]
@@ -126,6 +130,10 @@ namespace ReachyMini.Presentation
             if (GetComponent<ReachyAuthoritativePhysicalAcceptance>() == null)
             {
                 gameObject.AddComponent<ReachyAuthoritativePhysicalAcceptance>();
+            }
+            if (GetComponent<ReachyNativeLifecycleAcceptance>() == null)
+            {
+                gameObject.AddComponent<ReachyNativeLifecycleAcceptance>();
             }
         }
 
