@@ -137,17 +137,30 @@ namespace ReachyMini.Editor
 
                 jointLabel = BuildJointLabel(names);
             }
-            catch (Exception exception) when (
-                exception is IOException ||
-                exception is UnauthorizedAccessException ||
-                exception is InvalidDataException ||
-                exception is ArgumentException)
+            catch (InvalidDataException exception)
             {
-                loadFault = exception.Message;
-                Debug.LogError(
-                    $"Reachy authoritative debug overlay failed to load " +
-                    $"{AuditRelativePath}: {exception.Message}");
+                RecordLoadFault(exception);
             }
+            catch (IOException exception)
+            {
+                RecordLoadFault(exception);
+            }
+            catch (UnauthorizedAccessException exception)
+            {
+                RecordLoadFault(exception);
+            }
+            catch (ArgumentException exception)
+            {
+                RecordLoadFault(exception);
+            }
+        }
+
+        private static void RecordLoadFault(Exception exception)
+        {
+            loadFault = exception.Message;
+            Debug.LogError(
+                $"Reachy authoritative debug overlay failed to load " +
+                $"{AuditRelativePath}: {exception.Message}");
         }
 
         private static string BuildJointLabel(IReadOnlyList<string> names)
