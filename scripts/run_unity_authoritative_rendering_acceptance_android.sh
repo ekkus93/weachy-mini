@@ -6,6 +6,7 @@ ADB_BIN="${ADB_BIN:-adb}"
 APK_PATH="${UNITY_DEVICE_APK_PATH:-${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk}"
 REPORT_DIR="${UNITY_AUTHORITATIVE_REPORT_DIR:-${ROOT_DIR}/build/unity-authoritative-device-report}"
 PACKAGE_NAME="com.ekkus.weachymini"
+LAUNCH_EXTRA_NAME="weachy_physical_acceptance"
 RESULT_FILE_NAME="weachy-authoritative-acceptance.json"
 REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
 TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-90}"
@@ -66,6 +67,62 @@ ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 rm -rf -- "${REPORT_DIR}"
 mkdir -p "${REPORT_DIR}"
 
+capture_diagnostics()
+{
+    set +e
+    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt"
+    "${ADB[@]}" shell dumpsys activity activities \
+        > "${REPORT_DIR}/activity.txt"
+    "${ADB[@]}" shell dumpsys window windows \
+        > "${REPORT_DIR}/window.txt"
+    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
+        > "${REPORT_DIR}/package.txt"
+    "${ADB[@]}" shell ps \
+        > "${REPORT_DIR}/processes.txt"
+    "${ADB[@]}" shell \
+        "ls -laR '/sdcard/Android/data/${PACKAGE_NAME}' 2>&1" \
+        > "${REPORT_DIR}/external-files.txt"
+    "${ADB[@]}" shell \
+        "run-as '${PACKAGE_NAME}' sh -c 'pwd; find . -maxdepth 3 -type f -print' 2>&1" \
+        > "${REPORT_DIR}/internal-files.txt"
+    "${ADB[@]}" exec-out screencap -p \
+        > "${REPORT_DIR}/device-screen.png"
+}
+
+on_exit()
+{
+    local exit_code=$?
+    trap - EXIT
+    if (( exit_code != 0 )); then
+        capture_diagnostics
+    fi
+    exit "${exit_code}"
+}
+trap on_exit EXIT
+
+read_device_report()
+{
+    local report_json
+    report_json="$(
+        "${ADB[@]}" shell \
+            "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+            | tr -d '\r' \
+            || true
+    )"
+    if [[ -n "${report_json}" ]]; then
+        printf '%s' "${report_json}"
+        return
+    fi
+
+    report_json="$(
+        "${ADB[@]}" shell \
+            "run-as '${PACKAGE_NAME}' cat 'files/${RESULT_FILE_NAME}' 2>/dev/null" \
+            | tr -d '\r' \
+            || true
+    )"
+    printf '%s' "${report_json}"
+}
+
 {
     printf 'serial=%s\n' "${DEVICE_SERIAL}"
     printf 'manufacturer=%s\n' "$("${ADB[@]}" shell getprop ro.product.manufacturer | tr -d '\r')"
@@ -82,22 +139,18 @@ mkdir -p "${REPORT_DIR}"
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/clear.txt"
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" || true
 "${ADB[@]}" logcat -c || true
-"${ADB[@]}" shell monkey \
-    -p "${PACKAGE_NAME}" \
+"${ADB[@]}" shell am start -W \
+    -a android.intent.action.MAIN \
     -c android.intent.category.LAUNCHER \
-    1 > "${REPORT_DIR}/launch.txt"
+    -p "${PACKAGE_NAME}" \
+    --ez "${LAUNCH_EXTRA_NAME}" true \
+    > "${REPORT_DIR}/launch.txt"
 
 start_epoch="$(date +%s)"
 report_json=""
 last_report_json=""
 while true; do
-    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt" || true
-    report_json="$(
-        "${ADB[@]}" shell \
-            "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
-            | tr -d '\r' \
-            || true
-    )"
+    report_json="$(read_device_report)"
     if [[ -n "${report_json}" ]]; then
         last_report_json="${report_json}"
         printf '%s\n' "${report_json}" \
@@ -189,13 +242,9 @@ if not sequences[0] < sequences[1] < sequences[2]:
 print(json.dumps(report, indent=2, sort_keys=True))
 PY
 
-"${ADB[@]}" exec-out screencap -p > "${REPORT_DIR}/authoritative-rendering.png"
-if [[ ! -s "${REPORT_DIR}/authoritative-rendering.png" ]]; then
+capture_diagnostics
+if [[ ! -s "${REPORT_DIR}/device-screen.png" ]]; then
     printf '%s\n' 'Physical-device screenshot is empty.' >&2
     exit 1
 fi
-"${ADB[@]}" shell dumpsys activity activities \
-    > "${REPORT_DIR}/activity.txt"
-"${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
-    > "${REPORT_DIR}/package.txt"
 printf 'Authoritative Unity rendering acceptance passed on %s.\n' "${DEVICE_SERIAL}"
