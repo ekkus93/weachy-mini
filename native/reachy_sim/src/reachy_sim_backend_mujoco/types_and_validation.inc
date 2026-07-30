@@ -186,10 +186,33 @@ static void clear_warning_statistics(ReachyMujocoBackendContext* context)
     memset(context->data->warning, 0, sizeof(context->data->warning));
 }
 
+static bool dimension_fits_uint32(mjtSize value)
+{
+    return value >= 0 && (uint64_t)value <= UINT32_MAX;
+}
+
+static bool dimension_fits_int(mjtSize value)
+{
+    return value >= 0 && value <= (mjtSize)INT_MAX;
+}
+
 static bool dimensions_fit_public_state(const mjModel* model)
 {
     return model != NULL &&
         model->nbody >= 1 &&
-        model->njnt >= 0 &&
-        model->nu >= 0;
+        dimension_fits_uint32(model->nbody) &&
+        dimension_fits_uint32(model->njnt) &&
+        dimension_fits_uint32(model->nu) &&
+        dimension_fits_int(model->nq) &&
+        dimension_fits_int(model->nv) &&
+        dimension_fits_int(model->na) &&
+        dimension_fits_int(model->neq) &&
+        dimension_fits_int(model->nkey) &&
+        dimension_fits_int(model->nmocap) &&
+        dimension_fits_int(model->nuserdata);
+}
+
+static void reachy_mujoco_zero(mjtNum* values, mjtSize count)
+{
+    mju_zero(values, (int)count);
 }

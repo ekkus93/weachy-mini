@@ -1,5 +1,7 @@
 #include <mujoco/mujoco.h>
 
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -31,14 +33,15 @@ int main(int argc, char** argv)
 
     (void)printf(
         "{\"status\":\"ok\",\"mujoco_version\":\"%s\","
-        "\"body_count\":%d,\"joint_count\":%d,\"actuator_count\":%d,"
-        "\"position_count\":%d,\"velocity_count\":%d}\n",
+        "\"body_count\":%" PRId64 ",\"joint_count\":%" PRId64 ","
+        "\"actuator_count\":%" PRId64 ",\"position_count\":%" PRId64 ","
+        "\"velocity_count\":%" PRId64 "}\n",
         mj_versionString(),
-        verified->nbody,
-        verified->njnt,
-        verified->nu,
-        verified->nq,
-        verified->nv);
+        (int64_t)verified->nbody,
+        (int64_t)verified->njnt,
+        (int64_t)verified->nu,
+        (int64_t)verified->nq,
+        (int64_t)verified->nv);
     mj_deleteModel(verified);
     mj_deleteModel(model);
     return 0;
