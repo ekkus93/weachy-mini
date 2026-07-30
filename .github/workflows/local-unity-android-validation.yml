@@ -17,7 +17,7 @@ on:
         default: true
         type: boolean
       install_physical_device:
-        description: Install, launch, and run authoritative rendering acceptance
+        description: Install and run lifecycle and authoritative-rendering acceptance
         required: true
         default: true
         type: boolean
@@ -201,6 +201,23 @@ jobs:
         run: |
           set -euo pipefail
           test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+
+      - name: Install and run RMA-022 lifecycle acceptance
+        id: lifecycle_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          UNITY_LIFECYCLE_REPORT_DIR: ${{ runner.temp }}/unity-lifecycle-device-report
+        run: bash scripts/run_unity_native_lifecycle_acceptance_android.sh
+
+      - name: Upload RMA-022 lifecycle evidence
+        if: ${{ always() && steps.lifecycle_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-lifecycle-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/unity-lifecycle-device-report
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Install and run authoritative rendering acceptance
         id: physical_acceptance
