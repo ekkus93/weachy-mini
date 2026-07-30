@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Any
 
 
+QUATERNION_NORM_TOLERANCE = 1e-6
+
+
 class TraceComparisonError(RuntimeError):
     """Raised when trace metadata or numerical results differ beyond policy."""
 
@@ -28,18 +31,141 @@ def read_json(path: Path) -> tuple[dict[str, Any], str]:
     return value, hashlib.sha256(raw).hexdigest()
 
 
+def finite_number(value: object, label: str) -> float:
+    """Return one finite JSON number while rejecting booleans."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        raise TraceComparisonError(f"{label} must be numeric")
+    number = float(value)
+    if not math.isfinite(number):
+        raise TraceComparisonError(f"{label} is not finite")
+    return number
+
+
+def require_unique_names(value: object, label: str) -> list[str]:
+    """Return a nonempty ordered list of unique nonempty names."""
+    if not isinstance(value, list) or not value:
+        raise TraceComparisonError(f"{label} must be a nonempty array")
+    result: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item:
+            raise TraceComparisonError(f"{label}[{index}] must be a nonempty string")
+        result.append(item)
+    if len(set(result)) != len(result):
+        raise TraceComparisonError(f"{label} must not contain duplicate names")
+    return result
+
+
+def require_scenario_contract(scenario: dict[str, Any]) -> None:
+    """Validate the shared scenario before trusting its dimensions or tolerances."""
+    if scenario.get("schema_version") != 1:
+        raise TraceComparisonError("Scenario must use schema version 1")
+    scenario_id = scenario.get("scenario_id")
+    if not isinstance(scenario_id, str) or not scenario_id:
+        raise TraceComparisonError("Scenario ID must be a nonempty string")
+    source = scenario.get("source")
+    if not isinstance(source, dict):
+        raise TraceComparisonError("Scenario source must be an object")
+    for key in ("commit", "model_sha256", "mujoco_version"):
+        value = source.get(key)
+        if not isinstance(value, str) or not value:
+            raise TraceComparisonError(f"Scenario source {key} must be a nonempty string")
+
+    timestep = finite_number(scenario.get("timestep_seconds"), "scenario timestep")
+    if timestep <= 0.0:
+        raise TraceComparisonError("Scenario timestep must be positive")
+    total_steps = scenario.get("total_steps")
+    if not isinstance(total_steps, int) or isinstance(total_steps, bool) or total_steps <= 0:
+        raise TraceComparisonError("Scenario total_steps must be a positive integer")
+
+    actuator_names = require_unique_names(scenario.get("actuator_names"), "actuator_names")
+    require_unique_names(scenario.get("body_names"), "body_names")
+
+    phases = scenario.get("phases")
+    if not isinstance(phases, list) or not phases:
+        raise TraceComparisonError("Scenario phases must be a nonempty array")
+    previous_start = -1
+    for index, phase in enumerate(phases):
+        if not isinstance(phase, dict):
+            raise TraceComparisonError(f"Scenario phase {index} must be an object")
+        start = phase.get("start_step")
+        if not isinstance(start, int) or isinstance(start, bool):
+            raise TraceComparisonError(f"Scenario phase {index} start_step must be an integer")
+        if start <= previous_start or start < 0 or start >= total_steps:
+            raise TraceComparisonError("Scenario phase start steps must increase within the run")
+        if index == 0 and start != 0:
+            raise TraceComparisonError("The first scenario phase must start at step 0")
+        previous_start = start
+        targets = phase.get("targets_radians")
+        if not isinstance(targets, list) or len(targets) != len(actuator_names):
+            raise TraceComparisonError(
+                f"Scenario phase {index} must contain {len(actuator_names)} targets"
+            )
+        for target_index, target in enumerate(targets):
+            finite_number(target, f"scenario phase {index} target {target_index}")
+
+    checkpoints = scenario.get("checkpoint_steps")
+    if not isinstance(checkpoints, list) or not checkpoints:
+        raise TraceComparisonError("Scenario checkpoint_steps must be a nonempty array")
+    if checkpoints[0] != 0 or checkpoints[-1] != total_steps:
+        raise TraceComparisonError("Scenario checkpoints must include step 0 and total_steps")
+    previous_checkpoint = -1
+    for checkpoint in checkpoints:
+        if not isinstance(checkpoint, int) or isinstance(checkpoint, bool):
+            raise TraceComparisonError("Scenario checkpoint steps must be integers")
+        if checkpoint <= previous_checkpoint:
+            raise TraceComparisonError("Scenario checkpoint steps must be strictly increasing")
+        previous_checkpoint = checkpoint
+
+    counts = scenario.get("expected_counts")
+    if not isinstance(counts, dict):
+        raise TraceComparisonError("Scenario expected_counts must be an object")
+    for key in (
+        "bodies_including_world",
+        "joints",
+        "actuators",
+        "equalities",
+        "sites",
+        "cameras",
+        "nq",
+        "nv",
+    ):
+        value = counts.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise TraceComparisonError(f"Scenario expected count {key} must be positive")
+
+    tolerances = scenario.get("tolerances")
+    if not isinstance(tolerances, dict):
+        raise TraceComparisonError("Scenario tolerances must be an object")
+    for key in (
+        "simulation_time_seconds",
+        "qpos_absolute",
+        "qvel_absolute",
+        "body_position_metres_absolute",
+        "body_quaternion_component_absolute",
+        "equality_residual_absolute",
+        "maximum_equality_residual",
+    ):
+        tolerance = finite_number(tolerances.get(key), f"scenario tolerance {key}")
+        if tolerance < 0.0:
+            raise TraceComparisonError(f"Scenario tolerance {key} must not be negative")
+
+
 def require_metadata(
     scenario: dict[str, Any],
     expected: dict[str, Any],
     actual: dict[str, Any],
     scenario_sha256: str,
 ) -> None:
-    """Require both traces to identify the exact scenario, model, and runtime."""
+    """Require both traces to identify the exact scenario, model, runtime, and platform."""
     source = scenario["source"]
-    for label, trace in (("desktop", expected), ("Android", actual)):
+    for label, trace, required_platform in (
+        ("desktop", expected, "desktop_reference"),
+        ("Android", actual, "android_arm64_api26"),
+    ):
         if trace.get("schema_version") != 1 or trace.get("status") != "ok":
             raise TraceComparisonError(f"{label} trace is not a successful schema-1 trace")
         comparisons = {
+            "platform": (trace.get("platform"), required_platform),
             "scenario ID": (trace.get("scenario_id"), scenario["scenario_id"]),
             "scenario SHA-256": (trace.get("scenario_sha256"), scenario_sha256),
             "model SHA-256": (trace.get("source_model_sha256"), source["model_sha256"]),
@@ -57,15 +183,7 @@ def numeric_vector(value: object, label: str, length: int) -> list[float]:
     """Return a finite fixed-length numeric array."""
     if not isinstance(value, list) or len(value) != length:
         raise TraceComparisonError(f"{label} must contain {length} values")
-    result: list[float] = []
-    for index, item in enumerate(value):
-        if not isinstance(item, int | float) or isinstance(item, bool):
-            raise TraceComparisonError(f"{label}[{index}] must be numeric")
-        number = float(item)
-        if not math.isfinite(number):
-            raise TraceComparisonError(f"{label}[{index}] is not finite")
-        result.append(number)
-    return result
+    return [finite_number(item, f"{label}[{index}]") for index, item in enumerate(value)]
 
 
 def maximum_absolute_error(left: list[float], right: list[float]) -> float:
@@ -80,6 +198,24 @@ def quaternion_error(left: list[float], right: list[float]) -> float:
     return min(direct, negated)
 
 
+def quaternion_norm_error(value: list[float], label: str) -> float:
+    """Require a quaternion to represent a normalized MuJoCo rotation."""
+    error = abs(math.sqrt(sum(component * component for component in value)) - 1.0)
+    if error > QUATERNION_NORM_TOLERANCE:
+        raise TraceComparisonError(
+            f"{label} norm error {error:.17g} exceeds {QUATERNION_NORM_TOLERANCE:.17g}"
+        )
+    return error
+
+
+def require_warning_free(value: object, label: str, step: int) -> None:
+    """Require an explicit integer zero warning count."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise TraceComparisonError(f"{label} warning_count is not a nonnegative integer")
+    if value != 0:
+        raise TraceComparisonError(f"MuJoCo warning present in {label} trace at step {step}")
+
+
 def compare_traces(
     scenario: dict[str, Any],
     expected: dict[str, Any],
@@ -87,6 +223,7 @@ def compare_traces(
     scenario_sha256: str,
 ) -> dict[str, Any]:
     """Compare all checkpoints and return measured maximum errors."""
+    require_scenario_contract(scenario)
     require_metadata(scenario, expected, actual, scenario_sha256)
     expected_checkpoints = expected.get("checkpoints")
     actual_checkpoints = actual.get("checkpoints")
@@ -101,12 +238,17 @@ def compare_traces(
     counts = scenario["expected_counts"]
     body_names = scenario["body_names"]
     tolerances = scenario["tolerances"]
+    timestep = float(scenario["timestep_seconds"])
+    time_tolerance = float(tolerances["simulation_time_seconds"])
     maxima = {
         "simulation_time_seconds": 0.0,
+        "desktop_time_schedule_absolute": 0.0,
+        "android_time_schedule_absolute": 0.0,
         "qpos_absolute": 0.0,
         "qvel_absolute": 0.0,
         "body_position_metres_absolute": 0.0,
         "body_quaternion_component_absolute": 0.0,
+        "maximum_quaternion_norm_error": 0.0,
         "equality_residual_absolute": 0.0,
         "maximum_observed_equality_residual": 0.0,
     }
@@ -118,22 +260,44 @@ def compare_traces(
             raise TraceComparisonError(f"Checkpoint {index} must be an object")
         if desktop.get("step") != step or android.get("step") != step:
             raise TraceComparisonError(f"Checkpoint step mismatch at index {index}")
-        if desktop.get("warning_count") != 0 or android.get("warning_count") != 0:
-            raise TraceComparisonError(f"MuJoCo warning present at checkpoint {step}")
+        require_warning_free(desktop.get("warning_count"), "desktop", step)
+        require_warning_free(android.get("warning_count"), "Android", step)
 
-        desktop_time = float(desktop["simulation_time"])
-        android_time = float(android["simulation_time"])
-        maxima["simulation_time_seconds"] = max(
-            maxima["simulation_time_seconds"],
-            abs(desktop_time - android_time),
+        desktop_time = finite_number(desktop.get("simulation_time"), "desktop simulation_time")
+        android_time = finite_number(android.get("simulation_time"), "Android simulation_time")
+        scheduled_time = step * timestep
+        desktop_schedule_error = abs(desktop_time - scheduled_time)
+        android_schedule_error = abs(android_time - scheduled_time)
+        maxima["desktop_time_schedule_absolute"] = max(
+            maxima["desktop_time_schedule_absolute"], desktop_schedule_error
         )
-        desktop_residual = float(desktop["maximum_equality_residual"])
-        android_residual = float(android["maximum_equality_residual"])
-        if not math.isfinite(desktop_residual) or not math.isfinite(android_residual):
-            raise TraceComparisonError(f"Non-finite equality residual at step {step}")
+        maxima["android_time_schedule_absolute"] = max(
+            maxima["android_time_schedule_absolute"], android_schedule_error
+        )
+        if desktop_schedule_error > time_tolerance:
+            raise TraceComparisonError(
+                f"desktop simulation_time at step {step} differs from the scenario schedule"
+            )
+        if android_schedule_error > time_tolerance:
+            raise TraceComparisonError(
+                f"Android simulation_time at step {step} differs from the scenario schedule"
+            )
+        maxima["simulation_time_seconds"] = max(
+            maxima["simulation_time_seconds"], abs(desktop_time - android_time)
+        )
+
+        desktop_residual = finite_number(
+            desktop.get("maximum_equality_residual"),
+            "desktop maximum_equality_residual",
+        )
+        android_residual = finite_number(
+            android.get("maximum_equality_residual"),
+            "Android maximum_equality_residual",
+        )
+        if desktop_residual < 0.0 or android_residual < 0.0:
+            raise TraceComparisonError(f"Equality residual must not be negative at step {step}")
         maxima["equality_residual_absolute"] = max(
-            maxima["equality_residual_absolute"],
-            abs(desktop_residual - android_residual),
+            maxima["equality_residual_absolute"], abs(desktop_residual - android_residual)
         )
         maxima["maximum_observed_equality_residual"] = max(
             maxima["maximum_observed_equality_residual"],
@@ -144,14 +308,12 @@ def compare_traces(
         desktop_qpos = numeric_vector(desktop.get("qpos"), "desktop qpos", counts["nq"])
         android_qpos = numeric_vector(android.get("qpos"), "Android qpos", counts["nq"])
         maxima["qpos_absolute"] = max(
-            maxima["qpos_absolute"],
-            maximum_absolute_error(desktop_qpos, android_qpos),
+            maxima["qpos_absolute"], maximum_absolute_error(desktop_qpos, android_qpos)
         )
         desktop_qvel = numeric_vector(desktop.get("qvel"), "desktop qvel", counts["nv"])
         android_qvel = numeric_vector(android.get("qvel"), "Android qvel", counts["nv"])
         maxima["qvel_absolute"] = max(
-            maxima["qvel_absolute"],
-            maximum_absolute_error(desktop_qvel, android_qvel),
+            maxima["qvel_absolute"], maximum_absolute_error(desktop_qvel, android_qvel)
         )
 
         desktop_bodies = desktop.get("bodies")
@@ -193,6 +355,11 @@ def compare_traces(
                 f"Android {body_name} quaternion",
                 4,
             )
+            maxima["maximum_quaternion_norm_error"] = max(
+                maxima["maximum_quaternion_norm_error"],
+                quaternion_norm_error(desktop_quaternion, f"desktop {body_name} quaternion"),
+                quaternion_norm_error(android_quaternion, f"Android {body_name} quaternion"),
+            )
             maxima["body_quaternion_component_absolute"] = max(
                 maxima["body_quaternion_component_absolute"],
                 quaternion_error(desktop_quaternion, android_quaternion),
@@ -209,7 +376,8 @@ def compare_traces(
     for key in comparison_keys:
         if maxima[key] > float(tolerances[key]):
             raise TraceComparisonError(
-                f"{key} error {maxima[key]:.17g} exceeds tolerance {float(tolerances[key]):.17g}"
+                f"{key} error {maxima[key]:.17g} exceeds tolerance "
+                f"{float(tolerances[key]):.17g}"
             )
     if maxima["maximum_observed_equality_residual"] > float(
         tolerances["maximum_equality_residual"]
@@ -243,6 +411,7 @@ def main() -> int:
             "scenario_sha256": scenario_sha256,
             "desktop_trace_sha256": desktop_sha256,
             "android_trace_sha256": android_sha256,
+            "coordinate_convention": "MuJoCo world metres, native qpos/qvel, quaternion wxyz",
             "maximum_errors": maxima,
             "tolerances": scenario["tolerances"],
         }
