@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "source": {
     "repository": "https://github.com/pollen-robotics/reachy_mini.git",
     "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
@@ -16,7 +16,11 @@
     "may_be_labeled_calibrated": false,
     "diagnostics_status": "uncalibrated_upstream_baseline",
     "summary": "CAD-derived geometry and inertias with upstream generic or estimated dynamics. Active actuators use the upstream chosen_actuator class, which inherits perfect_actuator placeholder constants.",
-    "required_next_level": "Measured and held-out-validated actuator, friction, backlash, compliance, power, thermal, collision, and joint-limit evidence."
+    "required_next_level": "Measured and held-out-validated actuator, friction, backlash, compliance, power, thermal, collision, and joint-limit evidence.",
+    "diagnostics_severity": "warning",
+    "blocking_classifications": [
+      "placeholder"
+    ]
   },
   "parameter_groups": [
     {
@@ -200,7 +204,7 @@
           1.35
         ]
       },
-      "source_comment": "Estimation based on the gear ratio difference",
+      "source_comment": "(Estimation based on the gear ratio difference)",
       "rationale": "The upstream source explicitly labels the values as an estimate."
     }
   ],
@@ -213,7 +217,8 @@
         -2.792526803190975,
         2.792526803190879
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_1",
@@ -223,7 +228,8 @@
         -0.8377580409572196,
         1.3962634015955222
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_2",
@@ -233,7 +239,8 @@
         -1.396263401595614,
         1.2217304763958803
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_3",
@@ -243,7 +250,8 @@
         -0.8377580409572173,
         1.3962634015955244
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_4",
@@ -253,7 +261,8 @@
         -1.3962634015953894,
         0.8377580409573525
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_5",
@@ -263,7 +272,8 @@
         -1.2217304763962082,
         1.396263401595286
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "stewart_6",
@@ -273,70 +283,80 @@
         -1.3962634015954123,
         0.8377580409573296
       ],
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "explicit_joint_ranges"
     },
     {
       "name": "passive_1",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_2",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_3",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_4",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_5",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_6",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "passive_7",
       "type": "ball",
       "actuated": false,
       "range_radians": null,
-      "range_classification": "upstream_approximation"
+      "range_classification": "upstream_approximation",
+      "range_provenance_id": "passive_ball_joint_limits"
     },
     {
       "name": "right_antenna",
       "type": "hinge",
       "actuated": true,
       "range_radians": null,
-      "range_classification": "placeholder"
+      "range_classification": "placeholder",
+      "range_provenance_id": "unbounded_antenna_joints"
     },
     {
       "name": "left_antenna",
       "type": "hinge",
       "actuated": true,
       "range_radians": null,
-      "range_classification": "placeholder"
+      "range_classification": "placeholder",
+      "range_provenance_id": "unbounded_antenna_joints"
     }
   ],
   "actuators": [
@@ -414,7 +434,7 @@
   "uncertainty_notes": [
     "probably wrong, would need to re-identify",
     "Confident that this is realistic (mini duck walks with these values)",
-    "Estimation based on the gear ratio difference",
+    "(Estimation based on the gear ratio difference)",
     "Collision models defualt: coarse - there is also fine (but much more detailed models)"
   ],
   "evidence_absent": {
@@ -422,5 +442,77 @@
     "measured": [],
     "fitted": [],
     "calibrated_profiles": []
-  }
+  },
+  "contract_id": "rma041_parameter_fidelity_v2",
+  "diagnostics": {
+    "schema_version": 1,
+    "profile_id": "upstream_geometric_baseline",
+    "status": "uncalibrated_upstream_baseline",
+    "severity": "warning",
+    "title": "Upstream geometric baseline",
+    "classification": "geometric_baseline",
+    "calibrated": false,
+    "summary": "CAD-derived geometry and inertias with upstream generic or estimated dynamics. Active actuators use the upstream chosen_actuator class, which inherits perfect_actuator placeholder constants.",
+    "source_model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "blocking_classifications": [
+      "placeholder"
+    ]
+  },
+  "joint_limit_provenance": {
+    "source_kind": "pinned_upstream_mjcf",
+    "source_commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "source_model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "attribute": "joint.range",
+    "units": "radian",
+    "explicit_range_joints": [
+      "stewart_1",
+      "stewart_2",
+      "stewart_3",
+      "stewart_4",
+      "stewart_5",
+      "stewart_6",
+      "yaw_body"
+    ],
+    "unrestricted_ball_joints": [
+      "passive_1",
+      "passive_2",
+      "passive_3",
+      "passive_4",
+      "passive_5",
+      "passive_6",
+      "passive_7"
+    ],
+    "missing_hard_stop_range_joints": [
+      "left_antenna",
+      "right_antenna"
+    ],
+    "manufacturer_specification": null,
+    "measurement_report": null
+  },
+  "source_uncertainties": [
+    {
+      "scope": "actuator_model",
+      "id": "xc330m288t",
+      "comment": "probably wrong, would need to re-identify",
+      "classification": "placeholder"
+    },
+    {
+      "scope": "actuator_model",
+      "id": "sts3215_345",
+      "comment": "Confident that this is realistic (mini duck walks with these values)",
+      "classification": "upstream_approximation"
+    },
+    {
+      "scope": "actuator_model",
+      "id": "sts3215_147",
+      "comment": "(Estimation based on the gear ratio difference)",
+      "classification": "upstream_approximation"
+    },
+    {
+      "scope": "collision_mesh_selection",
+      "id": "collision_meshes",
+      "comment": "Collision models defualt: coarse - there is also fine (but much more detailed models)",
+      "classification": "upstream_approximation"
+    }
+  ]
 }
