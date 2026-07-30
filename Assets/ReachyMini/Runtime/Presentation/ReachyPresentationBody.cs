@@ -21,6 +21,23 @@ namespace ReachyMini.Presentation
 
         public string BodyName => bodyName;
 
+        public static string ResolveCanonicalBodyName(
+            int generatedBodyIndex,
+            string generatedBodyName)
+        {
+            if (generatedBodyIndex < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(generatedBodyIndex),
+                    generatedBodyIndex,
+                    "Body index must be nonnegative.");
+            }
+
+            return string.IsNullOrWhiteSpace(generatedBodyName)
+                ? $"__body_{generatedBodyIndex}"
+                : generatedBodyName;
+        }
+
         public void ConfigureGeneratedBody(
             int generatedBodyIndex,
             string generatedBodyPath,
@@ -42,7 +59,9 @@ namespace ReachyMini.Presentation
 
             bodyIndex = generatedBodyIndex;
             bodyPath = generatedBodyPath;
-            bodyName = generatedBodyName ?? string.Empty;
+            bodyName = ResolveCanonicalBodyName(
+                generatedBodyIndex,
+                generatedBodyName);
             ReachyPresentationRoot root =
                 GetComponentInParent<ReachyPresentationRoot>();
             if (root != null)
