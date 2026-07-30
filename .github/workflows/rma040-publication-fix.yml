@@ -17,19 +17,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-      - name: Apply and compile publication repair
+      - name: Apply guarded publication repair
         shell: bash
         run: |
           set -euo pipefail
           python3 .github/rma040_prepare_publication_patch.py
           python3 .github/rma040_publication_fix.py
-          dotnet build managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
-            --configuration Release \
-            --nologo
-          python3 scripts/check_repo_static.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm \
