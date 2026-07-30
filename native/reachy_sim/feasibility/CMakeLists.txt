@@ -77,26 +77,7 @@ if(BUILD_TESTING)
     )
 endif()
 
-option(REACHY_BUILD_MUJOCO_PROBE "Build the probe against an external MuJoCo library" OFF)
-set(REACHY_MUJOCO_INCLUDE_DIR "" CACHE PATH "Directory containing mujoco/mujoco.h")
-set(REACHY_MUJOCO_LIBRARY "" CACHE FILEPATH "Path to libmujoco")
-
 if(REACHY_BUILD_MUJOCO_PROBE)
-    if(NOT EXISTS "${REACHY_MUJOCO_INCLUDE_DIR}/mujoco/mujoco.h")
-        message(FATAL_ERROR "REACHY_MUJOCO_INCLUDE_DIR does not contain mujoco/mujoco.h")
-    endif()
-    if(NOT EXISTS "${REACHY_MUJOCO_LIBRARY}")
-        message(FATAL_ERROR "REACHY_MUJOCO_LIBRARY does not exist")
-    endif()
-
-    add_library(reachy_external_mujoco SHARED IMPORTED GLOBAL)
-    set_target_properties(
-        reachy_external_mujoco
-        PROPERTIES
-            IMPORTED_LOCATION "${REACHY_MUJOCO_LIBRARY}"
-            INTERFACE_INCLUDE_DIRECTORIES "${REACHY_MUJOCO_INCLUDE_DIR}"
-    )
-
     add_library(reachy_mujoco_probe STATIC)
     target_sources(
         reachy_mujoco_probe
@@ -142,4 +123,40 @@ if(REACHY_BUILD_MUJOCO_PROBE)
             C_EXTENSIONS OFF
     )
     reachy_enable_strict_warnings(reachy_mujoco_reference_runner)
+
+    add_executable(
+        reachy_mujoco_compile_runner
+        reachy_mujoco_compile_runner.c
+    )
+    target_link_libraries(
+        reachy_mujoco_compile_runner
+        PRIVATE
+            reachy_external_mujoco
+    )
+    target_compile_features(reachy_mujoco_compile_runner PRIVATE c_std_17)
+    set_target_properties(
+        reachy_mujoco_compile_runner
+        PROPERTIES
+            C_EXTENSIONS OFF
+    )
+    reachy_enable_strict_warnings(reachy_mujoco_compile_runner)
+endif()
+
+if(REACHY_BUILD_MUJOCO_BACKEND)
+    add_executable(
+        reachy_sim_backend_runner
+        reachy_sim_backend_runner.c
+    )
+    target_link_libraries(
+        reachy_sim_backend_runner
+        PRIVATE
+            reachy_sim_shared
+    )
+    target_compile_features(reachy_sim_backend_runner PRIVATE c_std_17)
+    set_target_properties(
+        reachy_sim_backend_runner
+        PROPERTIES
+            C_EXTENSIONS OFF
+    )
+    reachy_enable_strict_warnings(reachy_sim_backend_runner)
 endif()

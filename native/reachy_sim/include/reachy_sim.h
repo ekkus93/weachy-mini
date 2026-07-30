@@ -70,13 +70,19 @@ typedef enum ReachySimCapabilityFlag {
     REACHY_SIM_CAPABILITY_SNAPSHOT = UINT64_C(1) << 5
 } ReachySimCapabilityFlag;
 
+typedef enum ReachySimConfigFlag {
+    REACHY_SIM_CONFIG_FLAG_MODEL_XML = UINT32_C(1) << 0,
+    REACHY_SIM_CONFIG_FLAG_MODEL_MJB = UINT32_C(1) << 1
+} ReachySimConfigFlag;
+
 typedef enum ReachySimResetPose {
     REACHY_SIM_RESET_POSE_SLEEP_REST = 0,
     REACHY_SIM_RESET_POSE_NEUTRAL_AWAKE = 1
 } ReachySimResetPose;
 
 typedef enum ReachySimHealthFlag {
-    REACHY_SIM_HEALTH_FLAG_SLEEPING = UINT32_C(1) << 0
+    REACHY_SIM_HEALTH_FLAG_SLEEPING = UINT32_C(1) << 0,
+    REACHY_SIM_HEALTH_FLAG_MUJOCO_WARNING = UINT32_C(1) << 1
 } ReachySimHealthFlag;
 
 typedef struct ReachySimConfig {
@@ -116,6 +122,14 @@ typedef struct ReachySimCommandBatchHeader {
     uint32_t command_count;
     uint32_t byte_count;
 } ReachySimCommandBatchHeader;
+
+typedef struct ReachySimActuatorCommand {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint32_t actuator_id;
+    uint32_t reserved;
+    double control_value;
+} ReachySimActuatorCommand;
 
 typedef struct ReachySimWrenchCommand {
     uint32_t abi_version;

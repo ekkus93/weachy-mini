@@ -9,6 +9,7 @@ REMOTE_MODEL_DIR="${REMOTE_DIR}/reachy-model"
 REPORT_DIR="${REACHY_PROBE_REPORT_DIR:-${ROOT_DIR}/diagnostics-output/mujoco-probe}"
 STEP_COUNT="${REACHY_PROBE_STEP_COUNT:-900000}"
 REACHY_MODEL_STEP_COUNT="${REACHY_MODEL_PROBE_STEP_COUNT:-100}"
+BACKEND_STEP_COUNT="${REACHY_BACKEND_STEP_COUNT:-100}"
 ADB_BIN="${ADB:-adb}"
 REQUESTED_SERIAL="${REACHY_ANDROID_SERIAL:-${ANDROID_SERIAL:-}}"
 REACHY_MODEL_DIR="${STAGING_DIR}/reachy-model"
@@ -47,8 +48,11 @@ trap dump_failure_diagnostics EXIT
 
 for required_file in \
     libmujoco.so \
+    libreachy_sim.so \
     reachy_mujoco_probe_runner \
     reachy_mujoco_reference_runner \
+    reachy_mujoco_compile_runner \
+    reachy_sim_backend_runner \
     closed_loop_probe.xml \
     malformed_probe.xml \
     reference-scenario.json \
@@ -174,6 +178,92 @@ print(json.dumps(report, indent=2, sort_keys=True))
 PY
 }
 
+validate_compile_report()
+{
+    local report_path="$1"
+    python3 - "${report_path}" "${REACHY_BASELINE_PATH}" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+baseline = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+expected = baseline["compiled_counts"]
+if report.get("status") != "ok":
+    raise SystemExit(f"MJB compilation failed: {report}")
+checks = {
+    "body_count": expected["bodies_including_world"],
+    "joint_count": expected["joints"],
+    "actuator_count": expected["actuators"],
+    "position_count": expected["nq"],
+    "velocity_count": expected["nv"],
+}
+for key, expected_value in checks.items():
+    if report.get(key) != expected_value:
+        raise SystemExit(
+            f"compiled MJB {key} mismatch: expected {expected_value}, "
+            f"found {report.get(key)}"
+        )
+print(json.dumps(report, indent=2, sort_keys=True))
+PY
+}
+
+validate_backend_report()
+{
+    local report_path="$1"
+    local expected_steps="$2"
+    python3 - "${report_path}" "${REACHY_BASELINE_PATH}" "${expected_steps}" <<'PY'
+from __future__ import annotations
+
+import json
+import math
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+baseline = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+expected_steps = int(sys.argv[3])
+expected = baseline["compiled_counts"]
+if report.get("status") != "ok":
+    raise SystemExit(f"production backend failed: {report}")
+if report.get("completed_steps") != expected_steps:
+    raise SystemExit(f"production backend step count mismatch: {report}")
+if report.get("sequence") != expected_steps:
+    raise SystemExit(f"production backend sequence mismatch: {report}")
+expected_time = expected_steps * 0.002
+actual_time = report.get("simulated_seconds")
+if not isinstance(actual_time, (int, float)) or not math.isfinite(actual_time):
+    raise SystemExit(f"production backend time is invalid: {report}")
+if abs(actual_time - expected_time) > 1e-10:
+    raise SystemExit(
+        f"production backend time mismatch: expected {expected_time}, "
+        f"found {actual_time}"
+    )
+checks = {
+    "body_count": expected["bodies_including_world"] - 1,
+    "joint_count": expected["joints"],
+    "actuator_count": expected["actuators"],
+}
+for key, expected_value in checks.items():
+    if report.get(key) != expected_value:
+        raise SystemExit(
+            f"production backend {key} mismatch: expected {expected_value}, "
+            f"found {report.get(key)}"
+        )
+required_capabilities = 0x3F
+capabilities = report.get("capability_flags")
+if not isinstance(capabilities, int) or capabilities & required_capabilities != required_capabilities:
+    raise SystemExit(f"production backend capabilities are incomplete: {report}")
+if report.get("snapshot_replay_identical") is not True:
+    raise SystemExit(f"production backend replay is not deterministic: {report}")
+if report.get("sleep_reset_status") not in {"ok", "unsupported"}:
+    raise SystemExit(f"production backend sleep reset status is invalid: {report}")
+print(json.dumps(report, indent=2, sort_keys=True))
+PY
+}
+
 DEVICE_SERIAL="$(select_device_serial)"
 ADB_COMMAND=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 
@@ -181,6 +271,8 @@ mkdir -p "${REPORT_DIR}"
 TIMESTAMP="$(date -u +'%Y%m%dT%H%M%SZ')"
 CONSTRAINED_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-closed-loop.json"
 REACHY_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-reachy-model.json"
+COMPILE_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-mjb-compile.json"
+BACKEND_REPORT_PATH="${REPORT_DIR}/${TIMESTAMP}-production-backend.json"
 ANDROID_TRACE_PATH="${REPORT_DIR}/${TIMESTAMP}-reference-trace-android.json"
 TRACE_COMPARISON_PATH="${REPORT_DIR}/${TIMESTAMP}-reference-comparison.json"
 DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
@@ -197,26 +289,24 @@ DEVICE_PATH="${REPORT_DIR}/${TIMESTAMP}-device.txt"
 
 "${ADB_COMMAND[@]}" shell \
     "rm -rf '${REMOTE_DIR}' && mkdir -p '${REMOTE_MODEL_DIR}'"
-"${ADB_COMMAND[@]}" push \
-    "${STAGING_DIR}/libmujoco.so" \
-    "${REMOTE_DIR}/libmujoco.so" >/dev/null
-"${ADB_COMMAND[@]}" push \
-    "${STAGING_DIR}/reachy_mujoco_probe_runner" \
-    "${REMOTE_DIR}/reachy_mujoco_probe_runner" >/dev/null
-"${ADB_COMMAND[@]}" push \
-    "${STAGING_DIR}/reachy_mujoco_reference_runner" \
-    "${REMOTE_DIR}/reachy_mujoco_reference_runner" >/dev/null
-"${ADB_COMMAND[@]}" push \
-    "${STAGING_DIR}/closed_loop_probe.xml" \
-    "${REMOTE_DIR}/closed_loop_probe.xml" >/dev/null
-"${ADB_COMMAND[@]}" push \
-    "${STAGING_DIR}/malformed_probe.xml" \
-    "${REMOTE_DIR}/malformed_probe.xml" >/dev/null
+for runtime_file in \
+    libmujoco.so \
+    libreachy_sim.so \
+    reachy_mujoco_probe_runner \
+    reachy_mujoco_reference_runner \
+    reachy_mujoco_compile_runner \
+    reachy_sim_backend_runner \
+    closed_loop_probe.xml \
+    malformed_probe.xml; do
+    "${ADB_COMMAND[@]}" push \
+        "${STAGING_DIR}/${runtime_file}" \
+        "${REMOTE_DIR}/${runtime_file}" >/dev/null
+done
 "${ADB_COMMAND[@]}" push \
     "${REACHY_MODEL_DIR}/." \
     "${REMOTE_MODEL_DIR}/" >/dev/null
 "${ADB_COMMAND[@]}" shell \
-    "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner' '${REMOTE_DIR}/reachy_mujoco_reference_runner'"
+    "chmod 700 '${REMOTE_DIR}/reachy_mujoco_probe_runner' '${REMOTE_DIR}/reachy_mujoco_reference_runner' '${REMOTE_DIR}/reachy_mujoco_compile_runner' '${REMOTE_DIR}/reachy_sim_backend_runner'"
 
 for remote_required_file in \
     "${REMOTE_MODEL_DIR}/reachy_mini.xml" \
@@ -249,6 +339,20 @@ validate_probe_report "${CONSTRAINED_REPORT_PATH}" "${STEP_COUNT}"
 validate_reachy_report "${REACHY_REPORT_PATH}" "${REACHY_MODEL_STEP_COUNT}"
 
 "${ADB_COMMAND[@]}" shell \
+    "cd '${REMOTE_DIR}' && LD_LIBRARY_PATH='${REMOTE_DIR}' ./reachy_mujoco_compile_runner reachy-model/reachy_mini.xml reachy-model/reachy_mini.mjb" \
+    | tr -d '\r' > "${COMPILE_REPORT_PATH}"
+validate_compile_report "${COMPILE_REPORT_PATH}"
+if ! "${ADB_COMMAND[@]}" shell "test -s '${REMOTE_MODEL_DIR}/reachy_mini.mjb'"; then
+    printf '%s\n' 'Production Reachy MJB was not generated on the device.' >&2
+    exit 1
+fi
+
+"${ADB_COMMAND[@]}" shell \
+    "cd '${REMOTE_DIR}' && LD_LIBRARY_PATH='${REMOTE_DIR}' ./reachy_sim_backend_runner reachy-model/reachy_mini.mjb '${BACKEND_STEP_COUNT}'" \
+    | tr -d '\r' > "${BACKEND_REPORT_PATH}"
+validate_backend_report "${BACKEND_REPORT_PATH}" "${BACKEND_STEP_COUNT}"
+
+"${ADB_COMMAND[@]}" shell \
     "cd '${REMOTE_DIR}' && LD_LIBRARY_PATH='${REMOTE_DIR}' ./reachy_mujoco_reference_runner reachy-model/reachy_mini.xml android_arm64_api26" \
     | tr -d '\r' > "${ANDROID_TRACE_PATH}"
 python3 "${SCRIPT_DIR}/compare_reachy_reference_trace.py" \
@@ -261,6 +365,8 @@ trap - EXIT
 printf '%s\n' \
     "Constrained probe report: ${CONSTRAINED_REPORT_PATH}" \
     "Reachy model report: ${REACHY_REPORT_PATH}" \
+    "MJB compile report: ${COMPILE_REPORT_PATH}" \
+    "Production backend report: ${BACKEND_REPORT_PATH}" \
     "Android reference trace: ${ANDROID_TRACE_PATH}" \
     "Reference comparison: ${TRACE_COMPARISON_PATH}" \
     "Device report: ${DEVICE_PATH}"

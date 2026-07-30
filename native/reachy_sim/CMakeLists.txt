@@ -1,29 +1,123 @@
-add_library(reachy_sim STATIC)
-
-target_sources(
-    reachy_sim
-    PRIVATE
-        src/reachy_sim.c
-        src/reachy_sim_backend_unavailable.c
-        src/reachy_sim_version.c
-    PUBLIC
-        FILE_SET public_headers
-        TYPE HEADERS
-        BASE_DIRS include
-        FILES
-            include/reachy_sim.h
-            include/reachy_sim_version.h
+option(
+    REACHY_BUILD_MUJOCO_BACKEND
+    "Build the production reachy_sim backend against an external MuJoCo library"
+    OFF
+)
+option(
+    REACHY_BUILD_MUJOCO_PROBE
+    "Build the Android MuJoCo feasibility executables against an external MuJoCo library"
+    OFF
+)
+set(
+    REACHY_MUJOCO_INCLUDE_DIR
+    ""
+    CACHE PATH
+    "Directory containing mujoco/mujoco.h"
+)
+set(
+    REACHY_MUJOCO_LIBRARY
+    ""
+    CACHE FILEPATH
+    "Path to the external MuJoCo shared library"
+)
+set(
+    REACHY_MUJOCO_EXPECTED_VERSION
+    "3.9.0"
+    CACHE STRING
+    "Exact MuJoCo runtime version accepted by the production backend"
 )
 
-target_include_directories(
-    reachy_sim
-    PRIVATE
-        src
-)
-target_compile_features(reachy_sim PUBLIC c_std_17)
-set_target_properties(reachy_sim PROPERTIES C_EXTENSIONS OFF)
-reachy_enable_strict_warnings(reachy_sim)
-reachy_enable_sanitizers(reachy_sim)
+if(REACHY_BUILD_MUJOCO_BACKEND OR REACHY_BUILD_MUJOCO_PROBE)
+    if(NOT EXISTS "${REACHY_MUJOCO_INCLUDE_DIR}/mujoco/mujoco.h")
+        message(
+            FATAL_ERROR
+            "REACHY_MUJOCO_INCLUDE_DIR must contain mujoco/mujoco.h"
+        )
+    endif()
+    if(NOT EXISTS "${REACHY_MUJOCO_LIBRARY}")
+        message(
+            FATAL_ERROR
+            "REACHY_MUJOCO_LIBRARY must name the built MuJoCo shared library"
+        )
+    endif()
+    if(NOT TARGET reachy_external_mujoco)
+        add_library(reachy_external_mujoco SHARED IMPORTED GLOBAL)
+        set_target_properties(
+            reachy_external_mujoco
+            PROPERTIES
+                IMPORTED_LOCATION "${REACHY_MUJOCO_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${REACHY_MUJOCO_INCLUDE_DIR}"
+        )
+    endif()
+endif()
+
+set(REACHY_SIM_BACKEND_SOURCE src/reachy_sim_backend_unavailable.c)
+if(REACHY_BUILD_MUJOCO_BACKEND)
+    set(REACHY_SIM_BACKEND_SOURCE src/reachy_sim_backend_mujoco.c)
+endif()
+
+function(reachy_configure_sim_library target_name library_type)
+    add_library(${target_name} ${library_type})
+    target_sources(
+        ${target_name}
+        PRIVATE
+            src/reachy_sim.c
+            ${REACHY_SIM_BACKEND_SOURCE}
+            src/reachy_sim_version.c
+        PUBLIC
+            FILE_SET public_headers
+            TYPE HEADERS
+            BASE_DIRS include
+            FILES
+                include/reachy_sim.h
+                include/reachy_sim_version.h
+    )
+    target_include_directories(
+        ${target_name}
+        PRIVATE
+            src
+    )
+    target_compile_features(${target_name} PUBLIC c_std_17)
+    set_target_properties(${target_name} PROPERTIES C_EXTENSIONS OFF)
+    reachy_enable_strict_warnings(${target_name})
+    reachy_enable_sanitizers(${target_name})
+
+    if(REACHY_BUILD_MUJOCO_BACKEND)
+        target_compile_definitions(
+            ${target_name}
+            PRIVATE
+                REACHY_SIM_HAS_MUJOCO_BACKEND=1
+                REACHY_MUJOCO_EXPECTED_VERSION="${REACHY_MUJOCO_EXPECTED_VERSION}"
+        )
+        target_link_libraries(
+            ${target_name}
+            PRIVATE
+                reachy_external_mujoco
+        )
+        if(NOT MSVC)
+            target_link_libraries(${target_name} PRIVATE m)
+        endif()
+    endif()
+endfunction()
+
+reachy_configure_sim_library(reachy_sim STATIC)
+
+if(REACHY_BUILD_MUJOCO_BACKEND)
+    reachy_configure_sim_library(reachy_sim_shared SHARED)
+    target_compile_definitions(
+        reachy_sim_shared
+        PRIVATE
+            REACHY_SIM_BUILD_SHARED
+    )
+    set_target_properties(
+        reachy_sim_shared
+        PROPERTIES
+            OUTPUT_NAME reachy_sim
+            ARCHIVE_OUTPUT_NAME reachy_sim_production
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/reachy-production"
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/reachy-production"
+    )
+endif()
 
 if(BUILD_TESTING)
     add_executable(
@@ -52,34 +146,74 @@ if(BUILD_TESTING)
         COMMAND reachy_sim_version_test
     )
 
+    if(NOT REACHY_BUILD_MUJOCO_BACKEND)
+        add_executable(
+            reachy_sim_backend_unavailable_test
+            tests/reachy_sim_backend_unavailable_test.c
+        )
+        target_link_libraries(
+            reachy_sim_backend_unavailable_test
+            PRIVATE
+                reachy_sim
+        )
+        target_compile_features(
+            reachy_sim_backend_unavailable_test
+            PRIVATE
+                c_std_17
+        )
+        set_target_properties(
+            reachy_sim_backend_unavailable_test
+            PROPERTIES
+                C_EXTENSIONS OFF
+        )
+        reachy_enable_strict_warnings(
+            reachy_sim_backend_unavailable_test
+        )
+        reachy_enable_sanitizers(
+            reachy_sim_backend_unavailable_test
+        )
+        add_test(
+            NAME reachy_sim_backend_unavailable_test
+            COMMAND reachy_sim_backend_unavailable_test
+        )
+    endif()
+
     add_executable(
-        reachy_sim_backend_unavailable_test
-        tests/reachy_sim_backend_unavailable_test.c
+        reachy_sim_mujoco_backend_test
+        src/reachy_sim_backend_mujoco.c
+        tests/fake_mujoco/src/fake_mujoco.c
+        tests/reachy_sim_mujoco_backend_test.c
     )
-    target_link_libraries(
-        reachy_sim_backend_unavailable_test
+    target_include_directories(
+        reachy_sim_mujoco_backend_test
         PRIVATE
-            reachy_sim
+            tests/fake_mujoco/include
+            include
+            src
+    )
+    target_compile_definitions(
+        reachy_sim_mujoco_backend_test
+        PRIVATE
+            REACHY_MUJOCO_EXPECTED_VERSION="${REACHY_MUJOCO_EXPECTED_VERSION}"
     )
     target_compile_features(
-        reachy_sim_backend_unavailable_test
+        reachy_sim_mujoco_backend_test
         PRIVATE
             c_std_17
     )
     set_target_properties(
-        reachy_sim_backend_unavailable_test
+        reachy_sim_mujoco_backend_test
         PROPERTIES
             C_EXTENSIONS OFF
     )
-    reachy_enable_strict_warnings(
-        reachy_sim_backend_unavailable_test
-    )
-    reachy_enable_sanitizers(
-        reachy_sim_backend_unavailable_test
-    )
+    reachy_enable_strict_warnings(reachy_sim_mujoco_backend_test)
+    reachy_enable_sanitizers(reachy_sim_mujoco_backend_test)
+    if(NOT MSVC)
+        target_link_libraries(reachy_sim_mujoco_backend_test PRIVATE m)
+    endif()
     add_test(
-        NAME reachy_sim_backend_unavailable_test
-        COMMAND reachy_sim_backend_unavailable_test
+        NAME reachy_sim_mujoco_backend_test
+        COMMAND reachy_sim_mujoco_backend_test
     )
 
     add_library(reachy_sim_contract STATIC)

@@ -116,6 +116,8 @@ cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTING=OFF \
     -DREACHY_BUILD_MUJOCO_PROBE=ON \
+    -DREACHY_BUILD_MUJOCO_BACKEND=ON \
+    -DREACHY_MUJOCO_EXPECTED_VERSION=3.9.0 \
     -DREACHY_MUJOCO_INCLUDE_DIR="${SOURCE_DIR}/include" \
     -DREACHY_MUJOCO_LIBRARY="${OUTPUT_DIR}/libmujoco.so"
 cmake --build \
@@ -123,20 +125,32 @@ cmake --build \
     --target \
         reachy_mujoco_probe_runner \
         reachy_mujoco_reference_runner \
+        reachy_mujoco_compile_runner \
+        reachy_sim_shared \
+        reachy_sim_backend_runner \
     --parallel
 
 PROBE_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_probe_runner' -print -quit)"
 REFERENCE_RUNNER_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_reference_runner' -print -quit)"
-if [[ -z "${PROBE_PATH}" ]]; then
-    printf '%s\n' "Probe build completed without producing reachy_mujoco_probe_runner." >&2
-    exit 1
-fi
-if [[ -z "${REFERENCE_RUNNER_PATH}" ]]; then
-    printf '%s\n' "Probe build completed without producing reachy_mujoco_reference_runner." >&2
-    exit 1
-fi
+COMPILE_RUNNER_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_mujoco_compile_runner' -print -quit)"
+BACKEND_RUNNER_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'reachy_sim_backend_runner' -print -quit)"
+REACHY_SIM_LIBRARY_PATH="$(find "${PROBE_BUILD_DIR}" -type f -name 'libreachy_sim.so' -print -quit)"
+for produced_file in \
+    "${PROBE_PATH}" \
+    "${REFERENCE_RUNNER_PATH}" \
+    "${COMPILE_RUNNER_PATH}" \
+    "${BACKEND_RUNNER_PATH}" \
+    "${REACHY_SIM_LIBRARY_PATH}"; do
+    if [[ -z "${produced_file}" ]]; then
+        printf '%s\n' "Production backend/probe build omitted a required artifact." >&2
+        exit 1
+    fi
+done
 cp "${PROBE_PATH}" "${OUTPUT_DIR}/reachy_mujoco_probe_runner"
 cp "${REFERENCE_RUNNER_PATH}" "${OUTPUT_DIR}/reachy_mujoco_reference_runner"
+cp "${COMPILE_RUNNER_PATH}" "${OUTPUT_DIR}/reachy_mujoco_compile_runner"
+cp "${BACKEND_RUNNER_PATH}" "${OUTPUT_DIR}/reachy_sim_backend_runner"
+cp "${REACHY_SIM_LIBRARY_PATH}" "${OUTPUT_DIR}/libreachy_sim.so"
 cp "${REFERENCE_SCENARIO}" "${OUTPUT_DIR}/reference-scenario.json"
 cp \
     "${ROOT_DIR}/native/reachy_sim/tests/fixtures/closed_loop_probe.xml" \
@@ -167,9 +181,25 @@ fi
 "${NM}" -D --defined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.exports.txt"
 "${NM}" -D --undefined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.imports.txt"
 "${NM}" --defined-only "${OUTPUT_DIR}/libmujoco.so" > "${OUTPUT_DIR}/libmujoco.symbols.txt"
+"${READELF}" -d "${OUTPUT_DIR}/libreachy_sim.so" > "${OUTPUT_DIR}/libreachy_sim.dynamic.txt"
+"${NM}" -D --defined-only "${OUTPUT_DIR}/libreachy_sim.so" > "${OUTPUT_DIR}/libreachy_sim.exports.txt"
 
 if grep -E 'lib(GL|GLX|X11|glfw)' "${OUTPUT_DIR}/libmujoco.dynamic.txt"; then
     printf '%s\n' "Desktop-only dependency detected in Android MuJoCo library." >&2
+    exit 1
+fi
+if grep -E 'lib(GL|GLX|X11|glfw)' "${OUTPUT_DIR}/libreachy_sim.dynamic.txt"; then
+    printf '%s\n' "Desktop-only dependency detected in Android reachy_sim library." >&2
+    exit 1
+fi
+if ! grep -F 'Shared library: [libmujoco.so]' \
+    "${OUTPUT_DIR}/libreachy_sim.dynamic.txt" >/dev/null; then
+    printf '%s\n' "Production reachy_sim library is not linked to libmujoco.so." >&2
+    exit 1
+fi
+if ! grep -E '[[:space:]]reachy_sim_create$' \
+    "${OUTPUT_DIR}/libreachy_sim.exports.txt" >/dev/null; then
+    printf '%s\n' "Production reachy_sim ABI exports are missing." >&2
     exit 1
 fi
 if ! grep -E '[[:space:]]reachy_android_api26_aligned_alloc$' \
@@ -187,6 +217,7 @@ REFERENCE_SCENARIO_SHA256="$(sha256sum "${REFERENCE_SCENARIO}" | awk '{print $1}
 cat > "${OUTPUT_DIR}/BUILD_INFO.txt" <<INFO
 MuJoCo version: 3.9.0
 MuJoCo commit: 237c17e48539b6c90bf90d3161547cbdcbfaa1e0
+reachy_sim backend: production MuJoCo
 Android ABI: arm64-v8a
 Android platform: ${ANDROID_PLATFORM}
 Android NDK: ${ACTUAL_NDK}
@@ -199,4 +230,4 @@ Reference scenario SHA-256: ${REFERENCE_SCENARIO_SHA256}
 Third-party source modified: no
 INFO
 
-printf 'MuJoCo Android library and probes staged in %s\n' "${OUTPUT_DIR}"
+printf 'MuJoCo Android library, production backend, and probes staged in %s\n' "${OUTPUT_DIR}"
