@@ -1,0 +1,55 @@
+name: RMA-031 Checklist Closure
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma031-checklist-closure.yml
+
+permissions:
+  contents: write
+
+jobs:
+  close-rma031:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Mark only RMA-031 checklist items complete
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+          text = path.read_text(encoding="utf-8")
+          start_marker = "## RMA-031 — Implement C# P/Invoke boundary"
+          end_marker = "## RMA-032 — Implement authoritative simulation thread"
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          section = text[start:end]
+          open_count = section.count("- [ ]")
+          if open_count != 8:
+              raise SystemExit(
+                  f"Expected exactly 8 open RMA-031 checkboxes, found {open_count}"
+              )
+          updated_section = section.replace("- [ ]", "- [x]")
+          updated = text[:start] + updated_section + text[end:]
+          if updated.count("- [x]") - text.count("- [x]") != 8:
+              raise SystemExit("RMA-031 checkbox delta was not exactly 8")
+          path.write_text(updated, encoding="utf-8")
+          PY
+
+      - name: Commit authoritative checklist closure
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git diff --cached --check
+          git commit -m "RMA-031: mark PInvoke boundary complete"
+          git push origin HEAD:master
