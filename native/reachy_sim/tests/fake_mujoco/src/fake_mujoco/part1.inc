@@ -96,30 +96,109 @@ void mj_deleteVFS(mjVFS* vfs)
     }
 }
 
+static char* copy_vfs_xml(
+    const mjVFS* vfs,
+    char* error,
+    int error_size)
+{
+    if(vfs == NULL || vfs->buffer == NULL || vfs->buffer_size <= 0)
+    {
+        write_error(error, error_size, "XML model buffer is missing");
+        return NULL;
+    }
+
+    const size_t byte_count = (size_t)vfs->buffer_size;
+    char* const xml = malloc(byte_count + 1U);
+    if(xml == NULL)
+    {
+        write_error(error, error_size, "XML model buffer allocation failed");
+        return NULL;
+    }
+    memcpy(xml, vfs->buffer, byte_count);
+    xml[byte_count] = '\0';
+    return xml;
+}
+
+static char* read_xml_file(
+    const char* filename,
+    char* error,
+    int error_size)
+{
+    if(filename == NULL)
+    {
+        write_error(error, error_size, "XML model filename is missing");
+        return NULL;
+    }
+
+    FILE* const stream = fopen(filename, "rb");
+    if(stream == NULL)
+    {
+        write_error(error, error_size, "XML model file could not be opened");
+        return NULL;
+    }
+    if(fseek(stream, 0L, SEEK_END) != 0)
+    {
+        write_error(error, error_size, "XML model file could not be sized");
+        (void)fclose(stream);
+        return NULL;
+    }
+    const long file_length = ftell(stream);
+    if(file_length <= 0L || fseek(stream, 0L, SEEK_SET) != 0)
+    {
+        write_error(error, error_size, "XML model file is empty or unreadable");
+        (void)fclose(stream);
+        return NULL;
+    }
+
+    const size_t byte_count = (size_t)file_length;
+    char* const xml = malloc(byte_count + 1U);
+    if(xml == NULL)
+    {
+        write_error(error, error_size, "XML model file allocation failed");
+        (void)fclose(stream);
+        return NULL;
+    }
+    const size_t read_count = fread(xml, 1U, byte_count, stream);
+    const int close_status = fclose(stream);
+    if(read_count != byte_count || close_status != 0)
+    {
+        write_error(error, error_size, "XML model file could not be read completely");
+        free(xml);
+        return NULL;
+    }
+    xml[byte_count] = '\0';
+    return xml;
+}
+
 mjModel* mj_loadXML(
     const char* filename,
     const mjVFS* vfs,
     char* error,
     int error_size)
 {
-    (void)filename;
-    if(vfs == NULL || vfs->buffer == NULL || vfs->buffer_size <= 0)
+    char* const xml = vfs != NULL
+        ? copy_vfs_xml(vfs, error, error_size)
+        : read_xml_file(filename, error, error_size);
+    if(xml == NULL)
     {
-        write_error(error, error_size, "XML model buffer is missing");
         return NULL;
     }
-    const char* const xml = vfs->buffer;
+
+    mjModel* model = NULL;
     if(strstr(xml, "<mujoco") == NULL || strstr(xml, "malformed") != NULL)
     {
         write_error(error, error_size, "XML parse error");
-        return NULL;
     }
-    if(strstr(xml, "external_asset") != NULL)
+    else if(strstr(xml, "external_asset") != NULL)
     {
         write_error(error, error_size, "resource not found via VFS");
-        return NULL;
     }
-    return allocate_model(strstr(xml, "backend_fixture") != NULL);
+    else
+    {
+        model = allocate_model(strstr(xml, "backend_fixture") != NULL);
+    }
+    free(xml);
+    return model;
 }
 
 mjModel* mj_loadModelBuffer(const void* buffer, int buffer_size)
