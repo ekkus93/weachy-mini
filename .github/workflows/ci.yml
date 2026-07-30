@@ -30,7 +30,7 @@ jobs:
           set -e
 
           git show HEAD^:.github/workflows/ci.yml > .github/workflows/ci.yml
-          git rm \
+          git rm -f \
             .github/workflows/rma040-publication-fix.yml \
             .github/rma040_prepare_publication_patch.py \
             .github/rma040_publication_fix.py
