@@ -318,18 +318,18 @@ class ReachyAssetImportTests(unittest.TestCase):
     def test_body_reparenting_fails_with_unchanged_counts_and_names(self) -> None:
         """Full ordered body paths must reject hierarchy drift before import."""
         changed = self.fixture_model().replace(
-            '''            <body name="right_antenna_body">
+            """            <body name="right_antenna_body">
               <joint name="right_antenna" type="hinge"/>
             </body>
             <body name="left_antenna_body">
               <joint name="left_antenna" type="hinge"/>
-            </body>''',
-            '''            <body name="right_antenna_body">
+            </body>""",
+            """            <body name="right_antenna_body">
               <joint name="right_antenna" type="hinge"/>
               <body name="left_antenna_body">
                 <joint name="left_antenna" type="hinge"/>
               </body>
-            </body>''',
+            </body>""",
         )
         self.model_path.write_text(changed, encoding="utf-8")
         new_commit = self.commit_source("reparent named body")
