@@ -57,6 +57,17 @@ namespace ReachyMini.Tests
                         StringComparison.Ordinal)),
                     Is.True);
 
+                string[] jointNames = bodies
+                    .SelectMany(body => body.JointNames)
+                    .ToArray();
+                Assert.That(jointNames, Has.Length.EqualTo(16));
+                Assert.That(
+                    jointNames.Distinct(StringComparer.Ordinal).Count(),
+                    Is.EqualTo(jointNames.Length));
+                Assert.That(jointNames, Does.Contain("yaw_body"));
+                Assert.That(jointNames, Does.Contain("right_antenna"));
+                Assert.That(jointNames, Does.Contain("left_antenna"));
+
                 ReachyAuthoritativeRenderer authoritativeRenderer =
                     contents.GetComponent<ReachyAuthoritativeRenderer>();
                 Assert.That(authoritativeRenderer, Is.Not.Null);
@@ -70,6 +81,12 @@ namespace ReachyMini.Tests
                 Assert.That(
                     authoritativeRenderer.ValidateAuthoritativeStructure(),
                     Is.True);
+
+                ReachyAuthoritativeDebugOverlay debugOverlay =
+                    contents.GetComponent<ReachyAuthoritativeDebugOverlay>();
+                Assert.That(debugOverlay, Is.Not.Null);
+                Assert.That(debugOverlay.BodyCount, Is.EqualTo(root.BodyCount));
+                Assert.That(debugOverlay.enabled, Is.False);
 
                 MeshRenderer[] renderers =
                     contents.GetComponentsInChildren<MeshRenderer>(true);
