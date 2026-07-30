@@ -4,6 +4,7 @@
 **Contract:** `rma041_parameter_fidelity_v2`
 **Pinned Reachy commit:** `a739a6e461eb6d722901f1cfc225265ffc85c28d`
 **Pinned MJCF SHA-256:** `efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46`
+**Guarded closure commit:** `6809532b3a49911b39bfdf447da0710e76945938`
 
 ## Scope
 
@@ -118,6 +119,12 @@ desktop reference generation all passed. That workflow's static job inspected a
 temporary patch helper and failed Ruff; the helper and temporary workflow were
 subsequently deleted, ending at cleanup commit
 `a44d1f883e94515c24338b1a7ecb2fcb55430c4e`.
+
+Guarded closure workflow run `30588993044` re-ran Ruff, all focused tests, static
+audit validation, exact checklist-boundary checks, and cached-diff validation
+before committing the seven-item RMA-041 closure as
+`6809532b3a49911b39bfdf447da0710e76945938` and removing its own temporary
+script/workflow.
 
 ## Result
 
