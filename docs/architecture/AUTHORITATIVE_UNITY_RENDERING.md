@@ -28,6 +28,24 @@ presentation camera and lighting. The MuJoCo `studio_close` and `eye_camera`
 definitions remain model metadata and are never the application presentation
 camera.
 
+### RMA-050 generated prefab contract
+
+The full pinned presentation contains 18 non-world body transforms, 161 visual
+instances, 41 referenced visual meshes, and 41 materials. Body indices and parent
+paths are canonical and complete; the unnamed source body receives only the
+presentation identity `__body_15`.
+
+Each generated mesh entry records source path/hash, source scale, output path/hash,
+triangle count, and `scale_baked_into_vertices=true`. Scale is applied before the
+coordinate-basis conversion, while generated Unity body and visual transforms use
+unit local scale. This prevents missing or double-applied MJCF mesh scale.
+
+The scene contract fixes the independent camera position, target, field of view,
+clip planes, background, AudioListener, directional key light, shadows, and
+ambient illumination. Camera and light are root objects rather than descendants of
+the authoritative robot hierarchy. Exact validation evidence is recorded in
+`docs/validation/RMA_050_UNITY_PREFAB_VALIDATION_2026-07-30.md`.
+
 The pinned model has 18 non-world bodies. Seventeen have upstream names. The one
 unnamed body is assigned the deterministic canonical identity `__body_15` by the
 asset generator and runtime mapper. The generated contract requires all 18

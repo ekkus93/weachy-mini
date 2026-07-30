@@ -589,11 +589,41 @@ while running:
 
 ## RMA-050 — Build the Reachy Unity prefab
 
-- [ ] Import visual meshes and materials through the asset pipeline.
-- [ ] Create one Unity transform per rendered MuJoCo body or a documented mapped subset.
-- [ ] Preserve model scale and coordinate conversion.
-- [ ] Add the fixed presentation camera and basic lighting.
-- [ ] Keep the presentation camera independent of Reachy's simulated camera frame.
+**Status:** Complete (2026-07-30)
+
+- [x] Import visual meshes and materials through the asset pipeline.
+- [x] Create one Unity transform per rendered MuJoCo body or a documented mapped subset.
+- [x] Preserve model scale and coordinate conversion.
+- [x] Add the fixed presentation camera and basic lighting.
+- [x] Keep the presentation camera independent of Reachy's simulated camera frame.
+
+**Completion evidence**
+
+- The deterministic asset path imports the pinned MJCF, meshes, license,
+  provenance, and model map; converts source STL triangles into Unity-coordinate
+  OBJ files; emits `UNITY_RENDER_MAP.json`; and generates the prefab and scene.
+- The prefab contains all 18 non-world MuJoCo bodies in canonical index and parent
+  order, 161 visual instances, 41 referenced visual meshes, and 41 materials. The
+  anonymous source body is represented only by deterministic presentation identity
+  `__body_15`.
+- Every mesh entry records source/output hashes, source scale, triangle count, and
+  that scale was baked into vertices. Generated body and visual transforms retain
+  unit local scale, preventing double application.
+- The basis contract maps MuJoCo right-handed Z-up positions and `wxyz`
+  quaternions into Unity left-handed Y-up coordinates, reverses mesh winding, and
+  never modifies the solver model.
+- The generated scene contains one root-level fixed front-three-quarter Unity
+  camera and one root-level directional key light. The MuJoCo `studio_close` and
+  `eye_camera` definitions remain excluded metadata and are not presentation
+  objects.
+- Hosted run `30591010118` and self-hosted `kawa` run `30591010149` passed on
+  exact clean commit `28c582e9e23c5b61e0c8dfac0d8b6f423064ac40`, covering
+  Python conversion tests, official-model conversion, Unity EditMode/PlayMode
+  tests, ARM64 API-26 IL2CPP build, installed lifecycle acceptance, physical
+  authoritative rendering, and artifact uploads.
+- Detailed contracts and evidence are in
+  `docs/architecture/AUTHORITATIVE_UNITY_RENDERING.md` and
+  `docs/validation/RMA_050_UNITY_PREFAB_VALIDATION_2026-07-30.md`.
 
 ## RMA-051 — Implement state-to-render mapping
 

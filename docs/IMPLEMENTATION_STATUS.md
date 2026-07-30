@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-041 machine-readable mechanical-parameter
-fidelity, joint-limit provenance, source uncertainty binding, and fail-closed
-calibration labeling after RMA-040 official-model import closure
+**Current implementation series:** RMA-050 deterministic Unity prefab and scene,
+full-model presentation hierarchy, auditable mesh scale/basis conversion, and
+fixed camera/lighting acceptance after RMA-041/RMA-042 model-integrity closure
 
 ## Repository rules in force
 
@@ -218,11 +218,30 @@ magnitude inside all locked tolerances. The detailed contract is in
 validation evidence in
 [the RMA-042 validation record](validation/RMA_042_REFERENCE_STATE_VALIDATION_2026-07-30.md).
 
-### RMA-050 through RMA-052 — authoritative Unity rendering
+### RMA-050 — generated Unity prefab and scene
 
-The deterministic generated presentation contains all 18 non-world MuJoCo
-bodies. The unnamed upstream body has the canonical identity `__body_15`; all
-runtime identities are nonempty and unique.
+RMA-050 is complete. The deterministic presentation pipeline imports the exact
+pinned visual assets, converts them into Unity-coordinate OBJ geometry, preserves
+material RGBA, and emits a source-bound render manifest before generating the
+prefab and scene. The prefab contains all 18 non-world MuJoCo bodies, 161 visual
+instances, 41 referenced visual meshes, and 41 materials. The unnamed upstream
+body has canonical presentation identity `__body_15`.
+
+Mesh scale is now explicit audit data. Each manifest mesh records its source scale
+and requires that scale to be baked into generated vertices; generated body and
+visual transforms remain unit scale. Strict validation covers body index/parent
+order, mesh and material identity, visual-to-body/mesh/material references, finite
+poses/colors, source/output hashes, and exclusion of both MuJoCo cameras.
+
+The generated scene locks one root-level fixed front-three-quarter Unity camera
+and one root-level directional key light. Neither is parented under Reachy, and
+the simulated `studio_close` and `eye_camera` definitions remain model metadata.
+The detailed contract is in
+[Authoritative Unity rendering](architecture/AUTHORITATIVE_UNITY_RENDERING.md),
+with validation evidence in
+[the RMA-050 validation record](validation/RMA_050_UNITY_PREFAB_VALIDATION_2026-07-30.md).
+
+### RMA-051/RMA-052 — authoritative state mapping and invariant foundations
 
 The production state-format-v1 envelope publishes model identity, sequence,
 simulation time, continuity, qpos, qvel, actuator observations, canonical body
@@ -243,6 +262,16 @@ launch the exact Unity activity, verify focused-window ownership, capture
 structured evidence, and restore device power policy.
 
 ## Current validation evidence
+
+- Hosted RMA-050 run `30591010118`: Ruff/actionlint/ShellCheck/static policy,
+  focused converter failure coverage, exact pinned-model Unity visual conversion,
+  native warnings/sanitizers, managed tests, and Android tests passed on
+  `28c582e9e23c5b61e0c8dfac0d8b6f423064ac40`.
+- Self-hosted RMA-050 run `30591010149`: generated presentation preparation,
+  production ARM64 MuJoCo staging, expanded Unity prefab/scene tests, ARM64 API-26
+  IL2CPP build/verification, installed lifecycle acceptance, physical
+  authoritative-rendering acceptance, evidence uploads, and APK upload passed on
+  the same exact commit.
 
 - Focused RMA-041 audit run `30587841758`: Ruff, 11 positive/failure-path tests,
   static evidence validation, and deterministic patch artifact publication passed
