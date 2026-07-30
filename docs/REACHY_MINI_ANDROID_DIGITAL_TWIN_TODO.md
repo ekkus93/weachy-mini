@@ -484,16 +484,62 @@ while running:
 
 ## RMA-041 — Audit mechanical parameters
 
-- [ ] Add `docs/model-parameter-audit.md` or an equivalent generated report.
-- [ ] Classify each parameter as CAD-derived, upstream approximation, manufacturer specification, measured, fitted, or placeholder.
-- [ ] Explicitly flag the generic/perfect actuator parameters as baseline approximations.
-- [ ] Record joint-limit provenance.
-- [ ] Record any source comments indicating uncertain values.
+**Status:** Complete (2026-07-30)
+
+- [x] Add `docs/model-parameter-audit.md` or an equivalent generated report.
+- [x] Classify each parameter as CAD-derived, upstream approximation, manufacturer specification, measured, fitted, or placeholder.
+- [x] Explicitly flag the generic/perfect actuator parameters as baseline approximations.
+- [x] Record joint-limit provenance.
+- [x] Record any source comments indicating uncertain values.
 
 **Acceptance criteria**
 
-- [ ] No placeholder is included in a profile labeled calibrated.
-- [ ] The diagnostics screen can eventually display the model fidelity classification from machine-readable data.
+- [x] No placeholder is included in a profile labeled calibrated.
+- [x] The diagnostics screen can eventually display the model fidelity classification from machine-readable data.
+
+**Completion evidence**
+
+- `docs/model-parameter-audit.md` defines the human-readable fidelity vocabulary,
+  source-derived geometry/inertia scope, joint-limit inventory, actuator-default
+  audit, equality-solver classification, calibration-label rule, and required
+  follow-on evidence.
+- `models/reachy-mini/model-parameter-audit.json` schema version `2` identifies
+  contract `rma041_parameter_fidelity_v2`. Every parameter group, joint range,
+  actuator, retained actuator-default class, and equality setting has an explicit
+  classification. Manufacturer, measured, fitted, and calibrated evidence remain
+  explicitly absent rather than inferred.
+- The active `chosen_actuator` class inherits the upstream `perfect_actuator`
+  defaults and remains a calibration-blocking `placeholder`. The retained
+  `xc330m288t` class is also a placeholder; the two retained STS3215 defaults are
+  upstream approximations. No profile may be labeled calibrated while any
+  placeholder remains.
+- `joint_limit_provenance` binds all ranges to the exact pinned MJCF commit and
+  SHA-256, the `joint.range` attribute, and radian units. Each joint points to its
+  applicable range policy. The two antenna hinges are explicitly recorded as
+  lacking encoded hard stops, and the seven passive ball joints remain
+  unrestricted upstream approximations.
+- `source_uncertainties` binds each audited upstream comment to its exact actuator
+  class or collision-mesh scope. Full-source validation requires actuator comments
+  to remain inside their matching `<default class=...>` block; moving identical
+  text elsewhere does not satisfy the contract.
+- The display-ready `diagnostics` object is an exact validator-enforced projection
+  of authoritative source and fidelity fields. It reports warning severity,
+  `uncalibrated_upstream_baseline`, `calibrated=false`, the source-model hash, and
+  the classifications that block calibration.
+- Regression tests reject missing/wrong classifications, false measured or
+  calibrated claims, joint-provenance drift, new unrecorded ranges, reassigned or
+  relocated uncertainty comments, and diagnostics/fidelity disagreement.
+- Focused validation run `30587841758` passed Ruff, all 11 parameter-audit tests,
+  and static audit validation before publishing artifact
+  `rma041-validated-patch-b2f116049df652307af45d7dd90f23bf7473fb8f` with digest
+  `0bca4d4a13903d76bb513670be8bd15c80789fcf8fda90c4bc9e7bb95357859f`.
+- The official-model job in hosted run `30588235631` passed the exact pinned
+  upstream source/topology/parameter audit, Unity visual conversion, MuJoCo
+  compile/step, and reference generation with the permanent contract. The run's
+  unrelated static job saw a temporary patch helper; that helper and its workflow
+  were removed in cleanup commit `a44d1f883e94515c24338b1a7ecb2fcb55430c4e`.
+- Detailed validation evidence is in
+  `docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md`.
 
 ## RMA-042 — Build reference-state comparison tests
 

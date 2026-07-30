@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-042 pinned desktop/Android reference-state
-comparison, strict fixture identity, coordinate conventions, and physical ARM64
-model-integrity acceptance after RMA-040 official-model import closure
+**Current implementation series:** RMA-041 machine-readable mechanical-parameter
+fidelity, joint-limit provenance, source uncertainty binding, and fail-closed
+calibration labeling after RMA-040 official-model import closure
 
 ## Repository rules in force
 
@@ -172,13 +172,29 @@ MuJoCo 3.9.0 compiles the model with 19 bodies including world, 16 joints,
 The detailed import contract is in
 [Official Reachy Mini model import](architecture/OFFICIAL_REACHY_MODEL_IMPORT.md).
 
-### RMA-041 — mechanical parameter audit foundation
+### RMA-041 — mechanical parameter audit
 
-The mechanical audit infrastructure already exists, but RMA-041 remains formally
-open until its classifications, joint-limit provenance, uncertainty records, and
-machine-readable fidelity exposure are individually audited and closed. Generic
-actuator dynamics and missing antenna hard-stop evidence remain explicitly
-uncalibrated placeholders; no calibrated claim is made.
+RMA-041 is complete. The version-2 machine-readable audit binds the fidelity
+profile to the exact pinned Reachy source commit and MJCF SHA-256, classifies every
+parameter group, joint range, actuator/default class, and equality-solver setting,
+and explicitly records which manufacturer, measured, fitted, and calibrated
+evidence is absent.
+
+Active `chosen_actuator` dynamics inherit the upstream `perfect_actuator` defaults
+and remain a calibration-blocking placeholder. Antenna hinges remain placeholders
+because the source encodes no hard-stop ranges; passive ball-joint and explicit
+hinge limits remain upstream approximations rather than physical measurements.
+The validator rejects any calibrated label while placeholders remain.
+
+Joint-limit provenance is structured and per-joint. Upstream uncertainty comments
+are bound to exact actuator classes or collision-mesh scope, including a source
+location check that rejects identical text moved outside the applicable default
+block. A display-ready diagnostics projection is checked against authoritative
+fidelity/source fields so future UI cannot silently overstate model fidelity.
+
+The detailed contract is in [Model parameter audit](model-parameter-audit.md), with
+validation evidence in
+[the RMA-041 validation record](validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md).
 
 ### RMA-042 — desktop/Android reference-state comparison
 
@@ -228,6 +244,14 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
+- Focused RMA-041 audit run `30587841758`: Ruff, 11 positive/failure-path tests,
+  static evidence validation, and deterministic patch artifact publication passed
+  before the exact validated bytes were applied to `master`.
+- Hosted RMA-041 source gate in run `30588235631`: the official-model job passed
+  the exact pinned Reachy source/topology/parameter audit, Unity visual conversion,
+  MuJoCo compile/step, and desktop reference generation with the permanent v2
+  contract. Temporary patch scaffolding observed only by that run's static job was
+  subsequently removed at `a44d1f88`.
 - Physical RMA-042 Android MuJoCo run `30583271127`: regenerated and locked the
   pinned desktop trace, cross-built the AArch64 runtime/reference runner, and
   passed the LG-H872 API-26 state/transform/equality comparison on `d229235d`.
