@@ -2,7 +2,8 @@
 
 **Date:** 2026-07-30  
 **Validated source commit:** `1606bb5583e63a14ace171d1bfbb553d2769826a`  
-**Checklist closure commit:** pending final closure
+**Checklist closure commit:** `3c45507c28be90998f78a0884b099ccc0bdaafe6`  
+**Record layout commit:** `71369e55264fd443777e7efdc3f6269ef8b572ff`
 
 ## Scope
 
