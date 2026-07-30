@@ -71,14 +71,6 @@ static ReachySimStatus mujoco_copy_state(
             error,
             error_size);
     }
-    if(!actuator_observation_mapping_supported(context->model))
-    {
-        write_message(
-            error,
-            error_size,
-            "MuJoCo actuator mapping is not one-control/one-output and cannot be published authoritatively");
-        return REACHY_SIM_STATUS_UNSUPPORTED;
-    }
 
     ReachyMujocoStateLayout layout = {0};
     if(!calculate_state_layout(context, &layout))

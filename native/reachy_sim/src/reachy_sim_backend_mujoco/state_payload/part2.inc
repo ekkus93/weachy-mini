@@ -93,9 +93,9 @@ static ReachySimStatus write_actuator_observations(
        !finite_values(data->qvel, (size_t)model->nu))
 #else
     if(!finite_values(data->ctrl, (size_t)model->nu) ||
-       !finite_values(data->actuator_force, (size_t)model->nout) ||
-       !finite_values(data->actuator_length, (size_t)model->nout) ||
-       !finite_values(data->actuator_velocity, (size_t)model->nout))
+       !finite_values(data->actuator_force, (size_t)model->nu) ||
+       !finite_values(data->actuator_length, (size_t)model->nu) ||
+       !finite_values(data->actuator_velocity, (size_t)model->nu))
 #endif
     {
         write_message(error, error_size, "MuJoCo actuator observations contain a non-finite value");
@@ -113,14 +113,13 @@ static ReachySimStatus write_actuator_observations(
             (double)data->qpos[index],
             (double)data->qvel[index]};
 #else
-        const size_t output_index = (size_t)model->actuator_outadr[index];
         const ReachySimActuatorObservation observation = {
             index,
             0U,
             (double)data->ctrl[index],
-            (double)data->actuator_force[output_index],
-            (double)data->actuator_length[output_index],
-            (double)data->actuator_velocity[output_index]};
+            (double)data->actuator_force[index],
+            (double)data->actuator_length[index],
+            (double)data->actuator_velocity[index]};
 #endif
         memcpy(
             output + offset + (size_t)index * sizeof(observation),
@@ -129,4 +128,3 @@ static ReachySimStatus write_actuator_observations(
     }
     return REACHY_SIM_STATUS_OK;
 }
-
