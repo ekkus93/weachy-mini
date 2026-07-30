@@ -1,6 +1,6 @@
 # Implementation status
 
-**Updated:** 2026-07-29  
+**Updated:** 2026-07-30  
 **Branch:** `master`  
 **Current implementation series:** Production MuJoCo backend connected to the public simulation ABI and physically validated; ordered state-payload publication and Unity production pose binding remain open
 
@@ -96,7 +96,7 @@ Android feasibility run `30507410229`, physical job `90760316016`, exercised the
 - explicit `unsupported` sleep reset because the pinned model has no named sleep keyframe;
 - successful neutral reset and clean destruction.
 
-Final caller-output-pointer validation and per-handle operation serialization or a typed `HANDLE_BUSY` result remain open safety-hardening items.
+RMA-030 caller-output and concurrency hardening is complete. Invalid, undersized, and busy calls leave caller-owned buffers and size outputs unchanged. Every public operation acquires an exclusive per-handle lease; concurrent operations on the same handle return typed `HANDLE_BUSY` results, while independent handles continue to make progress. Deterministic property-style parser tests cover structural versions and sizes, byte counts, pointers, capacities, sequencing, duplicates, reserved fields, finite/range constraints, stale handles, and snapshot identities. The native hardening suite also exercises a blocking backend and eight-thread contention with 2,000 attempts per thread.
 
 ### RMA-032 — Authoritative simulation worker
 
@@ -173,6 +173,7 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 - Java `-Xlint:all -Werror`, Android Lint, Gradle tests, and pinned Android SDK provisioning;
 - first-party native warnings-as-errors and ASan/UBSan builds/tests;
 - managed analyzers, 1,000-cycle native handle lifecycle coverage, and deterministic snapshot replay;
+- RMA-030 layout, C/C++ compatibility, parser-property matrix, caller-output invariants, per-handle `HANDLE_BUSY`, independent-handle progress, and threaded-contention coverage;
 - ARM64/API-26 MuJoCo and production-`reachy_sim` builds, AArch64/provenance verification, artifact upload, and physical library execution;
 - official multi-file Reachy package compilation to a version-matched MJB on the physical phone;
 - production public-ABI create, capabilities, state, commands, wrench, step, snapshot/restore/replay, reset, and destroy coverage;
@@ -191,7 +192,6 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 - RMA-022 physical installation/launch of the Unity IL2CPP APK with real native-wrapper initialization, failure visibility, pause/resume, and shutdown validation;
 - a versioned ordered production state payload containing `qpos`, `qvel`, actuator observations, body identity/order, body poses, continuity identity, and solver diagnostics;
 - managed parsing and publication of that payload through `IReachyAuthoritativePoseSource`, followed by physical RMA-051/RMA-052 motion acceptance;
-- caller-output-pointer validation and per-handle concurrency safety in the native ABI;
 - development APK and release AAB builds;
 - two-machine reproducible build evidence;
 - in-app licenses, attribution, and unofficial-project notice (RMA-012);
