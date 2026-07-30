@@ -1,0 +1,149 @@
+name: RMA-032 Worker Hardening
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma032-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-rma032-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply RMA-032 worker and acceptance hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, description: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected exactly one {description} replacement target, found {count}"
+                  )
+              return text.replace(old, new, 1)
+
+          worker_path = Path("Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs")
+          worker = worker_path.read_text(encoding="utf-8")
+
+          worker = replace_exact(
+              worker,
+              """        private const int FaultWaitMilliseconds = 100;\n        private const double TimestepSeconds =\n            ProjectMetadata.InitialPhysicsTimestepSeconds;\n""",
+              """        private const int FaultWaitMilliseconds = 100;\n        private const uint MujocoWarningHealthFlag = 1U << 1;\n        private const double TimestepSeconds =\n            ProjectMetadata.InitialPhysicsTimestepSeconds;\n""",
+              "worker warning constant",
+          )
+          worker = replace_exact(
+              worker,
+              """        private double accumulatedLagSeconds;\n        private double lastStepDurationSeconds;\n        private double maximumStepDurationSeconds;\n""",
+              """        private double accumulatedLagSeconds;\n        private double lastStepDurationSeconds;\n        private double maximumStepDurationSeconds;\n        private uint previousHealthFlags;\n""",
+              "worker warning state",
+          )
+          worker = replace_exact(
+              worker,
+              """                int cycleStepCount = 0;\n                while (accumulatorSeconds >= TimestepSeconds &&\n""",
+              """                int cycleStepCount = 0;\n                bool deadlineMissRecordedThisCycle = false;\n                while (accumulatorSeconds >= TimestepSeconds &&\n""",
+              "worker cycle deadline state",
+          )
+          worker = replace_exact(
+              worker,
+              """                    double stepDurationSeconds = TimestampDeltaSeconds(\n                        stepStartTimestamp,\n                        stepEndTimestamp);\n                    if (stepStatus != (int)ReachySimErrorCode.Ok)\n                    {\n                        EnterNativeFault(\n                            \"step\",\n                            session.GetErrorForStatus(stepStatus));\n                        break;\n                    }\n\n                    lastStepDurationSeconds = stepDurationSeconds;\n""",
+              """                    double stepDurationSeconds = TimestampDeltaSeconds(\n                        stepStartTimestamp,\n                        stepEndTimestamp);\n                    if (stepStatus != (int)ReachySimErrorCode.Ok)\n                    {\n                        EnterNativeFault(\n                            \"step\",\n                            session.GetErrorForStatus(stepStatus));\n                        break;\n                    }\n                    if (stepDurationSeconds < 0.0 ||\n                        double.IsNaN(stepDurationSeconds) ||\n                        double.IsInfinity(stepDurationSeconds))\n                    {\n                        EnterNativeFault(\n                            \"step timing\",\n                            ControlError(\n                                ReachySimErrorCode.NumericFailure,\n                                ReachySimRecoverability.RecreateHandle,\n                                \"The monotonic clock produced an invalid step duration.\"));\n                        break;\n                    }\n                    if (stepDurationSeconds > TimestepSeconds)\n                    {\n                        ++deadlineMissCount;\n                        deadlineMissRecordedThisCycle = true;\n                    }\n\n                    lastStepDurationSeconds = stepDurationSeconds;\n""",
+              "step duration validation and deadline accounting",
+          )
+          worker = replace_exact(
+              worker,
+              """                if (accumulatorSeconds >= TimestepSeconds &&\n                    State == ReachySimulationRunState.Running)\n                {\n                    ++deadlineMissCount;\n                    accumulatedLagSeconds = accumulatorSeconds;\n                    Thread.Yield();\n                }\n""",
+              """                if (accumulatorSeconds >= TimestepSeconds &&\n                    State == ReachySimulationRunState.Running)\n                {\n                    if (!deadlineMissRecordedThisCycle)\n                    {\n                        ++deadlineMissCount;\n                    }\n                    accumulatedLagSeconds = accumulatorSeconds;\n                    Thread.Yield();\n                }\n""",
+              "catch-up deadline accounting",
+          )
+          worker = replace_exact(
+              worker,
+              """            if (state.HealthFlags != 0U)\n            {\n                ++solverWarningCount;\n            }\n\n            lastStepDurationSeconds = stepDurationSeconds;\n""",
+              """            solverWarningCount = CountNewSolverWarningEpisodes(\n                solverWarningCount,\n                previousHealthFlags,\n                state.HealthFlags);\n            previousHealthFlags = state.HealthFlags;\n\n            lastStepDurationSeconds = stepDurationSeconds;\n""",
+              "solver warning accounting",
+          )
+          worker = replace_exact(
+              worker,
+              """        private void WaitForNextDeadline(double accumulatorSeconds)\n""",
+              """        internal static ulong CountNewSolverWarningEpisodes(\n            ulong currentCount,\n            uint previousHealthFlags,\n            uint currentHealthFlags)\n        {\n            bool warningWasActive =\n                (previousHealthFlags & MujocoWarningHealthFlag) != 0U;\n            bool warningIsActive =\n                (currentHealthFlags & MujocoWarningHealthFlag) != 0U;\n            return warningIsActive && !warningWasActive\n                ? checked(currentCount + 1UL)\n                : currentCount;\n        }\n\n        private void WaitForNextDeadline(double accumulatorSeconds)\n""",
+              "solver warning helper insertion",
+          )
+          worker_path.write_text(worker, encoding="utf-8")
+
+          program_path = Path("managed/ReachyMini.Core.Tests/Program.cs")
+          program = program_path.read_text(encoding="utf-8")
+          program = replace_exact(
+              program,
+              """            TestProjectMetadata();\n            TestNativeLayouts();\n\n            if (string.Equals(\n""",
+              """            TestProjectMetadata();\n            TestNativeLayouts();\n            TestSimulationWorkerWarningAccounting();\n\n            if (string.Equals(\n""",
+              "managed warning-accounting test registration",
+          )
+          program = replace_exact(
+              program,
+              """                TestNativeSessionLifecycle();\n                TestAuthoritativeSimulationWorker();\n""",
+              """                TestNativeSessionLifecycle();\n                TestAuthoritativeSimulationWorker();\n                TestAuthoritativeSimulationWorkerDeadlineMetrics();\n""",
+              "managed deadline test registration",
+          )
+          program = replace_exact(
+              program,
+              """                AssertEqual(\n                    ReachySimulationRunState.Running,\n                    worker.State,\n                    \"worker running state\");\n\n                ReachySimulationControlResult pause = worker.Pause(\n""",
+              """                AssertEqual(\n                    ReachySimulationRunState.Running,\n                    worker.State,\n                    \"worker running state\");\n                AssertTrajectoryInvariant(\n                    running,\n                    \"initial authoritative worker trajectory\");\n\n                ObserveWorkerAtCadence(\n                    worker,\n                    cadenceMilliseconds: 16,\n                    observationCount: 5,\n                    \"60 Hz reader cadence\");\n                ObserveWorkerAtCadence(\n                    worker,\n                    cadenceMilliseconds: 33,\n                    observationCount: 4,\n                    \"30 Hz reader cadence\");\n\n                AssertEqual(\n                    true,\n                    worker.TryGetLatestSnapshot(\n                        out ReachyPublishedSimulationSnapshot beforeRenderStall),\n                    \"pre-stall snapshot availability\");\n                Thread.Sleep(100);\n                ReachyPublishedSimulationSnapshot afterRenderStall = WaitForSnapshot(\n                    worker,\n                    snapshot => snapshot.State.Sequence >\n                        beforeRenderStall.State.Sequence,\n                    TimeSpan.FromSeconds(5.0),\n                    \"progress across a stalled rendering reader\");\n                AssertTrajectoryInvariant(\n                    afterRenderStall,\n                    \"post-stall authoritative worker trajectory\");\n\n                ReachySimulationControlResult pause = worker.Pause(\n""",
+              "reader cadence and render stall acceptance",
+          )
+          program = replace_exact(
+              program,
+              """                if (resetSnapshot.Timing.DiscardedCommandCount < 1UL)\n                {\n                    throw new InvalidOperationException(\n                        \"Managed test failed: discarded reset commands were not published in timing diagnostics.\");\n                }\n\n                ReachySimulationControlResult shutdown = worker.Shutdown(\n""",
+              """                if (resetSnapshot.Timing.DiscardedCommandCount < 1UL)\n                {\n                    throw new InvalidOperationException(\n                        \"Managed test failed: discarded reset commands were not published in timing diagnostics.\");\n                }\n                AssertEqual(\n                    1U,\n                    resetSnapshot.State.HealthFlags,\n                    \"sleeping health flag publication\");\n                AssertEqual(\n                    0UL,\n                    resetSnapshot.Timing.SolverWarningCount,\n                    \"sleeping state is not a solver warning\");\n\n                ReachySimulationControlResult shutdown = worker.Shutdown(\n""",
+              "sleeping health and warning acceptance",
+          )
+          program = replace_exact(
+              program,
+              """        private static ReachyPublishedSimulationSnapshot WaitForSnapshot(\n""",
+              """        private static void TestSimulationWorkerWarningAccounting()\n        {\n            const uint sleepingHealthFlag = 1U << 0;\n            const uint warningHealthFlag = 1U << 1;\n\n            ulong warningCount =\n                ReachySimulationWorker.CountNewSolverWarningEpisodes(\n                    currentCount: 0UL,\n                    previousHealthFlags: 0U,\n                    currentHealthFlags: sleepingHealthFlag);\n            AssertEqual(\n                0UL,\n                warningCount,\n                \"sleeping health does not increment solver warnings\");\n\n            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(\n                warningCount,\n                sleepingHealthFlag,\n                sleepingHealthFlag | warningHealthFlag);\n            AssertEqual(1UL, warningCount, \"warning rising edge\");\n\n            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(\n                warningCount,\n                sleepingHealthFlag | warningHealthFlag,\n                warningHealthFlag);\n            AssertEqual(1UL, warningCount, \"persistent warning is not recounted\");\n\n            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(\n                warningCount,\n                warningHealthFlag,\n                currentHealthFlags: 0U);\n            warningCount = ReachySimulationWorker.CountNewSolverWarningEpisodes(\n                warningCount,\n                previousHealthFlags: 0U,\n                currentHealthFlags: warningHealthFlag);\n            AssertEqual(2UL, warningCount, \"second warning episode\");\n        }\n\n        private static void TestAuthoritativeSimulationWorkerDeadlineMetrics()\n        {\n            ReachySimulationWorker? worker = null;\n            ReachySimSession? unownedSession = null;\n            Rma032NativeTestControls.ResetControls();\n            try\n            {\n                byte[] modelBytes = Encoding.UTF8.GetBytes(\n                    \"simulation-worker-deadline-model\");\n                ReachySimCreateResult createResult =\n                    ReachySimSession.Create(modelBytes);\n                unownedSession = createResult.Session ??\n                    throw new InvalidOperationException(\n                        $\"Deadline worker native create failed: {createResult.Error.Code}: {createResult.Error.Message}\");\n\n                worker = new ReachySimulationWorker(unownedSession);\n                unownedSession = null;\n                Rma032NativeTestControls.SetStepBlocked(blocked: true);\n\n                ReachySimulationControlResult start = worker.Start(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(start, \"deadline worker start\");\n                WaitForNativeStepEntry(TimeSpan.FromSeconds(5.0));\n                Thread.Sleep(40);\n                Rma032NativeTestControls.SetStepBlocked(blocked: false);\n\n                ReachyPublishedSimulationSnapshot timingSnapshot = WaitForSnapshot(\n                    worker,\n                    snapshot => snapshot.Timing.DeadlineMissCount >= 1UL &&\n                        snapshot.Timing.MaximumStepDurationSeconds >= 0.02,\n                    TimeSpan.FromSeconds(5.0),\n                    \"over-budget step timing publication\");\n                AssertTrajectoryInvariant(\n                    timingSnapshot,\n                    \"deadline-miss authoritative trajectory\");\n                if (timingSnapshot.Timing.LastStepDurationSeconds < 0.0 ||\n                    timingSnapshot.Timing.MaximumStepDurationSeconds <\n                        timingSnapshot.Timing.LastStepDurationSeconds)\n                {\n                    throw new InvalidOperationException(\n                        \"Managed test failed: step-duration diagnostics are inconsistent.\");\n                }\n\n                ReachySimulationControlResult shutdown = worker.Shutdown(\n                    TimeSpan.FromSeconds(5.0));\n                AssertControlSuccess(shutdown, \"deadline worker shutdown\");\n            }\n            finally\n            {\n                Rma032NativeTestControls.SetStepBlocked(blocked: false);\n                Rma032NativeTestControls.ResetControls();\n                if (worker != null)\n                {\n                    worker.Dispose();\n                }\n                else\n                {\n                    unownedSession?.Dispose();\n                }\n            }\n        }\n\n        private static void WaitForNativeStepEntry(TimeSpan timeout)\n        {\n            long deadline = Stopwatch.GetTimestamp() + checked(\n                (long)Math.Ceiling(\n                    timeout.TotalSeconds * Stopwatch.Frequency));\n            while (Stopwatch.GetTimestamp() < deadline)\n            {\n                if (Rma032NativeTestControls.StepEntered())\n                {\n                    return;\n                }\n                Thread.Sleep(1);\n            }\n\n            throw new InvalidOperationException(\n                \"Managed test timed out waiting for the controlled native step.\");\n        }\n\n        private static void ObserveWorkerAtCadence(\n            ReachySimulationWorker worker,\n            int cadenceMilliseconds,\n            int observationCount,\n            string description)\n        {\n            ulong firstSequence = 0UL;\n            ulong previousSequence = 0UL;\n            ulong previousPublication = 0UL;\n            for (int observation = 0; observation < observationCount; ++observation)\n            {\n                Thread.Sleep(cadenceMilliseconds);\n                if (!worker.TryGetLatestSnapshot(\n                        out ReachyPublishedSimulationSnapshot snapshot))\n                {\n                    throw new InvalidOperationException(\n                        $\"Managed test failed for {description}: no snapshot was available.\");\n                }\n                AssertTrajectoryInvariant(snapshot, description);\n                if (observation == 0)\n                {\n                    firstSequence = snapshot.State.Sequence;\n                }\n                else if (snapshot.State.Sequence < previousSequence ||\n                    snapshot.PublicationSequence < previousPublication)\n                {\n                    throw new InvalidOperationException(\n                        $\"Managed test failed for {description}: publication regressed.\");\n                }\n                previousSequence = snapshot.State.Sequence;\n                previousPublication = snapshot.PublicationSequence;\n            }\n\n            if (previousSequence <= firstSequence)\n            {\n                throw new InvalidOperationException(\n                    $\"Managed test failed for {description}: simulation did not advance independently of the reader cadence.\");\n            }\n        }\n\n        private static void AssertTrajectoryInvariant(\n            ReachyPublishedSimulationSnapshot snapshot,\n            string description)\n        {\n            double expectedSimulationTime = snapshot.State.Sequence *\n                ProjectMetadata.InitialPhysicsTimestepSeconds;\n            double error = Math.Abs(\n                snapshot.State.SimulationTime - expectedSimulationTime);\n            if (error > 1.0e-9)\n            {\n                throw new InvalidOperationException(\n                    $\"Managed test failed for {description}: sequence {snapshot.State.Sequence} implies time {expectedSimulationTime}, actual {snapshot.State.SimulationTime}.\");\n            }\n        }\n\n        private static ReachyPublishedSimulationSnapshot WaitForSnapshot(\n""",
+              "RMA-032 acceptance helper insertion",
+          )
+          program_path.write_text(program, encoding="utf-8")
+
+          controls_path = Path(
+              "managed/ReachyMini.Core.Tests/Rma032NativeTestControls.cs"
+          )
+          controls_path.write_text(
+              """#nullable enable\n\nusing System.Runtime.InteropServices;\n\nnamespace ReachyMini.Core.Tests\n{\n    internal static class Rma032NativeTestControls\n    {\n        private const string Library = \"reachy_sim\";\n\n        [DllImport(\n            Library,\n            EntryPoint = \"reachy_sim_blocking_backend_reset_controls\",\n            CallingConvention = CallingConvention.Cdecl,\n            ExactSpelling = true)]\n        private static extern void ResetControlsNative();\n\n        [DllImport(\n            Library,\n            EntryPoint = \"reachy_sim_blocking_backend_set_step_blocked\",\n            CallingConvention = CallingConvention.Cdecl,\n            ExactSpelling = true)]\n        private static extern void SetStepBlockedNative(\n            [MarshalAs(UnmanagedType.I1)] bool blocked);\n\n        [DllImport(\n            Library,\n            EntryPoint = \"reachy_sim_blocking_backend_step_entered\",\n            CallingConvention = CallingConvention.Cdecl,\n            ExactSpelling = true)]\n        [return: MarshalAs(UnmanagedType.I1)]\n        private static extern bool StepEnteredNative();\n\n        internal static void ResetControls()\n        {\n            ResetControlsNative();\n        }\n\n        internal static void SetStepBlocked(bool blocked)\n        {\n            SetStepBlockedNative(blocked);\n        }\n\n        internal static bool StepEntered()\n        {\n            return StepEnteredNative();\n        }\n    }\n}\n""",
+              encoding="utf-8",
+          )
+
+          design_path = Path(
+              "docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md"
+          )
+          design_path.write_text(
+              """# Authoritative simulation worker\n\nRMA-032 uses a **managed-owned dedicated thread** implemented by\n`ReachySimulationWorker`. Native MuJoCo remains the sole owner of mutable physics\nstate behind the C ABI, while managed code owns scheduling, command admission,\npublication, lifecycle handshakes, and diagnostics.\n\n## Why the worker is managed-owned\n\nThe managed layer already owns the deterministic `SafeHandle` lifetime and the\nAndroid/Unity lifecycle. Keeping the scheduler in that layer avoids native-to-managed\ncallbacks, keeps Unity APIs off the physics thread, and makes pause, resume, reset,\nand shutdown explicit synchronous requests with typed results. Native code never\ninvokes managed callbacks from the high-frequency path.\n\nThe Unity main thread is only a consumer. It may enqueue immutable command bytes and\nread published snapshots; it never calls `mj_step`, mutates MuJoCo data, or advances\nsimulation from `Update`, `FixedUpdate`, or rendering callbacks.\n\n## Fixed-step scheduling\n\nThe worker uses `Stopwatch.GetTimestamp()` as its monotonic clock and a 0.002-second\naccumulator. Commands are drained only immediately before a one-step native call. A\ncycle performs at most eight catch-up steps so a delayed worker cannot monopolize the\nprocess indefinitely.\n\nPause and resume both reset the accumulator and monotonic baseline. Suspended wall\ntime is therefore excluded instead of generating a catch-up burst after resume. Reset\nclears queued commands visibly, calls the selected native reset pose, republishes the\nreset state, and restarts timing from a zero accumulator.\n\n`DeadlineMissCount` records one miss for a scheduler cycle when either an individual\nnative step exceeds the 2 ms budget or backlog remains after the bounded catch-up\nwindow. `AccumulatedLagSeconds` is the current positive fixed-step backlog. Last and\nmaximum native-step durations use the same monotonic clock.\n\n## Commands and overflow\n\nThe command queue is bounded and preallocated. Enqueue validates the fixed header and\nreturns `Accepted`, `QueueFull`, `CommandTooLarge`, `InvalidFormat`, or\n`WorkerUnavailable`. A full queue never overwrites an older or newer command. Overflow\nand reset-discard counts are published in timing diagnostics. A native command failure\nfaults the worker visibly; it is not ignored or converted into a successful step.\n\n## Immutable publication\n\nThe worker copies native state into a private unmanaged buffer and converts it to an\nimmutable managed value. A versioned triple buffer publishes the complete state and\ntiming snapshot. Readers retry if they overlap a write and never obtain a reference to\nmutable MuJoCo memory. Slow, stalled, 30 Hz, and 60 Hz readers therefore affect only\nwhich immutable snapshots they observe, not the simulation trajectory.\n\n`ReachySimStateSnapshot.HealthFlags` preserves the exact native health bitset.\n`SolverWarningCount` counts observed transitions into\n`REACHY_SIM_HEALTH_FLAG_MUJOCO_WARNING`; the independent sleeping bit is not counted as\na solver warning, and a persistent warning is not recounted on every publication.\n\n## Fault and lifecycle contract\n\nNative step, command, reset, and state-copy failures become retained\n`ReachySimulationFault` values and transition the worker to `Faulted`. Managed timing,\nlayout, and lifecycle failures are converted to typed managed-interoperability faults.\nThe worker remains available for an explicit shutdown request after a fault so the\nnative handle is still destroyed deterministically.\n\nPause, resume, reset, and shutdown each have one in-flight request identifier, a\ncompletion result, and a caller deadline. A timed-out request remains visible and may\nstill complete; a second request receives a retryable busy result instead of silently\nreplacing it. Shutdown joins the dedicated thread and closes the native session.\n\n## Acceptance coverage\n\nManaged-native tests cover:\n\n- progress independent of 60 Hz and 30 Hz reader cadence;\n- continued valid trajectory after a deliberately stalled reader;\n- command admission and visible bounded-queue overflow;\n- pause stability and resume without suspended-time catch-up;\n- reset queue discard and immutable reset publication;\n- sleeping-health publication without a false solver-warning count;\n- a controlled native step blocked beyond the 2 ms budget, proving step-duration and\n  deadline-miss diagnostics;\n- retained faults and deterministic shutdown through the production lifecycle gates.\n\nUnity EditMode/PlayMode, ARM64 IL2CPP build, installed Android lifecycle acceptance,\nand authoritative rendering acceptance remain the production integration gates.\n""",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Verify and commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add \
+            Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
+            managed/ReachyMini.Core.Tests/Program.cs \
+            managed/ReachyMini.Core.Tests/Rma032NativeTestControls.cs \
+            docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "RMA-032: harden worker metrics and acceptance"
+          git push origin HEAD:master
