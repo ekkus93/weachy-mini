@@ -92,7 +92,7 @@ while true; do
     sleep 2
 done
 
-report_json="${report_line#*${SUCCESS_MARKER}}"
+report_json="${report_line#*"${SUCCESS_MARKER}"}"
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/authoritative-rendering.json"
 python3 - "${REPORT_DIR}/authoritative-rendering.json" <<'PY'
 from __future__ import annotations
