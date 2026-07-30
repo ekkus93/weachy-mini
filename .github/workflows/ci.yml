@@ -4,59 +4,393 @@ on:
   push:
     branches:
       - master
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  rma040-managed-test-fix:
+  static:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Make synthetic reader ownership explicit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+          cache: false
+      - name: Install Python lint tooling
+        run: python -m pip install --disable-pip-version-check ruff==0.12.0
+      - name: Install actionlint
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          printf '%s\n' "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
+      - name: GitHub Actions workflow lint
+        run: actionlint
+      - name: Ruff lint
+        run: ruff check scripts
+      - name: Ruff format
+        run: ruff format --check --diff scripts
+      - name: ShellCheck
+        run: shellcheck scripts/*.sh
+      - name: Static repository checks
+        run: ./scripts/ci.sh --static-only
+
+  reachy-model:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read pinned Reachy and MuJoCo sources
+        id: reachy_source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path, PurePosixPath
+          from urllib.parse import urlparse
+
+          reachy = json.loads(
+              Path("third_party/reachy-mini-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          mujoco = json.loads(
+              Path("third_party/mujoco-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          repository_path = urlparse(reachy["repository"]).path
+          repository = repository_path.removesuffix(".git").strip("/")
+          if repository.count("/") != 1:
+              raise SystemExit(f"Invalid pinned GitHub repository: {repository!r}")
+          print(f"repository={repository}")
+          print(f"commit={reachy['commit']}")
+          print(f"model_file={reachy['model_file']}")
+          print(f"model_directory={PurePosixPath(reachy['model_file']).parent}")
+          print(f"license_file={reachy['license_file']}")
+          print(f"mujoco_version={mujoco['version']}")
+          PY
+      - name: Check out pinned Reachy MJCF and meshes
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.reachy_source.outputs.repository }}
+          ref: ${{ steps.reachy_source.outputs.commit }}
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            ${{ steps.reachy_source.outputs.model_directory }}
+            ${{ steps.reachy_source.outputs.license_file }}
+          sparse-checkout-cone-mode: false
+      - name: Verify pinned source, topology, and parameter audit
+        shell: bash
+        env:
+          EXPECTED_REACHY_COMMIT: ${{ steps.reachy_source.outputs.commit }}
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          actual_commit="$(git -C upstream/reachy-mini rev-parse HEAD)"
+          if [[ "${actual_commit}" != "${EXPECTED_REACHY_COMMIT}" ]]; then
+            printf 'Reachy source mismatch: expected %s, found %s.\n' \
+              "${EXPECTED_REACHY_COMMIT}" "${actual_commit}" >&2
+            exit 1
+          fi
+          if [[ -n "$(git -C upstream/reachy-mini status --porcelain --untracked-files=all)" ]]; then
+            printf '%s\n' 'Pinned Reachy source checkout is not clean.' >&2
+            exit 1
+          fi
+          python3 scripts/validate_reachy_model.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --output build/reachy-model/MODEL_MAP.json
+          python3 scripts/validate_model_parameter_audit.py \
+            --audit models/reachy-mini/model-parameter-audit.json \
+            --lock third_party/reachy-mini-source.lock.json \
+            --baseline models/reachy-mini/model-baseline.json \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}"
+          python3 scripts/generate_reachy_reference_header.py \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --output native/reachy_sim/feasibility/reachy_reference_scenario.generated.h \
+            --check
+          cp models/reachy-mini/model-parameter-audit.json \
+            build/reachy-model/MODEL_PARAMETER_AUDIT.json
+          cp models/reachy-mini/reference-scenario.json \
+            build/reachy-model/REFERENCE_SCENARIO.json
+      - name: Convert official Reachy visual assets for Unity
+        shell: bash
+        run: |
+          set -euo pipefail
+          import_root="${RUNNER_TEMP}/reachy-unity-import"
+          presentation_root="${RUNNER_TEMP}/reachy-unity-presentation"
+          rm -rf -- "${import_root}" "${presentation_root}"
+
+          python3 scripts/import_reachy_assets.py \
+            --source upstream/reachy-mini \
+            --output-root "${import_root}"
+
+          source_subdirectory="$(python3 - <<'PY'
+          import json
           from pathlib import Path
 
-          path = Path("managed/ReachyMini.Core.Tests/Program.cs")
-          text = path.read_text(encoding="utf-8")
-          old_open = (
-              "            SyntheticAuthoritativeStateReader reader =\n"
-              "                new SyntheticAuthoritativeStateReader();\n\n"
-              "            using (ReachySimulationWorker worker =\n"
+          lock = json.loads(
+              Path("third_party/reachy-mini-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
           )
-          new_open = (
-              "            using (SyntheticAuthoritativeStateReader reader =\n"
-              "                new SyntheticAuthoritativeStateReader())\n"
-              "            {\n"
-              "            using (ReachySimulationWorker worker =\n"
-          )
-          old_close = (
-              "            AssertEqual(true, reader.IsDisposed, \"worker owns authoritative reader\");\n"
-              "        }\n\n"
-              "        private static void TestAuthoritativeSimulationWorkerSnapshots()\n"
-          )
-          new_close = (
-              "            AssertEqual(true, reader.IsDisposed, \"worker owns authoritative reader\");\n"
-              "            }\n"
-              "        }\n\n"
-              "        private static void TestAuthoritativeSimulationWorkerSnapshots()\n"
-          )
-          if text.count(old_open) == 1 and text.count(old_close) == 1:
-              text = text.replace(old_open, new_open, 1).replace(old_close, new_close, 1)
-              path.write_text(text, encoding="utf-8", newline="\n")
-          elif text.count(new_open) == 1 and text.count(new_close) == 1:
-              raise SystemExit(0)
-          else:
-              raise SystemExit("Managed ownership test guard did not match exactly")
+          print(lock["output_subdirectory"])
           PY
-          if git diff --quiet -- managed/ReachyMini.Core.Tests/Program.cs; then
-            exit 0
+          )"
+          source_root="${import_root}/${source_subdirectory}"
+          python3 scripts/prepare_reachy_unity_assets.py \
+            --source "${source_root}" \
+            --output "${presentation_root}"
+
+          python3 - "${presentation_root}" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1]).resolve()
+          manifest_path = root / "UNITY_RENDER_MAP.json"
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          if manifest.get("schema_version") != 1:
+              raise SystemExit("Unity render manifest schema mismatch")
+          bodies = manifest.get("bodies")
+          if not isinstance(bodies, list) or len(bodies) != 18:
+              raise SystemExit("Unity render manifest must contain 18 model bodies")
+          named_bodies = [body for body in bodies if body.get("name") is not None]
+          if len(named_bodies) != 17:
+              raise SystemExit("Unity render manifest must contain 17 named bodies")
+          cameras = manifest.get("source_cameras")
+          if not isinstance(cameras, list):
+              raise SystemExit("Unity render manifest source_cameras must be an array")
+          camera_names = {camera.get("name") for camera in cameras}
+          if camera_names != {"studio_close", "eye_camera"}:
+              raise SystemExit(f"Unexpected source camera set: {sorted(camera_names)}")
+          if any(camera.get("included_in_presentation") is not False for camera in cameras):
+              raise SystemExit("MuJoCo source cameras must not enter Unity presentation")
+          presentation = manifest.get("presentation")
+          if not isinstance(presentation, dict):
+              raise SystemExit("Unity render manifest presentation must be an object")
+          if presentation.get("source_cameras_included") is not False:
+              raise SystemExit("Unity presentation must explicitly exclude source cameras")
+          if presentation.get("authoritative_transform_source") != "MuJoCo body snapshots only":
+              raise SystemExit("Unity presentation transform authority is incorrect")
+
+          body_paths = {body.get("path") for body in bodies}
+          meshes = manifest.get("meshes")
+          materials = manifest.get("materials")
+          visual_geoms = manifest.get("visual_geoms")
+          if not isinstance(meshes, list) or not meshes:
+              raise SystemExit("Unity render manifest contains no meshes")
+          if not isinstance(materials, list) or not materials:
+              raise SystemExit("Unity render manifest contains no materials")
+          if not isinstance(visual_geoms, list) or not visual_geoms:
+              raise SystemExit("Unity render manifest contains no visual geoms")
+          mesh_names = {mesh.get("name") for mesh in meshes}
+          material_names = {material.get("name") for material in materials}
+          for mesh in meshes:
+              relative = mesh.get("output_path")
+              if not isinstance(relative, str):
+                  raise SystemExit("Converted mesh output_path must be a string")
+              path = (root / relative).resolve()
+              try:
+                  path.relative_to(root)
+              except ValueError as exc:
+                  raise SystemExit(f"Converted mesh escapes output root: {relative}") from exc
+              if not path.is_file():
+                  raise SystemExit(f"Converted mesh is missing: {relative}")
+              actual_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+              if actual_hash != mesh.get("output_sha256"):
+                  raise SystemExit(f"Converted mesh hash mismatch: {relative}")
+              if not isinstance(mesh.get("triangle_count"), int) or mesh["triangle_count"] <= 0:
+                  raise SystemExit(f"Converted mesh has no triangles: {relative}")
+          for geom in visual_geoms:
+              if geom.get("body_path") not in body_paths:
+                  raise SystemExit(f"Visual geom has unknown body path: {geom.get('path')}")
+              if geom.get("mesh") not in mesh_names:
+                  raise SystemExit(f"Visual geom has unknown mesh: {geom.get('path')}")
+              if geom.get("material") not in material_names:
+                  raise SystemExit(f"Visual geom has unknown material: {geom.get('path')}")
+
+          evidence = Path("build/reachy-model/UNITY_RENDER_MAP.json")
+          evidence.write_bytes(manifest_path.read_bytes())
+          print(
+              "Official Unity render conversion passed: "
+              f"bodies={len(bodies)} meshes={len(meshes)} "
+              f"materials={len(materials)} visual_geoms={len(visual_geoms)}"
+          )
+          PY
+      - name: Install pinned desktop MuJoCo runtime
+        env:
+          MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
+        run: python -m pip install --disable-pip-version-check "mujoco==${MUJOCO_VERSION}"
+      - name: Compile and step the official Reachy model
+        shell: bash
+        env:
+          MUJOCO_VERSION: ${{ steps.reachy_source.outputs.mujoco_version }}
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          python3 scripts/validate_reachy_mujoco.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --model-map build/reachy-model/MODEL_MAP.json \
+            --baseline models/reachy-mini/model-baseline.json \
+            --expected-version "${MUJOCO_VERSION}" \
+            --steps 100 \
+            --output build/reachy-model/MUJOCO_LOAD_REPORT.json
+      - name: Generate desktop reference trace
+        shell: bash
+        env:
+          REACHY_MODEL_FILE: ${{ steps.reachy_source.outputs.model_file }}
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_reachy_reference_trace.py \
+            --model "upstream/reachy-mini/${REACHY_MODEL_FILE}" \
+            --scenario models/reachy-mini/reference-scenario.json \
+            --output build/reachy-model/REFERENCE_TRACE_DESKTOP.json
+      - name: Upload pinned Reachy model evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reachy-model-evidence-${{ github.sha }}
+          path: build/reachy-model
+          if-no-files-found: error
+          retention-days: 14
+
+  native:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Native warnings-as-errors build and tests
+        run: ./scripts/build_native.sh
+      - name: Native sanitizer build and tests
+        env:
+          REACHY_ENABLE_SANITIZERS: 'ON'
+          REACHY_NATIVE_BUILD_DIR: build/native-sanitized
+        run: ./scripts/build_native.sh
+
+  managed:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build test-only native interop library
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/managed-native \
+            -G Ninja \
+            -DBUILD_TESTING=ON
+          cmake \
+            --build build/managed-native \
+            --target reachy_sim_managed_contract \
+            --parallel
+
+          native_library="$(find build/managed-native -type f -name 'libreachy_sim.so' -print -quit)"
+          if [[ -z "${native_library}" ]]; then
+            printf '%s\n' 'Managed contract build did not produce libreachy_sim.so.' >&2
+            exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add managed/ReachyMini.Core.Tests/Program.cs
-          git commit -m "RMA-040: make reader ownership explicit in test"
-          git push origin HEAD:master
+          printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n' \
+            "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
+      - name: Managed warnings-as-errors build and native lifecycle tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${REACHY_MANAGED_NATIVE_LIBRARY_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          export REACHY_MANAGED_NATIVE_TESTS=1
+          dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Export pinned Android SDK versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))
+          android = manifest["android"]
+          values = {
+              "ANDROID_BUILD_TOOLS": android["build_tools"],
+              "ANDROID_COMPILE_SDK": android["compile_sdk"],
+              "ANDROID_COMPILE_SDK_PACKAGE": android["compile_sdk_package"],
+              "ANDROID_GRADLE_VERSION": android["gradle"],
+              "ANDROID_JDK_MAJOR": android["jdk_major"],
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" \
+            --channel=3 \
+            --install \
+            "platform-tools" \
+            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}"
+
+      - name: Verify Android and Gradle pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_toolchain.py --manifest-only
+
+          actual_gradle="$(gradle --version | awk '/^Gradle / {print $2; exit}')"
+          if [[ "${actual_gradle}" != "${ANDROID_GRADLE_VERSION}" ]]; then
+            printf 'Gradle mismatch: expected %s, found %s.\n' \
+              "${ANDROID_GRADLE_VERSION}" "${actual_gradle}" >&2
+            exit 1
+          fi
+
+          actual_java="$(java -version 2>&1 | sed -n '1s/.*version "\([0-9][0-9]*\).*/\1/p')"
+          if [[ "${actual_java}" != "${ANDROID_JDK_MAJOR}" ]]; then
+            printf 'JDK mismatch: expected %s, found %s.\n' \
+              "${ANDROID_JDK_MAJOR}" "${actual_java}" >&2
+            exit 1
+          fi
+
+      - name: Android lint, Java warnings, and tests
+        run: gradle --no-daemon -p android-plugin lint test
