@@ -298,11 +298,11 @@ uint32_t reachy_sim_abi_version(void);
 
 ## RMA-031 — Implement C# P/Invoke boundary
 
-- [ ] Add a single managed interop assembly.
-- [ ] Mirror native layouts with explicit `StructLayout` and packing tests.
-- [ ] Wrap the native pointer in `SafeHandle` or an equivalent deterministic lifetime abstraction.
-- [ ] Convert native error codes to typed managed results without losing original diagnostics.
-- [ ] Ensure no managed callback is invoked from the high-frequency physics thread unless explicitly designed and tested.
+- [x] Add a single managed interop assembly.
+- [x] Mirror native layouts with explicit `StructLayout` and packing tests.
+- [x] Wrap the native pointer in `SafeHandle` or an equivalent deterministic lifetime abstraction.
+- [x] Convert native error codes to typed managed results without losing original diagnostics.
+- [x] Ensure no managed callback is invoked from the high-frequency physics thread unless explicitly designed and tested.
 
 Suggested pattern:
 
@@ -331,9 +331,9 @@ internal static class NativeReachySim
 
 **Acceptance criteria**
 
-- [ ] ABI mismatch prevents simulation startup with a clear error.
-- [ ] Create/destroy survives 1,000 cycles in a stress test without leaks.
-- [ ] Managed and native structure sizes match on Android ARM64.
+- [x] ABI mismatch prevents simulation startup with a clear error.
+- [x] Create/destroy survives 1,000 cycles in a stress test without leaks.
+- [x] Managed and native structure sizes match on Android ARM64.
 
 ## RMA-032 — Implement authoritative simulation thread
 
