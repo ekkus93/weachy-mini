@@ -41,9 +41,28 @@ def main() -> None:
 
     spec = mujoco.MjSpec.from_file(str(model_path))
     model = spec.compile()
-    spec.encode(str(output_path), model=model)
+    mujoco.mj_saveModel(model, str(output_path))
     if not output_path.is_file() or output_path.stat().st_size <= 0:
         raise SystemExit(f"MuJoCo did not produce an MJB: {output_path}")
+
+    reloaded_model = mujoco.MjModel.from_binary_path(str(output_path))
+    compiled_counts = (
+        int(model.nbody),
+        int(model.nu),
+        int(model.nq),
+        int(model.nv),
+    )
+    reloaded_counts = (
+        int(reloaded_model.nbody),
+        int(reloaded_model.nu),
+        int(reloaded_model.nq),
+        int(reloaded_model.nv),
+    )
+    if reloaded_counts != compiled_counts:
+        raise SystemExit(
+            "Reloaded MJB dimensions differ from the compiled model: "
+            f"compiled={compiled_counts}, reloaded={reloaded_counts}"
+        )
 
     manifest = {
         "schema_version": 1,
@@ -51,10 +70,10 @@ def main() -> None:
         "source_model_sha256": sha256(model_path),
         "mjb_sha256": sha256(output_path),
         "model_byte_count": output_path.stat().st_size,
-        "body_pose_count": int(model.nbody) - 1,
-        "actuator_count": int(model.nu),
-        "qpos_count": int(model.nq),
-        "qvel_count": int(model.nv),
+        "body_pose_count": int(reloaded_model.nbody) - 1,
+        "actuator_count": int(reloaded_model.nu),
+        "qpos_count": int(reloaded_model.nq),
+        "qvel_count": int(reloaded_model.nv),
     }
     if manifest["body_pose_count"] != 18:
         raise SystemExit(f"Unexpected non-world body count: {manifest}")
