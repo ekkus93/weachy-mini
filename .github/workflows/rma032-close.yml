@@ -1,0 +1,206 @@
+name: RMA-032 Authoritative Worker Closure
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma032-close.yml
+
+permissions:
+  contents: write
+
+jobs:
+  close-rma032:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close only verified RMA-032 requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, description: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(
+                      f"Expected exactly one {description} replacement target, found {count}"
+                  )
+              return text.replace(old, new, 1)
+
+          todo_path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+          todo = todo_path.read_text(encoding="utf-8")
+          start_marker = "## RMA-032 — Implement authoritative simulation thread"
+          end_marker = "## RMA-033 — Add snapshots and deterministic reset"
+          start = todo.index(start_marker)
+          end = todo.index(end_marker, start)
+          section = todo[start:end]
+          open_count = section.count("- [ ]")
+          if open_count != 11:
+              raise SystemExit(
+                  f"Expected exactly 11 open RMA-032 checkboxes, found {open_count}"
+              )
+          closed_section = section.replace("- [ ]", "- [x]")
+          completion_evidence = """**Completion evidence**
+
+- `ReachySimulationWorker` owns one dedicated managed thread while native MuJoCo
+  remains the sole owner of mutable physics state. The design rationale and lifecycle
+  contract are documented in
+  `docs/architecture/AUTHORITATIVE_SIMULATION_WORKER.md`.
+- The worker uses `Stopwatch.GetTimestamp()` and a 0.002-second accumulator, drains
+  bounded command batches only at native step boundaries, and publishes immutable
+  state/timing values through a versioned triple buffer.
+- Diagnostics publish total steps, last/maximum native-step duration, scheduler
+  deadline misses, accumulated lag, command overflow/discard counts, exact health
+  flags, and MuJoCo-warning episodes. Sleeping health is not mislabeled as a warning.
+- Native step, command, reset, and state-copy failures become retained typed worker
+  faults. A stale command test proves boundary-only application and visible
+  `CommandFormatError` retention before deterministic shutdown.
+- Managed-native acceptance covers 30 Hz and 60 Hz readers, a stalled reader,
+  trajectory invariants, visible queue overflow, pause stability, reset discard,
+  resume without suspended-time catch-up, and a controlled 40 ms native step that
+  must publish an over-budget duration and deadline miss.
+- Hosted quality run `30539234220` passed native warnings/sanitizers, managed
+  warnings-as-errors and native-backed worker tests, static checks, Android tests,
+  and official-model validation on `ac961fce3067c3724ba2638646251c52c78e62d3`.
+
+"""
+          if "**Completion evidence**" in closed_section:
+              raise SystemExit("RMA-032 already contains completion evidence")
+          closed_section = closed_section.rstrip() + "\n\n" + completion_evidence
+          updated_todo = todo[:start] + closed_section + todo[end:]
+          if updated_todo.count("- [x]") - todo.count("- [x]") != 11:
+              raise SystemExit("RMA-032 checkbox delta was not exactly 11")
+          rma033_section = updated_todo[updated_todo.index(end_marker):]
+          if not rma033_section.startswith(end_marker + "\n\n- [ ]"):
+              raise SystemExit("RMA-033 was unexpectedly modified")
+          todo_path.write_text(updated_todo, encoding="utf-8")
+
+          abi_path = Path("docs/SIMULATION_ABI.md")
+          abi = abi_path.read_text(encoding="utf-8")
+          abi = replace_exact(
+              abi,
+              """The managed P/Invoke, layout, ownership, error, and threading rules are specified
+in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md).
+""",
+              """The managed P/Invoke, layout, ownership, error, and threading rules are specified
+in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md). The
+fixed-step scheduler, command boundary, immutable publication, diagnostics, fault,
+and lifecycle contract are specified in
+[Authoritative simulation worker](architecture/AUTHORITATIVE_SIMULATION_WORKER.md).
+""",
+              "simulation ABI architecture links",
+          )
+          abi_path.write_text(abi, encoding="utf-8")
+
+          status_path = Path("docs/IMPLEMENTATION_STATUS.md")
+          status = status_path.read_text(encoding="utf-8")
+          status = replace_exact(
+              status,
+              """**Current implementation series:** Managed ABI/layout startup preflight and
+RMA-031 completion after production MuJoCo state publication, Unity pose binding,
+and physical lifecycle/rendering acceptance
+""",
+              """**Current implementation series:** RMA-032 authoritative worker scheduling,
+diagnostics, fault retention, and acceptance after managed ABI/layout startup
+preflight and production MuJoCo/Unity physical validation
+""",
+              "implementation series summary",
+          )
+          status = replace_exact(
+              status,
+              """### RMA-032/RMA-033 — authoritative worker and snapshots
+
+A managed-owned dedicated fixed-step worker owns mutable simulation work,
+applies commands at step boundaries, publishes immutable state, retains faults,
+and provides explicit pause/resume/reset/shutdown handshakes. Queue overflow is
+visible, rendering stalls do not own physics state, and resume does not execute a
+wall-time catch-up burst.
+
+Production snapshots are versioned, model/configuration/calibration bound,
+transactionally restored, and require byte-identical recapture/replay. Neutral
+reset is supported. Sleep/rest returns `UNSUPPORTED` because the pinned upstream
+model has no named sleep/rest keyframe; no pose is fabricated.
+""",
+              """### RMA-032 — authoritative simulation worker
+
+RMA-032 is complete. A managed-owned dedicated thread schedules the 500 Hz native
+simulation with a monotonic fixed-step accumulator. Commands are admitted through a
+bounded preallocated queue and applied only at native step boundaries. Immutable
+state and timing snapshots are published through a versioned triple buffer, so 30 Hz,
+60 Hz, slow, and stalled readers cannot mutate or schedule physics work.
+
+Timing diagnostics include total steps, last and maximum native-step duration,
+deadline misses, accumulated lag, command overflow/discard counts, exact health
+flags, and MuJoCo-warning episodes. Individual over-budget native steps and bounded
+catch-up backlog are both visible. Sleeping health is preserved without being counted
+as a solver warning.
+
+Native command, step, reset, and state-copy errors become retained typed faults. A
+stale-command acceptance test proves that queued commands remain unapplied while
+paused, apply at the next step boundary, and fault visibly when native sequencing
+rejects them. Pause, resume, reset, shutdown, request timeout, and deterministic handle
+closure are explicit handshakes. Resume resets the accumulator and excludes suspended
+wall time rather than executing a catch-up burst.
+
+The design and acceptance contract are documented in
+[Authoritative simulation worker](architecture/AUTHORITATIVE_SIMULATION_WORKER.md).
+
+### RMA-033 — snapshots and deterministic reset
+
+Production snapshots are versioned, model/configuration/calibration bound,
+transactionally restored, and require byte-identical recapture/replay. Neutral
+reset is supported. Sleep/rest returns `UNSUPPORTED` because the pinned upstream
+model has no named sleep/rest keyframe; no pose is fabricated.
+""",
+              "RMA-032/RMA-033 status split",
+          )
+          status = replace_exact(
+              status,
+              """## Current validation evidence
+
+- Hosted RMA-031 code-quality run `30536538862`: native warnings/sanitizers,
+""",
+              """## Current validation evidence
+
+- Hosted RMA-032 code-quality run `30539234220`: native warnings/sanitizers,
+  managed warnings-as-errors and native-backed worker acceptance, static checks,
+  Android tests, and official-model validation passed on `ac961fce`.
+- Hosted RMA-031 code-quality run `30536538862`: native warnings/sanitizers,
+""",
+              "RMA-032 validation evidence",
+          )
+          status_path.write_text(status, encoding="utf-8")
+          PY
+
+      - name: Remove temporary RMA-032 patch workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/rma032-hardening.yml
+          rm .github/workflows/rma032-fault-retention.yml
+          rm .github/workflows/rma032-close.yml
+
+      - name: Verify and commit authoritative closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git add \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/SIMULATION_ABI.md \
+            docs/IMPLEMENTATION_STATUS.md \
+            .github/workflows/rma032-hardening.yml \
+            .github/workflows/rma032-fault-retention.yml \
+            .github/workflows/rma032-close.yml
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "RMA-032: mark authoritative worker complete"
+          git push origin HEAD:master
