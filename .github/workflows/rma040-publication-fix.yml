@@ -25,11 +25,11 @@ jobs:
           {
             python3 .github/rma040_prepare_publication_patch.py
             python3 .github/rma040_publication_fix.py
-          } > .github/rma040_patch_result.txt 2>&1
+          } > .github/rma040_patch_result.md 2>&1
           patch_status=$?
           set -e
           if (( patch_status != 0 )); then
-            git add .github/rma040_patch_result.txt
+            git add -f .github/rma040_patch_result.md
             git commit -m "RMA-040: record publication patch guard failure"
             git push origin HEAD:master
             exit 0
@@ -38,7 +38,7 @@ jobs:
             .github/workflows/rma040-publication-fix.yml \
             .github/rma040_prepare_publication_patch.py \
             .github/rma040_publication_fix.py
-          rm .github/rma040_patch_result.txt
+          rm .github/rma040_patch_result.md
           git add \
             Assets/ReachyMini/Runtime/Simulation/IReachyPublishedAuthoritativeStateSource.cs \
             Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
