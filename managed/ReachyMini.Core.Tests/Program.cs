@@ -26,6 +26,7 @@ namespace ReachyMini.Core.Tests
                 TestNativeSessionLifecycle();
                 TestAuthoritativeSimulationWorker();
                 TestAuthoritativeSimulationWorkerDeadlineMetrics();
+                TestAuthoritativeSimulationWorkerFaultRetention();
             }
 
             return 0;
@@ -501,6 +502,111 @@ namespace ReachyMini.Core.Tests
                     unownedSession?.Dispose();
                 }
             }
+        }
+
+        private static void TestAuthoritativeSimulationWorkerFaultRetention()
+        {
+            byte[] modelBytes = Encoding.UTF8.GetBytes(
+                "simulation-worker-fault-model");
+            ReachySimCreateResult createResult =
+                ReachySimSession.Create(modelBytes);
+            ReachySimSession session = createResult.Session ??
+                throw new InvalidOperationException(
+                    $"Fault worker native create failed: {createResult.Error.Code}: {createResult.Error.Message}");
+
+            using (ReachySimulationWorker worker =
+                new ReachySimulationWorker(
+                    session,
+                    commandQueueCapacity: 2,
+                    maximumCommandBytes: 64))
+            {
+                ReachySimulationControlResult start = worker.Start(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(start, "fault worker start");
+
+                ReachySimulationControlResult pause = worker.Pause(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(pause, "fault worker initial pause");
+                AssertEqual(
+                    ReachySimulationCommandEnqueueResult.Accepted,
+                    worker.EnqueueCommandBatch(CreateCommandBatch(sequence: 1UL)),
+                    "command queued while paused");
+                Thread.Sleep(50);
+                AssertEqual(
+                    ReachySimulationRunState.Paused,
+                    worker.State,
+                    "queued command does not advance paused worker");
+                AssertEqual<ReachySimulationFault?>(
+                    null,
+                    worker.Fault,
+                    "queued command is not applied outside a step boundary");
+
+                ReachySimulationControlResult resume = worker.Resume(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(resume, "fault worker first resume");
+                ReachyPublishedSimulationSnapshot applied = WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.State.Sequence >= 1UL,
+                    TimeSpan.FromSeconds(5.0),
+                    "first command boundary application");
+                AssertTrajectoryInvariant(
+                    applied,
+                    "post-command authoritative trajectory");
+
+                ReachySimulationControlResult secondPause = worker.Pause(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(secondPause, "fault worker second pause");
+                AssertEqual(
+                    ReachySimulationCommandEnqueueResult.Accepted,
+                    worker.EnqueueCommandBatch(CreateCommandBatch(sequence: 1UL)),
+                    "stale command queued for boundary failure");
+
+                ReachySimulationControlResult secondResume = worker.Resume(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(secondResume, "fault worker second resume");
+                ReachySimulationFault retainedFault = WaitForWorkerFault(
+                    worker,
+                    TimeSpan.FromSeconds(5.0),
+                    "stale command fault retention");
+                AssertEqual(
+                    "submit commands",
+                    retainedFault.Operation,
+                    "retained command fault operation");
+                AssertEqual(
+                    ReachySimErrorCode.CommandFormatError,
+                    retainedFault.Error.Code,
+                    "retained command fault code");
+                AssertEqual(
+                    ReachySimulationRunState.Faulted,
+                    worker.State,
+                    "worker remains faulted after native rejection");
+
+                ReachySimulationControlResult shutdown = worker.Shutdown(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(shutdown, "fault worker shutdown");
+            }
+        }
+
+        private static ReachySimulationFault WaitForWorkerFault(
+            ReachySimulationWorker worker,
+            TimeSpan timeout,
+            string description)
+        {
+            long deadline = Stopwatch.GetTimestamp() + checked(
+                (long)Math.Ceiling(
+                    timeout.TotalSeconds * Stopwatch.Frequency));
+            while (Stopwatch.GetTimestamp() < deadline)
+            {
+                ReachySimulationFault? fault = worker.Fault;
+                if (fault != null)
+                {
+                    return fault;
+                }
+                Thread.Sleep(1);
+            }
+
+            throw new InvalidOperationException(
+                $"Managed test timed out waiting for {description}.");
         }
 
         private static void WaitForNativeStepEntry(TimeSpan timeout)

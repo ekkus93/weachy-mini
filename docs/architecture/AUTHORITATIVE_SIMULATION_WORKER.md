@@ -77,6 +77,7 @@ Managed-native tests cover:
 - command admission and visible bounded-queue overflow;
 - pause stability and resume without suspended-time catch-up;
 - reset queue discard and immutable reset publication;
+- boundary-only command application and retained typed failure for a stale command;
 - sleeping-health publication without a false solver-warning count;
 - a controlled native step blocked beyond the 2 ms budget, proving step-duration and
   deadline-miss diagnostics;
