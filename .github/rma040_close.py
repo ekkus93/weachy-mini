@@ -1,0 +1,163 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+root = Path.cwd()
+
+todo_path = root / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+todo = todo_path.read_text(encoding="utf-8")
+start = todo.index("## RMA-040 — Load the official Reachy Mini MJCF baseline")
+end = todo.index("## RMA-041 — Audit mechanical parameters", start)
+rma041_end = todo.index("## RMA-042 — Build reference-state comparison tests", end)
+rma041_before = todo[end:rma041_end]
+section = todo[start:end]
+if section.count("- [ ]") != 8 or section.count("- [x]") != 0:
+    raise SystemExit("RMA-040 must contain exactly eight unchecked boxes before closure")
+if "**Status:**" in section or "**Completion evidence**" in section:
+    raise SystemExit("RMA-040 already contains unexpected closure metadata")
+closed = section.replace(
+    "## RMA-040 — Load the official Reachy Mini MJCF baseline\n\n",
+    "## RMA-040 — Load the official Reachy Mini MJCF baseline\n\n"
+    "**Status:** Complete (2026-07-30)\n\n",
+    1,
+).replace("- [ ]", "- [x]")
+closed += """**Completion evidence**
+
+- The solver input is the clean Pollen Robotics checkout at
+  `a739a6e461eb6d722901f1cfc225265ffc85c28d`; the pinned MJCF SHA-256 is
+  `efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46`.
+- The deterministic importer copies the MJCF, every referenced visual/collision
+  mesh, and the upstream license without modifying source bytes. Per-file sizes
+  and SHA-256 digests are recorded in `PROVENANCE.json`.
+- The source lock requires all 17 named bodies, the complete ordered 18-body
+  hierarchy, all 16 joints and types, all 9 actuator-to-joint mappings, 13 sites,
+  2 source cameras, and all 5 equality-constraint pairs. A regression test proves
+  that body reparenting fails even when counts and names remain unchanged.
+- `MODEL_MAP.json` is the machine-readable body/joint/actuator/equality/site/camera
+  map. Compiled MuJoCo 3.9.0 validation requires 19 bodies including world,
+  16 joints, 9 actuators, 5 equalities, 13 sites, `nq=37`, and `nv=30`.
+- MuJoCo cameras `studio_close` and `eye_camera` remain solver/model metadata but
+  are explicitly excluded from the Unity prefab. The independent Unity camera and
+  versioned visual-mesh conversion do not modify ranges, inertias, collision
+  geometry, actuators, or equality constraints.
+- Hosted run `30567896524` passed native warnings/sanitizers, managed tests,
+  Ruff/actionlint/ShellCheck/static policy, Android tests, pinned-source topology,
+  Unity visual conversion, official-model compile/step, and reference-trace
+  generation on `d096796c422e9d7e0353a1dca89295e490665b84`.
+- Self-hosted run `30567896601` passed production ARM64 MuJoCo staging, Unity
+  EditMode/PlayMode tests, ARM64/API-26 IL2CPP build/verification, installed LG G6
+  lifecycle acceptance, authoritative rendering, evidence uploads, and APK upload
+  on the same exact commit.
+- Detailed contracts and evidence are in
+  `docs/architecture/OFFICIAL_REACHY_MODEL_IMPORT.md` and
+  `docs/validation/RMA_040_MODEL_IMPORT_VALIDATION_2026-07-30.md`.
+
+"""
+updated_todo = todo[:start] + closed + todo[end:]
+updated_rma041 = updated_todo[
+    updated_todo.index("## RMA-041 — Audit mechanical parameters") :
+    updated_todo.index("## RMA-042 — Build reference-state comparison tests")
+]
+if updated_rma041 != rma041_before:
+    raise SystemExit("RMA-041 changed during RMA-040 closure")
+if closed.count("- [x]") != 8 or closed.count("- [ ]") != 0:
+    raise SystemExit("RMA-040 closure did not produce exactly eight checked boxes")
+todo_path.write_text(updated_todo, encoding="utf-8", newline="\n")
+
+status_path = root / "docs/IMPLEMENTATION_STATUS.md"
+status = status_path.read_text(encoding="utf-8")
+old_series = """**Current implementation series:** RMA-033 authoritative snapshots,
+transactional restore, deterministic reset, and worker-owned persistence after
+RMA-032 fixed-step scheduling and production MuJoCo/Unity validation
+"""
+new_series = """**Current implementation series:** RMA-040 official Reachy Mini model import,
+complete topology identity, immutable provenance, and Android/runtime acceptance
+after RMA-033 deterministic snapshot and reset closure
+"""
+if status.count(old_series) != 1:
+    raise SystemExit("Could not locate implementation-series text")
+status = status.replace(old_series, new_series)
+
+section_start = status.index("### RMA-040 through RMA-042 — official model integrity")
+section_end = status.index(
+    "### RMA-050 through RMA-052 — authoritative Unity rendering", section_start
+)
+replacement = """### RMA-040 — official model import and integrity
+
+RMA-040 is complete. The clean pinned Pollen Robotics checkout at
+`a739a6e461eb6d722901f1cfc225265ffc85c28d` is the immutable solver source. The
+importer copies the MJCF, every referenced visual/collision mesh, and license
+without content modification and emits deterministic per-file provenance.
+
+The topology gate now locks all 17 named bodies plus the complete ordered 18-body
+hierarchy, all joints and types, actuator mappings, sites, cameras, and equality
+pairs. This moves body reparenting or order drift into the import gate before
+native state indices or Unity transform identities can change. `MODEL_MAP.json`
+is the machine-readable model contract; the anonymous camera-frame body remains
+pinned at index 15 and receives only the presentation identity `__body_15`.
+
+The source MuJoCo cameras remain model metadata but are excluded from the Unity
+prefab. The versioned visual conversion is presentation-only and does not modify
+the solver MJCF, collisions, ranges, inertias, actuators, or equality constraints.
+MuJoCo 3.9.0 compiles the model with 19 bodies including world, 16 joints,
+9 actuators, 5 equality constraints, 13 sites, `nq=37`, and `nv=30`.
+
+The detailed import contract is in
+[Official Reachy Mini model import](architecture/OFFICIAL_REACHY_MODEL_IMPORT.md).
+
+### RMA-041/RMA-042 — parameter audit and reference comparison foundations
+
+The mechanical audit and cross-platform reference infrastructure already exist,
+but these tasks remain formally open until their individual requirements and
+acceptance criteria are audited and closed. The audit classifies generic actuator
+dynamics and missing antenna hard-stop evidence as uncalibrated placeholders; no
+calibrated claim is made. Desktop/Android reference traces compare qpos, qvel,
+named body transforms, equality residuals, warnings, dimensions, hashes, and
+MuJoCo version within locked tolerances.
+
+"""
+status = status[:section_start] + replacement + status[section_end:]
+
+evidence_marker = "## Current validation evidence\n\n"
+evidence = """- Hosted RMA-040 run `30567896524`: full pinned-source/topology import,
+  Unity visual conversion, MuJoCo compile/step and reference trace, static policy,
+  native warnings/sanitizers, managed tests, and Android tests passed on
+  `d096796c422e9d7e0353a1dca89295e490665b84`.
+- Self-hosted RMA-040 run `30567896601`: production ARM64 staging, Unity tests,
+  ARM64/API-26 IL2CPP build/verification, installed lifecycle acceptance,
+  authoritative rendering, evidence uploads, and APK upload passed on the exact
+  same commit.
+"""
+if status.count(evidence_marker) != 1:
+    raise SystemExit("Could not locate validation-evidence heading")
+status = status.replace(evidence_marker, evidence_marker + evidence, 1)
+status_path.write_text(status, encoding="utf-8", newline="\n")
+
+validation_path = root / "docs/validation/RMA_040_MODEL_IMPORT_VALIDATION_2026-07-30.md"
+validation = validation_path.read_text(encoding="utf-8")
+old_tail = """Exact run IDs and checklist-closure commit are added only after those gates finish
+on the closure head.
+"""
+new_tail = """## Automated evidence
+
+Hosted Quality Gates run `30567896524` passed on
+`d096796c422e9d7e0353a1dca89295e490665b84`, including the complete pinned-source
+model gate, Unity conversion, MuJoCo compile/step, reference trace, static checks,
+native warnings/sanitizers, managed tests, and Android tests.
+
+Self-hosted Unity/Android run `30567896601` passed on the same exact commit,
+including production ARM64 MuJoCo staging, Unity tests, ARM64/API-26 IL2CPP
+build/verification, installed LG G6 lifecycle acceptance, physical authoritative
+rendering, evidence uploads, and APK upload.
+
+## Result
+
+All eight RMA-040 checklist and acceptance items are supported by permanent
+implementation, regression tests, hosted validation, and exact-head physical
+Unity/Android validation. RMA-041 and later tasks remain unchanged.
+"""
+if validation.count(old_tail) != 1:
+    raise SystemExit("Could not locate validation-record placeholder")
+validation_path.write_text(
+    validation.replace(old_tail, new_tail), encoding="utf-8", newline="\n"
+)
