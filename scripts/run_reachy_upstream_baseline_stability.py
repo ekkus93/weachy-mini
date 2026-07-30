@@ -215,24 +215,20 @@ def validate_config(raw: dict[str, Any]) -> StabilityConfig:
         phase_names.add(name)
         categories.add(category)
         targets = phase.get("targets_radians")
-        if not isinstance(targets, list) or len(targets) != len(actuator_names):
-            raise StabilityError(
-                f"phases[{index}].targets_radians must contain "
-                f"{len(actuator_names)} values"
-            )
+        target_count = len(actuator_names)
+        target_label = f"phases[{index}].targets_radians"
+        if not isinstance(targets, list) or len(targets) != target_count:
+            raise StabilityError(f"{target_label} must contain {target_count} values")
         for target_index, target in enumerate(targets):
             require_number(target, f"phases[{index}].targets_radians[{target_index}]")
         allowed = phase.get("allowed_out_of_range_actuators")
+        allowed_label = f"phases[{index}].allowed_out_of_range_actuators"
         if not isinstance(allowed, list) or not all(
             isinstance(item, str) and item in actuator_names for item in allowed
         ):
-            raise StabilityError(
-                f"phases[{index}].allowed_out_of_range_actuators is invalid"
-            )
+            raise StabilityError(f"{allowed_label} is invalid")
         if len(allowed) != len(set(allowed)):
-            raise StabilityError(
-                f"phases[{index}].allowed_out_of_range_actuators has duplicates"
-            )
+            raise StabilityError(f"{allowed_label} has duplicates")
 
     required_categories = {
         "neutral",
@@ -274,9 +270,8 @@ def percentile(sorted_values: list[float], fraction: float) -> float:
     if lower == upper:
         return sorted_values[lower]
     weight = scaled - lower
-    return sorted_values[lower] + (
-        sorted_values[upper] - sorted_values[lower]
-    ) * weight
+    difference = sorted_values[upper] - sorted_values[lower]
+    return sorted_values[lower] + difference * weight
 
 
 def file_sha256(path: Path) -> str:
@@ -377,17 +372,14 @@ def validate_model(
         )
 
     actuator_ids: list[int] = []
+    actuator_type = mujoco.mjtObj.mjOBJ_ACTUATOR
     for name in config.actuator_names:
-        actuator_id = int(
-            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
-        )
+        actuator_id = int(mujoco.mj_name2id(model, actuator_type, name))
         if actuator_id < 0:
             raise StabilityError(f"Model is missing actuator {name}")
         actuator_ids.append(actuator_id)
     if actuator_ids != list(range(len(actuator_ids))):
-        raise StabilityError(
-            f"Actuator order differs from stability profile: {actuator_ids}"
-        )
+        raise StabilityError(f"Actuator order differs from profile: {actuator_ids}")
     return actuator_ids
 
 
@@ -453,10 +445,7 @@ def monitor_step(
     mujoco.mj_energyVel(model, data)
     total_energy = float(data.energy[0] + data.energy[1])
     if not math.isfinite(total_energy):
-        message = (
-            f"Non-finite total energy in phase {phase_name} "
-            f"at step {global_step}"
-        )
+        message = f"Non-finite energy in {phase_name} at step {global_step}"
         raise StabilityError(message)
 
     metrics.completed_steps += 1
@@ -594,10 +583,9 @@ def run_suite(
                 else:
                     blend = 1.0
                 for index, actuator_id in enumerate(actuator_ids):
-                    target_delta = targets[index] - previous_targets[index]
-                    data.ctrl[actuator_id] = (
-                        previous_targets[index] + target_delta * blend
-                    )
+                    base_target = previous_targets[index]
+                    target_delta = targets[index] - base_target
+                    data.ctrl[actuator_id] = base_target + target_delta * blend
 
                 start = time.perf_counter_ns()
                 mujoco.mj_step(model, data)
