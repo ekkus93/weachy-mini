@@ -1,0 +1,729 @@
+name: RMA-033 Worker Snapshot Integration
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma033-worker-snapshots.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact master commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Integrate snapshots with the authoritative worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          worker_path = Path("Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs")
+          worker = worker_path.read_text(encoding="utf-8")
+
+          old_control_result = '''    public sealed class ReachySimulationControlResult
+    {
+        private ReachySimulationControlResult(
+            bool isSuccess,
+            ReachySimulationRunState state,
+            int discardedCommandCount,
+            ReachySimError error)
+        {
+            IsSuccess = isSuccess;
+            State = state;
+            DiscardedCommandCount = discardedCommandCount;
+            Error = error;
+        }
+
+        public bool IsSuccess { get; }
+
+        public ReachySimulationRunState State { get; }
+
+        public int DiscardedCommandCount { get; }
+
+        public ReachySimError Error { get; }
+
+        internal static ReachySimulationControlResult Success(
+            ReachySimulationRunState state,
+            int discardedCommandCount = 0)
+        {
+            return new ReachySimulationControlResult(
+                isSuccess: true,
+                state,
+                discardedCommandCount,
+                ReachySimError.NoError);
+        }
+
+        internal static ReachySimulationControlResult Failure(
+            ReachySimulationRunState state,
+            ReachySimError error)
+        {
+            return new ReachySimulationControlResult(
+                isSuccess: false,
+                state,
+                discardedCommandCount: 0,
+                error ?? throw new ArgumentNullException(nameof(error)));
+        }
+    }
+'''
+          new_control_result = '''    public sealed class ReachySimulationControlResult
+    {
+        private ReachySimulationControlResult(
+            bool isSuccess,
+            ReachySimulationRunState state,
+            int discardedCommandCount,
+            ReachySimSnapshot? capturedSnapshot,
+            ReachySimError error)
+        {
+            IsSuccess = isSuccess;
+            State = state;
+            DiscardedCommandCount = discardedCommandCount;
+            CapturedSnapshot = capturedSnapshot;
+            Error = error;
+        }
+
+        public bool IsSuccess { get; }
+
+        public ReachySimulationRunState State { get; }
+
+        public int DiscardedCommandCount { get; }
+
+        public ReachySimSnapshot? CapturedSnapshot { get; }
+
+        public ReachySimError Error { get; }
+
+        internal static ReachySimulationControlResult Success(
+            ReachySimulationRunState state,
+            int discardedCommandCount = 0,
+            ReachySimSnapshot? capturedSnapshot = null)
+        {
+            return new ReachySimulationControlResult(
+                isSuccess: true,
+                state,
+                discardedCommandCount,
+                capturedSnapshot,
+                ReachySimError.NoError);
+        }
+
+        internal static ReachySimulationControlResult Failure(
+            ReachySimulationRunState state,
+            ReachySimError error)
+        {
+            return new ReachySimulationControlResult(
+                isSuccess: false,
+                state,
+                discardedCommandCount: 0,
+                capturedSnapshot: null,
+                error ?? throw new ArgumentNullException(nameof(error)));
+        }
+    }
+'''
+          worker = replace_once(
+              worker,
+              old_control_result,
+              new_control_result,
+              "control result snapshot payload",
+          )
+
+          worker = replace_once(
+              worker,
+              '''            return SubmitControlRequest(
+                ControlRequestKind.Pause,
+                resetId: 0U,
+                timeout);
+''',
+              '''            return SubmitControlRequest(
+                ControlRequestKind.Pause,
+                resetId: 0U,
+                snapshot: null,
+                timeout);
+''',
+              "pause request",
+          )
+          worker = replace_once(
+              worker,
+              '''            return SubmitControlRequest(
+                ControlRequestKind.Resume,
+                resetId: 0U,
+                timeout);
+''',
+              '''            return SubmitControlRequest(
+                ControlRequestKind.Resume,
+                resetId: 0U,
+                snapshot: null,
+                timeout);
+''',
+              "resume request",
+          )
+
+          old_reset = '''        public ReachySimulationControlResult Reset(
+            uint resetId,
+            TimeSpan timeout)
+        {
+            return SubmitControlRequest(
+                ControlRequestKind.Reset,
+                resetId,
+                timeout);
+        }
+'''
+          new_reset = '''        public ReachySimulationControlResult Reset(
+            ReachySimResetPose resetPose,
+            TimeSpan timeout)
+        {
+            return Reset((uint)resetPose, timeout);
+        }
+
+        public ReachySimulationControlResult Reset(
+            uint resetId,
+            TimeSpan timeout)
+        {
+            return SubmitControlRequest(
+                ControlRequestKind.Reset,
+                resetId,
+                snapshot: null,
+                timeout);
+        }
+
+        public ReachySimulationControlResult CaptureSnapshot(TimeSpan timeout)
+        {
+            return SubmitControlRequest(
+                ControlRequestKind.CaptureSnapshot,
+                resetId: 0U,
+                snapshot: null,
+                timeout);
+        }
+
+        public ReachySimulationControlResult RestoreSnapshot(
+            ReachySimSnapshot snapshot,
+            TimeSpan timeout)
+        {
+            if (snapshot == null)
+            {
+                throw new ArgumentNullException(nameof(snapshot));
+            }
+
+            return SubmitControlRequest(
+                ControlRequestKind.RestoreSnapshot,
+                resetId: 0U,
+                snapshot,
+                timeout);
+        }
+'''
+          worker = replace_once(worker, old_reset, new_reset, "worker snapshot API")
+
+          worker = replace_once(
+              worker,
+              '''                SubmitControlRequest(
+                    ControlRequestKind.Shutdown,
+                    resetId: 0U,
+                    requestTime);
+''',
+              '''                SubmitControlRequest(
+                    ControlRequestKind.Shutdown,
+                    resetId: 0U,
+                    snapshot: null,
+                    requestTime);
+''',
+              "shutdown request",
+          )
+
+          worker = replace_once(
+              worker,
+              '''        private ReachySimulationControlResult SubmitControlRequest(
+            ControlRequestKind kind,
+            uint resetId,
+            TimeSpan timeout)
+''',
+              '''        private ReachySimulationControlResult SubmitControlRequest(
+            ControlRequestKind kind,
+            uint resetId,
+            ReachySimSnapshot? snapshot,
+            TimeSpan timeout)
+''',
+              "control request signature",
+          )
+          worker = replace_once(
+              worker,
+              '''                pendingRequest = new ControlRequest(
+                    requestId,
+                    kind,
+                    resetId);
+''',
+              '''                pendingRequest = new ControlRequest(
+                    requestId,
+                    kind,
+                    resetId,
+                    snapshot);
+''',
+              "control request construction",
+          )
+
+          worker = replace_once(
+              worker,
+              '''                case ControlRequestKind.Shutdown:
+                    if (runState == ReachySimulationRunState.Stopped)
+''',
+              '''                case ControlRequestKind.CaptureSnapshot:
+                case ControlRequestKind.RestoreSnapshot:
+                    if (runState != ReachySimulationRunState.Paused)
+                    {
+                        return InvalidStateResult(kind);
+                    }
+                    break;
+                case ControlRequestKind.Shutdown:
+                    if (runState == ReachySimulationRunState.Stopped)
+''',
+              "snapshot request state validation",
+          )
+
+          worker = replace_once(
+              worker,
+              '''                case ControlRequestKind.Reset:
+                    ProcessResetRequest(request);
+                    accumulatorSeconds = 0.0;
+                    previousTimestamp = Stopwatch.GetTimestamp();
+                    break;
+                case ControlRequestKind.Shutdown:
+''',
+              '''                case ControlRequestKind.Reset:
+                    ProcessResetRequest(request);
+                    accumulatorSeconds = 0.0;
+                    previousTimestamp = Stopwatch.GetTimestamp();
+                    break;
+                case ControlRequestKind.CaptureSnapshot:
+                    ProcessCaptureSnapshotRequest(request);
+                    break;
+                case ControlRequestKind.RestoreSnapshot:
+                    ProcessRestoreSnapshotRequest(request);
+                    accumulatorSeconds = 0.0;
+                    previousTimestamp = Stopwatch.GetTimestamp();
+                    break;
+                case ControlRequestKind.Shutdown:
+''',
+              "snapshot request dispatch",
+          )
+
+          reset_method_end = '''            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    State,
+                    discarded));
+        }
+
+        private bool ApplyQueuedCommandsAtBoundary()
+'''
+          snapshot_methods = '''            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    State,
+                    discarded));
+        }
+
+        private void ProcessCaptureSnapshotRequest(ControlRequest request)
+        {
+            ReachySimSnapshotCaptureResult capture = session.CaptureSnapshot();
+            ReachySimSnapshot? snapshot = capture.Snapshot;
+            if (!capture.IsSuccess || snapshot == null)
+            {
+                ReachySimError error = capture.IsSuccess
+                    ? ControlError(
+                        ReachySimErrorCode.ManagedInteropFailure,
+                        ReachySimRecoverability.RecreateHandle,
+                        "Snapshot capture succeeded without returning snapshot bytes.")
+                    : capture.Error;
+                RetainTerminalSnapshotFault("capture snapshot", error);
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(State, error));
+                return;
+            }
+
+            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    State,
+                    capturedSnapshot: snapshot));
+        }
+
+        private void ProcessRestoreSnapshotRequest(ControlRequest request)
+        {
+            ReachySimSnapshot? snapshot = request.Snapshot;
+            if (snapshot == null)
+            {
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        State,
+                        ControlError(
+                            ReachySimErrorCode.InvalidArgument,
+                            ReachySimRecoverability.FatalConfiguration,
+                            "Snapshot restore request did not contain snapshot bytes.")));
+                return;
+            }
+
+            ReachySimOperationResult restore = session.RestoreSnapshot(snapshot);
+            if (!restore.IsSuccess)
+            {
+                RetainTerminalSnapshotFault("restore snapshot", restore.Error);
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        State,
+                        restore.Error));
+                return;
+            }
+
+            int discarded = commandQueue.Clear();
+            if (discarded > 0)
+            {
+                Interlocked.Add(ref discardedCommandCount, discarded);
+            }
+
+            lastStepDurationSeconds = 0.0;
+            accumulatedLagSeconds = 0.0;
+            if (!PublishCurrentState(stepDurationSeconds: 0.0))
+            {
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        ReachySimulationRunState.Faulted,
+                        Fault?.Error ?? ControlError(
+                            ReachySimErrorCode.ManagedInteropFailure,
+                            ReachySimRecoverability.RecreateHandle,
+                            "Restored state publication failed.")));
+                return;
+            }
+
+            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    ReachySimulationRunState.Paused,
+                    discarded));
+        }
+
+        private void RetainTerminalSnapshotFault(
+            string operation,
+            ReachySimError error)
+        {
+            if (error.Recoverability == ReachySimRecoverability.RecreateHandle ||
+                error.Recoverability == ReachySimRecoverability.FatalConfiguration)
+            {
+                EnterNativeFault(operation, error);
+            }
+        }
+
+        private bool ApplyQueuedCommandsAtBoundary()
+'''
+          worker = replace_once(
+              worker,
+              reset_method_end,
+              snapshot_methods,
+              "snapshot request processors",
+          )
+
+          worker = replace_once(
+              worker,
+              '''            Reset = 3,
+            Shutdown = 4,
+''',
+              '''            Reset = 3,
+            CaptureSnapshot = 4,
+            RestoreSnapshot = 5,
+            Shutdown = 6,
+''',
+              "snapshot control kinds",
+          )
+
+          old_request = '''        private readonly struct ControlRequest
+        {
+            internal ControlRequest(
+                long id,
+                ControlRequestKind kind,
+                uint resetId)
+            {
+                Id = id;
+                Kind = kind;
+                ResetId = resetId;
+            }
+
+            internal long Id { get; }
+
+            internal ControlRequestKind Kind { get; }
+
+            internal uint ResetId { get; }
+        }
+'''
+          new_request = '''        private readonly struct ControlRequest
+        {
+            internal ControlRequest(
+                long id,
+                ControlRequestKind kind,
+                uint resetId,
+                ReachySimSnapshot? snapshot)
+            {
+                Id = id;
+                Kind = kind;
+                ResetId = resetId;
+                Snapshot = snapshot;
+            }
+
+            internal long Id { get; }
+
+            internal ControlRequestKind Kind { get; }
+
+            internal uint ResetId { get; }
+
+            internal ReachySimSnapshot? Snapshot { get; }
+        }
+'''
+          worker = replace_once(worker, old_request, new_request, "snapshot request payload")
+          worker_path.write_text(worker, encoding="utf-8")
+
+          tests_path = Path("managed/ReachyMini.Core.Tests/Program.cs")
+          tests = tests_path.read_text(encoding="utf-8")
+          tests = replace_once(
+              tests,
+              '''                TestAuthoritativeSimulationWorker();
+                TestAuthoritativeSimulationWorkerDeadlineMetrics();
+''',
+              '''                TestAuthoritativeSimulationWorker();
+                TestAuthoritativeSimulationWorkerSnapshots();
+                TestAuthoritativeSimulationWorkerDeadlineMetrics();
+''',
+              "snapshot test registration",
+          )
+
+          marker = '''        private static void TestSimulationWorkerWarningAccounting()
+'''
+          snapshot_test = '''        private static void TestAuthoritativeSimulationWorkerSnapshots()
+        {
+            byte[] modelBytes = Encoding.UTF8.GetBytes(
+                "simulation-worker-snapshot-model");
+            ReachySimCreateResult createResult =
+                ReachySimSession.Create(modelBytes);
+            ReachySimSession session = createResult.Session ??
+                throw new InvalidOperationException(
+                    $"Snapshot worker native create failed: {createResult.Error.Code}: {createResult.Error.Message}");
+
+            using (ReachySimulationWorker worker =
+                new ReachySimulationWorker(session))
+            {
+                ReachySimulationControlResult start = worker.Start(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(start, "snapshot worker start");
+                WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.State.Sequence >= 5UL,
+                    TimeSpan.FromSeconds(5.0),
+                    "snapshot worker initial progress");
+
+                ReachySimulationControlResult runningCapture =
+                    worker.CaptureSnapshot(TimeSpan.FromSeconds(5.0));
+                AssertEqual(false, runningCapture.IsSuccess, "running capture rejection");
+                AssertEqual(
+                    ReachySimErrorCode.InvalidArgument,
+                    runningCapture.Error.Code,
+                    "running capture error code");
+
+                ReachySimulationControlResult pause = worker.Pause(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(pause, "snapshot worker pause");
+                AssertEqual(
+                    true,
+                    worker.TryGetLatestSnapshot(
+                        out ReachyPublishedSimulationSnapshot checkpointState),
+                    "checkpoint state availability");
+
+                ReachySimulationControlResult capture = worker.CaptureSnapshot(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(capture, "worker checkpoint capture");
+                ReachySimSnapshot checkpoint = capture.CapturedSnapshot ??
+                    throw new InvalidOperationException(
+                        "Managed test failed: successful worker capture returned no snapshot.");
+                AssertEqual(
+                    ProjectMetadata.NativeSnapshotFormatVersion,
+                    checkpoint.SnapshotVersion,
+                    "worker snapshot format version");
+                AssertEqual(
+                    ProjectMetadata.UncalibratedCalibrationProfileId,
+                    checkpoint.CalibrationProfileId,
+                    "worker snapshot calibration profile");
+                AssertEqual(
+                    checkpointState.State.Sequence,
+                    checkpoint.Sequence,
+                    "worker checkpoint sequence");
+                AssertEqual(
+                    checkpointState.State.SimulationTime,
+                    checkpoint.SimulationTime,
+                    "worker checkpoint time");
+                if (checkpoint.ModelHash == 0UL)
+                {
+                    throw new InvalidOperationException(
+                        "Managed test failed: worker snapshot model hash is zero.");
+                }
+
+                ReachySimCreateResult foreignCreate = ReachySimSession.Create(
+                    Encoding.UTF8.GetBytes("foreign-snapshot-model"));
+                ReachySimSession foreignSession = foreignCreate.Session ??
+                    throw new InvalidOperationException(
+                        $"Foreign snapshot create failed: {foreignCreate.Error.Code}: {foreignCreate.Error.Message}");
+                using (foreignSession)
+                {
+                    ReachySimSnapshotCaptureResult foreignCapture =
+                        foreignSession.CaptureSnapshot();
+                    ReachySimSnapshot foreignSnapshot = foreignCapture.Snapshot ??
+                        throw new InvalidOperationException(
+                            $"Foreign snapshot capture failed: {foreignCapture.Error.Code}: {foreignCapture.Error.Message}");
+                    ReachySimulationControlResult incompatible =
+                        worker.RestoreSnapshot(
+                            foreignSnapshot,
+                            TimeSpan.FromSeconds(5.0));
+                    AssertEqual(
+                        false,
+                        incompatible.IsSuccess,
+                        "foreign worker snapshot rejection");
+                    AssertEqual(
+                        ReachySimErrorCode.SnapshotIncompatible,
+                        incompatible.Error.Code,
+                        "foreign worker snapshot error code");
+                    AssertEqual(
+                        ReachySimulationRunState.Paused,
+                        worker.State,
+                        "worker remains paused after incompatible restore");
+                    AssertEqual<ReachySimulationFault?>(
+                        null,
+                        worker.Fault,
+                        "incompatible restore is nonfatal");
+                }
+
+                AssertEqual(
+                    true,
+                    worker.TryGetLatestSnapshot(
+                        out ReachyPublishedSimulationSnapshot afterIncompatible),
+                    "post-incompatible state availability");
+                AssertEqual(
+                    checkpointState.PublicationSequence,
+                    afterIncompatible.PublicationSequence,
+                    "incompatible restore does not publish state");
+                AssertEqual(
+                    checkpointState.State.Sequence,
+                    afterIncompatible.State.Sequence,
+                    "incompatible restore preserves sequence");
+                AssertEqual(
+                    checkpointState.State.SimulationTime,
+                    afterIncompatible.State.SimulationTime,
+                    "incompatible restore preserves time");
+
+                ReachySimulationControlResult resume = worker.Resume(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(resume, "snapshot worker advance resume");
+                ReachyPublishedSimulationSnapshot advanced = WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.State.Sequence >= checkpoint.Sequence + 5UL,
+                    TimeSpan.FromSeconds(5.0),
+                    "snapshot worker advanced state");
+                ReachySimulationControlResult secondPause = worker.Pause(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(secondPause, "snapshot worker second pause");
+
+                AssertEqual(
+                    ReachySimulationCommandEnqueueResult.Accepted,
+                    worker.EnqueueCommandBatch(CreateCommandBatch(sequence: 1UL)),
+                    "queued command before snapshot restore");
+                ReachySimulationControlResult restore = worker.RestoreSnapshot(
+                    checkpoint,
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(restore, "worker checkpoint restore");
+                AssertEqual(
+                    1,
+                    restore.DiscardedCommandCount,
+                    "snapshot restore discarded queued command");
+                AssertEqual(
+                    ReachySimulationRunState.Paused,
+                    restore.State,
+                    "snapshot restore remains paused");
+
+                ReachyPublishedSimulationSnapshot restored = WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.PublicationSequence >
+                            advanced.PublicationSequence &&
+                        snapshot.State.Sequence == checkpoint.Sequence &&
+                        snapshot.State.SimulationTime == checkpoint.SimulationTime,
+                    TimeSpan.FromSeconds(5.0),
+                    "worker restored state publication");
+                AssertEqual(
+                    checkpoint.Sequence,
+                    restored.State.Sequence,
+                    "restored worker sequence");
+                AssertEqual(
+                    checkpoint.SimulationTime,
+                    restored.State.SimulationTime,
+                    "restored worker time");
+
+                ReachySimulationControlResult recapture = worker.CaptureSnapshot(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(recapture, "worker recapture after restore");
+                ReachySimSnapshot replayed = recapture.CapturedSnapshot ??
+                    throw new InvalidOperationException(
+                        "Managed test failed: restored worker recapture returned no snapshot.");
+                AssertBytesEqual(
+                    checkpoint.ToArray(),
+                    replayed.ToArray(),
+                    "worker restore snapshot bytes");
+
+                Thread.Sleep(50);
+                AssertEqual(
+                    true,
+                    worker.TryGetLatestSnapshot(
+                        out ReachyPublishedSimulationSnapshot stillRestored),
+                    "restored paused state availability");
+                AssertEqual(
+                    restored.State.Sequence,
+                    stillRestored.State.Sequence,
+                    "restored worker remains paused");
+
+                ReachySimulationControlResult finalResume = worker.Resume(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(finalResume, "snapshot worker final resume");
+                WaitForSnapshot(
+                    worker,
+                    snapshot => snapshot.State.Sequence > checkpoint.Sequence,
+                    TimeSpan.FromSeconds(5.0),
+                    "snapshot worker post-restore progress");
+                ReachySimulationControlResult shutdown = worker.Shutdown(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(shutdown, "snapshot worker shutdown");
+            }
+        }
+
+'''
+          tests = replace_once(
+              tests,
+              marker,
+              snapshot_test + marker,
+              "worker snapshot acceptance test",
+          )
+          tests_path.write_text(tests, encoding="utf-8")
+          PY
+
+          git rm .github/workflows/rma033-worker-snapshots.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs
+          git add managed/ReachyMini.Core.Tests/Program.cs
+          git commit -m "RMA-033: integrate snapshots with worker"
+          git push origin HEAD:master
