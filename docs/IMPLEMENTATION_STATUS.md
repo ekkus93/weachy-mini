@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** Production MuJoCo state publication, Unity
-pose binding, physical lifecycle/rendering acceptance, and RMA-030 native handle
-concurrency hardening
+**Current implementation series:** Managed ABI/layout startup preflight and
+RMA-031 completion after production MuJoCo state publication, Unity pose binding,
+and physical lifecycle/rendering acceptance
 
 ## Repository rules in force
 
@@ -54,12 +54,11 @@ steps, closes, and rejects reuse of a valid native handle, survives two real
 HOME/resume cycles without suspended-wall-time catch-up, destroys the production
 runtime, disables the renderer, and shuts down the process deterministically.
 
-### RMA-030/RMA-031 — native ABI and managed interop
+### RMA-030 — native ABI
 
 The public C ABI remains version 2. It uses explicit-width/versioned structures,
 generation-bearing opaque handles, typed status/recoverability, exact command
-records, state/wrench/snapshot operations, and caller-owned error data. The
-managed layer uses exact layouts and deterministic `SafeHandle` ownership.
+records, state/wrench/snapshot operations, and caller-owned error data.
 
 RMA-030 native handle concurrency hardening is implemented:
 
@@ -79,8 +78,24 @@ blocked-operation tests plus eight-thread / 16,000-attempt contention tests with
 exact success/busy accounting and sequence verification. Hosted warnings,
 ASan, and UBSan gates pass the implementation.
 
-The detailed contracts are in [Simulation ABI](SIMULATION_ABI.md) and
-[Native handle concurrency](architecture/NATIVE_HANDLE_CONCURRENCY.md).
+### RMA-031 — managed P/Invoke boundary
+
+RMA-031 is complete. `NativeReachySim` is the single P/Invoke declaration surface
+in `ReachyMini.Runtime`; it mirrors the versioned C ABI with sequential layouts
+and no managed callback entry point. `ReachySimSafeHandle` owns the opaque native
+token deterministically, while `ReachySimSession` serializes operations and maps
+native status, recoverability, and diagnostic text into typed managed results.
+
+A fail-closed managed contract now verifies the 64-bit process, all fixed ABI and
+authoritative-state structure sizes, and critical field offsets. Android IL2CPP
+runs this contract before the first scene, loads `libreachy_sim`, and rejects a
+native ABI mismatch before simulation startup. Hosted managed tests inject an
+incompatible ABI and require a typed fatal `AbiMismatch` containing both version
+numbers. The native-backed managed suite retains 1,000 create/step/dispose cycles.
+
+The detailed contracts are in [Simulation ABI](SIMULATION_ABI.md),
+[Native handle concurrency](architecture/NATIVE_HANDLE_CONCURRENCY.md), and
+[Managed simulation interop](architecture/MANAGED_INTEROP.md).
 
 ### RMA-032/RMA-033 — authoritative worker and snapshots
 
@@ -133,11 +148,13 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
-- Hosted RMA-030 exact-head quality run `30534082373`: all jobs passed on
-  `c109b13b7909efee017d32352f4ba2a973cf1447`.
+- Hosted RMA-031 code-quality run `30536538862`: native warnings/sanitizers,
+  managed warnings-as-errors and lifecycle tests, static checks, Android tests,
+  and official-model validation passed with the managed ABI/layout contract.
 - Self-hosted Unity/Android exact-head run `30534082314`: production staging,
   Unity tests, APK build/verification, RMA-022 lifecycle, authoritative rendering,
-  evidence uploads, and APK upload passed on `c109b13b`.
+  evidence uploads, and APK upload passed on `c109b13b` before the additive
+  RMA-031 startup preflight.
 - Production-identical Android MuJoCo run `30533169884`: ARM64 cross-build,
   architecture/provenance verification, and physical LG G6 probes passed on
   `22fdd1f4a47b14136ea2c85c918da1941684fc34`.
