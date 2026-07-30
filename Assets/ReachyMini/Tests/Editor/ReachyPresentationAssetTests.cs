@@ -136,6 +136,20 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void PresentationSetupRunsBeforeRuntimeBinding()
+        {
+            DefaultExecutionOrder rootOrder = Attribute.GetCustomAttribute(
+                typeof(ReachyPresentationRoot),
+                typeof(DefaultExecutionOrder)) as DefaultExecutionOrder;
+            Assert.That(rootOrder, Is.Not.Null);
+            Assert.That(
+                rootOrder.order,
+                Is.LessThan(0),
+                "Presentation setup must disable/configure the renderer before the " +
+                "production runtime binds and enables its pose source.");
+        }
+
+        [Test]
         public void GeneratedPresentationSceneIsTheOnlyEnabledBuildScene()
         {
             SceneAsset scene = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
