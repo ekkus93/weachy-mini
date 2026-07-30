@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using ReachyMini.Presentation;
 using ReachyMini.Simulation;
 using UnityEngine;
@@ -12,8 +13,12 @@ namespace ReachyMini.Rendering
     [DisallowMultipleComponent]
     public sealed class ReachyAuthoritativePhysicalAcceptance : MonoBehaviour
     {
+        public const string ResultFileName =
+            "weachy-authoritative-acceptance.json";
+
         private const string SuccessMarker = "WEACHY_AUTHORITATIVE_ACCEPTANCE ";
-        private const string FailureMarker = "WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE ";
+        private const string FailureMarker =
+            "WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE ";
         private const double PhaseDurationSeconds = 0.55;
         private const float PositionMotionThresholdMetres = 1.0e-5f;
         private const float RotationMotionThresholdDegrees = 0.05f;
@@ -26,16 +31,24 @@ namespace ReachyMini.Rendering
             -0.12, -0.20, 0.18, -0.15, 0.20, -0.18, 0.16, -0.20, 0.28,
         };
 
-        private string displayMessage = "Authoritative rendering acceptance is starting.";
+        private string displayMessage =
+            "Authoritative rendering acceptance is starting.";
         private bool complete;
 
         public bool IsComplete => complete;
+
+        public string ResultPath => Path.Combine(
+            Application.persistentDataPath,
+            ResultFileName);
 
         private IEnumerator Start()
         {
 #if !WEACHY_PHYSICAL_ACCEPTANCE
             yield break;
 #else
+            PublishProgress(
+                "component_started",
+                "The physical authoritative-rendering component started.");
             yield return RunAcceptance();
 #endif
         }
@@ -49,34 +62,48 @@ namespace ReachyMini.Rendering
                 GetComponent<ReachyAuthoritativeRenderer>();
             if (runtime == null || root == null || renderer == null)
             {
-                Fail("The generated acceptance scene is missing a required runtime component.");
+                Fail(
+                    "The generated acceptance scene is missing a required " +
+                    "runtime component.");
                 yield break;
             }
 
+            PublishProgress(
+                "waiting_for_runtime",
+                "Waiting for the production simulator and renderer to bind.");
             float startupDeadline = Time.realtimeSinceStartup + 30.0f;
             while (runtime.Status != ReachyProductionRuntimeStatus.Running ||
-                   renderer.Status != ReachyAuthoritativeRendererStatus.Rendering)
+                   renderer.Status !=
+                       ReachyAuthoritativeRendererStatus.Rendering)
             {
                 if (runtime.Status == ReachyProductionRuntimeStatus.Faulted)
                 {
-                    Fail($"Production runtime faulted during startup: {runtime.Fault}");
+                    Fail(
+                        $"Production runtime faulted during startup: " +
+                        runtime.Fault);
                     yield break;
                 }
                 if (Time.realtimeSinceStartup >= startupDeadline)
                 {
                     Fail(
-                        $"Timed out waiting for production rendering; runtime={runtime.Status}, " +
-                        $"renderer={renderer.Status}.");
+                        $"Timed out waiting for production rendering; " +
+                        $"runtime={runtime.Status}, renderer={renderer.Status}.");
                     yield break;
                 }
                 yield return null;
             }
 
+            PublishProgress(
+                "runtime_bound",
+                $"Production rendering is bound with model hash " +
+                $"{runtime.ModelHash}.");
             if (!runtime.TryGetLatestAuthoritativePair(
                     out _,
                     out ReachyAuthoritativePoseSnapshot baselineState))
             {
-                Fail("The production pose source did not publish an initial snapshot pair.");
+                Fail(
+                    "The production pose source did not publish an initial " +
+                    "snapshot pair.");
                 yield break;
             }
 
@@ -85,7 +112,11 @@ namespace ReachyMini.Rendering
             ulong initialSequence = baselineState.Sequence;
             uint initialContinuity = baselineState.DiscontinuityId;
 
-            displayMessage = "Driving representative pose A from authoritative MuJoCo commands.";
+            displayMessage =
+                "Driving representative pose A from authoritative MuJoCo commands.";
+            PublishProgress(
+                "pose_a_submitted",
+                "Submitting representative pose A to the production worker.");
             ReachySimulationCommandEnqueueResult poseAResult =
                 runtime.SubmitPositionTargets(PoseA);
             if (poseAResult != ReachySimulationCommandEnqueueResult.Accepted)
@@ -107,8 +138,16 @@ namespace ReachyMini.Rendering
                 yield break;
             }
             Dictionary<string, BodyWorldPose> poseA = CaptureWorldPoses(bodies);
+            PublishProgress(
+                "pose_a_observed",
+                $"Observed authoritative pose A at sequence " +
+                $"{poseAState.Sequence}.");
 
-            displayMessage = "Driving representative pose B from authoritative MuJoCo commands.";
+            displayMessage =
+                "Driving representative pose B from authoritative MuJoCo commands.";
+            PublishProgress(
+                "pose_b_submitted",
+                "Submitting representative pose B to the production worker.");
             ReachySimulationCommandEnqueueResult poseBResult =
                 runtime.SubmitPositionTargets(PoseB);
             if (poseBResult != ReachySimulationCommandEnqueueResult.Accepted)
@@ -129,9 +168,14 @@ namespace ReachyMini.Rendering
                 Fail(poseBError);
                 yield break;
             }
+            PublishProgress(
+                "pose_b_observed",
+                $"Observed authoritative pose B at sequence " +
+                $"{poseBState.Sequence}.");
 
             int movedBodyCount = CountMovedBodies(baseline, poseA);
-            bool bodyYawMoved = BodyMoved(baseline, poseA, "body_down_3dprint");
+            bool bodyYawMoved =
+                BodyMoved(baseline, poseA, "body_down_3dprint");
             bool headMoved = BodyMoved(baseline, poseA, "xl_330");
             bool rightAntennaMoved =
                 BodyMoved(baseline, poseA, "dc15_a01_horn_dummy_7");
@@ -139,7 +183,12 @@ namespace ReachyMini.Rendering
                 BodyMoved(baseline, poseA, "dc15_a01_horn_dummy_8");
             int movedStewartLinks = CountMovedStewartLinks(baseline, poseA);
 
-            displayMessage = "Resetting the production simulation and verifying discontinuity snapping.";
+            displayMessage =
+                "Resetting the production simulation and verifying " +
+                "discontinuity snapping.";
+            PublishProgress(
+                "reset_submitted",
+                "Submitting a neutral reset to the production worker.");
             ReachySimulationControlResult resetResult = runtime.ResetNeutral();
             if (!resetResult.IsSuccess)
             {
@@ -165,7 +214,8 @@ namespace ReachyMini.Rendering
                 resetContinuity = resetState.DiscontinuityId;
                 if (Time.realtimeSinceStartup >= resetDeadline)
                 {
-                    Fail("Neutral reset did not publish a new continuity epoch.");
+                    Fail(
+                        "Neutral reset did not publish a new continuity epoch.");
                     yield break;
                 }
                 yield return null;
@@ -191,7 +241,8 @@ namespace ReachyMini.Rendering
                 renderer_structure_valid = structureValid,
                 renderer_status = renderer.Status.ToString(),
                 runtime_status = runtime.Status.ToString(),
-                sleep_reset_status = "unsupported_pinned_model_has_no_named_sleep_keyframe",
+                sleep_reset_status =
+                    "unsupported_pinned_model_has_no_named_sleep_keyframe",
                 hidden_kinematic_fallback = false,
             };
 
@@ -203,7 +254,8 @@ namespace ReachyMini.Rendering
                 !bodyYawMoved || !headMoved ||
                 !rightAntennaMoved || !leftAntennaMoved ||
                 !structureValid ||
-                renderer.Status != ReachyAuthoritativeRendererStatus.Rendering ||
+                renderer.Status !=
+                    ReachyAuthoritativeRendererStatus.Rendering ||
                 runtime.Status != ReachyProductionRuntimeStatus.Running)
             {
                 report.status = "failed_acceptance_condition";
@@ -213,8 +265,11 @@ namespace ReachyMini.Rendering
 
             complete = true;
             displayMessage =
-                "Authoritative MuJoCo-to-Unity rendering acceptance passed on this device.";
-            Debug.Log(SuccessMarker + JsonUtility.ToJson(report), this);
+                "Authoritative MuJoCo-to-Unity rendering acceptance passed " +
+                "on this device.";
+            string reportJson = JsonUtility.ToJson(report);
+            PublishResult(reportJson);
+            Debug.Log(SuccessMarker + reportJson, this);
         }
 
         private static IEnumerator WaitForSimulationAdvance(
@@ -264,7 +319,9 @@ namespace ReachyMini.Rendering
             }
             if (!runtime.TryGetLatestAuthoritativePair(out _, out state))
             {
-                error = "The authoritative pose source stopped publishing snapshot pairs.";
+                error =
+                    "The authoritative pose source stopped publishing " +
+                    "snapshot pairs.";
                 return false;
             }
             error = string.Empty;
@@ -284,7 +341,9 @@ namespace ReachyMini.Rendering
                     : body.BodyName;
                 result.Add(
                     name,
-                    new BodyWorldPose(body.transform.position, body.transform.rotation));
+                    new BodyWorldPose(
+                        body.transform.position,
+                        body.transform.rotation));
             }
             return result;
         }
@@ -296,7 +355,9 @@ namespace ReachyMini.Rendering
             int count = 0;
             foreach (KeyValuePair<string, BodyWorldPose> entry in baseline)
             {
-                if (moved.TryGetValue(entry.Key, out BodyWorldPose current) &&
+                if (moved.TryGetValue(
+                        entry.Key,
+                        out BodyWorldPose current) &&
                     HasMoved(entry.Value, current))
                 {
                     ++count;
@@ -312,8 +373,12 @@ namespace ReachyMini.Rendering
             int count = 0;
             foreach (KeyValuePair<string, BodyWorldPose> entry in baseline)
             {
-                if (entry.Key.StartsWith("stewart_link_rod", StringComparison.Ordinal) &&
-                    moved.TryGetValue(entry.Key, out BodyWorldPose current) &&
+                if (entry.Key.StartsWith(
+                        "stewart_link_rod",
+                        StringComparison.Ordinal) &&
+                    moved.TryGetValue(
+                        entry.Key,
+                        out BodyWorldPose current) &&
                     HasMoved(entry.Value, current))
                 {
                     ++count;
@@ -327,12 +392,16 @@ namespace ReachyMini.Rendering
             IReadOnlyDictionary<string, BodyWorldPose> moved,
             string bodyName)
         {
-            return baseline.TryGetValue(bodyName, out BodyWorldPose before) &&
+            return baseline.TryGetValue(
+                    bodyName,
+                    out BodyWorldPose before) &&
                 moved.TryGetValue(bodyName, out BodyWorldPose after) &&
                 HasMoved(before, after);
         }
 
-        private static bool HasMoved(BodyWorldPose before, BodyWorldPose after)
+        private static bool HasMoved(
+            BodyWorldPose before,
+            BodyWorldPose after)
         {
             return Vector3.Distance(before.Position, after.Position) >
                     PositionMotionThresholdMetres ||
@@ -340,16 +409,54 @@ namespace ReachyMini.Rendering
                     RotationMotionThresholdDegrees;
         }
 
+        private void PublishProgress(string stage, string message)
+        {
+            AcceptanceProgress progress = new AcceptanceProgress
+            {
+                status = "in_progress",
+                stage = stage,
+                message = message,
+            };
+            PublishResult(JsonUtility.ToJson(progress));
+        }
+
+        private void PublishResult(string json)
+        {
+            try
+            {
+                string directory = Application.persistentDataPath;
+                Directory.CreateDirectory(directory);
+                string resultPath = Path.Combine(directory, ResultFileName);
+                string temporaryPath = resultPath + ".tmp";
+                File.WriteAllText(temporaryPath, json);
+                if (File.Exists(resultPath))
+                {
+                    File.Delete(resultPath);
+                }
+                File.Move(temporaryPath, resultPath);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    $"Could not publish authoritative acceptance evidence: " +
+                    exception.Message,
+                    this);
+            }
+        }
+
         private void Fail(string message)
         {
             complete = true;
-            displayMessage = $"Authoritative rendering acceptance failed: {message}";
+            displayMessage =
+                $"Authoritative rendering acceptance failed: {message}";
             AcceptanceFailure failure = new AcceptanceFailure
             {
                 status = "failed",
                 message = message,
             };
-            Debug.LogError(FailureMarker + JsonUtility.ToJson(failure), this);
+            string failureJson = JsonUtility.ToJson(failure);
+            PublishResult(failureJson);
+            Debug.LogError(FailureMarker + failureJson, this);
         }
 
         private void OnGUI()
@@ -380,6 +487,14 @@ namespace ReachyMini.Rendering
             public Vector3 Position { get; }
 
             public Quaternion Rotation { get; }
+        }
+
+        [Serializable]
+        private sealed class AcceptanceProgress
+        {
+            public string status = string.Empty;
+            public string stage = string.Empty;
+            public string message = string.Empty;
         }
 
         [Serializable]
