@@ -51,6 +51,7 @@ typedef struct ReachyMujocoBackendContext {
     uint32_t reset_pose_id;
     uint32_t health_flags;
     uint32_t model_format;
+    uint32_t continuity_id;
     ReachySimWrenchCommand pending_wrench;
     uint64_t wrench_steps_remaining;
     int warning_counts[mjNWARNING];

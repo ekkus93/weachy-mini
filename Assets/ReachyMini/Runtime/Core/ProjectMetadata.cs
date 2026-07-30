@@ -15,6 +15,7 @@ namespace ReachyMini.Core
         public const string ProductName = "Weachy Mini";
         public const uint NativeAbiVersion = 2;
         public const uint NativeSnapshotFormatVersion = 1;
+        public const uint NativeStateFormatVersion = 1;
         public const ulong UncalibratedCalibrationProfileId = 0UL;
         public const double InitialPhysicsTimestepSeconds = 0.002;
         public const SimulationFidelity InitialFidelity = SimulationFidelity.Unavailable;
