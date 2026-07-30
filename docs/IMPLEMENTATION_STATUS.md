@@ -2,199 +2,155 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** Production MuJoCo backend connected to the public simulation ABI and physically validated; ordered state-payload publication and Unity production pose binding remain open
+**Current implementation series:** Production MuJoCo state publication, Unity
+pose binding, physical lifecycle/rendering acceptance, and RMA-030 native handle
+concurrency hardening
 
 ## Repository rules in force
 
-- Work directly on `master`; do not create branches or pull requests unless the user explicitly changes that instruction.
-- Every lint warning, analyzer warning, compiler warning, or error in first-party code is a bug and must be fixed at its source.
-- Do not hide first-party warnings through pragmas, blanket suppressions, lint baselines, fake generated-code labels, or reduced warning levels.
-- Do not modify third-party source to satisfy first-party lint policy. Keep third-party builds isolated and preserve upstream source.
+- Work directly on `master`; do not create branches or pull requests unless the
+  user explicitly changes that instruction.
+- Every first-party warning or error is a defect to fix at its source.
+- Do not suppress warnings, hide failures, select mocks in production, or add a
+  silent kinematic/cosmetic fallback.
+- Preserve pinned third-party source and provenance.
 
-## Implemented
+## Completed foundations
 
-### RMA-001 — Repository structure
+### RMA-001 through RMA-003 — repository, toolchain, and quality gates
 
-The initial Unity, Android bridge, native wrapper, managed-test, model-manifest, calibration-schema, documentation, script, and third-party inventory layout exists. README, ignore rules, text/LFS policy, asset policy, and a minimal explicit bootstrap scene are present.
+The repository pins Unity, Android SDK/AGP/Gradle/JDK/NDK/CMake, MuJoCo, and the
+Reachy source model. Hosted validation covers actionlint, Ruff, ShellCheck,
+repository policy, first-party native warnings and sanitizers, managed analyzers
+and lifecycle tests, Android Lint/tests, and official-model validation.
 
-### RMA-002 — Toolchain and build entry points
+The trusted `kawa` runner builds Unity with the pinned editor, stages the exact
+ARM64 production runtime, builds the API-26 IL2CPP feasibility APK, and runs
+installed-device acceptance on the LG G6. A second independently provisioned
+Unity/Android machine remains required for the two-machine reproducibility gate.
 
-The repository pins Unity 6000.5.2f1 to match the installed editor on the `kawa` self-hosted runner. Android API/AGP/Gradle/JDK/NDK/CMake versions, IL2CPP, and ARM64 are pinned. Toolchain validation verifies that `ProjectVersion.txt` and `toolchain.lock.json` agree and fails visibly when the Unity Android Build Support module or pinned SDK packages are absent.
+### RMA-010/RMA-011 — provenance
 
-Unity 6000.5 no longer provides an Android x86_64 player target. The build entry points are:
+The Reachy Mini source is pinned at
+`a739a6e461eb6d722901f1cfc225265ffc85c28d`. The importer verifies hashes,
+rejects dirty or mismatched inputs, preserves notices, imports all referenced
+assets, and generates deterministic model/render maps. RMA-012 in-app licenses
+and the complete release-notice reconciliation remain open.
 
-- ARM64/API-26 physical-device feasibility APK;
-- ARM64/API-31 development APK;
-- ARM64/API-31 release AAB.
+### RMA-020 through RMA-022 — Android native feasibility and lifecycle
 
-The API-26 feasibility target exists only to exercise the LG G6 test phone. It does not silently lower the normal application or release API floor.
+MuJoCo 3.9.0 is pinned at
+`237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. The project builds API-26 ARM64
+`libmujoco.so`, production `libreachy_sim.so`, model compilers, and probes without
+modifying upstream MuJoCo source.
 
-GitHub Actions contains:
+The LG G6 constrained-mechanism gate completed 900,000 steps / 30 simulated
+minutes with finite state, bounded equality residuals, zero MuJoCo warnings, and
+a structured malformed-model failure.
 
-- hosted Android SDK installation, Android Lint, Java warnings-as-errors, and tests;
-- hosted Unity test/APK/AAB validation through a manual GameCI workflow after Unity secrets are configured;
-- hosted Android ARM64 MuJoCo and production-`reachy_sim` cross-compilation;
-- a trusted self-hosted `kawa` runner for local Unity validation and physical-phone jobs;
-- physical-phone selection that ignores emulator targets and requires the sole connected ARM64 hardware device;
-- stable issue-based status endpoints for hosted quality, local Unity, and Android MuJoCo feasibility workflows.
+RMA-022 is physically accepted. The installed IL2CPP application resolves the
+native ABI/version, visibly reports a controlled malformed-MJB failure, creates,
+steps, closes, and rejects reuse of a valid native handle, survives two real
+HOME/resume cycles without suspended-wall-time catch-up, destroys the production
+runtime, disables the renderer, and shuts down the process deterministically.
 
-The two-machine Unity/Android reproducibility acceptance criterion remains open until successful run evidence exists on a second independently provisioned machine.
+### RMA-030/RMA-031 — native ABI and managed interop
 
-### RMA-003 — Baseline quality gates
+The public C ABI remains version 2. It uses explicit-width/versioned structures,
+generation-bearing opaque handles, typed status/recoverability, exact command
+records, state/wrench/snapshot operations, and caller-owned error data. The
+managed layer uses exact layouts and deterministic `SafeHandle` ownership.
 
-First-party C, Java, managed, Python, shell, Android, and GitHub Actions workflow warning/lint policies are configured. The normal GitHub Actions workflow runs actionlint, Ruff lint/format, ShellCheck, native warnings-as-errors and sanitizer builds, managed analyzer/native-lifecycle tests, Android Lint, Java `-Werror`, Android tests, static repository validation, pinned Reachy topology and parameter-audit validation, desktop MuJoCo model loading, and desktop reference-trace generation.
+RMA-030 native handle concurrency hardening is implemented:
 
-Hosted run `30508016954` passed all static, native, managed, Android, and official-model jobs for commit `78105298959a4d6d37bd5ac6dc1838a331af3dd9`.
+- every handle-scoped public operation owns a nonblocking exclusive lease;
+- same-handle contention returns retryable `HANDLE_BUSY` before backend access;
+- invalid and stale handles retain their specific statuses;
+- unrelated handles remain independent;
+- destroy cannot race a live operation;
+- contended calls do not replace retained diagnostics;
+- state/snapshot size outputs change only on success or `BUFFER_TOO_SMALL`;
+- null/nonzero, missing-size, undersized, and invalid output combinations fail
+  without wrapper-side partial mutation;
+- optional creation diagnostics require initialized ABI and structure size.
 
-### RMA-010/RMA-011 — Third-party inventory and Reachy provenance
+The native suite retains the original contract coverage and adds deterministic
+blocked-operation tests plus eight-thread / 16,000-attempt contention tests with
+exact success/busy accounting and sequence verification. Hosted warnings,
+ASan, and UBSan gates pass the implementation.
 
-Reachy Mini source is pinned at commit `a739a6e461eb6d722901f1cfc225265ffc85c28d`. The deterministic importer rejects dirty or mismatched sources, copies all MJCF-referenced meshes and the upstream license, and emits attribution plus per-file SHA-256 provenance. Fixture tests cover repeated deterministic output, duplicate names, topology drift, and preservation of previous known-good output after a failed import.
+The detailed contracts are in [Simulation ABI](SIMULATION_ABI.md) and
+[Native handle concurrency](architecture/NATIVE_HANDLE_CONCURRENCY.md).
 
-Release-package inventory reconciliation and the in-app licenses screen remain open.
+### RMA-032/RMA-033 — authoritative worker and snapshots
 
-### RMA-020 — MuJoCo Android ARM64 build
+A managed-owned dedicated fixed-step worker owns mutable simulation work,
+applies commands at step boundaries, publishes immutable state, retains faults,
+and provides explicit pause/resume/reset/shutdown handshakes. Queue overflow is
+visible, rendering stalls do not own physics state, and resume does not execute a
+wall-time catch-up burst.
 
-MuJoCo 3.9.0 is pinned at commit `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`. The Android ARM64 build preserves upstream source, isolates third-party warnings, records compiler/provenance information, and produces API-26 `arm64-v8a` `libmujoco.so`, production `libreachy_sim.so`, a full-model MJB compiler, and probe executables. A first-party API-26 compatibility shim supplies checked `aligned_alloc` behavior through `posix_memalign` without modifying MuJoCo source.
+Production snapshots are versioned, model/configuration/calibration bound,
+transactionally restored, and require byte-identical recapture/replay. Neutral
+reset is supported. Sleep/rest returns `UNSUPPORTED` because the pinned upstream
+model has no named sleep/rest keyframe; no pose is fabricated.
 
-Android feasibility run `30507410229` built and verified the AArch64 artifacts, uploaded them, loaded both shared libraries on the LG G6, compiled the complete pinned Reachy package to MJB using the same MuJoCo runtime, and completed the production public-ABI probe successfully.
+### RMA-040 through RMA-042 — official model integrity
 
-### RMA-021 — Minimal constrained-mechanism physical test
+The complete official model is imported and compiled with 19 bodies including
+world, 16 joints, 9 actuators, 5 equality constraints, 13 sites, `nq=37`, and
+`nv=30`. Desktop/Android reference traces compare qpos, qvel, all named body
+transforms, equality residuals, warnings, dimensions, hashes, and MuJoCo version
+within locked tolerances.
 
-The constrained fixture contains an equality loop closure and runs at a 0.002-second timestep. The probe measures equality rows separately from contact rows, rejects NaN/Inf and timing or residual failures, and returns structured malformed-model errors.
+The mechanical audit explicitly classifies the generic actuator dynamics and
+missing antenna hard-stop evidence as uncalibrated placeholders. No calibrated
+claim is made.
 
-On LG G6 `LGH87250967ab9` running Android 8.0/API 26, run `30498720239` completed:
+### RMA-050 through RMA-052 — authoritative Unity rendering
 
-- `900000` steps;
-- `1799.999999971` simulated seconds;
-- maximum equality residual `3.67318514288284e-06`;
-- median step time `17.760001356` microseconds;
-- p95 step time `17.8650007` microseconds;
-- maximum observed step time `1301.561998844` microseconds;
-- zero MuJoCo warnings;
-- structured malformed-model failure without a crash.
+The deterministic generated presentation contains all 18 non-world MuJoCo
+bodies. The unnamed upstream body has the canonical identity `__body_15`; all
+runtime identities are nonempty and unique.
 
-The measured result leaves substantial median and p95 execution headroom relative to a 2,000-microsecond 500 Hz step budget on this fixture. It does not by itself establish full-model 500 Hz headroom under all application workloads.
+The production state-format-v1 envelope publishes model identity, sequence,
+simulation time, continuity, qpos, qvel, actuator observations, canonical body
+poses, calibration identity, warnings, constraint counts, and residuals. The
+managed parser validates all offsets, counts, identities, ordering, finiteness,
+and quaternions, then publishes immutable pose pairs.
 
-### RMA-030/RMA-031 — Native ABI, production MuJoCo backend, and managed interop
+Unity interpolates by simulation timestamps, snaps across discontinuities, and
+never feeds presentation transforms back into MuJoCo. Rigidbody, articulation,
+Animator, Timeline, and other competing writers are rejected or detected.
+Physical acceptance verifies body yaw, head, both antennas, all six Stewart
+links, reset continuity, renderer health, and absence of a hidden kinematic
+fallback.
 
-The repository contains a versioned explicit-width C ABI, structured recoverability, stale-handle and bounded-buffer checks, native contract tests, exact managed layouts, deterministic handle ownership, typed managed errors, and native lifecycle stress coverage. The public C ABI remains version 2; additive model-format flags and an exact actuator-command record do not change existing layouts.
+The physical acceptance scripts now share one deterministic device contract:
+wake, unlock, collapse overlays, acknowledge immersive confirmation, keep awake,
+launch the exact Unity activity, verify focused-window ownership, capture
+structured evidence, and restore device power policy.
 
-Production builds can now select a real MuJoCo backend instead of the explicit unavailable backend. One handle owns `mjModel`, `mjData`, fixed-step sequence state, validated command sequencing, pending finite-duration wrench state, warning health, and preallocated integration-state buffers. The backend supports self-contained XML fixtures and version-matched MJB input; the official multi-file Reachy package is compiled to MJB rather than pretending that unresolved XML assets are self-contained.
+## Current validation evidence
 
-Command batches are fully validated before mutation and are never partially applied or silently clamped. Wrenches target non-world bodies for an explicit whole-step duration. MuJoCo warnings and non-finite state fail visibly. Neutral reset is implemented; sleep reset succeeds only when the model provides a named sleep/rest keyframe and otherwise returns `UNSUPPORTED` rather than fabricating a pose.
-
-Production snapshots are model-, calibration-, timestep-, format-, sequence-, command-, reset-, health-, and pending-wrench-bound. They preserve `mjSTATE_INTEGRATION`, reject warning-faulted or incompatible candidates, and restore transactionally: a failed candidate is rolled back instead of becoming partially live state. The backend behavior is documented in [Production MuJoCo backend](architecture/PRODUCTION_MUJOCO_BACKEND.md).
-
-Android feasibility run `30507410229`, physical job `90760316016`, exercised the public production ABI on the complete Reachy MJB and reported:
-
-- MuJoCo `3.9.0` and backend version `0.3.0-deterministic-snapshot`;
-- 18 non-world bodies, 16 joints, and 9 actuators;
-- all six public capability flags present;
-- 100 fixed steps and sequence 100;
-- `0.20000000000000015` simulated seconds;
-- byte-identical snapshot restore/replay;
-- explicit `unsupported` sleep reset because the pinned model has no named sleep keyframe;
-- successful neutral reset and clean destruction.
-
-RMA-030 caller-output and concurrency hardening is complete. Invalid, undersized, and busy calls leave caller-owned buffers and size outputs unchanged. Every public operation acquires an exclusive per-handle lease; concurrent operations on the same handle return typed `HANDLE_BUSY` results, while independent handles continue to make progress. Deterministic property-style parser tests cover structural versions and sizes, byte counts, pointers, capacities, sequencing, duplicates, reserved fields, finite/range constraints, stale handles, and snapshot identities. The native hardening suite also exercises a blocking backend and eight-thread contention with 2,000 attempts per thread.
-
-### RMA-032 — Authoritative simulation worker
-
-A managed-owned dedicated simulation thread, bounded command queue, step-boundary command application, immutable triple-buffered state publication, monotonic fixed-step timing, visible queue overflow, pause/resume/reset/shutdown handshakes, retained faults, and lifecycle tests are implemented.
-
-Hosted native/managed gates and the `kawa` Unity tests passed the implementation. Unity frame cadence remains separated from the authoritative worker, rendering stalls do not own mutable physics state, queue overflow is counted rather than overwritten silently, and resume does not execute a wall-time catch-up burst.
-
-### RMA-033 — Snapshots and deterministic reset
-
-Named sleep/rest and neutral-awake reset identifiers, snapshot format version 1, model identity, calibration-profile identity, immutable managed snapshot ownership, compatibility rejection, and deterministic replay tests are implemented. The native ABI is version 2; snapshot serialization is independently versioned.
-
-The contract and failure behavior are documented in [Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md). The deterministic test backend has zero replay tolerance. The production MuJoCo backend now provides its own private versioned payload and also requires byte-identical recapture after restore and identical replay. The pinned upstream model currently provides no named sleep/rest keyframe, so the production backend reports that reset as unsupported rather than substituting guessed values.
-
-### RMA-040 — Official Reachy Mini model integrity
-
-The pinned official MJCF and all referenced mesh assets are imported with provenance. `MODEL_MAP.json` records the complete body, joint, actuator, equality, site, and camera topology. CI rejects missing names, duplicate names, changed topology, source-hash drift, or a dirty/mismatched source checkout.
-
-Desktop MuJoCo 3.9.0 compiles and steps the model. The physical Android probe on the LG G6 also loaded the complete model and completed 100 steps with:
-
-- 19 bodies including world;
-- 16 joints;
-- 9 actuators;
-- 5 equality constraints;
-- 13 sites;
-- 2 cameras;
-- `nq=37`, `nv=30`;
-- maximum equality residual `3.028836354224129e-07`;
-- median step time `293.567503832` microseconds;
-- p95 step time `339.924955551` microseconds;
-- maximum step time `514.999999723` microseconds;
-- zero MuJoCo warnings.
-
-The model source, compiled dimensions, coordinate units, quaternion order, and initial `xl_330` reference pose are pinned in `models/reachy-mini/model-baseline.json`. The desktop-only source camera remains present in the untouched model package; the generated RMA-050 presentation excludes it and uses a fixed Unity-only camera and lighting setup.
-
-### RMA-041 — Mechanical parameter audit
-
-The human-readable audit is [Reachy Mini model parameter audit](model-parameter-audit.md). The authoritative machine-readable audit is `models/reachy-mini/model-parameter-audit.json`.
-
-The audit classifies geometry and inertial data as CAD-derived, explicit upstream joint ranges and equality settings as upstream approximations, and the active `chosen_actuator` dynamics plus missing antenna hard-stop ranges as placeholders. It preserves upstream uncertainty comments, records every active joint and actuator, and explicitly records the absence of manufacturer, measured, fitted, or calibrated evidence.
-
-CI rejects source/hash drift, changed ranges or inherited actuator constants, missing uncertainty comments, unknown classifications, and any calibrated label while placeholders remain. Hosted run `30498864452` passed static policy tests and exact validation against the pinned upstream MJCF.
-
-### RMA-042 — Desktop/Android reference-state comparison
-
-The shared scenario `models/reachy-mini/reference-scenario.json` defines reset/settling, two representative bounded actuator poses, return to neutral, ten checkpoints, exact model/runtime identity, compared body names, and per-field tolerances. A generated C header keeps the Android runner on the same command schedule, and CI rejects a stale header or desktop trace lock.
-
-The comparator checks simulation time, all 37 `qpos` values, all 30 `qvel` values, positions and quaternions for all 17 named bodies, equality-only residuals, warnings, model/scenario hashes, MuJoCo version, and compiled dimensions. Quaternion sign equivalence is handled explicitly.
-
-Android feasibility run `30498720239`, physical job `90733807972`, passed the comparison on the LG G6 and uploaded the five-file evidence artifact. The comparison and measured maximum errors are documented in [Reachy Mini desktop/Android reference-state comparison](reference-state-comparison.md). The largest observed cross-platform errors were many orders of magnitude below the documented tolerances, and the largest equality residual in either trace remained below `0.001`.
-
-### RMA-050/RMA-051/RMA-052 — Authoritative Unity presentation
-
-The deterministic Unity asset path converts the pinned visual meshes, materials, and complete 18-body presentation hierarchy, records explicit MuJoCo-to-Unity coordinate conversion, excludes the two source-model cameras, and creates a fixed Unity-only presentation camera and lighting setup. The generated prefab contains one canonical `ReachyPresentationBody` binding per non-world MuJoCo body.
-
-`ReachyAuthoritativePoseBuffer` retains the latest immutable snapshot pair. `ReachyAuthoritativeRenderer` validates canonical body order and identity, interpolates by simulation timestamps, snaps across reset/model-reload discontinuities, writes only presentation transforms, and retains no Unity-to-MuJoCo feedback path. The steady-state renderer has explicit zero-managed-allocation coverage.
-
-Invariant enforcement rejects Rigidbody, Rigidbody2D, Joint, Joint2D, ArticulationBody, Animator, legacy Animation, and PlayableDirector components in the authoritative body hierarchies. The renderer records expected world poses and faults visibly when any script or other writer changes an authoritative transform between applications.
-
-The optional disabled-by-default `ReachyPresentationDebugOverlay` is generated from the imported `MODEL_MAP.json`; it contains the canonical 18-body axis mapping and all 16 joint-name/body associations. Duplicate hard-coded/editor overlay implementations were removed. The detailed contract is documented in [Authoritative Unity rendering](architecture/AUTHORITATIVE_UNITY_RENDERING.md).
-
-Automated acceptance coverage includes 30/60 FPS trajectory equivalence, reset discontinuity handling, head and antenna alignment, canonical generated mapping, prohibited-writer rejection, forced transform-drift detection, and no managed allocation in the steady-state render loop.
-
-The production backend is now real, but ABI version 2 still publishes only `ReachySimStateHeader`; it does not yet publish ordered `qpos`, `qvel`, actuator observations, or MuJoCo body poses. The renderer therefore remains visibly unbound in the generated prefab. Physical sleep/wake, head, Stewart-link, and antenna acceptance remains open and must not be replaced by test fixtures, cosmetic animation, or a hidden kinematic fallback.
-
-### Local Unity/Android validation
-
-Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, the ARM64/API-26 IL2CPP APK build, APK verification, and artifact upload for commit `501c7be0614dc19046d65abae9c787e560e44e7f`. Push validation intentionally does not install or launch the Unity APK on the connected phone.
-
-## Verified evidence
-
-- toolchain manifest and cross-file Unity-version validation;
-- repository scaffold, Markdown links, inventory, deterministic importer, and topology-failure tests;
-- actionlint, Ruff lint/format, ShellCheck, and static repository checks;
-- Java `-Xlint:all -Werror`, Android Lint, Gradle tests, and pinned Android SDK provisioning;
-- first-party native warnings-as-errors and ASan/UBSan builds/tests;
-- managed analyzers, 1,000-cycle native handle lifecycle coverage, and deterministic snapshot replay;
-- RMA-030 layout, C/C++ compatibility, parser-property matrix, caller-output invariants, per-handle `HANDLE_BUSY`, independent-handle progress, and threaded-contention coverage;
-- ARM64/API-26 MuJoCo and production-`reachy_sim` builds, AArch64/provenance verification, artifact upload, and physical library execution;
-- official multi-file Reachy package compilation to a version-matched MJB on the physical phone;
-- production public-ABI create, capabilities, state, commands, wrench, step, snapshot/restore/replay, reset, and destroy coverage;
-- 900,000-step constrained-model physical report and structured malformed-model failure;
-- official Reachy model desktop and Android load/step evidence with matching compiled counts;
-- source-linked machine-readable mechanical-parameter fidelity audit;
-- locked desktop/Android command-trace comparison with qpos, qvel, body-transform, equality-residual, warning, and identity checks;
-- deterministic generated Reachy visual presentation and canonical 18-body mapping;
-- simulation-time interpolation, discontinuity snapping, writer rejection, drift detection, 30/60 FPS equivalence, and steady-state allocation coverage;
-- Unity EditMode and PlayMode tests on Unity 6000.5.2f1;
-- ARM64/API-26 Unity APK build, verification, and artifact upload on `kawa`;
-- ADB authorization and ARM64/API-26 identification of the LG G6.
+- Hosted RMA-030 exact-head quality run `30534082373`: all jobs passed on
+  `c109b13b7909efee017d32352f4ba2a973cf1447`.
+- Self-hosted Unity/Android exact-head run `30534082314`: production staging,
+  Unity tests, APK build/verification, RMA-022 lifecycle, authoritative rendering,
+  evidence uploads, and APK upload passed on `c109b13b`.
+- Production-identical Android MuJoCo run `30533169884`: ARM64 cross-build,
+  architecture/provenance verification, and physical LG G6 probes passed on
+  `22fdd1f4a47b14136ea2c85c918da1941684fc34`.
 
 ## Open hard gates
 
-- RMA-022 physical installation/launch of the Unity IL2CPP APK with real native-wrapper initialization, failure visibility, pause/resume, and shutdown validation;
-- a versioned ordered production state payload containing `qpos`, `qvel`, actuator observations, body identity/order, body poses, continuity identity, and solver diagnostics;
-- managed parsing and publication of that payload through `IReachyAuthoritativePoseSource`, followed by physical RMA-051/RMA-052 motion acceptance;
-- development APK and release AAB builds;
-- two-machine reproducible build evidence;
-- in-app licenses, attribution, and unofficial-project notice (RMA-012);
-- all later dynamics, calibration, camera, perception, speech, LLM/provider, behavior, privacy, diagnostics, performance, and release phases.
+- RMA-060 long-duration official-model baseline dynamics and monitoring;
+- RMA-012 offline licenses, attribution, and unofficial-project notice;
+- API-31 development APK and release AAB validation;
+- two-machine reproducible Unity/Android build evidence;
+- later servo fidelity, calibration, application shell, camera, perception,
+  speech, provider, behavior, privacy, diagnostics, performance, and release
+  phases.
 
-No open gate may be converted into a completed checkbox by substituting a mock, cosmetic Unity animation, hidden fallback, suppressed warning, or fabricated measurement.
+No open gate may be converted into a completed claim through a mock, hidden
+fallback, suppressed warning, or fabricated measurement.
