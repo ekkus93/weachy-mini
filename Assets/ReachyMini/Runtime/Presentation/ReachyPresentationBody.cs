@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace ReachyMini.Presentation
@@ -16,21 +15,11 @@ namespace ReachyMini.Presentation
         [SerializeField]
         private string bodyName = string.Empty;
 
-        [SerializeField]
-        private string[] jointNames = Array.Empty<string>();
-
-        [SerializeField]
-        private string jointDebugLabel = string.Empty;
-
         public int BodyIndex => bodyIndex;
 
         public string BodyPath => bodyPath;
 
         public string BodyName => bodyName;
-
-        public IReadOnlyList<string> JointNames => jointNames;
-
-        public string JointDebugLabel => jointDebugLabel;
 
         public void ConfigureGeneratedBody(
             int generatedBodyIndex,
@@ -54,9 +43,6 @@ namespace ReachyMini.Presentation
             bodyIndex = generatedBodyIndex;
             bodyPath = generatedBodyPath;
             bodyName = generatedBodyName ?? string.Empty;
-            jointNames = ReachyPinnedJointDebugMap.CreateJointNames(bodyName);
-            jointDebugLabel = string.Join(", ", jointNames);
-
             ReachyPresentationRoot root =
                 GetComponentInParent<ReachyPresentationRoot>();
             if (root != null)

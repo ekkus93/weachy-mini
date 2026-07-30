@@ -60,11 +60,6 @@ namespace ReachyMini.Presentation
                     generatedVisualGeometryCount,
                     "Presentation must contain at least one visual geometry.");
             }
-            if (generatedBodyCount == 18)
-            {
-                ReachyPinnedJointDebugMap.ValidateSourceModel(
-                    generatedSourceModelSha256);
-            }
 
             schemaVersion = generatedSchemaVersion;
             sourceModelSha256 = generatedSourceModelSha256;
@@ -136,16 +131,6 @@ namespace ReachyMini.Presentation
                     $"{renderer.Fault}");
             }
             renderer.enabled = false;
-
-            ReachyAuthoritativeDebugOverlay debugOverlay =
-                GetComponent<ReachyAuthoritativeDebugOverlay>();
-            if (debugOverlay == null)
-            {
-                debugOverlay =
-                    gameObject.AddComponent<ReachyAuthoritativeDebugOverlay>();
-            }
-            debugOverlay.ConfigureBodies(canonicalBodies);
-            debugOverlay.enabled = false;
         }
     }
 }
