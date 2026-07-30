@@ -1,59 +1,28 @@
-#ifndef REACHY_FAKE_MUJOCO_H
-#define REACHY_FAKE_MUJOCO_H
+#ifndef REACHY_TEST_FAKE_MUJOCO_H
+#define REACHY_TEST_FAKE_MUJOCO_H
 
-#include <stddef.h>
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+#define REACHY_FAKE_MUJOCO 1
 #define mjVERSION_HEADER 3009000
+#define mjSTATE_INTEGRATION 0x01
+#define mjOBJ_KEY 1
+#define mjCNSTR_EQUALITY 0
+#define mjCNSTR_CONTACT_FRICTIONLESS 1
+#define mjNWARNING 8
 
 typedef double mjtNum;
-typedef int64_t mjtSize;
 typedef unsigned char mjtByte;
+typedef long long mjtSize;
 
-enum { mjNWARNING = 8 };
-enum { mjOBJ_KEY = 15 };
-enum {
-    mjCNSTR_EQUALITY = 0,
-    mjCNSTR_CONTACT_FRICTIONLESS = 5
-};
-enum {
-    mjSTATE_TIME = 1 << 0,
-    mjSTATE_QPOS = 1 << 1,
-    mjSTATE_QVEL = 1 << 2,
-    mjSTATE_ACT = 1 << 3,
-    mjSTATE_HISTORY = 1 << 4,
-    mjSTATE_WARMSTART = 1 << 5,
-    mjSTATE_CTRL = 1 << 6,
-    mjSTATE_QFRC_APPLIED = 1 << 7,
-    mjSTATE_XFRC_APPLIED = 1 << 8,
-    mjSTATE_EQ_ACTIVE = 1 << 9,
-    mjSTATE_MOCAP_POS = 1 << 10,
-    mjSTATE_MOCAP_QUAT = 1 << 11,
-    mjSTATE_USERDATA = 1 << 12,
-    mjSTATE_PLUGIN = 1 << 13,
-    mjSTATE_PHYSICS = mjSTATE_QPOS | mjSTATE_QVEL | mjSTATE_ACT | mjSTATE_HISTORY,
-    mjSTATE_FULLPHYSICS = mjSTATE_TIME | mjSTATE_PHYSICS | mjSTATE_PLUGIN,
-    mjSTATE_USER = mjSTATE_CTRL | mjSTATE_QFRC_APPLIED | mjSTATE_XFRC_APPLIED |
-                   mjSTATE_EQ_ACTIVE | mjSTATE_MOCAP_POS | mjSTATE_MOCAP_QUAT |
-                   mjSTATE_USERDATA,
-    mjSTATE_INTEGRATION = mjSTATE_FULLPHYSICS | mjSTATE_USER | mjSTATE_WARMSTART
-};
-
-typedef struct mjVFS {
-    const void* buffer;
-    int buffer_size;
-} mjVFS;
+typedef struct mjWarningStat {
+    int lastinfo;
+    int number;
+} mjWarningStat;
 
 typedef struct mjOption {
     mjtNum timestep;
 } mjOption;
 
 typedef struct mjModel {
-    mjOption opt;
     int nq;
     int nv;
     int na;
@@ -66,19 +35,13 @@ typedef struct mjModel {
     int nkey;
     int nmocap;
     int nuserdata;
+    mjOption opt;
     mjtByte* actuator_ctrllimited;
     mjtNum* actuator_ctrlrange;
 } mjModel;
 
-typedef struct mjWarningStat {
-    int lastinfo;
-    int number;
-} mjWarningStat;
-
 typedef struct mjData {
     mjtNum time;
-    int ncon;
-    mjtSize nefc;
     mjtNum* qpos;
     mjtNum* qvel;
     mjtNum* qacc;
@@ -91,19 +54,30 @@ typedef struct mjData {
     mjtNum* mocap_pos;
     mjtNum* mocap_quat;
     mjtNum* userdata;
+    mjWarningStat warning[mjNWARNING];
+    mjtSize nefc;
     mjtNum* efc_pos;
     int* efc_type;
+    int ncon;
     mjtNum* xpos;
     mjtNum* xquat;
-    mjWarningStat warning[mjNWARNING];
     int fake_steps;
     int fake_emit_warning;
 } mjData;
 
+typedef struct mjVFS {
+    const void* buffer;
+    int buffer_size;
+} mjVFS;
+
 void mj_defaultVFS(mjVFS* vfs);
 int mj_addBufferVFS(mjVFS* vfs, const char* name, const void* buffer, int nbuffer);
 void mj_deleteVFS(mjVFS* vfs);
-mjModel* mj_loadXML(const char* filename, const mjVFS* vfs, char* error, int error_size);
+mjModel* mj_loadXML(
+    const char* filename,
+    const mjVFS* vfs,
+    char* error,
+    int error_size);
 mjModel* mj_loadModelBuffer(const void* buffer, int buffer_size);
 void mj_saveModel(
     const mjModel* model,
@@ -122,13 +96,16 @@ int mj_name2id(const mjModel* model, int type, const char* name);
 int mj_stateSize(const mjModel* model, int sig);
 void mj_getState(const mjModel* model, const mjData* data, mjtNum* state, int sig);
 void mj_setState(const mjModel* model, mjData* data, const mjtNum* state, int sig);
-void mj_applyFT(const mjModel* model, mjData* data, const mjtNum force[3], const mjtNum torque[3], const mjtNum point[3], int body, mjtNum* qfrc_target);
+void mj_applyFT(
+    const mjModel* model,
+    mjData* data,
+    const mjtNum force[3],
+    const mjtNum torque[3],
+    const mjtNum point[3],
+    int body,
+    mjtNum* qfrc_target);
 void mju_zero(mjtNum* values, int count);
 int mj_version(void);
 const char* mj_versionString(void);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif
