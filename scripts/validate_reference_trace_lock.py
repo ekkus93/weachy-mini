@@ -6,9 +6,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
+
+
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
 class TraceLockError(RuntimeError):
@@ -34,6 +38,14 @@ def require_string(value: object, label: str) -> str:
     return value
 
 
+def require_sha256(value: object, label: str) -> str:
+    """Return one lowercase hexadecimal SHA-256 digest."""
+    digest = require_string(value, label)
+    if SHA256_PATTERN.fullmatch(digest) is None:
+        raise TraceLockError(f"{label} must contain 64 lowercase hexadecimal characters")
+    return digest
+
+
 def validate_lock(
     scenario: dict[str, Any],
     scenario_raw: bytes,
@@ -57,14 +69,17 @@ def validate_lock(
             raise TraceLockError(
                 f"Trace lock {field} mismatch: expected {required!r}, found {actual!r}"
             )
-    trace_sha256 = require_string(lock.get("trace_sha256"), "lock.trace_sha256")
-    if len(trace_sha256) != 64:
-        raise TraceLockError("lock.trace_sha256 must contain 64 hexadecimal characters")
+    require_sha256(lock.get("scenario_sha256"), "lock.scenario_sha256")
+    require_sha256(lock.get("source_model_sha256"), "lock.source_model_sha256")
+    require_sha256(lock.get("trace_sha256"), "lock.trace_sha256")
+
     generation = lock.get("trace_generation")
     if not isinstance(generation, dict):
         raise TraceLockError("lock.trace_generation must be an object")
     if generation.get("script") != "scripts/generate_reachy_reference_trace.py":
         raise TraceLockError("Trace lock identifies an unexpected generator")
+    if generation.get("format") != "UTF-8 JSON, sorted keys, two-space indentation, trailing newline":
+        raise TraceLockError("Trace lock identifies an unexpected serialization format")
     if generation.get("checkpoints") != len(scenario.get("checkpoint_steps", [])):
         raise TraceLockError("Trace lock checkpoint count differs from scenario")
     if generation.get("total_steps") != scenario.get("total_steps"):
