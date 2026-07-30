@@ -29,6 +29,8 @@ namespace ReachyMini.Rendering
         private string displayMessage = "Authoritative rendering acceptance is starting.";
         private bool complete;
 
+        public bool IsComplete => complete;
+
         private IEnumerator Start()
         {
 #if !WEACHY_PHYSICAL_ACCEPTANCE
