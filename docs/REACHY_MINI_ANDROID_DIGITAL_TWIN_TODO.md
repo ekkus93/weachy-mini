@@ -211,11 +211,13 @@ third_party/
 
 ## RMA-030 — Define the stable C ABI
 
-- [ ] Add `native/reachy_sim/include/reachy_sim.h`.
-- [ ] Use explicit-width integer types and versioned structures.
-- [ ] Prevent C++ types, STL containers, exceptions, or ownership ambiguity from crossing the boundary.
-- [ ] Add create/destroy, model load, reset, step, command, state, wrench, snapshot, and error APIs.
-- [ ] Add capability and version query APIs.
+**Status:** Complete (2026-07-30)
+
+- [x] Add `native/reachy_sim/include/reachy_sim.h`.
+- [x] Use explicit-width integer types and versioned structures.
+- [x] Prevent C++ types, STL containers, exceptions, or ownership ambiguity from crossing the boundary.
+- [x] Add create/destroy, model load, reset, step, command, state, wrench, snapshot, and error APIs.
+- [x] Add capability and version query APIs.
 
 Suggested starting point:
 
@@ -275,15 +277,24 @@ uint32_t reachy_sim_abi_version(void);
 #endif
 ```
 
-- [ ] Define error codes and whether each error is recoverable.
-- [ ] Ensure `last_error` lifetime and thread-safety are documented.
+- [x] Define error codes and whether each error is recoverable.
+- [x] Ensure `last_error` lifetime and thread-safety are documented.
 
 **Tests**
 
-- [ ] Native layout/size tests.
-- [ ] C and C++ compilation tests.
-- [ ] Invalid pointer, undersized buffer, stale handle, and ABI mismatch tests.
-- [ ] Fuzz or property tests for command/state parsers where practical.
+- [x] Native layout/size tests.
+- [x] C and C++ compilation tests.
+- [x] Invalid pointer, undersized buffer, stale handle, and ABI mismatch tests.
+- [x] Fuzz or property tests for command/state parsers where practical.
+
+**Completion evidence**
+
+- The production boundary is ABI version 2 and uses an opaque 64-bit generation-tagged handle, explicit-width structures, copied error records, typed recoverability, bounded variable-size output contracts, and capability/version queries.
+- Native contract targets cover fixed layouts, C and C++ compatibility, malformed versions and sizes, null and undersized buffers, stale generations, double destroy, exact command byte counts and sequencing, duplicate actuator identifiers, reserved fields, finite/range validation, snapshots, errors, and 1,000 create/destroy cycles.
+- Caller-owned buffers and size outputs remain unchanged for invalid, undersized, and busy results.
+- Every public operation acquires an exclusive per-handle lease. Concurrent same-handle operations return `REACHY_SIM_STATUS_HANDLE_BUSY`; independent handles continue to make progress. Blocking-backend and eight-thread contention tests verify the contract.
+- The deterministic malformed-input matrix is the property-test implementation for the current small stateful parsers. It runs under strict warnings and ASan/UBSan in supported desktop CI. A randomized fuzz corpus is deferred until it provides reproducible additional coverage beyond the maintained invariant matrix.
+- The contract and ownership rules are documented in `docs/SIMULATION_ABI.md`.
 
 ## RMA-031 — Implement C# P/Invoke boundary
 
