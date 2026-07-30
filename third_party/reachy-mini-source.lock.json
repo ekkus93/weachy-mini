@@ -22,6 +22,18 @@
       "bodies": [
         "body_foot_3dprint",
         "body_down_3dprint",
+        "dc15_a01_horn_dummy",
+        "stewart_link_rod",
+        "dc15_a01_horn_dummy_2",
+        "stewart_link_rod_2",
+        "dc15_a01_horn_dummy_3",
+        "stewart_link_rod_3",
+        "dc15_a01_horn_dummy_4",
+        "stewart_link_rod_4",
+        "dc15_a01_horn_dummy_5",
+        "stewart_link_rod_5",
+        "dc15_a01_horn_dummy_6",
+        "stewart_link_rod_6",
         "xl_330",
         "dc15_a01_horn_dummy_7",
         "dc15_a01_horn_dummy_8"
@@ -149,6 +161,26 @@
       "eye_camera": {
         "mode": "fixed"
       }
-    }
+    },
+    "exact_body_paths": [
+      "/world/body_foot_3dprint",
+      "/world/body_foot_3dprint/body_down_3dprint",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy/stewart_link_rod",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_2",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_2/stewart_link_rod_2",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_3",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_3/stewart_link_rod_3",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_4",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_4/stewart_link_rod_4",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_5",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_5/stewart_link_rod_5",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/@body[0]",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/dc15_a01_horn_dummy_7",
+      "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/dc15_a01_horn_dummy_8"
+    ]
   }
 }

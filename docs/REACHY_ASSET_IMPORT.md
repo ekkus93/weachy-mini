@@ -25,9 +25,10 @@ The default output is `Assets/Generated/ReachyMini/Source/`, which is intentiona
 3. copies the MJCF and every mesh referenced by its `<asset>` section;
 4. copies the upstream license;
 5. emits `ATTRIBUTION.md` and a deterministic `PROVENANCE.json` containing a SHA-256 digest and byte size for each imported file;
-6. fails on missing files, traversal paths, malformed XML, source changes, or revision mismatch.
+6. validates exact topology counts, every named body/joint/actuator/site/camera required by the runtime, and the complete ordered 18-body hierarchy;
+7. fails on missing files, traversal paths, malformed XML, source changes, revision mismatch, or body reparenting/reordering.
 
-It does not convert or modify mesh content yet. Any future conversion must be represented as a versioned source transformation with tests and updated provenance.
+The imported MJCF and source meshes remain byte-for-byte unchanged. The source cameras (`studio_close` and `eye_camera`) stay available as MuJoCo model metadata, but `prepare_reachy_unity_assets.py` marks both as excluded from the Unity presentation and creates an independent Unity-only presentation camera. Mesh conversion is a separate versioned `reachy_stl_to_unity_obj_v1` presentation transformation with source/output hashes; it does not alter the solver model, joint ranges, inertias, or collision geometry.
 
 ## Tests
 

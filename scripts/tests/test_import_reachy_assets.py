@@ -124,8 +124,24 @@ class ReachyAssetImportTests(unittest.TestCase):
                     "named_bodies": 6,
                     "sites": 5,
                 },
+                "exact_body_paths": [
+                    "/world/base",
+                    "/world/base/stewart_arm",
+                    "/world/base/stewart_arm/rod",
+                    "/world/base/stewart_arm/rod/head",
+                    "/world/base/stewart_arm/rod/head/@body[0]",
+                    "/world/base/stewart_arm/rod/head/right_antenna_body",
+                    "/world/base/stewart_arm/rod/head/left_antenna_body",
+                ],
                 "required_names": {
-                    "bodies": ["base", "head"],
+                    "bodies": [
+                        "base",
+                        "stewart_arm",
+                        "rod",
+                        "head",
+                        "right_antenna_body",
+                        "left_antenna_body",
+                    ],
                     "joints": [
                         "yaw_body",
                         "stewart_1",
@@ -298,6 +314,30 @@ class ReachyAssetImportTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("cameras count mismatch", result.stderr)
         self.assertEqual(previous, model_map_path.read_bytes())
+
+    def test_body_reparenting_fails_with_unchanged_counts_and_names(self) -> None:
+        """Full ordered body paths must reject hierarchy drift before import."""
+        changed = self.fixture_model().replace(
+            '''            <body name="right_antenna_body">
+              <joint name="right_antenna" type="hinge"/>
+            </body>
+            <body name="left_antenna_body">
+              <joint name="left_antenna" type="hinge"/>
+            </body>''',
+            '''            <body name="right_antenna_body">
+              <joint name="right_antenna" type="hinge"/>
+              <body name="left_antenna_body">
+                <joint name="left_antenna" type="hinge"/>
+              </body>
+            </body>''',
+        )
+        self.model_path.write_text(changed, encoding="utf-8")
+        new_commit = self.commit_source("reparent named body")
+        self.write_lock(new_commit)
+
+        result = self.run_import()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("body path/order mismatch", result.stderr)
 
     def test_duplicate_named_joint_fails_visibly(self) -> None:
         """Duplicate model names must not create an ambiguous runtime map."""

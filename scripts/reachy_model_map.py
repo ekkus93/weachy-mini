@@ -263,6 +263,37 @@ def validate_model_requirements(
                 f"MJCF {category} count mismatch: expected {expected}, found {actual}"
             )
 
+    exact_body_paths = requirements.get("exact_body_paths")
+    if not isinstance(exact_body_paths, list) or any(
+        not isinstance(path, str) or not path for path in exact_body_paths
+    ):
+        raise ModelMapError("model_requirements.exact_body_paths must contain nonempty strings")
+    actual_body_paths = [body["path"] for body in model_map["bodies"]]
+    if actual_body_paths != exact_body_paths:
+        shared_length = min(len(actual_body_paths), len(exact_body_paths))
+        mismatch_index = next(
+            (
+                index
+                for index in range(shared_length)
+                if actual_body_paths[index] != exact_body_paths[index]
+            ),
+            shared_length,
+        )
+        expected_path = (
+            exact_body_paths[mismatch_index]
+            if mismatch_index < len(exact_body_paths)
+            else "<missing>"
+        )
+        actual_path = (
+            actual_body_paths[mismatch_index]
+            if mismatch_index < len(actual_body_paths)
+            else "<missing>"
+        )
+        raise ModelMapError(
+            "MJCF body path/order mismatch at index "
+            f"{mismatch_index}: expected {expected_path!r}, found {actual_path!r}"
+        )
+
     required_names = requirements.get("required_names")
     if not isinstance(required_names, dict):
         raise ModelMapError("model_requirements.required_names must be an object")
