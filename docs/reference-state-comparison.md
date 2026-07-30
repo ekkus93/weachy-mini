@@ -9,7 +9,13 @@
 
 ## Result
 
-The pinned official Reachy Mini model produced matching desktop and Android ARM64 state traces within all documented tolerances.
+The pinned official Reachy Mini model produced matching desktop x86-64 and Android
+ARM64 state traces within every documented tolerance. This is a deterministic
+cross-platform model-integrity result, not a physical calibration claim.
+
+The current physical comparison was produced by Android MuJoCo Feasibility run
+`30583271127` on the `kawa` runner using commit
+`d229235d73851f58088b7c142e469ef6cfaeaefb`.
 
 The Android trace was recorded on:
 
@@ -18,10 +24,7 @@ The Android trace was recorded on:
 - device codename: `lucye`;
 - Android release: 8.0.0;
 - API level: 26;
-- ABI: `arm64-v8a`;
-- serial used by the private CI runner: `LGH87250967ab9`.
-
-The successful comparison was produced by Android MuJoCo feasibility run `30498212689`, device job `90732163460`, using commit `b06c045a04ed9b1049565db84d0bd472da979031`.
+- ABI: `arm64-v8a`.
 
 ## Pinned simulation identity
 
@@ -64,24 +67,32 @@ The phases are:
 | 350 | `pose_b` | Opposite-sign representative command. |
 | 600 | `return_neutral` | Return all active targets to neutral. |
 
-The exact target vectors are authoritative in `reference-scenario.json`; this document intentionally does not duplicate them as a second source of truth.
+The exact target vectors are authoritative in `reference-scenario.json`; this
+document intentionally does not duplicate them as a second source of truth.
 
 ## Compared state
 
 At every checkpoint, the comparator validates:
 
-- simulation time;
+- platform identity;
+- scenario ID and exact scenario SHA-256;
+- model SHA-256;
+- MuJoCo version;
+- compiled dimensions;
+- checkpoint count, order, and exact step numbers;
+- simulation time against both the other platform and `step * 0.002`;
 - all 37 `qpos` values;
 - all 30 `qvel` values;
 - position and quaternion for all 17 named non-world bodies;
+- body order and identity;
+- quaternion normalization and `q`/`-q` equivalence;
 - maximum equality-constraint residual;
-- MuJoCo warning count;
-- scenario ID and SHA-256;
-- model SHA-256;
-- MuJoCo version;
-- compiled dimensions.
+- MuJoCo warning count.
 
-The native Android scenario header is generated from the JSON scenario. CI rejects a stale generated header. The desktop trace is regenerated through Python MuJoCo and must match the compact trace lock before it is packaged for Android comparison.
+The native Android scenario header is generated from the JSON scenario. CI rejects
+a stale generated header. The desktop trace is regenerated through Python MuJoCo
+and must match the compact trace lock byte-for-byte before it is packaged for the
+Android comparison.
 
 ## Coordinate conventions
 
@@ -90,37 +101,41 @@ The comparison uses MuJoCo-native state and transform conventions:
 - positions are metres in the MuJoCo world frame;
 - joint positions and velocities retain MuJoCo ordering and units;
 - body quaternions use MuJoCo `w, x, y, z` ordering;
+- quaternions must be finite and normalized;
 - quaternion `q` and `-q` are treated as equivalent rotations;
 - no Unity coordinate conversion is applied in this model-integrity gate;
-- equality residuals include only MuJoCo rows whose constraint type is `mjCNSTR_EQUALITY`; contact residuals are not misclassified as loop-closure error.
+- equality residuals include only MuJoCo rows whose constraint type is
+  `mjCNSTR_EQUALITY`; contact residuals are not misclassified as loop-closure
+  error.
 
-Unity/MuJoCo coordinate conversion remains a separate rendering-layer responsibility under RMA-050 through RMA-052.
+Every equality row is evaluated by each platform runner. The trace stores the
+maximum absolute equality-row residual at each checkpoint, so the comparator both
+checks the cross-platform difference and enforces an absolute bounded-residual
+policy.
+
+Unity/MuJoCo coordinate conversion remains a separate rendering-layer
+responsibility under RMA-050 through RMA-052.
 
 ## Tolerances and measured errors
 
-These tolerances measure deterministic numerical agreement across the desktop x86-64 and Android ARM64 builds. They are not claims of physical calibration accuracy.
+These tolerances measure deterministic numerical agreement across desktop x86-64
+and Android ARM64 builds. They intentionally include margin for compiler,
+architecture, floating-point instruction selection, and standard-library
+differences while remaining much tighter than any physical-model accuracy claim.
 
 | Quantity | Allowed absolute error | Measured maximum error |
 |---|---:|---:|
-| Simulation time | `1e-12` s | `0.0` s |
-| `qpos` | `2e-6` | `3.7816971776294395e-15` |
-| `qvel` | `2e-5` | `2.6889601656421294e-13` |
+| Simulation time, platform-to-platform | `1e-12` s | `0.0` s |
+| Simulation time versus scenario schedule | `1e-12` s | `1.3322676295501878e-15` s |
+| `qpos` | `2e-6` | `3.784299262843405e-15` |
+| `qvel` | `2e-5` | `2.6852825518730583e-13` |
 | Body position | `2e-6` m | `5.898059818321144e-16` m |
 | Quaternion component | `2e-6` | `3.219646771412954e-15` |
+| Quaternion norm error | `1e-6` | `9.992007221626409e-16` |
 | Equality residual difference | `1e-6` | `1.1102230246251565e-16` |
 
-The largest equality residual observed in either trace was:
-
-```text
-3.850418586758942e-06
-```
-
-The bounded-residual policy allows at most:
-
-```text
-0.001
-```
-
+The largest equality residual observed in either trace was
+`3.84603861668803e-06`. The absolute bounded-residual policy is `0.001`.
 No MuJoCo warning was present at any checkpoint.
 
 ## Evidence hashes
@@ -128,28 +143,41 @@ No MuJoCo warning was present at any checkpoint.
 | Artifact | SHA-256 |
 |---|---|
 | Desktop trace | `400dbe651653820f722b11de347b055a8bcf19f8904a10dc03832139531d90b7` |
-| Android trace | `4692229d2f90978bff258110e6e6eb8ff07a074d813f81db34e8322471b0793c` |
-| Comparison report | available in the run `30498212689` physical-device report artifact |
+| Android trace | `9470aff1cfe0a02027d1d9dae1694b8dcc964dd8f80db786b5b6f93d30cd3598` |
+| Physical report artifact | `b19022aabc455236b61aa4eeda779e93ed8a4415984534704b179cac9df9c7df` |
 
-The comparison report records the trace hashes, tolerances, and measured maximum errors. The full traces remain generated CI evidence rather than hand-maintained source files.
+The comparison report records trace hashes, coordinate convention, tolerances,
+and measured maxima. Full generated traces remain CI evidence rather than
+hand-maintained source fixtures.
 
 ## Failure behavior
 
 The RMA-042 tooling fails visibly when any of the following occurs:
 
-- generated C header differs from the JSON scenario;
-- model, scenario, runtime, or compiled-count identity differs;
-- checkpoint count or order differs;
-- any state value is missing, malformed, or non-finite;
-- a MuJoCo warning appears;
-- equality residual exceeds the bounded-residual policy;
-- any state error exceeds its per-field tolerance;
-- a body name/order differs;
+- the generated C header differs from the JSON scenario;
+- a compact lock value is not a lowercase hexadecimal SHA-256;
 - desktop trace bytes differ from the compact lock;
-- Android trace runner cannot resolve every required actuator or body.
+- model, scenario, runtime, platform, or compiled-count identity differs;
+- phases, targets, checkpoints, names, counts, or tolerances are malformed;
+- checkpoint count, order, or step number differs;
+- either platform time differs from the scenario schedule;
+- any state value is missing, malformed, boolean-as-number, or non-finite;
+- a MuJoCo warning appears;
+- an equality residual is negative, non-finite, or exceeds the absolute bound;
+- any cross-platform state error exceeds its field tolerance;
+- a body name/order differs;
+- a quaternion is not normalized;
+- the Android trace runner cannot resolve every required actuator or body.
 
-Unit tests also prove that an over-tolerance `qpos` difference fails and that quaternion sign equivalence is accepted.
+Unit tests explicitly prove over-tolerance state rejection, matching-but-wrong
+clock rejection, platform rejection, non-finite rejection, loop-closure bound
+enforcement, transform-order enforcement, quaternion normalization, quaternion
+sign equivalence, strict warning typing, and strict fixture hashes.
 
 ## Fidelity limitation
 
-This comparison proves deterministic cross-platform execution of the pinned upstream model and command schedule. The active actuator model remains the uncalibrated upstream `chosen_actuator` placeholder documented in `docs/model-parameter-audit.md`. Agreement between desktop and Android does not convert placeholder dynamics into measured or calibrated robot behavior.
+This comparison proves deterministic cross-platform execution of the pinned
+upstream model and command schedule. The active actuator model remains the
+uncalibrated upstream `chosen_actuator` placeholder documented in
+`docs/model-parameter-audit.md`. Agreement between desktop and Android does not
+convert placeholder dynamics into measured or calibrated robot behavior.
