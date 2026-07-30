@@ -34,8 +34,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("scripts/validate_model_parameter_audit.py")
-          text = path.read_text(encoding="utf-8")
+          validator_path = Path("scripts/validate_model_parameter_audit.py")
+          validator = validator_path.read_text(encoding="utf-8")
           old = 'is_fidelity_level = child_path == "audit.fidelity.classification"'
           new = (
               'is_fidelity_level = child_path in {\n'
@@ -43,9 +43,41 @@ jobs:
               '                "audit.diagnostics.classification",\n'
               '            }'
           )
-          if text.count(old) != 1:
+          if validator.count(old) != 1:
               raise SystemExit("Could not patch diagnostics classification traversal exactly once")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+          validator_path.write_text(
+              validator.replace(old, new, 1),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          test_path = Path("scripts/tests/test_model_parameter_audit.py")
+          tests = test_path.read_text(encoding="utf-8")
+          replacements = [
+              (
+                  '            audit["source"]["model_sha256"] = model_sha\n'
+                  '            baseline["source"]["model_sha256"] = model_sha\n',
+                  '            audit["source"]["model_sha256"] = model_sha\n'
+                  '            audit["diagnostics"]["source_model_sha256"] = model_sha\n'
+                  '            audit["joint_limit_provenance"]["source_model_sha256"] = model_sha\n'
+                  '            baseline["source"]["model_sha256"] = model_sha\n',
+              ),
+              (
+                  "model_text = self.fixture_model(audit).replace(",
+                  "model_text = self.fixture_model(audit).decode().replace(",
+              ),
+              (
+                  "        model_text = self.fixture_model(audit)\n"
+                  "        comment = audit[\"actuator_models\"][1][\"source_comment\"]\n",
+                  "        model_text = self.fixture_model(audit).decode()\n"
+                  "        comment = audit[\"actuator_models\"][1][\"source_comment\"]\n",
+              ),
+          ]
+          for before, after in replacements:
+              if tests.count(before) != 1:
+                  raise SystemExit(f"Expected exactly one fixture adapter match: {before!r}")
+              tests = tests.replace(before, after, 1)
+          test_path.write_text(tests, encoding="utf-8", newline="\n")
           PY
       - name: Apply repository Python policy
         run: |
