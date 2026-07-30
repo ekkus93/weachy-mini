@@ -1,0 +1,140 @@
+name: RMA-040 model import patch
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma040-model-import-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply guarded RMA-040 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          root = Path.cwd()
+
+          exact_body_paths = [
+              "/world/body_foot_3dprint",
+              "/world/body_foot_3dprint/body_down_3dprint",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy/stewart_link_rod",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_2",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_2/stewart_link_rod_2",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_3",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_3/stewart_link_rod_3",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_4",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_4/stewart_link_rod_4",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_5",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_5/stewart_link_rod_5",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/@body[0]",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/dc15_a01_horn_dummy_7",
+              "/world/body_foot_3dprint/body_down_3dprint/dc15_a01_horn_dummy_6/stewart_link_rod_6/xl_330/dc15_a01_horn_dummy_8",
+          ]
+          all_named_bodies = [
+              "body_foot_3dprint",
+              "body_down_3dprint",
+              "dc15_a01_horn_dummy",
+              "stewart_link_rod",
+              "dc15_a01_horn_dummy_2",
+              "stewart_link_rod_2",
+              "dc15_a01_horn_dummy_3",
+              "stewart_link_rod_3",
+              "dc15_a01_horn_dummy_4",
+              "stewart_link_rod_4",
+              "dc15_a01_horn_dummy_5",
+              "stewart_link_rod_5",
+              "dc15_a01_horn_dummy_6",
+              "stewart_link_rod_6",
+              "xl_330",
+              "dc15_a01_horn_dummy_7",
+              "dc15_a01_horn_dummy_8",
+          ]
+
+          lock_path = root / "third_party/reachy-mini-source.lock.json"
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          requirements = lock["model_requirements"]
+          if requirements.get("exact_counts", {}).get("bodies") != 18:
+              raise SystemExit("Unexpected Reachy body count before RMA-040 patch")
+          requirements["exact_body_paths"] = exact_body_paths
+          requirements["required_names"]["bodies"] = all_named_bodies
+          lock_path.write_text(
+              json.dumps(lock, indent=2) + "\n",
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          map_path = root / "scripts/reachy_model_map.py"
+          map_text = map_path.read_text(encoding="utf-8")
+          map_needle = '''        if actual != expected:\n            raise ModelMapError(\n                f"MJCF {category} count mismatch: expected {expected}, found {actual}"\n            )\n\n    required_names = requirements.get("required_names")\n'''
+          map_replacement = '''        if actual != expected:\n            raise ModelMapError(\n                f"MJCF {category} count mismatch: expected {expected}, found {actual}"\n            )\n\n    exact_body_paths = requirements.get("exact_body_paths")\n    if not isinstance(exact_body_paths, list) or any(\n        not isinstance(path, str) or not path for path in exact_body_paths\n    ):\n        raise ModelMapError("model_requirements.exact_body_paths must contain nonempty strings")\n    actual_body_paths = [body["path"] for body in model_map["bodies"]]\n    if actual_body_paths != exact_body_paths:\n        shared_length = min(len(actual_body_paths), len(exact_body_paths))\n        mismatch_index = next(\n            (\n                index\n                for index in range(shared_length)\n                if actual_body_paths[index] != exact_body_paths[index]\n            ),\n            shared_length,\n        )\n        expected_path = (\n            exact_body_paths[mismatch_index]\n            if mismatch_index < len(exact_body_paths)\n            else "<missing>"\n        )\n        actual_path = (\n            actual_body_paths[mismatch_index]\n            if mismatch_index < len(actual_body_paths)\n            else "<missing>"\n        )\n        raise ModelMapError(\n            "MJCF body path/order mismatch at index "\n            f"{mismatch_index}: expected {expected_path!r}, found {actual_path!r}"\n        )\n\n    required_names = requirements.get("required_names")\n'''
+          if map_text.count(map_needle) != 1:
+              raise SystemExit("Could not locate guarded model-map insertion point")
+          map_path.write_text(
+              map_text.replace(map_needle, map_replacement),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          tests_path = root / "scripts/tests/test_import_reachy_assets.py"
+          tests_text = tests_path.read_text(encoding="utf-8")
+          counts_needle = '''                    "sites": 5,\n                },\n                "required_names": {\n                    "bodies": ["base", "head"],\n'''
+          counts_replacement = '''                    "sites": 5,\n                },\n                "exact_body_paths": [\n                    "/world/base",\n                    "/world/base/stewart_arm",\n                    "/world/base/stewart_arm/rod",\n                    "/world/base/stewart_arm/rod/head",\n                    "/world/base/stewart_arm/rod/head/@body[0]",\n                    "/world/base/stewart_arm/rod/head/right_antenna_body",\n                    "/world/base/stewart_arm/rod/head/left_antenna_body",\n                ],\n                "required_names": {\n                    "bodies": [\n                        "base",\n                        "stewart_arm",\n                        "rod",\n                        "head",\n                        "right_antenna_body",\n                        "left_antenna_body",\n                    ],\n'''
+          if tests_text.count(counts_needle) != 1:
+              raise SystemExit("Could not locate fixture topology contract")
+          tests_text = tests_text.replace(counts_needle, counts_replacement)
+
+          test_needle = '''    def test_duplicate_named_joint_fails_visibly(self) -> None:\n'''
+          test_replacement = '''    def test_body_reparenting_fails_with_unchanged_counts_and_names(self) -> None:\n        """Full ordered body paths must reject hierarchy drift before import."""\n        changed = self.fixture_model().replace(\n            ''' + "'''" + '''            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n            </body>\n            <body name="left_antenna_body">\n              <joint name="left_antenna" type="hinge"/>\n            </body>''' + "'''" + ''',\n            ''' + "'''" + '''            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n              <body name="left_antenna_body">\n                <joint name="left_antenna" type="hinge"/>\n              </body>\n            </body>''' + "'''" + ''',\n        )\n        self.model_path.write_text(changed, encoding="utf-8")\n        new_commit = self.commit_source("reparent named body")\n        self.write_lock(new_commit)\n\n        result = self.run_import()\n        self.assertNotEqual(0, result.returncode)\n        self.assertIn("body path/order mismatch", result.stderr)\n\n    def test_duplicate_named_joint_fails_visibly(self) -> None:\n'''
+          if tests_text.count(test_needle) != 1:
+              raise SystemExit("Could not locate import-test insertion point")
+          tests_path.write_text(
+              tests_text.replace(test_needle, test_replacement),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          docs_path = root / "docs/REACHY_ASSET_IMPORT.md"
+          docs_text = docs_path.read_text(encoding="utf-8")
+          docs_needle = '''6. fails on missing files, traversal paths, malformed XML, source changes, or revision mismatch.\n\nIt does not convert or modify mesh content yet. Any future conversion must be represented as a versioned source transformation with tests and updated provenance.\n'''
+          docs_replacement = '''6. validates exact topology counts, every named body/joint/actuator/site/camera required by the runtime, and the complete ordered 18-body hierarchy;\n7. fails on missing files, traversal paths, malformed XML, source changes, revision mismatch, or body reparenting/reordering.\n\nThe imported MJCF and source meshes remain byte-for-byte unchanged. The source cameras (`studio_close` and `eye_camera`) stay available as MuJoCo model metadata, but `prepare_reachy_unity_assets.py` marks both as excluded from the Unity presentation and creates an independent Unity-only presentation camera. Mesh conversion is a separate versioned `reachy_stl_to_unity_obj_v1` presentation transformation with source/output hashes; it does not alter the solver model, joint ranges, inertias, or collision geometry.\n'''
+          if docs_text.count(docs_needle) != 1:
+              raise SystemExit("Could not locate Reachy import documentation block")
+          docs_path.write_text(
+              docs_text.replace(docs_needle, docs_replacement),
+              encoding="utf-8",
+              newline="\n",
+          )
+          PY
+
+          python3 -m unittest scripts.tests.test_import_reachy_assets -v
+          python3 -m py_compile scripts/reachy_model_map.py scripts/import_reachy_assets.py
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/rma040-model-import-patch.yml
+          git add \
+            third_party/reachy-mini-source.lock.json \
+            scripts/reachy_model_map.py \
+            scripts/tests/test_import_reachy_assets.py \
+            docs/REACHY_ASSET_IMPORT.md
+          git commit -m "RMA-040: lock complete model body hierarchy"
+          git push origin HEAD:master
