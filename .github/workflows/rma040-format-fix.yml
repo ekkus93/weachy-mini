@@ -1,0 +1,46 @@
+name: RMA-040 formatter correction
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma040-format-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply Ruff formatter result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/tests/test_import_reachy_assets.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''            \'\'\'            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n            </body>\n            <body name="left_antenna_body">\n              <joint name="left_antenna" type="hinge"/>\n            </body>\'\'\',\n            \'\'\'            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n              <body name="left_antenna_body">\n                <joint name="left_antenna" type="hinge"/>\n              </body>\n            </body>\'\'\',\n'''
+          new = '''            """            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n            </body>\n            <body name="left_antenna_body">\n              <joint name="left_antenna" type="hinge"/>\n            </body>""",\n            """            <body name="right_antenna_body">\n              <joint name="right_antenna" type="hinge"/>\n              <body name="left_antenna_body">\n                <joint name="left_antenna" type="hinge"/>\n              </body>\n            </body>""",\n'''
+          if text.count(old) != 1:
+              raise SystemExit("Could not locate the exact Ruff formatter change")
+          path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
+          PY
+
+          python3 -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff check scripts
+          ruff format --check --diff scripts
+          python3 -m unittest scripts.tests.test_import_reachy_assets -v
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/rma040-format-fix.yml
+          git add scripts/tests/test_import_reachy_assets.py
+          git commit -m "RMA-040: format hierarchy regression test"
+          git push origin HEAD:master
