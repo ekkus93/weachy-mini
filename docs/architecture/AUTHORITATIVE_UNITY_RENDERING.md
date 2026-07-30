@@ -58,8 +58,12 @@ The authoritative hierarchy rejects these component classes on a mapped body or 
 
 The renderer executes late in the frame and performs no successful-path collection or array allocation. Body bindings and expected-pose arrays are created during configuration.
 
+## Optional editor diagnostics
+
+The Unity editor menu item **Reachy Mini > Debug > Show Authoritative Body Axes and Joint Names** enables a non-authoritative Scene-view overlay. It draws the rendered local X/Y/Z axes and body names without writing any transform. The joint-name legend is loaded from the pinned machine-readable mechanical parameter audit, not inferred from animation state or copied into a cosmetic motion path. A missing, malformed, or duplicate-name audit fails visibly in the Console and in the Scene-view overlay. The diagnostic is editor-only and is not compiled into the Android player.
+
 ## Current integration boundary
 
-The coordinate conversion, immutable pose-pair buffer, simulation-time interpolation, discontinuity handling, structural rejection, and drift tests are implemented without authorizing a fake production source. The current production `reachy_sim` backend still reports unavailable and its state ABI currently exposes only the state header. Therefore the application must remain visibly unbound until the production MuJoCo backend publishes the ordered body-pose payload required by `IReachyAuthoritativePoseSource`.
+The coordinate conversion, immutable pose-pair buffer, simulation-time interpolation, discontinuity handling, structural rejection, drift tests, and optional editor diagnostics are implemented without authorizing a fake production source. The current production `reachy_sim` backend still reports unavailable and its state ABI currently exposes only the state header. Therefore the application must remain visibly unbound until the production MuJoCo backend publishes the ordered body-pose payload required by `IReachyAuthoritativePoseSource`.
 
 Reference fixtures and editor tests prove the presentation contract, but they are not a runtime fallback and are not packaged as simulated motion. RMA-051/RMA-052 physical acceptance remains blocked until the real backend is connected and device evidence demonstrates that sleep/wake, head, Stewart links, and antenna transforms originate from MuJoCo snapshots.
