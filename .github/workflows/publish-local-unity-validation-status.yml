@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: publish-local-unity-validation-status
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
