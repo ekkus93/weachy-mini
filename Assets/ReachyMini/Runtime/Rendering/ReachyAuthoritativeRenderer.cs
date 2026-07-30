@@ -136,6 +136,7 @@ namespace ReachyMini.Rendering
                 return false;
             }
 
+            EnsureExpectedStorage();
             float alpha = CalculateInterpolationAlpha(
                 older,
                 newer,
@@ -251,9 +252,9 @@ namespace ReachyMini.Rendering
                          binding.BodyName,
                          StringComparison.Ordinal) ||
                       !string.Equals(
-                         newerPose.BodyName,
-                         binding.BodyName,
-                         StringComparison.Ordinal))))
+                          newerPose.BodyName,
+                          binding.BodyName,
+                          StringComparison.Ordinal))))
                 {
                     return EnterFault(
                         $"Authoritative snapshot body identity differs " +
