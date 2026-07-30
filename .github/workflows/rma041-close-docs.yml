@@ -1,4 +1,4 @@
-name: RMA-041 Build Closure Documentation
+name: RMA-041 Publish Closure Documentation
 
 on:
   push:
@@ -8,25 +8,20 @@ on:
       - '.github/workflows/rma041-close-docs.yml'
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 jobs:
-  build-closure:
+  publish-closure:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Publish closure run identity
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          body="RMA-041 closure documentation is being validated.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-closure-docs-${GITHUB_SHA}\n"
-          gh issue edit 7 --repo "${GITHUB_REPOSITORY}" --body "${body}"
       - name: Generate guarded closure documents
         run: python3 scripts/rma041_close_docs.py
       - name: Validate permanent RMA-041 contract
@@ -44,28 +39,26 @@ jobs:
             --audit models/reachy-mini/model-parameter-audit.json \
             --lock third_party/reachy-mini-source.lock.json \
             --baseline models/reachy-mini/model-baseline.json
-      - name: Validate closure diff
+      - name: Validate and commit exact closure
         run: |
           set -euo pipefail
           git diff --check
-          test "$(git diff --numstat -- docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md | awk '{print $1}')" -gt 0
-          test "$(git diff --numstat -- docs/IMPLEMENTATION_STATUS.md | awk '{print $1}')" -gt 0
           test -s docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md
-          test -z "$(git status --short | grep -vE '^( M docs/(IMPLEMENTATION_STATUS|REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO)\.md|\?\? docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30\.md)$' || true)"
-      - name: Upload guarded closure files
-        uses: actions/upload-artifact@v4
-        with:
-          name: rma041-closure-docs-${{ github.sha }}
-          path: |
-            docs/IMPLEMENTATION_STATUS.md
-            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm scripts/rma041_close_docs.py .github/workflows/rma041-close-docs.yml
+          git add \
+            docs/IMPLEMENTATION_STATUS.md \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
             docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md
-          if-no-files-found: error
-          retention-days: 1
-      - name: Publish closure validation success
+          git diff --cached --check
+          git commit -m 'RMA-041: close mechanical parameter audit'
+          git push origin HEAD:master
+      - name: Publish closure commit identity
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          body="RMA-041 closure documentation artifact is validated.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-closure-docs-${GITHUB_SHA}\n- Result: success\n"
+          commit="$(git rev-parse HEAD)"
+          body="RMA-041 closure documentation was validated and committed.\n\n- Workflow run: ${GITHUB_RUN_ID}\n- Closure commit: ${commit}\n- Result: success\n"
           gh issue edit 7 --repo "${GITHUB_REPOSITORY}" --body "${body}"
