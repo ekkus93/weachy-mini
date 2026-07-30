@@ -24,65 +24,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('.github/rma040_publication_fix.py')
-          text = path.read_text(encoding='utf-8')
-          text = text.replace(
-              '''                authoritativeStateReader: null,
-                commandQueueCapacity,
-                maximumCommandBytes)
-''',
-              '''                authoritativeStateReader: null,
-                commandQueueCapacity,
-                maximumCommandBytes,
-                useAuthoritativeStateReader: false)
-''',
-              1,
-          )
-          text = text.replace(
-              '''                commandQueueCapacity,
-                maximumCommandBytes)
-        {
-        }
-
-        private ReachySimulationWorker(
-''',
-              '''                commandQueueCapacity,
-                maximumCommandBytes,
-                useAuthoritativeStateReader: true)
-        {
-        }
-
-        private ReachySimulationWorker(
-''',
-              1,
-          )
-          text = text.replace(
-              '''            int commandQueueCapacity,
-            int maximumCommandBytes)
-        {
-            this.session = session ??
-                throw new ArgumentNullException(nameof(session));
-            this.authoritativeStateReader = authoritativeStateReader;
-            authoritativeStateFrame = authoritativeStateReader?.CreateFrame();
-''',
-              '''            int commandQueueCapacity,
-            int maximumCommandBytes,
-            bool useAuthoritativeStateReader)
-        {
-            this.session = session ??
-                throw new ArgumentNullException(nameof(session));
-            this.authoritativeStateReader = useAuthoritativeStateReader
-                ? authoritativeStateReader
-                : null;
-            authoritativeStateFrame = this.authoritativeStateReader?.CreateFrame();
-''',
-              1,
-          )
-          path.write_text(text, encoding='utf-8', newline='\n')
-          PY
+          python3 .github/rma040_prepare_publication_patch.py
           python3 .github/rma040_publication_fix.py
           dotnet build managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
             --configuration Release \
@@ -92,6 +34,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm \
             .github/workflows/rma040-publication-fix.yml \
+            .github/rma040_prepare_publication_patch.py \
             .github/rma040_publication_fix.py
           git add \
             Assets/ReachyMini/Runtime/Simulation/IReachyPublishedAuthoritativeStateSource.cs \
