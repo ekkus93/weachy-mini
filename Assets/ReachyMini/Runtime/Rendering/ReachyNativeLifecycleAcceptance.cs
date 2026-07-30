@@ -112,6 +112,12 @@ namespace ReachyMini.Rendering
                 Fail("The production runtime did not publish an initial authoritative state pair.");
                 yield break;
             }
+            ulong productionModelHash = runtime.ModelHash;
+            if (productionModelHash == 0UL)
+            {
+                Fail("The production runtime reported an invalid zero model hash.");
+                yield break;
+            }
 
             uint nativeAbiVersion;
             string nativeVersion;
@@ -265,7 +271,7 @@ namespace ReachyMini.Rendering
                 status = "ok",
                 native_abi_version = nativeAbiVersion,
                 native_version = nativeVersion,
-                model_hash = finalState.ModelHash.ToString(),
+                model_hash = productionModelHash.ToString(),
                 initial_sequence = initialSequence.ToString(),
                 final_sequence = finalState.Sequence.ToString(),
                 initial_simulation_time = initialSimulationTime,
