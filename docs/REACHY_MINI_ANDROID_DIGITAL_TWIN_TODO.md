@@ -399,10 +399,6 @@ while running:
 
 - [x] Restoring a snapshot and replaying the same command stream reproduces the state within documented tolerances.
 
----
-
-# Phase 5 — Reachy model import and integrity gate
-
 **Completion evidence**
 
 - Stable reset identifiers are `SleepRest` (`0`) and `NeutralAwake` (`1`).
@@ -434,6 +430,10 @@ while running:
   identical commit. The first device attempt had an isolated
   `WaitingForSnapshots` timeout; the exact job rerun passed without source or
   artifact changes.
+
+---
+
+# Phase 5 — Reachy model import and integrity gate
 
 ## RMA-040 — Load the official Reachy Mini MJCF baseline
 
