@@ -1,7 +1,8 @@
 # RMA-033 snapshot and deterministic-reset validation
 
 **Date:** 2026-07-30  
-**Validated source commit:** `1606bb5583e63a14ace171d1bfbb553d2769826a`  
+**Validated snapshot source commit:** `1606bb5583e63a14ace171d1bfbb553d2769826a`  
+**Physical-acceptance hardening commit:** `ec1b08a8fef04aeae02e527e82caff9f6d7339a4`  
 **Checklist closure commit:** `3c45507c28be90998f78a0884b099ccc0bdaafe6`  
 **Record layout commit:** `71369e55264fd443777e7efdc3f6269ef8b572ff`
 
@@ -53,14 +54,18 @@ Run `30561792261` validated the same exact commit on `kawa` and the LG G6:
 - evidence and APK uploads.
 
 The first physical-rendering attempt timed out with
-`runtime=Running, renderer=WaitingForSnapshots`. The app was focused, lifecycle
-acceptance had passed, and no runtime fault was present. An exact rerun of the
-same job, commit, and artifact passed every step without source changes. This is
-recorded as an isolated device scheduling race, not hidden as a successful first
-attempt.
+`runtime=Running, renderer=WaitingForSnapshots`; an unchanged exact rerun passed.
+Later closure-only exact-head runs reproduced that fixed 30-second startup
+binding timeout twice while the app remained focused, lifecycle acceptance
+passed, and no runtime fault was present. The condition was therefore not
+classified as an isolated successful-first-attempt race. Commit `ec1b08a8`
+keeps the gate fail-closed but gives cold production binding 60 seconds inside a
+120-second device-script envelope and adds simulation/runtime/renderer fault
+state to any future timeout report.
 
 ## Result
 
 All five RMA-033 checklist and acceptance items are supported by permanent
-implementation, deterministic tests, hosted validation, and exact-head physical
-Unity/Android validation.
+implementation, deterministic tests, hosted validation, and physical
+Unity/Android validation. Exact-head status remains authoritative in the hosted
+and self-hosted CI status records.
