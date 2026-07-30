@@ -9,6 +9,7 @@ The source asset flow is:
 1. `scripts/import_reachy_assets.py` imports the pinned Reachy Mini MJCF and every referenced mesh while preserving provenance.
 2. `scripts/prepare_reachy_unity_assets.py` converts STL files to Unity-importable OBJ files and writes `UNITY_RENDER_MAP.json`.
 3. Unity consumes that render map to create the generated Reachy presentation prefab.
+4. `ReachyPresentationPipeline` binds the generated optional diagnostic overlay from the imported `MODEL_MAP.json` body and joint topology.
 
 Generated assets remain excluded from Git because they are deterministic derivatives of the pinned upstream package. Missing, malformed, mismatched, or escaping asset paths must fail visibly. The generated presentation contains the complete MJCF body hierarchy, converted visual geometry and materials, one `ReachyPresentationBody` marker for each model body, and a fixed Unity-only presentation camera and lighting. The MuJoCo `studio_close` and `eye_camera` definitions remain model metadata and are never the application presentation camera.
 
@@ -58,12 +59,14 @@ The authoritative hierarchy rejects these component classes on a mapped body or 
 
 The renderer executes late in the frame and performs no successful-path collection or array allocation. Body bindings and expected-pose arrays are created during configuration.
 
-## Optional editor diagnostics
+## Optional diagnostics
 
-The Unity editor menu item **Reachy Mini > Debug > Show Authoritative Body Axes and Joint Names** enables a non-authoritative Scene-view overlay. It draws the rendered local X/Y/Z axes and body names without writing any transform. The joint-name legend is loaded from the pinned machine-readable mechanical parameter audit, not inferred from animation state or copied into a cosmetic motion path. A missing, malformed, or duplicate-name audit fails visibly in the Console and in the Scene-view overlay. The diagnostic is editor-only and is not compiled into the Android player.
+The generated prefab contains exactly one disabled `ReachyPresentationDebugOverlay`. Its body-axis bindings come from the canonical generated body mapping, and its 16 joint labels and body associations come from the imported `MODEL_MAP.json`. The presentation pipeline rejects missing body paths, duplicate or malformed joint entries, unexpected topology, and a serialized overlay that does not retain the complete mapping.
+
+Enabling the overlay draws local X/Y/Z body axes and joint labels without writing any body transform or feeding data into MuJoCo. It is disabled by default and is diagnostic presentation only; it is not an animation, physics source, pose source, or fallback motion path.
 
 ## Current integration boundary
 
-The coordinate conversion, immutable pose-pair buffer, simulation-time interpolation, discontinuity handling, structural rejection, drift tests, and optional editor diagnostics are implemented without authorizing a fake production source. The current production `reachy_sim` backend still reports unavailable and its state ABI currently exposes only the state header. Therefore the application must remain visibly unbound until the production MuJoCo backend publishes the ordered body-pose payload required by `IReachyAuthoritativePoseSource`.
+The coordinate conversion, immutable pose-pair buffer, simulation-time interpolation, discontinuity handling, structural rejection, drift tests, zero-allocation steady-state coverage, and optional model-map-driven diagnostics are implemented without authorizing a fake production source. The current production `reachy_sim` backend still reports unavailable and its state ABI currently exposes only the state header. Therefore the application must remain visibly unbound until the production MuJoCo backend publishes the ordered body-pose payload required by `IReachyAuthoritativePoseSource`.
 
 Reference fixtures and editor tests prove the presentation contract, but they are not a runtime fallback and are not packaged as simulated motion. RMA-051/RMA-052 physical acceptance remains blocked until the real backend is connected and device evidence demonstrates that sleep/wake, head, Stewart links, and antenna transforms originate from MuJoCo snapshots.
