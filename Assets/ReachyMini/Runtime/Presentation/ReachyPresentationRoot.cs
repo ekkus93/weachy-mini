@@ -9,6 +9,7 @@ namespace ReachyMini.Presentation
     [RequireComponent(typeof(ReachyProductionAuthoritativeRuntime))]
     [RequireComponent(typeof(ReachyAuthoritativePhysicalAcceptance))]
     [RequireComponent(typeof(ReachyNativeLifecycleAcceptance))]
+    [RequireComponent(typeof(ReachyNativeLifecycleAcceptanceReadinessGate))]
     public sealed class ReachyPresentationRoot : MonoBehaviour
     {
         [SerializeField]
@@ -134,6 +135,10 @@ namespace ReachyMini.Presentation
             if (GetComponent<ReachyNativeLifecycleAcceptance>() == null)
             {
                 gameObject.AddComponent<ReachyNativeLifecycleAcceptance>();
+            }
+            if (GetComponent<ReachyNativeLifecycleAcceptanceReadinessGate>() == null)
+            {
+                gameObject.AddComponent<ReachyNativeLifecycleAcceptanceReadinessGate>();
             }
         }
 

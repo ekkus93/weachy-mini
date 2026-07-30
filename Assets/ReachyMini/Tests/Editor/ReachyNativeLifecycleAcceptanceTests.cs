@@ -30,6 +30,9 @@ namespace ReachyMini.Tests
                 Assert.That(
                     root.GetComponent<ReachyNativeLifecycleAcceptance>(),
                     Is.Not.Null);
+                Assert.That(
+                    root.GetComponent<ReachyNativeLifecycleAcceptanceReadinessGate>(),
+                    Is.Not.Null);
             }
             finally
             {
