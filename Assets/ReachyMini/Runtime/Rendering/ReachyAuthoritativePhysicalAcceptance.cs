@@ -16,6 +16,8 @@ namespace ReachyMini.Rendering
         public const string ResultFileName =
             "weachy-authoritative-acceptance.json";
 
+        private const string AcceptanceMarkerResourcePath =
+            "ReachyMiniRuntime/physical_acceptance_enabled";
         private const string SuccessMarker = "WEACHY_AUTHORITATIVE_ACCEPTANCE ";
         private const string FailureMarker =
             "WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE ";
@@ -33,7 +35,10 @@ namespace ReachyMini.Rendering
 
         private string displayMessage =
             "Authoritative rendering acceptance is starting.";
+        private bool acceptanceEnabled;
         private bool complete;
+
+        public bool IsAcceptanceEnabled => acceptanceEnabled;
 
         public bool IsComplete => complete;
 
@@ -43,14 +48,19 @@ namespace ReachyMini.Rendering
 
         private IEnumerator Start()
         {
-#if !WEACHY_PHYSICAL_ACCEPTANCE
-            yield break;
-#else
+            TextAsset marker = Resources.Load<TextAsset>(
+                AcceptanceMarkerResourcePath);
+            if (Application.platform != RuntimePlatform.Android || marker == null)
+            {
+                enabled = false;
+                yield break;
+            }
+
+            acceptanceEnabled = true;
             PublishProgress(
                 "component_started",
                 "The physical authoritative-rendering component started.");
             yield return RunAcceptance();
-#endif
         }
 
         private IEnumerator RunAcceptance()
@@ -461,7 +471,11 @@ namespace ReachyMini.Rendering
 
         private void OnGUI()
         {
-#if WEACHY_PHYSICAL_ACCEPTANCE
+            if (!acceptanceEnabled)
+            {
+                return;
+            }
+
             GUIStyle style = new GUIStyle(GUI.skin.box)
             {
                 alignment = TextAnchor.MiddleCenter,
@@ -473,7 +487,6 @@ namespace ReachyMini.Rendering
                 new Rect(20f, 20f, Screen.width - 40f, 120f),
                 displayMessage,
                 style);
-#endif
         }
 
         private readonly struct BodyWorldPose
