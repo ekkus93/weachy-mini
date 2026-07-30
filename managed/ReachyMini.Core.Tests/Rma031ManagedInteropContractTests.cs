@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using ReachyMini.Core;
 using ReachyMini.Interop;
@@ -45,10 +46,11 @@ namespace ReachyMini.Core.Tests
                     $"RMA-031 incompatible ABI returned {mismatchError.Code}/{mismatchError.Recoverability}.");
             }
             if (!mismatchError.Message.Contains(
-                    ProjectMetadata.NativeAbiVersion.ToString(),
+                    ProjectMetadata.NativeAbiVersion.ToString(
+                        CultureInfo.InvariantCulture),
                     StringComparison.Ordinal) ||
                 !mismatchError.Message.Contains(
-                    incompatibleAbi.ToString(),
+                    incompatibleAbi.ToString(CultureInfo.InvariantCulture),
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
