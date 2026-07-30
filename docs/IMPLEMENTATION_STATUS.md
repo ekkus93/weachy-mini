@@ -2,7 +2,7 @@
 
 **Updated:** 2026-07-29  
 **Branch:** `master`  
-**Current implementation series:** Phase 6 Unity rendering; RMA-050 Reachy prefab and presentation mapping
+**Current implementation series:** Phase 6 Unity rendering; RMA-050 through RMA-052 implemented at the presentation-contract level, with production MuJoCo pose integration and physical acceptance still open
 
 ## Repository rules in force
 
@@ -112,7 +112,7 @@ Desktop MuJoCo 3.9.0 compiles and steps the model. The physical Android probe on
 - maximum step time `514.999999723` microseconds;
 - zero MuJoCo warnings.
 
-The model source, compiled dimensions, coordinate units, quaternion order, and initial `xl_330` reference pose are pinned in `models/reachy-mini/model-baseline.json`. The desktop-only source camera remains present in the untouched model package; RMA-050 must isolate it from the Unity presentation camera rather than silently treating it as application presentation state.
+The model source, compiled dimensions, coordinate units, quaternion order, and initial `xl_330` reference pose are pinned in `models/reachy-mini/model-baseline.json`. The desktop-only source camera remains present in the untouched model package; the generated RMA-050 presentation excludes it and uses a fixed Unity-only camera and lighting setup.
 
 ### RMA-041 — Mechanical parameter audit
 
@@ -129,6 +129,20 @@ The shared scenario `models/reachy-mini/reference-scenario.json` defines reset/s
 The comparator checks simulation time, all 37 `qpos` values, all 30 `qvel` values, positions and quaternions for all 17 named bodies, equality-only residuals, warnings, model/scenario hashes, MuJoCo version, and compiled dimensions. Quaternion sign equivalence is handled explicitly.
 
 Android feasibility run `30498720239`, physical job `90733807972`, passed the comparison on the LG G6 and uploaded the five-file evidence artifact. The comparison and measured maximum errors are documented in [Reachy Mini desktop/Android reference-state comparison](reference-state-comparison.md). The largest observed cross-platform errors were many orders of magnitude below the documented tolerances, and the largest equality residual in either trace remained below `0.001`.
+
+### RMA-050/RMA-051/RMA-052 — Authoritative Unity presentation
+
+The deterministic Unity asset path converts the pinned visual meshes, materials, and complete 18-body presentation hierarchy, records explicit MuJoCo-to-Unity coordinate conversion, excludes the two source-model cameras, and creates a fixed Unity-only presentation camera and lighting setup. The generated prefab contains one canonical `ReachyPresentationBody` binding per non-world MuJoCo body.
+
+`ReachyAuthoritativePoseBuffer` retains the latest immutable snapshot pair. `ReachyAuthoritativeRenderer` validates canonical body order and identity, interpolates by simulation timestamps, snaps across reset/model-reload discontinuities, writes only presentation transforms, and retains no Unity-to-MuJoCo feedback path. The steady-state renderer has explicit zero-managed-allocation coverage.
+
+Invariant enforcement rejects Rigidbody, Rigidbody2D, Joint, Joint2D, ArticulationBody, Animator, legacy Animation, and PlayableDirector components in the authoritative body hierarchies. The renderer records expected world poses and faults visibly when any script or other writer changes an authoritative transform between applications.
+
+The optional disabled-by-default `ReachyPresentationDebugOverlay` is generated from the imported `MODEL_MAP.json`; it contains the canonical 18-body axis mapping and all 16 joint-name/body associations. Duplicate hard-coded/editor overlay implementations were removed. The detailed contract is documented in [Authoritative Unity rendering](architecture/AUTHORITATIVE_UNITY_RENDERING.md).
+
+Automated acceptance coverage includes 30/60 FPS trajectory equivalence, reset discontinuity handling, head and antenna alignment, canonical generated mapping, prohibited-writer rejection, forced transform-drift detection, and no managed allocation in the steady-state render loop.
+
+The production `reachy_sim` backend still does not publish the ordered MuJoCo body-pose payload required by `IReachyAuthoritativePoseSource`. The renderer therefore remains visibly unbound in the generated prefab. Physical sleep/wake, head, Stewart-link, and antenna acceptance remains open and must not be replaced by test fixtures, cosmetic animation, or a hidden kinematic fallback.
 
 ### Local Unity/Android validation
 
@@ -147,6 +161,8 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 - official Reachy model desktop and Android load/step evidence with matching compiled counts;
 - source-linked machine-readable mechanical-parameter fidelity audit;
 - locked desktop/Android command-trace comparison with qpos, qvel, body-transform, equality-residual, warning, and identity checks;
+- deterministic generated Reachy visual presentation and canonical 18-body mapping;
+- simulation-time interpolation, discontinuity snapping, writer rejection, drift detection, 30/60 FPS equivalence, and steady-state allocation coverage;
 - Unity EditMode and PlayMode tests on Unity 6000.5.2f1;
 - ARM64/API-26 Unity APK build, verification, and artifact upload on `kawa`;
 - ADB authorization and ARM64/API-26 identification of the LG G6.
@@ -155,11 +171,10 @@ Self-hosted run `30498864443` on `kawa` passed Unity EditMode/PlayMode tests, th
 
 - RMA-022 physical installation/launch of the Unity IL2CPP APK with real native-wrapper initialization, failure visibility, pause/resume, and shutdown validation;
 - connection of the production `reachy_sim` ABI backend to real MuJoCo model/state/command/snapshot operations;
+- publication of the ordered production MuJoCo body-pose payload and physical RMA-051/RMA-052 motion acceptance;
 - caller-output-pointer validation and per-handle concurrency safety in the native ABI;
 - development APK and release AAB builds;
 - two-machine reproducible build evidence;
-- RMA-040 isolation of the upstream desktop-only camera from Unity application presentation state;
-- RMA-050 through RMA-052 authoritative Unity rendering and invariant enforcement;
 - in-app licenses, attribution, and unofficial-project notice (RMA-012);
 - all later dynamics, calibration, camera, perception, speech, LLM/provider, behavior, privacy, diagnostics, performance, and release phases.
 
