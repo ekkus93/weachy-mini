@@ -6,8 +6,8 @@ ADB_BIN="${ADB_BIN:-adb}"
 APK_PATH="${UNITY_DEVICE_APK_PATH:-${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk}"
 REPORT_DIR="${UNITY_AUTHORITATIVE_REPORT_DIR:-${ROOT_DIR}/build/unity-authoritative-device-report}"
 PACKAGE_NAME="com.ekkus.weachymini"
-SUCCESS_MARKER="WEACHY_AUTHORITATIVE_ACCEPTANCE "
-FAILURE_MARKER="WEACHY_AUTHORITATIVE_ACCEPTANCE_FAILURE "
+RESULT_FILE_NAME="weachy-authoritative-acceptance.json"
+REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
 TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-90}"
 
 if [[ ! -s "${APK_PATH}" ]]; then
@@ -43,6 +43,24 @@ select_device_serial()
     printf '%s\n' "${arm64_serials[0]}"
 }
 
+read_report_status()
+{
+    local report_json="$1"
+    python3 - "${report_json}" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+
+try:
+    report = json.loads(sys.argv[1])
+except json.JSONDecodeError:
+    print("invalid")
+else:
+    print(report.get("status", "missing"))
+PY
+}
+
 DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:-$(select_device_serial | tail -n 1)}"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 rm -rf -- "${REPORT_DIR}"
@@ -61,23 +79,49 @@ mkdir -p "${REPORT_DIR}"
 "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 "${ADB[@]}" shell pm path "${PACKAGE_NAME}" > "${REPORT_DIR}/package-path.txt"
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
-"${ADB[@]}" logcat -c
+"${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/clear.txt"
+"${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" || true
+"${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell monkey \
     -p "${PACKAGE_NAME}" \
     -c android.intent.category.LAUNCHER \
     1 > "${REPORT_DIR}/launch.txt"
 
 start_epoch="$(date +%s)"
-report_line=""
+report_json=""
+last_report_json=""
 while true; do
-    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt"
-    if grep -F "${FAILURE_MARKER}" "${REPORT_DIR}/logcat.txt" >/dev/null; then
-        grep -F "${FAILURE_MARKER}" "${REPORT_DIR}/logcat.txt" | tail -n 1 >&2
-        exit 1
-    fi
-    report_line="$(grep -F "${SUCCESS_MARKER}" "${REPORT_DIR}/logcat.txt" | tail -n 1 || true)"
-    if [[ -n "${report_line}" ]]; then
-        break
+    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt" || true
+    report_json="$(
+        "${ADB[@]}" shell \
+            "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+            | tr -d '\r' \
+            || true
+    )"
+    if [[ -n "${report_json}" ]]; then
+        last_report_json="${report_json}"
+        printf '%s\n' "${report_json}" \
+            > "${REPORT_DIR}/authoritative-rendering-latest.json"
+        report_status="$(read_report_status "${report_json}")"
+        case "${report_status}" in
+            ok)
+                break
+                ;;
+            failed|failed_acceptance_condition)
+                printf '%s\n' "${report_json}" \
+                    > "${REPORT_DIR}/authoritative-rendering.json"
+                printf 'Authoritative rendering acceptance failed: %s\n' \
+                    "${report_json}" >&2
+                exit 1
+                ;;
+            in_progress)
+                ;;
+            *)
+                printf 'Invalid physical acceptance report: %s\n' \
+                    "${report_json}" >&2
+                exit 1
+                ;;
+        esac
     fi
     if ! "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null; then
         printf '%s\n' 'Unity application exited before authoritative acceptance completed.' >&2
@@ -85,14 +129,18 @@ while true; do
     fi
     now_epoch="$(date +%s)"
     if (( now_epoch - start_epoch >= TIMEOUT_SECONDS )); then
-        printf 'Timed out after %s seconds waiting for authoritative acceptance.\n' \
-            "${TIMEOUT_SECONDS}" >&2
+        if [[ -n "${last_report_json}" ]]; then
+            printf 'Timed out after %s seconds at report: %s\n' \
+                "${TIMEOUT_SECONDS}" "${last_report_json}" >&2
+        else
+            printf 'Timed out after %s seconds before the application published acceptance evidence.\n' \
+                "${TIMEOUT_SECONDS}" >&2
+        fi
         exit 1
     fi
     sleep 2
 done
 
-report_json="${report_line#*"${SUCCESS_MARKER}"}"
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/authoritative-rendering.json"
 python3 - "${REPORT_DIR}/authoritative-rendering.json" <<'PY'
 from __future__ import annotations
