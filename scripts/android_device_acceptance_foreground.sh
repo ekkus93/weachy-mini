@@ -25,6 +25,12 @@ collapse_status_bar()
         || true
 }
 
+dismiss_immersive_confirmation()
+{
+    "${ADB[@]}" shell settings put secure immersive_mode_confirmations confirmed \
+        >/dev/null 2>&1 || true
+}
+
 focused_window()
 {
     "${ADB[@]}" shell dumpsys window windows 2>/dev/null \
@@ -39,6 +45,7 @@ case "${ACTION}" in
         "${ADB[@]}" shell wm dismiss-keyguard >/dev/null 2>&1 || true
         "${ADB[@]}" shell input keyevent 82 >/dev/null 2>&1 || true
         collapse_status_bar
+        dismiss_immersive_confirmation
         "${ADB[@]}" shell svc power stayon true >/dev/null 2>&1 || true
         ;;
     wait-focus)
@@ -46,6 +53,12 @@ case "${ACTION}" in
         while true; do
             collapse_status_bar
             focus="$(focused_window || true)"
+            if [[ "${focus}" == *"ImmersiveModeConfirmation"* ]]; then
+                dismiss_immersive_confirmation
+                "${ADB[@]}" shell input keyevent 66 >/dev/null 2>&1 || true
+                sleep 1
+                continue
+            fi
             if [[ "${focus}" == *"${PACKAGE_NAME}"* ]]; then
                 printf '%s\n' "${focus}"
                 exit 0
