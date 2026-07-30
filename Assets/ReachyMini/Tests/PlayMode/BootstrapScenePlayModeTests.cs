@@ -80,18 +80,41 @@ namespace ReachyMini.Tests
                 UnityEngine.Object.FindObjectsByType<ReachyPresentationCamera>(
                     FindObjectsInactive.Include);
             Assert.That(presentationCameras, Has.Length.EqualTo(1));
+            ReachyPresentationCamera presentationCamera = presentationCameras[0];
             Assert.That(
-                presentationCameras[0].Framing,
+                presentationCamera.Framing,
                 Is.EqualTo("fixed_front_three_quarter"));
-            Assert.That(presentationCameras[0].AcceptsUserNavigation, Is.False);
+            Assert.That(presentationCamera.AcceptsUserNavigation, Is.False);
+            Assert.That(presentationCamera.transform.parent, Is.Null);
+            Assert.That(presentationCamera.transform.IsChildOf(root.transform), Is.False);
+            Camera[] cameras = UnityEngine.Object.FindObjectsByType<Camera>(
+                FindObjectsInactive.Include);
+            Assert.That(cameras, Has.Length.EqualTo(1));
+            Camera camera = cameras[0];
+            Assert.That(camera, Is.SameAs(presentationCamera.GetComponent<Camera>()));
+            Assert.That(camera.fieldOfView, Is.EqualTo(35f));
+            Assert.That(camera.nearClipPlane, Is.EqualTo(0.01f));
+            Assert.That(camera.farClipPlane, Is.EqualTo(20f));
             Assert.That(
-                UnityEngine.Object.FindObjectsByType<Camera>(
-                    FindObjectsInactive.Include),
-                Has.Length.EqualTo(1));
+                Vector3.Distance(
+                    camera.transform.position,
+                    new Vector3(0.62f, 0.36f, -0.62f)),
+                Is.LessThan(1e-6f));
+            Vector3 targetDirection =
+                (new Vector3(0f, 0.16f, 0f) - camera.transform.position).normalized;
             Assert.That(
-                UnityEngine.Object.FindObjectsByType<Light>(
-                    FindObjectsInactive.Include),
-                Has.Length.EqualTo(1));
+                Vector3.Angle(camera.transform.forward, targetDirection),
+                Is.LessThan(1e-4f));
+
+            Light[] lights = UnityEngine.Object.FindObjectsByType<Light>(
+                FindObjectsInactive.Include);
+            Assert.That(lights, Has.Length.EqualTo(1));
+            Light light = lights[0];
+            Assert.That(light.transform.parent, Is.Null);
+            Assert.That(light.transform.IsChildOf(root.transform), Is.False);
+            Assert.That(light.type, Is.EqualTo(LightType.Directional));
+            Assert.That(light.intensity, Is.EqualTo(1.15f));
+            Assert.That(light.shadows, Is.EqualTo(LightShadows.Soft));
             Assert.That(
                 activeScene.GetRootGameObjects().Select(gameObject => gameObject.name),
                 Does.Not.Contain("studio_close"));

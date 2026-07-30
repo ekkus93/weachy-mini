@@ -387,6 +387,8 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
             "name": mesh_name,
             "source_path": source_relative,
             "source_sha256": sha256(source_path),
+            "source_scale": list(scale_values),
+            "scale_baked_into_vertices": True,
             "output_path": output_relative,
             "output_sha256": sha256(output_path),
             "triangle_count": triangle_count,

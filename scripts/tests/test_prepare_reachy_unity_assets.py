@@ -192,6 +192,12 @@ endsolid head
             [1.0, 3.0, 2.0],
             base["local_pose_unity"]["position_metres"],
         )
+        head = next(body for body in manifest["bodies"] if body["name"] == "head")
+        head_quaternion = head["local_pose_unity"]["quaternion_wxyz"]
+        self.assertAlmostEqual(0.7071067811865476, head_quaternion[0])
+        self.assertAlmostEqual(0.0, head_quaternion[1])
+        self.assertAlmostEqual(-0.7071067811865475, head_quaternion[2])
+        self.assertAlmostEqual(0.0, head_quaternion[3])
         head_geom = next(geom for geom in manifest["visual_geoms"] if geom["material"] == "light")
         self.assertEqual(
             [0.0, 0.0, 2.0],
@@ -199,7 +205,13 @@ endsolid head
         )
         self.assertEqual(2, len(manifest["visual_geoms"]))
         self.assertEqual(2, len(manifest["materials"]))
+        light_material = next(
+            material for material in manifest["materials"] if material["name"] == "light"
+        )
+        self.assertEqual([0.8, 0.9, 1.0, 0.5], light_material["rgba"])
         base_mesh = next(mesh for mesh in manifest["meshes"] if mesh["name"] == "base")
+        self.assertEqual([2.0, 3.0, 4.0], base_mesh["source_scale"])
+        self.assertTrue(base_mesh["scale_baked_into_vertices"])
         self.assertEqual(1, base_mesh["triangle_count"])
         self.assertEqual(
             hashlib.sha256((self.source / "MODEL_MAP.json").read_bytes()).hexdigest(),
@@ -215,6 +227,25 @@ endsolid head
         self.assertIn("v 0 0 3", obj)
         self.assertIn("vn 0 -1 0", obj)
         self.assertIn("f 1//1 3//1 2//1", obj)
+
+    def test_nonfinite_mesh_scale_fails_visibly(self) -> None:
+        """A mesh scale must remain finite before it is baked into vertices."""
+        model_path = self.source / "reachy_mini.xml"
+        model_path.write_text(
+            self.fixture_mjcf().replace('scale="2 3 4"', 'scale="nan 3 4"'),
+            encoding="utf-8",
+        )
+        model_map_path = self.source / "MODEL_MAP.json"
+        model_map = json.loads(model_map_path.read_text(encoding="utf-8"))
+        model_map["source_model"]["sha256"] = hashlib.sha256(model_path.read_bytes()).hexdigest()
+        model_map_path.write_text(
+            json.dumps(model_map, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+        result = self.run_conversion()
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("mesh base scale contains NaN or infinity", result.stderr)
 
     def test_failure_preserves_previous_known_good_output(self) -> None:
         """Malformed replacement input must not destroy prior generated assets."""

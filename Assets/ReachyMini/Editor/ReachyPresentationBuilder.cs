@@ -94,10 +94,10 @@ namespace ReachyMini.Editor
 
         private static void ValidateManifest(RenderManifest manifest)
         {
-            if (manifest.schema_version != 1)
+            if (manifest == null || manifest.schema_version != 1)
             {
                 throw new InvalidDataException(
-                    $"Unsupported Unity render manifest schema: {manifest.schema_version}");
+                    $"Unsupported Unity render manifest schema: {manifest?.schema_version}");
             }
             if (manifest.source == null ||
                 !IsSha256(manifest.source.model_sha256))
@@ -120,11 +120,42 @@ namespace ReachyMini.Editor
                 throw new InvalidDataException(
                     "Unity render manifest must contain exactly 18 model bodies.");
             }
-            if (manifest.bodies.Count(body => !string.IsNullOrEmpty(body.name)) != 17)
+
+            HashSet<string> bodyPaths = new HashSet<string>(StringComparer.Ordinal);
+            for (int index = 0; index < manifest.bodies.Length; ++index)
             {
-                throw new InvalidDataException(
-                    "Unity render manifest must contain exactly 17 named bodies.");
+                BodyEntry body = manifest.bodies[index];
+                bool anonymousBody = index == 15;
+                if (body == null || body.index != index ||
+                    string.IsNullOrWhiteSpace(body.path) ||
+                    string.IsNullOrWhiteSpace(body.parent_path) ||
+                    body.local_pose_unity == null ||
+                    !bodyPaths.Add(body.path) ||
+                    (anonymousBody
+                        ? !string.IsNullOrEmpty(body.name)
+                        : string.IsNullOrWhiteSpace(body.name)))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest body {index} is malformed.");
+                }
+                if (!string.Equals(
+                        body.parent_path,
+                        "/world",
+                        StringComparison.Ordinal) &&
+                    !bodyPaths.Contains(body.parent_path))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest body {index} has an unknown parent.");
+                }
+                if (!body.path.StartsWith(
+                        body.parent_path + "/",
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest body {index} path is outside its parent.");
+                }
             }
+
             if (manifest.meshes == null || manifest.meshes.Length == 0 ||
                 manifest.materials == null || manifest.materials.Length == 0 ||
                 manifest.visual_geoms == null || manifest.visual_geoms.Length == 0)
@@ -132,9 +163,73 @@ namespace ReachyMini.Editor
                 throw new InvalidDataException(
                     "Unity render manifest must contain meshes, materials, and visual geoms.");
             }
+
+            Dictionary<string, MeshEntry> meshEntries =
+                new Dictionary<string, MeshEntry>(StringComparer.Ordinal);
+            for (int index = 0; index < manifest.meshes.Length; ++index)
+            {
+                MeshEntry mesh = manifest.meshes[index];
+                if (mesh == null || string.IsNullOrWhiteSpace(mesh.name) ||
+                    string.IsNullOrWhiteSpace(mesh.source_path) ||
+                    !IsSha256(mesh.source_sha256) ||
+                    mesh.source_scale == null || mesh.source_scale.Length != 3 ||
+                    !mesh.source_scale.All(IsFinite) ||
+                    !mesh.scale_baked_into_vertices ||
+                    string.IsNullOrWhiteSpace(mesh.output_path) ||
+                    !IsSha256(mesh.output_sha256) || mesh.triangle_count <= 0 ||
+                    !meshEntries.TryAdd(mesh.name, mesh))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest mesh {index} is malformed.");
+                }
+            }
+
+            HashSet<string> materialNames =
+                new HashSet<string>(StringComparer.Ordinal);
+            for (int index = 0; index < manifest.materials.Length; ++index)
+            {
+                MaterialEntry material = manifest.materials[index];
+                if (material == null || string.IsNullOrWhiteSpace(material.name) ||
+                    material.rgba == null || material.rgba.Length != 4 ||
+                    material.rgba.Any(value =>
+                        !IsFinite(value) || value < 0.0 || value > 1.0) ||
+                    !materialNames.Add(material.name))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest material {index} is malformed.");
+                }
+            }
+
+            HashSet<string> visualPaths =
+                new HashSet<string>(StringComparer.Ordinal);
+            for (int index = 0; index < manifest.visual_geoms.Length; ++index)
+            {
+                VisualGeomEntry geom = manifest.visual_geoms[index];
+                if (geom == null || geom.index != index ||
+                    string.IsNullOrWhiteSpace(geom.path) ||
+                    string.IsNullOrWhiteSpace(geom.body_path) ||
+                    string.IsNullOrWhiteSpace(geom.mesh) ||
+                    string.IsNullOrWhiteSpace(geom.mesh_output_path) ||
+                    string.IsNullOrWhiteSpace(geom.material) ||
+                    geom.local_pose_unity == null ||
+                    !visualPaths.Add(geom.path) ||
+                    !bodyPaths.Contains(geom.body_path) ||
+                    !meshEntries.TryGetValue(geom.mesh, out MeshEntry mesh) ||
+                    !string.Equals(
+                        geom.mesh_output_path,
+                        mesh.output_path,
+                        StringComparison.Ordinal) ||
+                    !materialNames.Contains(geom.material))
+                {
+                    throw new InvalidDataException(
+                        $"Unity render manifest visual geometry {index} is malformed.");
+                }
+            }
+
             if (manifest.source_cameras == null ||
                 manifest.source_cameras.Length != 2 ||
-                manifest.source_cameras.Any(camera => camera.included_in_presentation))
+                manifest.source_cameras.Any(camera =>
+                    camera == null || camera.included_in_presentation))
             {
                 throw new InvalidDataException(
                     "MuJoCo source cameras must remain excluded from Unity presentation.");
@@ -800,6 +895,10 @@ namespace ReachyMini.Editor
         private sealed class MeshEntry
         {
             public string name = string.Empty;
+            public string source_path = string.Empty;
+            public string source_sha256 = string.Empty;
+            public double[] source_scale = Array.Empty<double>();
+            public bool scale_baked_into_vertices;
             public string output_path = string.Empty;
             public string output_sha256 = string.Empty;
             public int triangle_count;
@@ -829,6 +928,7 @@ namespace ReachyMini.Editor
             public string path = string.Empty;
             public string body_path = string.Empty;
             public string mesh = string.Empty;
+            public string mesh_output_path = string.Empty;
             public string material = string.Empty;
             public PoseEntry local_pose_unity = new PoseEntry();
         }
