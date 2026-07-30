@@ -135,14 +135,28 @@ read_device_report()
 
 "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 "${ADB[@]}" shell pm path "${PACKAGE_NAME}" > "${REPORT_DIR}/package-path.txt"
+"${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/package-before-launch.txt"
+launch_component="$(
+    awk '
+        /android.intent.action.MAIN:/ { in_main = 1; next }
+        in_main && / filter / { print $2; exit }
+    ' "${REPORT_DIR}/package-before-launch.txt"
+)"
+if [[ -z "${launch_component}" || "${launch_component}" != */* ]]; then
+    printf 'Could not resolve the installed Unity launcher activity.\n' >&2
+    exit 1
+fi
+printf '%s\n' "${launch_component}" > "${REPORT_DIR}/launch-component.txt"
+
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/clear.txt"
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" || true
 "${ADB[@]}" logcat -c || true
 "${ADB[@]}" shell am start -W \
+    -n "${launch_component}" \
     -a android.intent.action.MAIN \
     -c android.intent.category.LAUNCHER \
-    -p "${PACKAGE_NAME}" \
     --ez "${LAUNCH_EXTRA_NAME}" true \
     > "${REPORT_DIR}/launch.txt"
 
