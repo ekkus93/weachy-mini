@@ -97,15 +97,23 @@ python3 "${SCRIPT_DIR}/prepare_reachy_unity_assets.py" \
     --source "${IMPORT_ROOT}/${OUTPUT_SUBDIRECTORY}" \
     --output "${RENDER_ROOT}"
 
+MODEL_MAP_PATH="${IMPORT_ROOT}/${OUTPUT_SUBDIRECTORY}/MODEL_MAP.json"
+if [[ ! -s "${MODEL_MAP_PATH}" ]]; then
+    printf 'Imported Reachy model map is missing or empty: %s\n' \
+        "${MODEL_MAP_PATH}" >&2
+    exit 1
+fi
+
 rm -f -- "${LOG_PATH}"
 set +e
 REACHY_UNITY_RENDER_ROOT="${RENDER_ROOT}" \
+REACHY_MODEL_MAP_PATH="${MODEL_MAP_PATH}" \
     "${UNITY_EDITOR}" \
     -batchmode \
     -nographics \
     -quit \
     -projectPath "${ROOT_DIR}" \
-    -executeMethod ReachyMini.Editor.ReachyPresentationBuilder.BuildFromCommandLine \
+    -executeMethod ReachyMini.Editor.ReachyPresentationPipeline.BuildFromCommandLine \
     -logFile "${LOG_PATH}"
 unity_status=$?
 set -e
