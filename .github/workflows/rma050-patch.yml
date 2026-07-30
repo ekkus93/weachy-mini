@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - 'scripts/rma050_patch.py'
+      - 'scripts/rma050_post_patch.py'
       - '.github/workflows/rma050-patch.yml'
 
 permissions:
@@ -25,29 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/rma050_patch.py
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('Assets/ReachyMini/Tests/Editor/ReachyPresentationAssetTests.cs')
-          text = path.read_text(encoding='utf-8')
-          old = 'using UnityEngine;\nusing UnityEngine.SceneManagement;\n'
-          new = 'using UnityEngine;\nusing UnityEngine.Rendering;\nusing UnityEngine.SceneManagement;\n'
-          if text.count(old) != 1:
-              raise SystemExit('Could not add UnityEngine.Rendering import exactly once')
-          text = text.replace(old, new)
-          old = '''                Assert.That(
-                    roots.SelectMany(root => root.GetComponentsInChildren<AudioListener>(true)),
-                    Has.Exactly(1).Items);
-'''
-          new = '''                Assert.That(
-                    roots.SelectMany(root => root.GetComponentsInChildren<AudioListener>(true))
-                        .ToArray(),
-                    Has.Length.EqualTo(1));
-'''
-          if text.count(old) != 1:
-              raise SystemExit('Could not harden AudioListener assertion exactly once')
-          path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
-          PY
+          python3 scripts/rma050_post_patch.py
       - name: Format and validate Python changes
         run: |
           set -euo pipefail
@@ -66,7 +45,10 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          git diff --exit-code -- scripts/rma050_patch.py .github/workflows/rma050-patch.yml
+          git diff --exit-code -- \
+            scripts/rma050_patch.py \
+            scripts/rma050_post_patch.py \
+            .github/workflows/rma050-patch.yml
           expected="Assets/ReachyMini/Editor/ReachyPresentationBuilder.cs
           Assets/ReachyMini/Tests/Editor/ReachyPresentationAssetTests.cs
           Assets/ReachyMini/Tests/PlayMode/BootstrapScenePlayModeTests.cs
