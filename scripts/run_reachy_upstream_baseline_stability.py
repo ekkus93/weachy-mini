@@ -217,7 +217,8 @@ def validate_config(raw: dict[str, Any]) -> StabilityConfig:
         targets = phase.get("targets_radians")
         if not isinstance(targets, list) or len(targets) != len(actuator_names):
             raise StabilityError(
-                f"phases[{index}].targets_radians must contain {len(actuator_names)} values"
+                f"phases[{index}].targets_radians must contain "
+                f"{len(actuator_names)} values"
             )
         for target_index, target in enumerate(targets):
             require_number(target, f"phases[{index}].targets_radians[{target_index}]")
@@ -225,9 +226,13 @@ def validate_config(raw: dict[str, Any]) -> StabilityConfig:
         if not isinstance(allowed, list) or not all(
             isinstance(item, str) and item in actuator_names for item in allowed
         ):
-            raise StabilityError(f"phases[{index}].allowed_out_of_range_actuators is invalid")
+            raise StabilityError(
+                f"phases[{index}].allowed_out_of_range_actuators is invalid"
+            )
         if len(allowed) != len(set(allowed)):
-            raise StabilityError(f"phases[{index}].allowed_out_of_range_actuators has duplicates")
+            raise StabilityError(
+                f"phases[{index}].allowed_out_of_range_actuators has duplicates"
+            )
 
     required_categories = {
         "neutral",
@@ -269,7 +274,9 @@ def percentile(sorted_values: list[float], fraction: float) -> float:
     if lower == upper:
         return sorted_values[lower]
     weight = scaled - lower
-    return sorted_values[lower] + (sorted_values[upper] - sorted_values[lower]) * weight
+    return sorted_values[lower] + (
+        sorted_values[upper] - sorted_values[lower]
+    ) * weight
 
 
 def file_sha256(path: Path) -> str:
@@ -366,12 +373,16 @@ def validate_model(config: StabilityConfig, model_path: Path, model: Any, mujoco
 
     actuator_ids: list[int] = []
     for name in config.actuator_names:
-        actuator_id = int(mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name))
+        actuator_id = int(
+            mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+        )
         if actuator_id < 0:
             raise StabilityError(f"Model is missing actuator {name}")
         actuator_ids.append(actuator_id)
     if actuator_ids != list(range(len(actuator_ids))):
-        raise StabilityError(f"Actuator order differs from stability profile: {actuator_ids}")
+        raise StabilityError(
+            f"Actuator order differs from stability profile: {actuator_ids}"
+        )
     return actuator_ids
 
 
@@ -437,7 +448,9 @@ def monitor_step(
     mujoco.mj_energyVel(model, data)
     total_energy = float(data.energy[0] + data.energy[1])
     if not math.isfinite(total_energy):
-        raise StabilityError(f"Non-finite total energy in phase {phase_name} at step {global_step}")
+        raise StabilityError(
+            f"Non-finite total energy in phase {phase_name} at step {global_step}"
+        )
 
     metrics.completed_steps += 1
     metrics.maximum_equality_residual = max(
@@ -502,19 +515,33 @@ def monitor_step(
 def metrics_report(metrics: Metrics, timings: list[float]) -> dict[str, Any]:
     """Render deterministic JSON-compatible metrics."""
     sorted_timings = sorted(timings)
-    minimum_energy = metrics.minimum_total_energy if math.isfinite(metrics.minimum_total_energy) else 0.0
-    maximum_energy = metrics.maximum_total_energy if math.isfinite(metrics.maximum_total_energy) else 0.0
+    minimum_energy = (
+        metrics.minimum_total_energy
+        if math.isfinite(metrics.minimum_total_energy)
+        else 0.0
+    )
+    maximum_energy = (
+        metrics.maximum_total_energy
+        if math.isfinite(metrics.maximum_total_energy)
+        else 0.0
+    )
     return {
         "completed_steps": metrics.completed_steps,
         "maximum_equality_residual": metrics.maximum_equality_residual,
-        "maximum_scalar_joint_limit_violation_radians": (metrics.maximum_joint_limit_violation),
+        "maximum_scalar_joint_limit_violation_radians": (
+            metrics.maximum_joint_limit_violation
+        ),
         "maximum_contact_penetration_metres": metrics.maximum_contact_penetration,
         "maximum_contact_count": metrics.maximum_contact_count,
         "minimum_total_energy_joules": minimum_energy,
         "maximum_total_energy_joules": maximum_energy,
-        "maximum_absolute_total_energy_joules": (metrics.maximum_absolute_total_energy),
+        "maximum_absolute_total_energy_joules": (
+            metrics.maximum_absolute_total_energy
+        ),
         "warning_count": metrics.warning_count,
-        "median_step_microseconds": (statistics.median(sorted_timings) if sorted_timings else 0.0),
+        "median_step_microseconds": (
+            statistics.median(sorted_timings) if sorted_timings else 0.0
+        ),
         "p95_step_microseconds": percentile(sorted_timings, 0.95),
         "maximum_step_microseconds": max(sorted_timings, default=0.0),
     }
@@ -565,9 +592,9 @@ def run_suite(
                 else:
                     blend = 1.0
                 for index, actuator_id in enumerate(actuator_ids):
-                    data.ctrl[actuator_id] = (
-                        previous_targets[index] + (targets[index] - previous_targets[index]) * blend
-                    )
+                    data.ctrl[actuator_id] = previous_targets[index] + (
+                        targets[index] - previous_targets[index]
+                    ) * blend
 
                 start = time.perf_counter_ns()
                 mujoco.mj_step(model, data)
