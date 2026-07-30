@@ -497,16 +497,45 @@ while running:
 
 ## RMA-042 — Build reference-state comparison tests
 
-- [ ] Produce desktop reference traces using the pinned upstream model and MuJoCo version.
-- [ ] Compare Android qpos, qvel, body transforms, and constraint residuals for reset and representative command sequences.
-- [ ] Define numeric tolerances and explain platform floating-point differences.
-- [ ] Store compact reference fixtures with hashes.
+**Status:** Complete (2026-07-30)
+
+- [x] Produce desktop reference traces using the pinned upstream model and MuJoCo version.
+- [x] Compare Android qpos, qvel, body transforms, and constraint residuals for reset and representative command sequences.
+- [x] Define numeric tolerances and explain platform floating-point differences.
+- [x] Store compact reference fixtures with hashes.
 
 **Acceptance criteria — model integrity gate**
 
-- [ ] Android and desktop reference results agree within documented tolerances.
-- [ ] Loop-closure residuals stay bounded.
-- [ ] Coordinate conventions are documented and covered by tests.
+- [x] Android and desktop reference results agree within documented tolerances.
+- [x] Loop-closure residuals stay bounded.
+- [x] Coordinate conventions are documented and covered by tests.
+
+**Completion evidence**
+
+- `reference-scenario.json` pins the Reachy source/model hash, MuJoCo 3.9.0,
+  0.002-second timestep, ordered actuator/body identities, four command phases,
+  ten checkpoints, compiled dimensions, and per-field tolerances.
+- Desktop generation and the native Android runner execute the same generated
+  scenario. The committed compact lock binds the exact desktop trace bytes to the
+  scenario, model, runtime, generator, serialization format, checkpoint count,
+  and total step count using strict lowercase hexadecimal SHA-256 values.
+- The comparator verifies exact platform/scenario/model/runtime/count identities,
+  scenario-clock timing, all 37 qpos values, all 30 qvel values, all 17 named body
+  positions and normalized wxyz quaternions, warning counts, and the maximum
+  absolute residual across every MuJoCo equality row. Quaternion q/-q equivalence
+  is accepted; malformed matching traces are rejected.
+- Physical Android MuJoCo Feasibility run `30583271127` passed the AArch64 build,
+  provenance checks, locked desktop regeneration, and LG-H872 API-26 comparison on
+  `d229235d73851f58088b7c142e469ef6cfaeaefb`. Maximum qpos error was
+  `3.784299262843405e-15`, maximum qvel error was
+  `2.6852825518730583e-13`, and maximum observed equality residual was
+  `3.84603861668803e-06` against the `0.001` bound, with zero warnings.
+- Hosted Quality Gates run `30583907077` passed Ruff, actionlint, ShellCheck,
+  static policy, native warnings/sanitizers, managed tests, Android tests, and
+  official-model desktop trace generation on
+  `da6fb1fd3e13afe2b2269ee2dd85ba0a0f2826de`.
+- Detailed contracts and evidence are in `docs/reference-state-comparison.md` and
+  `docs/validation/RMA_042_REFERENCE_STATE_VALIDATION_2026-07-30.md`.
 
 ---
 

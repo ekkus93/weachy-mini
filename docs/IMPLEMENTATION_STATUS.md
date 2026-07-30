@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-040 official Reachy Mini model import,
-complete topology identity, immutable provenance, and Android/runtime acceptance
-after RMA-033 deterministic snapshot and reset closure
+**Current implementation series:** RMA-042 pinned desktop/Android reference-state
+comparison, strict fixture identity, coordinate conventions, and physical ARM64
+model-integrity acceptance after RMA-040 official-model import closure
 
 ## Repository rules in force
 
@@ -172,15 +172,35 @@ MuJoCo 3.9.0 compiles the model with 19 bodies including world, 16 joints,
 The detailed import contract is in
 [Official Reachy Mini model import](architecture/OFFICIAL_REACHY_MODEL_IMPORT.md).
 
-### RMA-041/RMA-042 — parameter audit and reference comparison foundations
+### RMA-041 — mechanical parameter audit foundation
 
-The mechanical audit and cross-platform reference infrastructure already exist,
-but these tasks remain formally open until their individual requirements and
-acceptance criteria are audited and closed. The audit classifies generic actuator
-dynamics and missing antenna hard-stop evidence as uncalibrated placeholders; no
-calibrated claim is made. Desktop/Android reference traces compare qpos, qvel,
-named body transforms, equality residuals, warnings, dimensions, hashes, and
-MuJoCo version within locked tolerances.
+The mechanical audit infrastructure already exists, but RMA-041 remains formally
+open until its classifications, joint-limit provenance, uncertainty records, and
+machine-readable fidelity exposure are individually audited and closed. Generic
+actuator dynamics and missing antenna hard-stop evidence remain explicitly
+uncalibrated placeholders; no calibrated claim is made.
+
+### RMA-042 — desktop/Android reference-state comparison
+
+RMA-042 is complete. A versioned scenario pins the exact Reachy model, MuJoCo
+3.9.0 runtime, 500 Hz timestep, compiled dimensions, actuator/body order, command
+phases, checkpoints, and numeric policies. Desktop Python MuJoCo generation and
+the native Android ARM64 runner execute the same generated scenario, while a
+compact SHA-256 lock requires byte-identical desktop fixture regeneration.
+
+The comparator requires exact platform, scenario, model, runtime, count, step,
+and body identities. It validates every qpos and qvel value, all named body poses,
+normalized wxyz quaternions with q/-q equivalence, scenario-clock timing, zero
+warnings, and the maximum absolute residual across every equality-constraint row.
+Matching-but-malformed traces, non-finite values, wrong clocks, non-unit
+quaternions, over-bound loop closures, and non-hexadecimal fixture hashes fail
+visibly.
+
+Physical LG-H872 API-26 evidence agrees with the desktop trace by orders of
+magnitude inside all locked tolerances. The detailed contract is in
+[Desktop/Android reference-state comparison](reference-state-comparison.md), with
+validation evidence in
+[the RMA-042 validation record](validation/RMA_042_REFERENCE_STATE_VALIDATION_2026-07-30.md).
 
 ### RMA-050 through RMA-052 — authoritative Unity rendering
 
@@ -208,6 +228,12 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
+- Physical RMA-042 Android MuJoCo run `30583271127`: regenerated and locked the
+  pinned desktop trace, cross-built the AArch64 runtime/reference runner, and
+  passed the LG-H872 API-26 state/transform/equality comparison on `d229235d`.
+- Hosted RMA-042 quality run `30583907077`: Ruff/actionlint/ShellCheck/static,
+  native warnings/sanitizers, managed, Android, official-model, and desktop trace
+  generation gates passed on `da6fb1fd`.
 - Hosted RMA-040 run `30567896524`: full pinned-source/topology import,
   Unity visual conversion, MuJoCo compile/step and reference trace, static policy,
   native warnings/sanitizers, managed tests, and Android tests passed on
