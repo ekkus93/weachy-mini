@@ -42,6 +42,8 @@ jobs:
       - name: Validate and commit exact closure
         run: |
           set -euo pipefail
+          sed -i 's/[[:space:]]\+$//' \
+            docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md
           git diff --check
           test -s docs/validation/RMA_041_MODEL_PARAMETER_AUDIT_VALIDATION_2026-07-30.md
           git config user.name github-actions[bot]
