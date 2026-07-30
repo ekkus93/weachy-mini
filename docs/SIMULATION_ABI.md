@@ -17,6 +17,9 @@ in [Managed simulation interop contract](architecture/MANAGED_INTEROP.md). The
 fixed-step scheduler, command boundary, immutable publication, diagnostics,
 fault, and lifecycle rules are specified in
 [Authoritative simulation worker](architecture/AUTHORITATIVE_SIMULATION_WORKER.md).
+The persisted-state, named-reset, compatibility, and deterministic replay rules
+are specified in
+[Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md).
 
 ## Versioning
 

@@ -390,18 +390,50 @@ while running:
 
 ## RMA-033 — Add snapshots and deterministic reset
 
-- [ ] Define named reset poses, including sleep/rest and neutral awake.
-- [ ] Add snapshot version, model hash, and calibration-profile ID.
-- [ ] Reject incompatible snapshots.
-- [ ] Test save/restore trajectory equivalence.
+- [x] Define named reset poses, including sleep/rest and neutral awake.
+- [x] Add snapshot version, model hash, and calibration-profile ID.
+- [x] Reject incompatible snapshots.
+- [x] Test save/restore trajectory equivalence.
 
 **Acceptance criteria**
 
-- [ ] Restoring a snapshot and replaying the same command stream reproduces the state within documented tolerances.
+- [x] Restoring a snapshot and replaying the same command stream reproduces the state within documented tolerances.
 
 ---
 
 # Phase 5 — Reachy model import and integrity gate
+
+**Completion evidence**
+
+- Stable reset identifiers are `SleepRest` (`0`) and `NeutralAwake` (`1`).
+  Production neutral reset is supported. The pinned official model has no
+  `sleep_rest`, `sleep`, or `rest` keyframe, so production returns typed
+  `UNSUPPORTED` rather than fabricating a calibrated pose.
+- Snapshot format version `1` carries the ABI/header size, exact model hash,
+  authoritative sequence/time, payload size, and calibration-profile ID.
+  Production additionally binds the private payload to timestep, model format,
+  command/reset state, health, pending wrench state, and the complete MuJoCo
+  integration state.
+- Restore rejects version, model, calibration, configuration, payload, and state
+  incompatibility transactionally. Failed restore preserves the previous live
+  state and does not publish a replacement snapshot.
+- `ReachySimulationWorker` now owns capture and restore as paused control
+  requests. Successful restore visibly discards queued future commands,
+  republishes the restored immutable state, remains paused, and requires an
+  explicit resume.
+- Native contract and production MuJoCo tests cover command and finite-duration
+  wrench replay, transactional rejection, and byte-identical recapture. Managed
+  acceptance covers paused capture, foreign-model rejection, queue discard,
+  immutable restored publication, paused stability, and exact recapture bytes.
+- Hosted run `30561792617` passed native warnings/sanitizers, managed
+  warnings-as-errors and native-backed snapshot acceptance, static checks,
+  Android tests, and official-model validation on `1606bb55`.
+- Self-hosted run `30561792261` passed production staging, Unity tests, ARM64
+  API-26 IL2CPP build/verification, installed lifecycle acceptance,
+  authoritative-rendering acceptance, evidence uploads, and APK upload on the
+  identical commit. The first device attempt had an isolated
+  `WaitingForSnapshots` timeout; the exact job rerun passed without source or
+  artifact changes.
 
 ## RMA-040 — Load the official Reachy Mini MJCF baseline
 

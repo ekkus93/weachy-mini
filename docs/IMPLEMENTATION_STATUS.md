@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-032 authoritative worker scheduling,
-diagnostics, fault retention, and acceptance after managed ABI/layout startup
-preflight and production MuJoCo/Unity physical validation
+**Current implementation series:** RMA-033 authoritative snapshots,
+transactional restore, deterministic reset, and worker-owned persistence after
+RMA-032 fixed-step scheduling and production MuJoCo/Unity validation
 
 ## Repository rules in force
 
@@ -123,10 +123,31 @@ The design and acceptance contract are documented in
 
 ### RMA-033 — snapshots and deterministic reset
 
-Production snapshots are versioned, model/configuration/calibration bound,
-transactionally restored, and require byte-identical recapture/replay. Neutral
-reset is supported. Sleep/rest returns `UNSUPPORTED` because the pinned upstream
-model has no named sleep/rest keyframe; no pose is fabricated.
+RMA-033 is complete. The native snapshot envelope is independently versioned
+and binds persisted state to the exact model, configuration, calibration
+profile, authoritative sequence/time, command sequencing, health state, pending
+wrench, and full MuJoCo integration state. Managed snapshots own immutable byte
+copies and expose validated metadata without leaking backend-private payloads.
+
+Restore is fail-closed and transactional. Version, model, calibration,
+timestep, format, payload, sequence, and numeric-state mismatches return
+`SNAPSHOT_INCOMPATIBLE`; any candidate state rejected after loading is rolled
+back to the byte-identical live state. Same-runtime command and wrench replay
+requires byte-identical final state and recaptured snapshot output.
+
+The authoritative worker now serializes capture and restore as paused control
+requests. Incompatible restore remains a nonfatal paused rejection with no
+publication or queue mutation. Successful restore discards queued future
+commands visibly, resets scheduler lag, publishes the restored immutable state,
+and remains paused until explicit resume.
+
+Stable named reset IDs are `SleepRest` and `NeutralAwake`. Neutral reset is
+supported. Sleep/rest resolves only a named model keyframe; because the pinned
+official Reachy model provides none, production returns typed `UNSUPPORTED`
+instead of inventing a pose.
+
+The detailed contract is in
+[Simulation snapshots and deterministic reset](architecture/SIMULATION_SNAPSHOTS.md).
 
 ### RMA-040 through RMA-042 — official model integrity
 
@@ -166,6 +187,14 @@ structured evidence, and restore device power policy.
 
 ## Current validation evidence
 
+- Hosted RMA-033 run `30561792617`: native warnings/sanitizers, managed
+  warnings-as-errors and worker-owned snapshot acceptance, static checks,
+  Android tests, and official-model validation passed on `1606bb55`.
+- Self-hosted RMA-033 run `30561792261`: production staging, Unity tests,
+  ARM64 API-26 IL2CPP build/verification, installed lifecycle acceptance,
+  authoritative rendering, evidence uploads, and APK upload passed on the exact
+  same commit after one isolated device scheduling timeout was cleared by an
+  unchanged exact-job rerun.
 - Hosted RMA-032 code-quality run `30539234220`: native warnings/sanitizers,
   managed warnings-as-errors and native-backed worker acceptance, static checks,
   Android tests, and official-model validation passed on `ac961fce`.
