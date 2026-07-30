@@ -41,10 +41,15 @@ A successful `reachy_sim_create` transfers ownership of the backend instance to
 the returned handle. `reachy_sim_destroy` releases it. Failed creation always
 leaves the output handle equal to `REACHY_SIM_INVALID_HANDLE`.
 
-Destroying a handle while another operation is active returns
-`REACHY_SIM_STATUS_HANDLE_BUSY`. Callers must serialize all operations on the
-same handle. The authoritative simulation worker provides that single-owner
-contract. General simultaneous operation rejection remains open hardening work.
+Every public operation on the same live handle participates in an exclusive
+per-handle operation lease. If another operation is already active, the second
+operation returns `REACHY_SIM_STATUS_HANDLE_BUSY` before it validates operation-
+specific arguments, mutates backend state, or writes caller-owned output.
+`reachy_sim_destroy` follows the same rule. Operations on independent handles
+remain able to make progress concurrently. The authoritative simulation worker
+still provides the normal single-owner call pattern, while the ABI enforces a
+typed failure instead of permitting an unsafe race when a caller violates that
+pattern.
 
 ## Backend selection and availability
 
@@ -105,9 +110,12 @@ Handle-scoped failures are copied into internal handle state and retrieved with
 `reachy_sim_get_last_error`.
 
 `reachy_sim_get_last_error` copies the full error structure into caller-owned
-memory. It does not return a borrowed pointer. Calls on the same handle must be
-externally serialized; concurrent calls could otherwise replace the latest error
-before it is queried.
+memory. It does not return a borrowed pointer. The query participates in the
+same per-handle operation lease as every other handle operation. If another
+operation is active, it returns `REACHY_SIM_STATUS_HANDLE_BUSY` and leaves the
+caller-owned error structure unchanged. A caller should query immediately after
+a failed operation because a later sequential operation may replace the retained
+last-error value.
 
 A MuJoCo numeric failure or warning is never converted into success, silently
 discarded, or replaced by another backend.
@@ -122,7 +130,9 @@ State and snapshot copying use a two-call bounded-buffer contract:
 
 The implementation enforces maximum model, command, and snapshot sizes. Command
 and snapshot headers include ABI version, structure size, sequence/identity
-fields, and declared byte counts. Malformed buffers fail explicitly.
+fields, and declared byte counts. Malformed buffers fail explicitly. Invalid,
+undersized, and busy calls do not partially modify caller-owned buffers or size
+outputs.
 
 ABI-2 production state is currently `ReachySimStateHeader` only. It reports real
 counts and health but not ordered simulation arrays. Snapshot payloads are
@@ -145,7 +155,7 @@ The native suite verifies:
 
 - fixed C structure layouts and C/C++ compatibility;
 - ABI and structure-size mismatch rejection;
-- null and undersized buffer handling;
+- null and undersized buffer handling without partial caller-output mutation;
 - explicit unavailable-backend failure in non-production builds;
 - create/destroy and 1,000-cycle lifecycle stress;
 - stale-generation rejection and double-destroy behavior;
@@ -155,7 +165,22 @@ The native suite verifies:
 - state copy and fixed-step progression;
 - model/configuration-bound snapshots;
 - transactional restore and deterministic replay;
-- last-error copying and recoverability classification.
+- last-error copying and recoverability classification;
+- same-handle operation exclusion with typed `HANDLE_BUSY` results;
+- unchanged caller outputs on busy results and concurrent progress on independent
+  handles; and
+- eight-thread contention where every attempt has exactly one typed result and
+  the final sequence equals the number of successful serialized operations.
+
+The command, state, wrench, snapshot, capability, and error parsers are covered
+by a deterministic property-style contract matrix over version and structure
+sizes, exact byte counts, null pointers, bounded capacities, sequences,
+duplicate identifiers, reserved fields, finite values, ranges, stale handles,
+and incompatible identities. A randomized fuzz target is not part of the
+default CI because the current parsers are small, stateful, and already exercised
+under strict deterministic invariants plus ASan/UBSan. A persistent fuzz corpus
+may be added when it provides additional coverage that can be reproduced and
+maintained in CI.
 
 The first-party backend contract runs under strict warnings-as-errors flags and
 ASan/UBSan on supported desktop CI. Fake MuJoCo validates the backend contract
