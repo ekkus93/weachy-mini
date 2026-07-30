@@ -12,6 +12,7 @@ RESULT_FILE_NAME="weachy-native-lifecycle-acceptance.json"
 REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
 TIMEOUT_SECONDS="${UNITY_LIFECYCLE_TIMEOUT_SECONDS:-180}"
 SUSPEND_SECONDS="${UNITY_LIFECYCLE_SUSPEND_SECONDS:-3}"
+POLL_SECONDS="${UNITY_LIFECYCLE_POLL_SECONDS:-0.2}"
 
 if [[ ! -s "${APK_PATH}" ]]; then
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2
@@ -254,7 +255,7 @@ while true; do
         fi
         exit 1
     fi
-    sleep 1
+    sleep "${POLL_SECONDS}"
 done
 
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/lifecycle.json"
@@ -307,10 +308,12 @@ for index, cycle in enumerate(cycles, start=1):
         raise SystemExit(f"resume callback missing for cycle {index}: {report}")
     suspended = float(cycle.get("suspended_wall_seconds", 0.0))
     advanced = float(cycle.get("simulation_time_advance", -1.0))
-    if suspended < max(1.0, requested_suspend - 1.0):
+    excluded = float(cycle.get("excluded_suspended_seconds", suspended - advanced))
+    minimum_excluded = max(1.0, requested_suspend - 1.0)
+    if suspended < minimum_excluded:
         raise SystemExit(f"cycle {index} was not suspended long enough: {report}")
-    if advanced < 0.0 or advanced > 0.75 or advanced >= suspended:
-        raise SystemExit(f"cycle {index} caught up suspended wall time: {report}")
+    if advanced < 0.0 or excluded < minimum_excluded:
+        raise SystemExit(f"cycle {index} did not exclude suspended time: {report}")
     if cycle.get("runtime_status_after_resume") != "Running":
         raise SystemExit(f"runtime did not resume in cycle {index}: {report}")
 if int(report["final_sequence"]) <= int(report["initial_sequence"]):

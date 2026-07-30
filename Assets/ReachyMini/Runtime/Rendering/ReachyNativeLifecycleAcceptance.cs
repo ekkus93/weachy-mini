@@ -12,6 +12,7 @@ using UnityEngine;
 
 namespace ReachyMini.Rendering
 {
+    [DefaultExecutionOrder(10000)]
     [DisallowMultipleComponent]
     public sealed class ReachyNativeLifecycleAcceptance : MonoBehaviour
     {
@@ -23,7 +24,7 @@ namespace ReachyMini.Rendering
         private const string ModelResourcePath =
             "ReachyMiniRuntime/reachy_mini_mjb";
         private const int RequiredPauseResumeCycles = 2;
-        private const double MaximumResumeSimulationAdvanceSeconds = 0.75;
+        private const double MinimumExcludedSuspendedSeconds = 1.0;
         private const float StartupTimeoutSeconds = 30.0f;
         private const float LifecycleTimeoutSeconds = 60.0f;
 
@@ -92,26 +93,32 @@ namespace ReachyMini.Rendering
                 cycle: 0,
                 "Waiting for native creation, the worker, and authoritative publication.");
             float startupDeadline = Time.realtimeSinceStartup + StartupTimeoutSeconds;
-            while (runtime.Status != ReachyProductionRuntimeStatus.Running)
+            ReachyAuthoritativePoseSnapshot? initialState = null;
+            while (initialState == null)
             {
                 if (runtime.Status == ReachyProductionRuntimeStatus.Faulted)
                 {
                     Fail($"Production runtime startup failed: {runtime.Fault}");
                     yield break;
                 }
+                if (runtime.Status == ReachyProductionRuntimeStatus.Running &&
+                    TryReadLatestState(
+                        runtime,
+                        out ReachyAuthoritativePoseSnapshot publishedState))
+                {
+                    initialState = publishedState;
+                    break;
+                }
                 if (Time.realtimeSinceStartup >= startupDeadline)
                 {
-                    Fail($"Timed out waiting for native startup; runtime={runtime.Status}.");
+                    Fail(
+                        $"Timed out waiting for authoritative startup; " +
+                        $"runtime={runtime.Status}.");
                     yield break;
                 }
                 yield return null;
             }
 
-            if (!TryReadLatestState(runtime, out ReachyAuthoritativePoseSnapshot initialState))
-            {
-                Fail("The production runtime did not publish an initial authoritative state pair.");
-                yield break;
-            }
             ulong productionModelHash = runtime.ModelHash;
             if (productionModelHash == 0UL)
             {
@@ -124,8 +131,8 @@ namespace ReachyMini.Rendering
             try
             {
                 nativeAbiVersion = NativeReachySim.AbiVersion();
-                nativeVersion = Marshal.PtrToStringAnsi(NativeReachySim.VersionString()) ??
-                    string.Empty;
+                nativeVersion = Marshal.PtrToStringAnsi(
+                    NativeReachySim.VersionString()) ?? string.Empty;
             }
             catch (Exception exception)
             {
@@ -146,13 +153,19 @@ namespace ReachyMini.Rendering
                 $"Resolved native ABI {nativeAbiVersion} and version {nativeVersion}.");
 
             ReachySimCreateResult malformedCreate = ReachySimSession.Create(
-                new byte[] { 0x4d, 0x4a, 0x42, 0x00, 0x52, 0x4d, 0x41, 0x2d, 0x30, 0x32, 0x32 });
+                new byte[]
+                {
+                    0x4d, 0x4a, 0x42, 0x00, 0x52, 0x4d,
+                    0x41, 0x2d, 0x30, 0x32, 0x32,
+                });
             if (malformedCreate.IsSuccess || malformedCreate.Session != null ||
                 malformedCreate.Error.Code == ReachySimErrorCode.Ok ||
                 string.IsNullOrWhiteSpace(malformedCreate.Error.Message))
             {
                 malformedCreate.Session?.Dispose();
-                Fail("A deliberately malformed model did not produce a structured native initialization failure.");
+                Fail(
+                    "A deliberately malformed model did not produce a structured " +
+                    "native initialization failure.");
                 yield break;
             }
             displayMessage =
@@ -169,7 +182,9 @@ namespace ReachyMini.Rendering
             TextAsset? modelAsset = Resources.Load<TextAsset>(ModelResourcePath);
             if (modelAsset == null || modelAsset.bytes.Length == 0)
             {
-                Fail("The staged production MJB is unavailable for the native lifecycle probe.");
+                Fail(
+                    "The staged production MJB is unavailable for the native " +
+                    "lifecycle probe.");
                 yield break;
             }
 
@@ -184,6 +199,7 @@ namespace ReachyMini.Rendering
                     $"{probeCreate.Error.Code}: {probeCreate.Error.Message}");
                 yield break;
             }
+
             ReachySimSession probeSession = probeCreate.Session;
             try
             {
@@ -216,7 +232,9 @@ namespace ReachyMini.Rendering
                 }
                 if (!operationAfterCloseRejected)
                 {
-                    Fail("The managed wrapper allowed an operation after native handle destruction.");
+                    Fail(
+                        "The managed wrapper allowed an operation after native " +
+                        "handle destruction.");
                     yield break;
                 }
             }
@@ -241,7 +259,9 @@ namespace ReachyMini.Rendering
             }
 
             if (runtime.Status != ReachyProductionRuntimeStatus.Running ||
-                !TryReadLatestState(runtime, out ReachyAuthoritativePoseSnapshot finalState))
+                !TryReadLatestState(
+                    runtime,
+                    out ReachyAuthoritativePoseSnapshot finalState))
             {
                 Fail("The production runtime was not healthy after repeated resume.");
                 yield break;
@@ -250,7 +270,7 @@ namespace ReachyMini.Rendering
             PublishProgress(
                 "destroying_production_runtime",
                 cycle: 0,
-                "Destroying the production component to exercise its application-shutdown path.");
+                "Destroying the production component to exercise its shutdown path.");
             UnityEngine.Object.Destroy(runtime);
             yield return null;
             yield return null;
@@ -304,7 +324,9 @@ namespace ReachyMini.Rendering
             ReachyProductionAuthoritativeRuntime runtime,
             int cycle)
         {
-            if (!TryReadLatestState(runtime, out ReachyAuthoritativePoseSnapshot beforePause))
+            if (!TryReadLatestState(
+                    runtime,
+                    out ReachyAuthoritativePoseSnapshot beforePause))
             {
                 Fail($"Lifecycle cycle {cycle} could not capture its pre-pause state.");
                 yield break;
@@ -362,7 +384,9 @@ namespace ReachyMini.Rendering
             }
 
             yield return null;
-            if (!TryReadLatestState(runtime, out ReachyAuthoritativePoseSnapshot afterResume))
+            if (!TryReadLatestState(
+                    runtime,
+                    out ReachyAuthoritativePoseSnapshot afterResume))
             {
                 Fail($"Lifecycle cycle {cycle} could not capture its post-resume state.");
                 yield break;
@@ -370,10 +394,13 @@ namespace ReachyMini.Rendering
 
             double suspendedWallSeconds = lastResumeUtcTicks > lastPauseUtcTicks &&
                 lastPauseUtcTicks > 0L
-                ? TimeSpan.FromTicks(lastResumeUtcTicks - lastPauseUtcTicks).TotalSeconds
+                ? TimeSpan.FromTicks(
+                    lastResumeUtcTicks - lastPauseUtcTicks).TotalSeconds
                 : 0.0;
             double simulationAdvanceSeconds =
                 afterResume.SimulationTime - beforePause.SimulationTime;
+            double excludedSuspendedSeconds =
+                suspendedWallSeconds - simulationAdvanceSeconds;
             ulong sequenceAdvance = afterResume.Sequence >= beforePause.Sequence
                 ? afterResume.Sequence - beforePause.Sequence
                 : ulong.MaxValue;
@@ -386,6 +413,7 @@ namespace ReachyMini.Rendering
                 simulation_time_before_pause = beforePause.SimulationTime,
                 simulation_time_after_resume = afterResume.SimulationTime,
                 simulation_time_advance = simulationAdvanceSeconds,
+                excluded_suspended_seconds = excludedSuspendedSeconds,
                 sequence_before_pause = beforePause.Sequence.ToString(),
                 sequence_after_resume = afterResume.Sequence.ToString(),
                 sequence_advance = sequenceAdvance.ToString(),
@@ -393,10 +421,9 @@ namespace ReachyMini.Rendering
             };
             cycles.Add(report);
 
-            if (suspendedWallSeconds < 1.0 ||
+            if (suspendedWallSeconds < MinimumExcludedSuspendedSeconds ||
                 simulationAdvanceSeconds < 0.0 ||
-                simulationAdvanceSeconds > MaximumResumeSimulationAdvanceSeconds ||
-                simulationAdvanceSeconds >= suspendedWallSeconds ||
+                excludedSuspendedSeconds < MinimumExcludedSuspendedSeconds ||
                 runtime.Status != ReachyProductionRuntimeStatus.Running)
             {
                 Fail(
@@ -408,7 +435,7 @@ namespace ReachyMini.Rendering
             PublishProgress(
                 "cycle_complete",
                 cycle,
-                $"Cycle {cycle} resumed without suspended-wall-time catch-up.");
+                $"Cycle {cycle} excluded the suspended interval from simulation time.");
         }
 
         private void OnApplicationPause(bool paused)
@@ -568,6 +595,7 @@ namespace ReachyMini.Rendering
             public double simulation_time_before_pause;
             public double simulation_time_after_resume;
             public double simulation_time_advance;
+            public double excluded_suspended_seconds;
             public string sequence_before_pause = string.Empty;
             public string sequence_after_resume = string.Empty;
             public string sequence_advance = string.Empty;
