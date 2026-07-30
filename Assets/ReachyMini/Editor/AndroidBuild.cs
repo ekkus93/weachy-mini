@@ -23,8 +23,6 @@ namespace ReachyMini.Editor
             "Assets/Plugins/Android/libs/arm64-v8a";
         private const string RuntimeResourceDirectory =
             "Assets/Generated/ReachyMini/UnityPresentation/Resources/ReachyMiniRuntime";
-        private const string PhysicalAcceptanceMarkerPath =
-            RuntimeResourceDirectory + "/physical_acceptance_enabled.bytes";
 
         private const int ApplicationMinimumApiLevel = 31;
         private const int DeviceFeasibilityMinimumApiLevel = 26;
@@ -36,10 +34,7 @@ namespace ReachyMini.Editor
                 buildAppBundle: false,
                 AndroidArchitecture.ARM64,
                 ApplicationMinimumApiLevel);
-            Build(
-                DevelopmentOutput,
-                BuildOptions.Development,
-                physicalAcceptance: false);
+            Build(DevelopmentOutput, BuildOptions.Development);
         }
 
         public static void BuildDeviceFeasibilityApk()
@@ -48,10 +43,7 @@ namespace ReachyMini.Editor
                 buildAppBundle: false,
                 AndroidArchitecture.ARM64,
                 DeviceFeasibilityMinimumApiLevel);
-            Build(
-                DeviceFeasibilityOutput,
-                BuildOptions.Development,
-                physicalAcceptance: true);
+            Build(DeviceFeasibilityOutput, BuildOptions.Development);
         }
 
         public static void BuildReleaseAab()
@@ -60,10 +52,7 @@ namespace ReachyMini.Editor
                 buildAppBundle: true,
                 AndroidArchitecture.ARM64,
                 ApplicationMinimumApiLevel);
-            Build(
-                ReleaseOutput,
-                BuildOptions.None,
-                physicalAcceptance: false);
+            Build(ReleaseOutput, BuildOptions.None);
         }
 
         private static void ConfigureAndroid(
@@ -170,10 +159,7 @@ namespace ReachyMini.Editor
             }
         }
 
-        private static void Build(
-            string outputPath,
-            BuildOptions options,
-            bool physicalAcceptance)
+        private static void Build(string outputPath, BuildOptions options)
         {
             string[] scenes = EditorBuildSettings.scenes
                 .Where(scene => scene.enabled)
@@ -207,56 +193,19 @@ namespace ReachyMini.Editor
             }
             Directory.CreateDirectory(outputDirectory);
 
-            ConfigurePhysicalAcceptanceMarker(physicalAcceptance);
-            try
+            BuildPlayerOptions buildOptions = new BuildPlayerOptions
             {
-                BuildPlayerOptions buildOptions = new BuildPlayerOptions
-                {
-                    scenes = scenes,
-                    locationPathName = outputPath,
-                    target = BuildTarget.Android,
-                    options = options,
-                };
-                BuildReport report = BuildPipeline.BuildPlayer(buildOptions);
+                scenes = scenes,
+                locationPathName = outputPath,
+                target = BuildTarget.Android,
+                options = options,
+            };
+            BuildReport report = BuildPipeline.BuildPlayer(buildOptions);
 
-                if (report.summary.result != BuildResult.Succeeded)
-                {
-                    throw new InvalidOperationException(
-                        $"Android build failed with result {report.summary.result}.");
-                }
-            }
-            finally
+            if (report.summary.result != BuildResult.Succeeded)
             {
-                ConfigurePhysicalAcceptanceMarker(enabled: false);
-            }
-        }
-
-        private static void ConfigurePhysicalAcceptanceMarker(bool enabled)
-        {
-            if (enabled)
-            {
-                Directory.CreateDirectory(RuntimeResourceDirectory);
-                File.WriteAllText(
-                    PhysicalAcceptanceMarkerPath,
-                    "physical_authoritative_rendering_acceptance_v1\n");
-                AssetDatabase.ImportAsset(
-                    PhysicalAcceptanceMarkerPath,
-                    ImportAssetOptions.ForceSynchronousImport |
-                    ImportAssetOptions.ForceUpdate);
-                if (AssetDatabase.LoadAssetAtPath<UnityEngine.TextAsset>(
-                        PhysicalAcceptanceMarkerPath) == null)
-                {
-                    throw new InvalidOperationException(
-                        "Unity did not import the physical acceptance Resource marker.");
-                }
-                return;
-            }
-
-            if (File.Exists(PhysicalAcceptanceMarkerPath) ||
-                File.Exists(PhysicalAcceptanceMarkerPath + ".meta"))
-            {
-                AssetDatabase.DeleteAsset(PhysicalAcceptanceMarkerPath);
-                AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+                throw new InvalidOperationException(
+                    $"Android build failed with result {report.summary.result}.");
             }
         }
 
