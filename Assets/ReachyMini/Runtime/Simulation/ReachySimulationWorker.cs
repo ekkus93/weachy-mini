@@ -109,11 +109,13 @@ namespace ReachyMini.Simulation
             bool isSuccess,
             ReachySimulationRunState state,
             int discardedCommandCount,
+            ReachySimSnapshot? capturedSnapshot,
             ReachySimError error)
         {
             IsSuccess = isSuccess;
             State = state;
             DiscardedCommandCount = discardedCommandCount;
+            CapturedSnapshot = capturedSnapshot;
             Error = error;
         }
 
@@ -123,16 +125,20 @@ namespace ReachyMini.Simulation
 
         public int DiscardedCommandCount { get; }
 
+        public ReachySimSnapshot? CapturedSnapshot { get; }
+
         public ReachySimError Error { get; }
 
         internal static ReachySimulationControlResult Success(
             ReachySimulationRunState state,
-            int discardedCommandCount = 0)
+            int discardedCommandCount = 0,
+            ReachySimSnapshot? capturedSnapshot = null)
         {
             return new ReachySimulationControlResult(
                 isSuccess: true,
                 state,
                 discardedCommandCount,
+                capturedSnapshot,
                 ReachySimError.NoError);
         }
 
@@ -144,6 +150,7 @@ namespace ReachyMini.Simulation
                 isSuccess: false,
                 state,
                 discardedCommandCount: 0,
+                capturedSnapshot: null,
                 error ?? throw new ArgumentNullException(nameof(error)));
         }
     }
@@ -322,6 +329,7 @@ namespace ReachyMini.Simulation
             return SubmitControlRequest(
                 ControlRequestKind.Pause,
                 resetId: 0U,
+                snapshot: null,
                 timeout);
         }
 
@@ -330,7 +338,15 @@ namespace ReachyMini.Simulation
             return SubmitControlRequest(
                 ControlRequestKind.Resume,
                 resetId: 0U,
+                snapshot: null,
                 timeout);
+        }
+
+        public ReachySimulationControlResult Reset(
+            ReachySimResetPose resetPose,
+            TimeSpan timeout)
+        {
+            return Reset((uint)resetPose, timeout);
         }
 
         public ReachySimulationControlResult Reset(
@@ -340,6 +356,32 @@ namespace ReachyMini.Simulation
             return SubmitControlRequest(
                 ControlRequestKind.Reset,
                 resetId,
+                snapshot: null,
+                timeout);
+        }
+
+        public ReachySimulationControlResult CaptureSnapshot(TimeSpan timeout)
+        {
+            return SubmitControlRequest(
+                ControlRequestKind.CaptureSnapshot,
+                resetId: 0U,
+                snapshot: null,
+                timeout);
+        }
+
+        public ReachySimulationControlResult RestoreSnapshot(
+            ReachySimSnapshot snapshot,
+            TimeSpan timeout)
+        {
+            if (snapshot == null)
+            {
+                throw new ArgumentNullException(nameof(snapshot));
+            }
+
+            return SubmitControlRequest(
+                ControlRequestKind.RestoreSnapshot,
+                resetId: 0U,
+                snapshot,
                 timeout);
         }
 
@@ -395,6 +437,7 @@ namespace ReachyMini.Simulation
                 SubmitControlRequest(
                     ControlRequestKind.Shutdown,
                     resetId: 0U,
+                    snapshot: null,
                     requestTime);
             if (!requestResult.IsSuccess)
             {
@@ -502,6 +545,7 @@ namespace ReachyMini.Simulation
         private ReachySimulationControlResult SubmitControlRequest(
             ControlRequestKind kind,
             uint resetId,
+            ReachySimSnapshot? snapshot,
             TimeSpan timeout)
         {
             ValidateTimeout(timeout);
@@ -532,7 +576,8 @@ namespace ReachyMini.Simulation
                 pendingRequest = new ControlRequest(
                     requestId,
                     kind,
-                    resetId);
+                    resetId,
+                    snapshot);
                 wakeSignal.Set();
 
                 while (completedRequestId < requestId)
@@ -584,6 +629,13 @@ namespace ReachyMini.Simulation
                 case ControlRequestKind.Reset:
                     if (runState != ReachySimulationRunState.Running &&
                         runState != ReachySimulationRunState.Paused)
+                    {
+                        return InvalidStateResult(kind);
+                    }
+                    break;
+                case ControlRequestKind.CaptureSnapshot:
+                case ControlRequestKind.RestoreSnapshot:
+                    if (runState != ReachySimulationRunState.Paused)
                     {
                         return InvalidStateResult(kind);
                     }
@@ -855,6 +907,14 @@ namespace ReachyMini.Simulation
                     accumulatorSeconds = 0.0;
                     previousTimestamp = Stopwatch.GetTimestamp();
                     break;
+                case ControlRequestKind.CaptureSnapshot:
+                    ProcessCaptureSnapshotRequest(request);
+                    break;
+                case ControlRequestKind.RestoreSnapshot:
+                    ProcessRestoreSnapshotRequest(request);
+                    accumulatorSeconds = 0.0;
+                    previousTimestamp = Stopwatch.GetTimestamp();
+                    break;
                 case ControlRequestKind.Shutdown:
                     SetRunState(ReachySimulationRunState.Stopping);
                     stopRequested = true;
@@ -914,6 +974,99 @@ namespace ReachyMini.Simulation
                 ReachySimulationControlResult.Success(
                     State,
                     discarded));
+        }
+
+        private void ProcessCaptureSnapshotRequest(ControlRequest request)
+        {
+            ReachySimSnapshotCaptureResult capture = session.CaptureSnapshot();
+            ReachySimSnapshot? snapshot = capture.Snapshot;
+            if (!capture.IsSuccess || snapshot == null)
+            {
+                ReachySimError error = capture.IsSuccess
+                    ? ControlError(
+                        ReachySimErrorCode.ManagedInteropFailure,
+                        ReachySimRecoverability.RecreateHandle,
+                        "Snapshot capture succeeded without returning snapshot bytes.")
+                    : capture.Error;
+                RetainTerminalSnapshotFault("capture snapshot", error);
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(State, error));
+                return;
+            }
+
+            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    State,
+                    capturedSnapshot: snapshot));
+        }
+
+        private void ProcessRestoreSnapshotRequest(ControlRequest request)
+        {
+            ReachySimSnapshot? snapshot = request.Snapshot;
+            if (snapshot == null)
+            {
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        State,
+                        ControlError(
+                            ReachySimErrorCode.InvalidArgument,
+                            ReachySimRecoverability.FatalConfiguration,
+                            "Snapshot restore request did not contain snapshot bytes.")));
+                return;
+            }
+
+            ReachySimOperationResult restore = session.RestoreSnapshot(snapshot);
+            if (!restore.IsSuccess)
+            {
+                RetainTerminalSnapshotFault("restore snapshot", restore.Error);
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        State,
+                        restore.Error));
+                return;
+            }
+
+            int discarded = commandQueue.Clear();
+            if (discarded > 0)
+            {
+                Interlocked.Add(ref discardedCommandCount, discarded);
+            }
+
+            lastStepDurationSeconds = 0.0;
+            accumulatedLagSeconds = 0.0;
+            if (!PublishCurrentState(stepDurationSeconds: 0.0))
+            {
+                CompleteRequest(
+                    request.Id,
+                    ReachySimulationControlResult.Failure(
+                        ReachySimulationRunState.Faulted,
+                        Fault?.Error ?? ControlError(
+                            ReachySimErrorCode.ManagedInteropFailure,
+                            ReachySimRecoverability.RecreateHandle,
+                            "Restored state publication failed.")));
+                return;
+            }
+
+            CompleteRequest(
+                request.Id,
+                ReachySimulationControlResult.Success(
+                    ReachySimulationRunState.Paused,
+                    discarded));
+        }
+
+        private void RetainTerminalSnapshotFault(
+            string operation,
+            ReachySimError error)
+        {
+            if (error.Recoverability == ReachySimRecoverability.RecreateHandle ||
+                error.Recoverability == ReachySimRecoverability.FatalConfiguration)
+            {
+                EnterNativeFault(operation, error);
+            }
         }
 
         private bool ApplyQueuedCommandsAtBoundary()
@@ -1270,7 +1423,9 @@ namespace ReachyMini.Simulation
             Pause = 1,
             Resume = 2,
             Reset = 3,
-            Shutdown = 4,
+            CaptureSnapshot = 4,
+            RestoreSnapshot = 5,
+            Shutdown = 6,
         }
 
         private readonly struct ControlRequest
@@ -1278,11 +1433,13 @@ namespace ReachyMini.Simulation
             internal ControlRequest(
                 long id,
                 ControlRequestKind kind,
-                uint resetId)
+                uint resetId,
+                ReachySimSnapshot? snapshot)
             {
                 Id = id;
                 Kind = kind;
                 ResetId = resetId;
+                Snapshot = snapshot;
             }
 
             internal long Id { get; }
@@ -1290,6 +1447,8 @@ namespace ReachyMini.Simulation
             internal ControlRequestKind Kind { get; }
 
             internal uint ResetId { get; }
+
+            internal ReachySimSnapshot? Snapshot { get; }
         }
 
         private sealed class BoundedCommandQueue
