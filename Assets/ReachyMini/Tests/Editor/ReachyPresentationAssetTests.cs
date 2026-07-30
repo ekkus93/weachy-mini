@@ -43,8 +43,10 @@ namespace ReachyMini.Tests
                     bodies.Select(body => body.BodyIndex),
                     Is.EquivalentTo(Enumerable.Range(0, root.BodyCount)));
                 Assert.That(
-                    bodies.Select(body => body.BodyPath).Distinct(StringComparer.Ordinal),
-                    Has.Count.EqualTo(root.BodyCount));
+                    bodies.Select(body => body.BodyPath)
+                        .Distinct(StringComparer.Ordinal)
+                        .Count(),
+                    Is.EqualTo(root.BodyCount));
                 Assert.That(
                     bodies.Count(body => !string.IsNullOrEmpty(body.BodyName)),
                     Is.EqualTo(17));
