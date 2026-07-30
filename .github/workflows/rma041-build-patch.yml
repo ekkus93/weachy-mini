@@ -20,8 +20,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Publish run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          body="RMA-041 patch validation is running.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-validated-patch-${GITHUB_SHA}\n"
+          gh issue edit 7 --repo "${GITHUB_REPOSITORY}" --body "${body}"
       - name: Apply guarded RMA-041 patch
-        run: python3 scripts/rma041_apply.py
+        run: |
+          set -euo pipefail
+          python3 scripts/rma041_apply.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/validate_model_parameter_audit.py")
+          text = path.read_text(encoding="utf-8")
+          old = 'is_fidelity_level = child_path == "audit.fidelity.classification"'
+          new = (
+              'is_fidelity_level = child_path in {\n'
+              '                "audit.fidelity.classification",\n'
+              '                "audit.diagnostics.classification",\n'
+              '            }'
+          )
+          if text.count(old) != 1:
+              raise SystemExit("Could not patch diagnostics classification traversal exactly once")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8", newline="\n")
+          PY
       - name: Apply repository Python policy
         run: |
           set -euo pipefail
@@ -60,10 +85,10 @@ jobs:
             docs/model-parameter-audit.md
           if-no-files-found: error
           retention-days: 1
-      - name: Publish validated run identity
+      - name: Publish validation success
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          body="Validated RMA-041 patch artifact is available.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-validated-patch-${GITHUB_SHA}\n"
+          body="Validated RMA-041 patch artifact is available.\n\n- Run ID: ${GITHUB_RUN_ID}\n- Commit: ${GITHUB_SHA}\n- Artifact: rma041-validated-patch-${GITHUB_SHA}\n- Result: success\n"
           gh issue edit 7 --repo "${GITHUB_REPOSITORY}" --body "${body}"
