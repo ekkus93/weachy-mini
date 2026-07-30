@@ -48,8 +48,21 @@ namespace ReachyMini.Tests
                         .Count(),
                     Is.EqualTo(root.BodyCount));
                 Assert.That(
-                    bodies.Count(body => !string.IsNullOrEmpty(body.BodyName)),
+                    bodies.All(body => !string.IsNullOrWhiteSpace(body.BodyName)),
+                    Is.True);
+                Assert.That(
+                    bodies.Select(body => body.BodyName)
+                        .Distinct(StringComparer.Ordinal)
+                        .Count(),
+                    Is.EqualTo(root.BodyCount));
+                Assert.That(
+                    bodies.Count(body => !body.BodyName.StartsWith(
+                        "__body_",
+                        StringComparison.Ordinal)),
                     Is.EqualTo(17));
+                Assert.That(
+                    bodies.Single(body => body.BodyIndex == 15).BodyName,
+                    Is.EqualTo("__body_15"));
                 Assert.That(
                     bodies.Any(body => string.Equals(
                         body.BodyName,
