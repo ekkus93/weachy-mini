@@ -4,6 +4,7 @@ using UnityEngine;
 
 namespace ReachyMini.Presentation
 {
+    [DefaultExecutionOrder(-1000)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(ReachyAuthoritativeRenderer))]
     [RequireComponent(typeof(ReachyProductionAuthoritativeRuntime))]
