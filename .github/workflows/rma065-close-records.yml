@@ -1,0 +1,306 @@
+name: RMA-065 Close Completion Records
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-close-records.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-records:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Write validation record and close tracking sections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          validation_path = Path(
+              'docs/validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md'
+          )
+          validation_path.parent.mkdir(parents=True, exist_ok=True)
+          validation_path.write_text(
+              '''# RMA-065 Collision and Hard-Stop Validation
+
+**Date:** 2026-07-31  
+**Repository:** `ekkus93/weachy-mini`  
+**Accepted implementation commit:** `08bf637a12dbe77591d3827412a752d3d4e28fba`  
+**Permanent workflow run:** `30654822714`  
+**Decision:** Accepted
+
+## Scope and fidelity boundary
+
+RMA-065 adds an explicit collision and mechanical hard-stop baseline to the
+pinned Reachy Mini MuJoCo model. The collision primitives, contact thresholds,
+and antenna hard-stop ranges remain labeled `engineering_estimate`; this
+validation does not relabel them as measured or calibrated physical parameters.
+
+The immutable source inputs were:
+
+- Reachy Mini commit `a739a6e461eb6d722901f1cfc225265ffc85c28d`;
+- source MJCF SHA-256
+  `efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46`;
+- MuJoCo 3.9.0 commit
+  `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`;
+- generated enhanced MJCF SHA-256
+  `743ef3763d04b2d07e179b5b33ac78ffb47b81aef5de9c3c5762ed31a559aa4a`.
+
+## Permanent hosted gate
+
+The permanent workflow rebuilt from the pinned sources and passed:
+
+- 19 generator, fixture, schema, and runtime regression tests;
+- 6 fail-closed report-verifier tests;
+- deterministic model generation and stale-output detection;
+- strict C/C++ compilation;
+- ASan/UBSan-backed fake-MuJoCo backend and ABI tests;
+- the 5,000-step enhanced neutral audit;
+- controlled internal and external contact fixtures;
+- yaw and right-antenna hard-stop trials;
+- real-MuJoCo state-format-v2 contact and hard-stop telemetry;
+- Android API-26 ARM64 cross-compilation and AArch64 ELF verification.
+
+The enhanced neutral audit compiled 186 geoms, including 25 active collision
+geoms over 17 bodies, and reported 9 limited joints. Across 5,000 steps it had
+zero warnings, zero contacts, zero penetration, finite qpos/qvel, p95 step time
+`62.327` microseconds, and realtime factor `43.07129555373134`.
+
+The desktop source/enhanced neutral comparison reported source p95
+`61.375` microseconds and enhanced p95 `54.743` microseconds, for hosted p95
+overhead ratio `-0.10805702647657833`.
+
+## Representative contacts
+
+The isolated internal contact fixture reported:
+
+- one contact;
+- maximum normal force `63.79679083729198` N;
+- maximum impulse `0.12759358167458396` N s;
+- maximum penetration `0.0005000000000000074` m;
+- zero warnings and finite state.
+
+The isolated external contact fixture reported:
+
+- one contact;
+- maximum normal force `17.098584223842007` N;
+- maximum impulse `0.034197168447684015` N s;
+- maximum penetration `0.0005000000000000178` m;
+- zero warnings and finite state.
+
+Both penetrations remained below the committed `0.008` m ceiling. The native
+state-format-v2 runner exposed one classified contact, one overload event,
+health flags value `4`, nine hard-stop observations, maximum normal force
+`63.796790837291979` N, and maximum impulse
+`0.12759358167458396` N s. The neutral state exposed zero contacts and zero
+contact-overload flags.
+
+## Hard stops and invalid commands
+
+The yaw trial observed the upper-limit constraint and contained the maximum
+position at `2.792026803190879` rad below the hard upper limit
+`2.792526803190879` rad. The right-antenna trial observed the upper-limit
+constraint and contained the maximum position at `3.1195` rad below the hard
+upper limit `3.12` rad. Both trials reported zero warnings.
+
+The native telemetry runner additionally submitted a deliberately invalid
+out-of-range actuator command and required the public ABI to return the typed
+`COMMAND_FORMAT_ERROR` result before simulation continued.
+
+## Physical Android benchmark
+
+The physical job ran on an LGE LG-H872 with Android 8.0.0, API 26, and
+`arm64-v8a`. The device serial is intentionally omitted from this public
+record.
+
+| Metric | Source model | Enhanced model | Requirement |
+| --- | ---: | ---: | ---: |
+| Steps | 50,000 | 50,000 | 50,000 each |
+| Simulated time | 100 s | 100 s | complete |
+| Realtime factor | 9.180208968594009 | 9.97500021157112 | >= 1.0 |
+| Median step | 213.4899841621518 us | 189.4269953481853 us | recorded |
+| p95 step | 238.5409898124635 us | 222.2909824922681 us | overhead <= 35% |
+| Maximum step | 1083.384995581582 us | 20973.54200668633 us | recorded |
+| Warnings | 0 | 0 | 0 |
+| Maximum penetration | 0 m | 0 m | <= 0.008 m |
+
+The measured p95 overhead ratio was `-0.06812249472499832`, comfortably below
+the `0.35` ceiling. The one maximum-step outlier did not reduce enhanced
+realtime factor below budget and did not produce a MuJoCo warning, contact, or
+penetration; p95 is the committed complexity acceptance metric.
+
+## Artifacts and integrity
+
+Run `30654822714` published:
+
+- hosted Android artifact ID `8802848639`, ZIP digest
+  `sha256:1333466684399f702f85223576ab2536388453a610838eb3e9f7fdbe325bd4a9`;
+- physical-device report artifact ID `8803021506`, ZIP digest
+  `sha256:e92f7d47cc2152690dd96e1a83c7f80f886c5c1b073486f23e211755e7bd86fa`.
+
+Selected staged-file SHA-256 values:
+
+- `reachy_mujoco_collision_benchmark_runner`:
+  `ee23f464d36e58f0ae192adb4c4892927f42ab1942dcf087123941142c9c1646`;
+- `libmujoco.so`:
+  `c18b1bb6bf1d80ac10118b75627551c0b12e907283ae1c56c1a0d40ce8515f6d`;
+- collision/hard-stop validation JSON:
+  `d644b8a3c3e1fa403526d8ef45f5518c5471dd1e720e5befea13f57677907303`;
+- native contact-state JSON:
+  `d2646dc78ececf95ff4ca7e095449dbac5308d881262ce71b88204695074fe98`.
+
+## Acceptance conclusion
+
+All RMA-065 dynamics-baseline criteria passed: representative internal and
+external contacts were stable, invalid commands and hard-stop constraints were
+reported rather than silently crossed, and collision complexity remained
+within the measured physical-device budget. RMA-065 is complete while its
+engineering-estimate and uncalibrated fidelity labels remain in force.
+''',
+              encoding='utf-8',
+              newline='\n',
+          )
+
+          todo_path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          todo = todo_path.read_text(encoding='utf-8')
+          start = todo.index('## RMA-065 — Add collision and hard-stop model\n')
+          end = todo.index('\n---\n\n# Phase 8', start)
+          completed_todo = '''## RMA-065 — Add collision and hard-stop model
+
+**Status:** Complete (2026-07-31)
+
+- [x] Audit existing collision geometry.
+- [x] Add coarse validated collision shapes for motor arms, rods, moving platform, head shell, body shell, and antennas where required.
+- [x] Add mechanical hard stops distinct from soft command limits.
+- [x] Expose contact pairs, impulses/forces, and overload events.
+- [x] Benchmark contact cost on Android.
+
+**Acceptance criteria — dynamics baseline gate**
+
+- [x] Representative internal and external contacts are stable.
+- [x] Invalid commands cannot pass through hard stops without a reported fault.
+- [x] Collision complexity remains within the measured device budget.
+
+**Completion evidence**
+
+- The immutable pinned source model now generates 17 named coarse collision
+  primitives plus the retained source shell colliders, producing 25 active
+  collision geoms across 17 bodies and 9 explicit limited joints.
+- Shell, moving, and external masks are explicit. Topology exclusions are
+  source-bound and validated exactly; neutral simulation remains contact-free.
+- Soft actuator command ranges are inset from separate hard joint ranges.
+  Yaw and antenna outward-motion trials observe their limit constraints and
+  remain inside the hard range with zero MuJoCo warnings.
+- State-format-v2 diagnostics expose contact geom/body pairs, position,
+  normal, penetration, normal/tangent force, impulse, contact classification,
+  overload flags, hard-stop observations, events, and health flags while the
+  state-format-v1 ABI remains compatible.
+- Permanent run `30654822714` passed schema/failure tests, strict native
+  compilation, ASan/UBSan, real MuJoCo contact and hard-stop validation,
+  state-v2 telemetry, Android API-26 ARM64 build, AArch64 verification, and
+  the physical LG-H872 benchmark on exact implementation commit
+  `08bf637a12dbe77591d3827412a752d3d4e28fba`.
+- The phone completed 50,000 source and 50,000 enhanced steps with zero
+  warnings and zero penetration. Realtime factors were `9.180208968594009`
+  and `9.97500021157112`; enhanced p95 was `222.2909824922681` us and the
+  p95 overhead ratio was `-0.06812249472499832`, below the `0.35` budget.
+- Collision shapes, thresholds, and antenna ranges remain explicit
+  engineering estimates and are not labeled calibrated.
+- Detailed evidence is in
+  `docs/validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md`.
+'''
+          todo = todo[:start] + completed_todo + todo[end:]
+          todo_path.write_text(todo, encoding='utf-8', newline='\n')
+
+          status_path = Path('docs/IMPLEMENTATION_STATUS.md')
+          status = status_path.read_text(encoding='utf-8')
+          status = status.replace('**Updated:** 2026-07-30', '**Updated:** 2026-07-31', 1)
+          status, count = re.subn(
+              r'\*\*Current implementation series:\*\*.*?\n\n## Repository rules in force',
+              '**Current implementation series:** RMA-065 collision geometry, '
+              'mechanical hard stops, contact/overload telemetry, and physical '
+              'Android complexity validation\n\n## Repository rules in force',
+              status,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f'current implementation series replacement count={count}')
+          marker = '## Current validation evidence\n'
+          if status.count(marker) != 1:
+              raise SystemExit(f'current validation marker count={status.count(marker)}')
+          rma065_section = '''### RMA-065 — collision and hard-stop baseline
+
+RMA-065 is complete. The pinned Reachy source now deterministically generates
+coarse collision coverage for the base/body shells, six motor arms, six rods,
+moving platform, head shell, and both antennas. Explicit mask roles and 18
+source-bound topology exclusions prevent unvalidated self-collision pairs while
+retaining representative moving-to-shell and external contact behavior.
+
+Mechanical hard stops are distinct from inset actuator soft ranges. Source yaw
+and Stewart ranges remain pinned-source values; antenna ranges remain explicit
+engineering estimates. State-format-v2 extends diagnostics with contact
+geom/body pairs, forces, impulses, penetration, classification and overload
+flags, plus hard-stop observations/events and health flags, without breaking
+the existing state-format-v1 contract.
+
+Permanent run `30654822714` passed 25 focused Python regressions, deterministic
+model generation, strict native compilation, ASan/UBSan, fake and real MuJoCo
+ABI/state tests, 5,000-step neutral/contact/hard-stop validation, Android API-26
+ARM64 cross-compilation, AArch64 verification, and the physical LG-H872 device
+gate on exact implementation commit
+`08bf637a12dbe77591d3827412a752d3d4e28fba`.
+
+The phone completed 50,000 source and 50,000 enhanced steps with zero warnings
+and zero penetration. Source/enhanced realtime factors were
+`9.180208968594009` and `9.97500021157112`; p95 step times were
+`238.5409898124635` us and `222.2909824922681` us, for overhead ratio
+`-0.06812249472499832` against the `0.35` ceiling. Collision and antenna-stop
+parameters remain visibly uncalibrated engineering estimates. Detailed evidence
+is in
+[the RMA-065 validation record](validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md).
+
+'''
+          status = status.replace(marker, rma065_section + marker, 1)
+          old_bullet = '''- The committed bus and thermal constants remain explicit engineering
+  estimates pending physical capture; RMA-065 still owns collisions and
+  mechanical hard stops, and production MuJoCo profile selection remains
+  explicit future work.
+'''
+          new_bullet = '''- RMA-065 run `30654822714`: permanent hosted schema, report, strict
+  native, ASan/UBSan, real state-v2 telemetry, Android ARM64 build, and
+  physical LG-H872 50,000-step source/enhanced benchmarks passed on
+  `08bf637a12dbe77591d3827412a752d3d4e28fba`.
+- RMA-065 collision primitives, thresholds, and antenna stop ranges remain
+  explicit engineering estimates pending physical identification; production
+  fidelity-profile selection remains future work.
+'''
+          if status.count(old_bullet) != 1:
+              raise SystemExit(f'RMA-065 open-status bullet count={status.count(old_bullet)}')
+          status = status.replace(old_bullet, new_bullet, 1)
+          status_path.write_text(status, encoding='utf-8', newline='\n')
+          PY
+
+          find .github -maxdepth 1 -type f -name 'rma065-*' -print -delete
+          git diff --check
+          git status --short
+
+      - name: Commit completion records
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-065: record accepted collision and device evidence [skip ci]'
+          git push origin HEAD:master
