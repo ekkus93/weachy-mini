@@ -1,0 +1,103 @@
+name: RMA-065 Recover V4 Payload
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-recover-v4.yml'
+
+permissions:
+  statuses: write
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 V4 Recovery',
+              description: 'Validating recoverable raw tar payload',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - uses: actions/checkout@v4
+
+      - name: Recover and fingerprint exact payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/rma065-fixed-v4.tar.gz"
+          raw_tar="${RUNNER_TEMP}/rma065-fixed-v4.tar"
+          recovered="${RUNNER_TEMP}/rma065-fixed-v4"
+
+          cat .github/rma065-fixed-v4.part* | base64 --decode > "${archive}"
+          printf '%s  %s\n' \
+            'b11e6c22ae306937e53fb712870f96bf8194edab37001b6f868258b5c172d6fe' \
+            "${archive}" | sha256sum --check --strict
+
+          set +e
+          gzip -dc "${archive}" > "${raw_tar}"
+          gzip_rc=$?
+          set -e
+          if [[ "${gzip_rc}" -ne 1 ]]; then
+            echo "Expected known gzip CRC failure rc=1, got ${gzip_rc}" >&2
+            exit 1
+          fi
+
+          mapfile -t manifest < <(tar -tf "${raw_tar}")
+          expected=(
+            'models/reachy-mini/collision-hard-stop-baseline.json'
+            'scripts/generate_reachy_collision_model.py'
+            'scripts/run_reachy_collision_hard_stop_validation.py'
+          )
+          if [[ "${#manifest[@]}" -ne "${#expected[@]}" ]]; then
+            printf 'Unexpected manifest:\n%s\n' "${manifest[*]}" >&2
+            exit 1
+          fi
+          for i in "${!expected[@]}"; do
+            [[ "${manifest[$i]}" == "${expected[$i]}" ]] || {
+              echo "Manifest mismatch at ${i}: ${manifest[$i]}" >&2
+              exit 1
+            }
+          done
+
+          mkdir -p "${recovered}"
+          tar -xf "${raw_tar}" -C "${recovered}"
+          find "${recovered}" -type l -o -type d -empty | grep . && exit 1 || true
+          sha256sum \
+            "${recovered}/models/reachy-mini/collision-hard-stop-baseline.json" \
+            "${recovered}/scripts/generate_reachy_collision_model.py" \
+            "${recovered}/scripts/run_reachy_collision_hard_stop_validation.py"
+          python3 -m json.tool \
+            "${recovered}/models/reachy-mini/collision-hard-stop-baseline.json" >/dev/null
+          python3 -m py_compile \
+            "${recovered}/scripts/generate_reachy_collision_model.py" \
+            "${recovered}/scripts/run_reachy_collision_hard_stop_validation.py"
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 V4 Recovery',
+              description: passed
+                ? 'Raw tar manifest and source syntax verified'
+                : 'V4 raw tar recovery failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
