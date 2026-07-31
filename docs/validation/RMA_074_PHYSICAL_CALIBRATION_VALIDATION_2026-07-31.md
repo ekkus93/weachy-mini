@@ -1,7 +1,7 @@
 # RMA-074 Physical Calibration Validation
 
 **Date:** 2026-07-31  
-**Status:** In progress — physical-unit discovery pending
+**Status:** In progress — read-only physical-unit gate installed
 
 ## Completion boundary
 
