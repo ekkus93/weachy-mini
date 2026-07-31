@@ -208,6 +208,57 @@ jobs:
                   text = text.replace(marker, marker + 'import numpy as np\n', 1)
               path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
           PYBUFFERS
+          python3 - <<'PYFIXTURES'
+          from pathlib import Path
+
+          validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          text = validator.read_text(encoding='utf-8')
+          old = (
+              '    with tempfile.TemporaryDirectory() as temp_text:\n'
+              '        temp = Path(temp_text)\n'
+              '        internal_path = temp / "internal.xml"\n'
+              '        external_path = temp / "external.xml"\n'
+          )
+          new = (
+              '    with tempfile.TemporaryDirectory() as temp_text:\n'
+              '        temp = Path(temp_text)\n'
+              '        assets = (args.enhanced_model.parent / "assets").resolve()\n'
+              '        if not assets.is_dir():\n'
+              '            raise SystemExit(\n'
+              '                f"enhanced model asset directory is missing: {assets}"\n'
+              '            )\n'
+              '        (temp / "assets").symlink_to(\n'
+              '            assets,\n'
+              '            target_is_directory=True,\n'
+              '        )\n'
+              '        internal_path = temp / "internal.xml"\n'
+              '        external_path = temp / "external.xml"\n'
+          )
+          if text.count(old) != 1:
+              raise SystemExit(f'contact fixture workspace marker count={text.count(old)}')
+          validator.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          test_text = tests.read_text(encoding='utf-8')
+          regression = (
+              '\n\nclass CollisionFixtureAssetRegressionTests(unittest.TestCase):\n'
+              '    def test_contact_fixture_workspace_links_model_assets(self):\n'
+              '        source = Path(\n'
+              '            "scripts/run_reachy_collision_hard_stop_validation.py"\n'
+              '        ).read_text(encoding="utf-8")\n'
+              '        self.assertIn(\n'
+              '            \'(args.enhanced_model.parent / "assets").resolve()\',\n'
+              '            source,\n'
+              '        )\n'
+              '        self.assertIn(\n'
+              '            \'(temp / "assets").symlink_to(\',\n'
+              '            source,\n'
+              '        )\n'
+          )
+          if 'class CollisionFixtureAssetRegressionTests' in test_text:
+              raise SystemExit('fixture asset regression test already exists unexpectedly')
+          tests.write_text(test_text + regression, encoding='utf-8', newline='\n')
+          PYFIXTURES
           git diff --check
 
       - name: Validate schema and native ABI
