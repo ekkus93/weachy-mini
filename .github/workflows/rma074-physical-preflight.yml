@@ -1,12 +1,6 @@
-name: RMA-074 Physical Calibration Preflight
+name: RMA-074 Optional Physical Calibration Preflight
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - '.github/workflows/rma074-physical-preflight.yml'
-      - 'scripts/probe_reachy_physical_unit.py'
-      - 'scripts/tests/test_rma074_physical_preflight.py'
   workflow_dispatch:
     inputs:
       reachy_host:
@@ -39,7 +33,7 @@ jobs:
           print(json.dumps({
               "state": "pending",
               "context": "RMA-074 Physical Calibration",
-              "description": "Read-only probe contract validation is running",
+              "description": "Optional read-only probe contract validation is running",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
@@ -82,7 +76,7 @@ jobs:
           print(json.dumps({
               "state": "pending",
               "context": "RMA-074 Physical Calibration",
-              "description": "Read-only physical Reachy Mini discovery is running",
+              "description": "Optional read-only physical Reachy Mini discovery is running",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
@@ -141,7 +135,7 @@ jobs:
           print(json.dumps({
               "state": "success" if passed else "failure",
               "context": "RMA-074 Physical Calibration",
-              "description": "Physical unit is ready for authorized capture" if passed else "No admissible physical unit was discovered",
+              "description": "Physical unit is ready for optional calibration capture" if passed else "No admissible physical unit was discovered",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
