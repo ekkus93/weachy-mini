@@ -7,12 +7,16 @@ on:
     paths:
       - '.github/workflows/rma065-collision-hard-stop.yml'
       - 'CMakeLists.txt'
+      - 'docs/IMPLEMENTATION_STATUS.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - 'docs/validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md'
       - 'models/reachy-mini/collision-hard-stop-baseline.json'
       - 'native/cmake/**'
       - 'native/reachy_sim/**'
       - 'scripts/audit_reachy_collision_model.py'
       - 'scripts/build_mujoco_android.sh'
       - 'scripts/build_rma065_android.sh'
+      - 'scripts/close_rma065_records.py'
       - 'scripts/generate_reachy_collision_model.py'
       - 'scripts/import_reachy_assets.py'
       - 'scripts/run_reachy_collision_hard_stop_validation.py'
@@ -35,7 +39,7 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
@@ -65,6 +69,22 @@ jobs:
 
       - name: Check out project
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Commit accepted completion records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/close_rma065_records.py
+          find .github -maxdepth 1 -type f -name 'rma065-*' -print -delete
+          git rm scripts/close_rma065_records.py
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-065: close accepted collision baseline records [skip ci]'
+          git push origin HEAD:master
 
       - name: Set up Python
         uses: actions/setup-python@v5
