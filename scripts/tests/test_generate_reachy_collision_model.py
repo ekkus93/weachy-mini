@@ -365,3 +365,18 @@ class CollisionExternalFixtureRegressionTests(unittest.TestCase):
             function,
         )
         self.assertNotIn('"size": "0.025"', function)
+
+
+class CollisionValidationReportStatusTests(unittest.TestCase):
+    def test_success_status_is_emitted_with_validation_contract(self):
+        source = Path(
+            "scripts/run_reachy_collision_hard_stop_validation.py"
+        ).read_text(encoding="utf-8")
+        report_start = source.index("    report = {")
+        report_end = source.index("    args.output.parent", report_start)
+        report_source = source[report_start:report_end]
+        self.assertIn('"status": "ok"', report_source)
+        self.assertIn(
+            '"contract": "rma065_collision_hard_stop_validation_v1"',
+            report_source,
+        )

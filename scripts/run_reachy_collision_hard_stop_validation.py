@@ -573,6 +573,7 @@ def main() -> int:
         hard_stop_trial(mujoco, enhanced_model, "right_antenna"),
     ]
     report = {
+        "status": "ok",
         "contract": "rma065_collision_hard_stop_validation_v1",
         "inventory": inventory,
         "source_neutral": source_neutral,
