@@ -113,6 +113,62 @@ jobs:
           text = text.replace(actuator_marker, actuator_replacement, 1)
           path.write_text(text, encoding='utf-8', newline='\n')
           PYGENERATOR
+          python3 - <<'PYBUFFERS'
+          from pathlib import Path
+
+          old = 'contact_force = [0.0] * 6'
+          new = 'contact_force = np.zeros(6, dtype=np.float64)'
+          replacements = 0
+          for relative in (
+              'scripts/audit_reachy_collision_model.py',
+              'scripts/run_reachy_collision_hard_stop_validation.py',
+          ):
+              script = Path(relative)
+              source = script.read_text(encoding='utf-8')
+              count = source.count(old)
+              if count == 0:
+                  continue
+              if 'import numpy as np\n' not in source:
+                  import_marker = 'import argparse\n'
+                  if source.count(import_marker) != 1:
+                      raise SystemExit(f'{relative}: argparse import marker count={source.count(import_marker)}')
+                  source = source.replace(
+                      import_marker,
+                      import_marker + 'import numpy as np\n',
+                      1,
+                  )
+              source = source.replace(old, new)
+              replacements += count
+              script.write_text(source, encoding='utf-8', newline='\n')
+          if replacements == 0:
+              raise SystemExit('no Python-list mj_contactForce buffers were replaced')
+          PYBUFFERS
+          python3 - <<'PYTEST'
+          from pathlib import Path
+
+          path = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          text = path.read_text(encoding='utf-8')
+          marker = 'if __name__ == "__main__":\n    unittest.main()\n'
+          if text.count(marker) != 1:
+              raise SystemExit(f'unit-test main marker count={text.count(marker)}')
+          regression = '''class CollisionContactBufferTests(unittest.TestCase):
+              def test_contact_force_uses_writable_numpy_float64_buffer(self):
+                  from pathlib import Path
+
+                  for relative in (
+                      "scripts/audit_reachy_collision_model.py",
+                      "scripts/run_reachy_collision_hard_stop_validation.py",
+                  ):
+                      source = Path(relative).read_text(encoding="utf-8")
+                      if "mj_contactForce" not in source:
+                          continue
+                      self.assertIn("contact_force = np.zeros(6, dtype=np.float64)", source)
+                      self.assertNotIn("contact_force = [0.0] * 6", source)
+
+
+          '''
+          path.write_text(text.replace(marker, regression + marker, 1), encoding='utf-8', newline='\n')
+          PYTEST
           rm scripts/.rma065-apply-source-edits.py
           test -f native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc
           test -f models/reachy-mini/collision-hard-stop-baseline.json
