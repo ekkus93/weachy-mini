@@ -73,12 +73,8 @@ jobs:
           from pathlib import Path
           path = Path('scripts/.rma065-apply-source-edits.py')
           text = path.read_text(encoding='utf-8')
-          old = '''    runner_marker = """if(REACHY_BUILD_MUJOCO_PROBE)
-              add_subdirectory(feasibility)
-          endif()
-          """'''.replace('          ', '')
-          new = '''    runner_marker = """add_subdirectory(feasibility)
-          """'''.replace('          ', '')
+          old = '    runner_marker = """if(REACHY_BUILD_MUJOCO_PROBE)\n    add_subdirectory(feasibility)\nendif()\n"""'
+          new = '    runner_marker = """add_subdirectory(feasibility)\n"""'
           if text.count(old) != 1:
               raise SystemExit(f'transport helper CMake marker count={text.count(old)}')
           path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
