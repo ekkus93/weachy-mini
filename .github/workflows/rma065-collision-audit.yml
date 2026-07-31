@@ -1,0 +1,127 @@
+name: RMA-065 Collision Audit
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-collision-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check out pinned Reachy model
+        uses: actions/checkout@v4
+        with:
+          repository: pollen-robotics/reachy_mini
+          ref: a739a6e461eb6d722901f1cfc225265ffc85c28d
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            src/reachy_mini/descriptions/reachy_mini/mjcf
+            LICENSE
+          sparse-checkout-cone-mode: false
+      - name: Import and audit compiled collision model
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check mujoco==3.9.0
+          python3 scripts/import_reachy_assets.py \
+            --source upstream/reachy-mini \
+            --output-root "${RUNNER_TEMP}/reachy-import"
+          model="${RUNNER_TEMP}/reachy-import/reachy-mini-official/reachy_mini.xml"
+          test -f "${model}"
+          python3 - "${model}" <<'PY'
+          import json
+          import sys
+          from collections import Counter, defaultdict
+          from pathlib import Path
+          import mujoco
+          import numpy as np
+          import xml.etree.ElementTree as ET
+
+          model_path = Path(sys.argv[1])
+          root = ET.parse(model_path).getroot()
+          source_bodies = []
+          for body in root.findall('.//body'):
+              source_bodies.append({
+                  'name': body.get('name'),
+                  'direct_geoms': len(body.findall('./geom')),
+                  'direct_joints': [j.get('name') for j in body.findall('./joint')],
+              })
+          source_collision_geoms = []
+          for geom in root.findall('.//geom'):
+              if geom.get('class') == 'collision' or geom.get('contype') not in (None, '0'):
+                  source_collision_geoms.append(dict(sorted(geom.attrib.items())))
+
+          m = mujoco.MjModel.from_xml_path(str(model_path))
+          d = mujoco.MjData(m)
+          mujoco.mj_forward(m, d)
+          compiled_geoms = []
+          collision_by_body = defaultdict(list)
+          for gid in range(m.ngeom):
+              name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, gid) or f'geom_{gid}'
+              bid = int(m.geom_bodyid[gid])
+              body = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, bid) or f'body_{bid}'
+              item = {
+                  'id': gid,
+                  'name': name,
+                  'body': body,
+                  'type': int(m.geom_type[gid]),
+                  'contype': int(m.geom_contype[gid]),
+                  'conaffinity': int(m.geom_conaffinity[gid]),
+                  'group': int(m.geom_group[gid]),
+                  'size': [float(x) for x in m.geom_size[gid]],
+              }
+              compiled_geoms.append(item)
+              if item['contype'] or item['conaffinity']:
+                  collision_by_body[body].append(item)
+
+          contacts = Counter()
+          max_penetration = 0.0
+          max_ncon = 0
+          for _ in range(5000):
+              mujoco.mj_step(m, d)
+              max_ncon = max(max_ncon, int(d.ncon))
+              for i in range(d.ncon):
+                  c = d.contact[i]
+                  g1 = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom1)) or str(int(c.geom1))
+                  g2 = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, int(c.geom2)) or str(int(c.geom2))
+                  contacts[tuple(sorted((g1, g2)))] += 1
+                  max_penetration = max(max_penetration, max(0.0, -float(c.dist)))
+
+          audit = {
+              'model_sha256_expected': 'efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46',
+              'compiled_counts': {
+                  'nbody': m.nbody, 'njnt': m.njnt, 'ngeom': m.ngeom,
+                  'nconmax': m.nconmax, 'nq': m.nq, 'nv': m.nv,
+              },
+              'source_body_count': len(source_bodies),
+              'source_bodies': source_bodies,
+              'source_collision_geom_count': len(source_collision_geoms),
+              'source_collision_geoms': source_collision_geoms,
+              'compiled_collision_body_count': len(collision_by_body),
+              'compiled_collision_by_body': collision_by_body,
+              'neutral_5000_steps': {
+                  'max_ncon': max_ncon,
+                  'max_penetration_metres': max_penetration,
+                  'pairs': [{'pair': list(k), 'steps': v} for k, v in contacts.most_common()],
+                  'finite_qpos': bool(np.isfinite(d.qpos).all()),
+                  'finite_qvel': bool(np.isfinite(d.qvel).all()),
+              },
+          }
+          print('RMA065_AUDIT_BEGIN')
+          print(json.dumps(audit, indent=2, sort_keys=True))
+          print('RMA065_AUDIT_END')
+          PY
