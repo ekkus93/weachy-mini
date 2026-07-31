@@ -725,15 +725,52 @@ while running:
 
 ## RMA-060 — Establish stable baseline dynamics
 
-- [ ] Run the official generic actuator model at 500 Hz as a named `upstream_baseline` mode.
-- [ ] Add finite-state, constraint residual, energy, joint-limit, and contact monitoring.
-- [ ] Test neutral, sleep, maximum valid head rotations, body yaw limits, and antennas.
-- [ ] Run long-duration stability tests on representative Android hardware.
+**Status:** Complete (2026-07-30)
+
+- [x] Run the official generic actuator model at 500 Hz as a named `upstream_baseline` mode.
+- [x] Add finite-state, constraint residual, energy, joint-limit, and contact monitoring.
+- [x] Test neutral, sleep, maximum valid head rotations, body yaw limits, and antennas.
+- [x] Run long-duration stability tests on representative Android hardware.
 
 **Acceptance criteria**
 
-- [ ] No unexplained divergence during the stability suite.
-- [ ] Any required deviation from 500 Hz is backed by measurements and recorded as a gate decision.
+- [x] No unexplained divergence during the stability suite.
+- [x] Any required deviation from 500 Hz is backed by measurements and recorded as a gate decision.
+
+**Completion evidence**
+
+- `models/reachy-mini/upstream-baseline-stability.json` defines the named
+  `upstream_baseline` contract at an exact `0.002`-second / 500 Hz timestep.
+  Its generated native header binds the exact profile bytes, pinned Reachy
+  model SHA-256, MuJoCo 3.9.0, dimensions, actuator order, monitoring bounds,
+  command schedule, and intentional sleep-command range exceptions.
+- The 20-phase cycle covers neutral, the upstream sleep request, both body-yaw
+  limits, positive and negative boundaries for all six Stewart actuators,
+  both antenna extremes, and final neutral. Boundary probes use a declared
+  `1e-9` radian inward inset to avoid platform-dependent one-ulp control-range
+  classification while remaining effectively at the audited limits.
+- Every solver step checks finite qpos/qvel/qacc, commands and actuator forces,
+  body poses, equality residuals, scalar joint-limit excursions, contacts and
+  penetration, total energy, and MuJoCo warning counters. The runner also
+  retains mean/median/p95/maximum step timing and visible 2 ms deadline misses.
+- Successful workflow run `30599288952` passed all focused profile tests,
+  exact pinned-model import, the full 900,000-step desktop reference schedule,
+  Android ARM64 cross-build and AArch64 verification, and the same 900,000-step
+  schedule on physical LG-H872 API-26 hardware at commit
+  `85dd886c398088946a2cc2ae61890aa94ad0294a`.
+- The Android run completed `1,799.9999999712595` simulated seconds in
+  `257.879618182` wall seconds for a solver real-time factor of
+  `6.980001027847417`. Maximum equality residual was
+  `0.00010839801784859326`, maximum penetration was
+  `0.004506368083200441` m, maximum absolute energy was
+  `1.2885171070884491` J, scalar joint-limit violation was zero, and MuJoCo
+  warnings were zero. No timestep deviation was required.
+- The physical harness also proved a structured invalid-cycle failure and
+  retained the runtime/model/profile desktop artifact plus the device report,
+  device identity, failure-path report, and attempted thermal captures.
+- Detailed contracts and evidence are in
+  `docs/architecture/UPSTREAM_BASELINE_DYNAMICS.md` and
+  `docs/validation/RMA_060_UPSTREAM_BASELINE_STABILITY_VALIDATION_2026-07-30.md`.
 
 ## RMA-061 — Define pluggable servo model
 

@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-052 pre-render authoritative
-invariant assertions, exact drift diagnostics, prohibited-writer rejection,
-and physical Android acceptance after RMA-051 state-to-render closure
+**Current implementation series:** RMA-060 named upstream-baseline dynamics,
+generated native contract, full-step monitoring, desktop reference validation,
+and physical Android long-duration acceptance
 
 ## Repository rules in force
 
@@ -307,8 +307,51 @@ retained the production MuJoCo source, renderer health, canonical motion and
 reset checks, and `hidden_kinematic_fallback=false`. Detailed evidence is in
 the [RMA-052 validation record](validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md).
 
+### RMA-060 — stable upstream baseline dynamics
+
+RMA-060 is complete. The exact pinned generic actuator model now has a named
+`upstream_baseline` contract at a fixed 500 Hz timestep. A validated JSON
+profile generates the production-native C schedule and binds model/runtime
+identity, dimensions, actuator order, representative phases, monitoring
+thresholds, long-duration requirements, and the no-deviation gate decision.
+
+The desktop and Android runners execute the same 45-cycle, 20-phase schedule:
+900,000 solver steps and 1,800 simulated seconds spanning neutral, upstream
+sleep, body-yaw boundaries, both boundaries for every Stewart actuator,
+antenna extremes, and neutral return. Every step checks finite authoritative
+state, equality residuals, scalar joint limits, contacts and penetration,
+total energy, and MuJoCo warnings. Timing evidence is retained without
+changing the simulation clock or skipping solver work.
+
+Workflow run `30599288952` passed the hosted desktop schedule, pinned Android
+ARM64 build, AArch64 verification, and physical LG-H872 API-26 run on exact
+commit `85dd886c398088946a2cc2ae61890aa94ad0294a`. The phone completed all
+900,000 steps with zero warnings and zero scalar joint-limit violation.
+Maximum equality residual was `0.00010839801784859326`, maximum contact
+penetration was `0.004506368083200441` m, and maximum absolute total energy
+was `1.2885171070884491` J. It simulated 30 minutes in `257.879618182` wall
+seconds for a `6.980001027847417` solver real-time factor; no timestep
+deviation was required.
+
+The initial full run exposed one decimal-to-binary boundary-classification
+artifact rather than divergence. The permanent profile records a `1e-9`
+radian inward inset for yaw/Stewart boundary probes, while preserving the
+exact upstream sleep request and its explicit intentional overrange mask.
+Detailed evidence is in
+[the RMA-060 validation record](validation/RMA_060_UPSTREAM_BASELINE_STABILITY_VALIDATION_2026-07-30.md).
+
 ## Current validation evidence
 
+- RMA-060 run `30599288952`: generated-profile tests, pinned source/model
+  import, the complete 900,000-step desktop schedule, Android ARM64 build and
+  AArch64 verification, physical LG-H872 API-26 900,000-step execution,
+  structured failure-path validation, evidence upload, and final commit status
+  all passed on `85dd886c398088946a2cc2ae61890aa94ad0294a`.
+- Physical RMA-060 metrics: zero MuJoCo warnings and scalar joint-limit
+  violation, maximum equality residual `0.00010839801784859326`, maximum
+  penetration `0.004506368083200441` m, maximum absolute energy
+  `1.2885171070884491` J, and solver real-time factor
+  `6.980001027847417` at the unchanged 500 Hz timestep.
 - Hosted RMA-052 run `30594656829`: managed/native tests, sanitizers,
   pinned-model conversion/reference generation, static policy, and Android
   checks passed on exact commit
@@ -384,7 +427,6 @@ the [RMA-052 validation record](validation/RMA_052_AUTHORITATIVE_RENDERING_INVAR
 
 ## Open hard gates
 
-- RMA-060 long-duration official-model baseline dynamics and monitoring;
 - RMA-012 offline licenses, attribution, and unofficial-project notice;
 - API-31 development APK and release AAB validation;
 - two-machine reproducible Unity/Android build evidence;
