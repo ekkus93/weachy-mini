@@ -169,6 +169,57 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void PoseSourceCopiesPublishedPairsWithoutManagedAllocation()
+        {
+            byte[][] frames =
+            {
+                BuildPayload(10UL, 0.020, 3U, 0.4),
+                BuildPayload(11UL, 0.022, 3U, 0.5),
+            };
+            using (FakePublishedStateSource published =
+                new FakePublishedStateSource(frames))
+            using (ReachySimAuthoritativePoseSource source =
+                new ReachySimAuthoritativePoseSource(
+                    published,
+                    new[] { "base", "head" }))
+            {
+                ReachyReusableAuthoritativePoseFrame older =
+                    source.CreatePoseFrame();
+                ReachyReusableAuthoritativePoseFrame newer =
+                    source.CreatePoseFrame();
+                Assert.That(
+                    source.TryCopyLatestPair(older, newer),
+                    Is.False);
+                Assert.That(
+                    source.TryCopyLatestPair(older, newer),
+                    Is.True);
+                Assert.That(older.Sequence, Is.EqualTo(10UL));
+                Assert.That(newer.Sequence, Is.EqualTo(11UL));
+                Assert.That(newer.GetBodyPose(1).PositionX, Is.EqualTo(0.5));
+
+                for (int iteration = 0; iteration < 32; ++iteration)
+                {
+                    source.TryCopyLatestPair(older, newer);
+                }
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                long before = GC.GetAllocatedBytesForCurrentThread();
+                bool allCopiesSucceeded = true;
+                for (int iteration = 0; iteration < 128; ++iteration)
+                {
+                    allCopiesSucceeded &=
+                        source.TryCopyLatestPair(older, newer);
+                }
+                long allocatedBytes =
+                    GC.GetAllocatedBytesForCurrentThread() - before;
+
+                Assert.That(allCopiesSucceeded, Is.True);
+                Assert.That(allocatedBytes, Is.Zero);
+            }
+        }
+
+        [Test]
         public void PoseSourcePublishesOrderedPairsAndDiscontinuities()
         {
             byte[][] frames =
