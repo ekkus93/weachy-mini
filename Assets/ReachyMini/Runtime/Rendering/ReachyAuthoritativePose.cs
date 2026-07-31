@@ -1,6 +1,8 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
+using ReachyMini.Interop;
 
 namespace ReachyMini.Rendering
 {
@@ -53,7 +55,21 @@ namespace ReachyMini.Rendering
         public double QuaternionZ { get; }
     }
 
-    public sealed class ReachyAuthoritativePoseSnapshot
+    public interface IReachyAuthoritativePoseFrame
+    {
+        ulong Sequence { get; }
+
+        double SimulationTime { get; }
+
+        uint DiscontinuityId { get; }
+
+        int BodyCount { get; }
+
+        ReachyMujocoBodyPose GetBodyPose(int index);
+    }
+
+    public sealed class ReachyAuthoritativePoseSnapshot :
+        IReachyAuthoritativePoseFrame
     {
         private readonly ReachyMujocoBodyPose[] bodyPoses;
 
@@ -63,12 +79,7 @@ namespace ReachyMini.Rendering
             uint discontinuityId,
             ReachyMujocoBodyPose[] bodyPoses)
         {
-            if (!IsFinite(simulationTime) || simulationTime < 0.0)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(simulationTime),
-                    "Simulation time must be finite and nonnegative.");
-            }
+            ValidateSimulationTime(simulationTime, nameof(simulationTime));
             if (bodyPoses == null)
             {
                 throw new ArgumentNullException(nameof(bodyPoses));
@@ -85,7 +96,7 @@ namespace ReachyMini.Rendering
             for (int index = 0; index < bodyPoses.Length; ++index)
             {
                 ReachyMujocoBodyPose pose = bodyPoses[index];
-                ValidatePose(pose, index);
+                ValidatePose(pose, index, nameof(bodyPoses));
                 copied[index] = pose;
             }
 
@@ -108,15 +119,28 @@ namespace ReachyMini.Rendering
             return bodyPoses[index];
         }
 
-        private static void ValidatePose(
+        internal static void ValidateSimulationTime(
+            double simulationTime,
+            string parameterName)
+        {
+            if (!IsFinite(simulationTime) || simulationTime < 0.0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    parameterName,
+                    "Simulation time must be finite and nonnegative.");
+            }
+        }
+
+        internal static void ValidatePose(
             ReachyMujocoBodyPose pose,
-            int index)
+            int index,
+            string parameterName)
         {
             if (pose.BodyIndex != index)
             {
                 throw new ArgumentException(
                     $"Body pose {index} declares body index {pose.BodyIndex}.",
-                    nameof(pose));
+                    parameterName);
             }
             if (!IsFinite(pose.PositionX) ||
                 !IsFinite(pose.PositionY) ||
@@ -128,7 +152,7 @@ namespace ReachyMini.Rendering
             {
                 throw new ArgumentException(
                     $"Body pose {index} contains NaN or infinity.",
-                    nameof(pose));
+                    parameterName);
             }
 
             double normSquared =
@@ -140,7 +164,7 @@ namespace ReachyMini.Rendering
             {
                 throw new ArgumentException(
                     $"Body pose {index} has an invalid quaternion.",
-                    nameof(pose));
+                    parameterName);
             }
         }
 
@@ -150,11 +174,139 @@ namespace ReachyMini.Rendering
         }
     }
 
+    public sealed class ReachyReusableAuthoritativePoseFrame :
+        IReachyAuthoritativePoseFrame
+    {
+        private readonly ReachyMujocoBodyPose[] bodyPoses;
+
+        internal ReachyReusableAuthoritativePoseFrame(
+            IReadOnlyList<string> canonicalBodyNames)
+        {
+            if (canonicalBodyNames == null)
+            {
+                throw new ArgumentNullException(nameof(canonicalBodyNames));
+            }
+            if (canonicalBodyNames.Count == 0)
+            {
+                throw new ArgumentException(
+                    "A reusable authoritative pose frame requires at least one body.",
+                    nameof(canonicalBodyNames));
+            }
+
+            bodyPoses = new ReachyMujocoBodyPose[canonicalBodyNames.Count];
+            for (int index = 0; index < bodyPoses.Length; ++index)
+            {
+                string bodyName = canonicalBodyNames[index];
+                if (string.IsNullOrWhiteSpace(bodyName))
+                {
+                    throw new ArgumentException(
+                        $"Canonical body name {index} is missing.",
+                        nameof(canonicalBodyNames));
+                }
+                bodyPoses[index] = new ReachyMujocoBodyPose(
+                    index,
+                    bodyName,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0);
+            }
+        }
+
+        public ulong Sequence { get; private set; }
+
+        public double SimulationTime { get; private set; }
+
+        public uint DiscontinuityId { get; private set; }
+
+        public int BodyCount => bodyPoses.Length;
+
+        public ReachyMujocoBodyPose GetBodyPose(int index)
+        {
+            return bodyPoses[index];
+        }
+
+        internal void CopyFrom(ReachySimAuthoritativeStateFrame source)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+            if (source.BodyPoseCount != bodyPoses.Length)
+            {
+                throw new ArgumentException(
+                    "The authoritative state frame has a different body count.",
+                    nameof(source));
+            }
+            ReachyAuthoritativePoseSnapshot.ValidateSimulationTime(
+                source.SimulationTime,
+                nameof(source));
+
+            for (int index = 0; index < bodyPoses.Length; ++index)
+            {
+                ReachySimBodyPoseSnapshot nativePose = source.GetBodyPose(index);
+                uint expectedBodyId = checked((uint)index + 1U);
+                if (nativePose.BodyId != expectedBodyId)
+                {
+                    throw new InvalidOperationException(
+                        $"Native body pose {index} declares MuJoCo body " +
+                        $"{nativePose.BodyId}, expected {expectedBodyId}.");
+                }
+                ReachyMujocoBodyPose pose = CreatePose(index, nativePose);
+                ReachyAuthoritativePoseSnapshot.ValidatePose(
+                    pose,
+                    index,
+                    nameof(source));
+            }
+
+            for (int index = 0; index < bodyPoses.Length; ++index)
+            {
+                bodyPoses[index] = CreatePose(
+                    index,
+                    source.GetBodyPose(index));
+            }
+            Sequence = source.Sequence;
+            SimulationTime = source.SimulationTime;
+            DiscontinuityId = source.ContinuityId;
+        }
+
+        private ReachyMujocoBodyPose CreatePose(
+            int index,
+            ReachySimBodyPoseSnapshot nativePose)
+        {
+            return new ReachyMujocoBodyPose(
+                index,
+                bodyPoses[index].BodyName,
+                nativePose.PositionX,
+                nativePose.PositionY,
+                nativePose.PositionZ,
+                nativePose.QuaternionW,
+                nativePose.QuaternionX,
+                nativePose.QuaternionY,
+                nativePose.QuaternionZ);
+        }
+    }
+
     public interface IReachyAuthoritativePoseSource
     {
         bool TryGetLatestPair(
             out ReachyAuthoritativePoseSnapshot older,
             out ReachyAuthoritativePoseSnapshot newer);
+    }
+
+    public interface IReachyReusableAuthoritativePoseSource :
+        IReachyAuthoritativePoseSource
+    {
+        int BodyCount { get; }
+
+        ReachyReusableAuthoritativePoseFrame CreatePoseFrame();
+
+        bool TryCopyLatestPair(
+            ReachyReusableAuthoritativePoseFrame olderDestination,
+            ReachyReusableAuthoritativePoseFrame newerDestination);
     }
 
     public sealed class ReachyAuthoritativePoseBuffer :
