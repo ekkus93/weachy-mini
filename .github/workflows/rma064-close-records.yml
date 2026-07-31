@@ -1,0 +1,190 @@
+name: Close RMA-064 Records
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma064-close-records.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-records:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close RMA-064 tracking records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo_path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          todo = todo_path.read_text(encoding='utf-8')
+          old_todo = '''## RMA-064 — Add power and thermal model
+
+          - [ ] Model shared supply voltage and source impedance.
+          - [ ] Compute voltage sag under simultaneous load.
+          - [ ] Add per-servo thermal state and configurable derating/shutdown.
+          - [ ] Expose estimated current, voltage, and temperature in state/diagnostics.
+          - [ ] Add fault-clear rules that match the chosen fidelity model.
+
+          **Acceptance criteria**
+
+          - [ ] Simultaneous high-load commands cannot unrealistically use independent unlimited peak torque.
+          - [ ] Thermal shutdown is visible and does not silently re-enable.
+          '''.replace('          ', '')
+          new_todo = '''## RMA-064 — Add power and thermal model
+
+          **Status:** Complete (2026-07-30)
+
+          - [x] Model shared supply voltage and source impedance.
+          - [x] Compute voltage sag under simultaneous load.
+          - [x] Add per-servo thermal state and configurable derating/shutdown.
+          - [x] Expose estimated current, voltage, and temperature in state/diagnostics.
+          - [x] Add fault-clear rules that match the chosen fidelity model.
+
+          **Acceptance criteria**
+
+          - [x] Simultaneous high-load commands cannot unrealistically use independent unlimited peak torque.
+          - [x] Thermal shutdown is visible and does not silently re-enable.
+
+          **Completion evidence**
+
+          - `PowerThermalModel` is a Unity-independent native C++17 fleet-level
+            coordinator for nine wrapped `ServoModel` channels. It uses one common
+            bus voltage, aggregates all requested current, enforces one shared source
+            budget, and applies source-impedance voltage sag without actuator-order
+            dependence.
+          - The source-bound `rma064_power_thermal_v1` contract defines a visibly
+            noncalibrated 5 V, 0.12 ohm, 5 A shared-bus engineering baseline and
+            distinct body-yaw, Stewart, and antenna thermal parameter sets. It does
+            not mistake the documented 6.8-7.6 V robot input for the unidentified
+            internal Dynamixel rail.
+          - Per-servo lumped thermal state uses manufacturer-derived winding
+            resistance, `I^2 R` heating, ambient cooling, role-specific thermal
+            resistance/capacitance estimates, linear warning-to-shutdown derating,
+            and latched zero-torque/current shutdown.
+          - Cooling never silently re-enables a channel. Explicit clear succeeds only
+            below the recovery threshold with torque disabled, performs a safe wrapped
+            model reset, removes the thermal bit, and preserves other observed faults.
+          - Per-channel diagnostics expose requested/delivered current, shared voltage,
+            temperature, heating/cooling power, derating, latch, and faults; bus
+            diagnostics expose source/evaluation/final voltage, voltage drop,
+            aggregate current, allocation scales, and undervoltage.
+          - Hosted run `30607760504` passed exact generation, eight schema/failure
+            tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+            and the complete shared-current, sag, thermal derating, shutdown, explicit
+            clear, diagnostics, and role-mismatch CTest on exact commit
+            `a9a8d4b172a8484cc01167051d5779ce892e6355`.
+          - Detailed design and evidence are in
+            `docs/architecture/POWER_THERMAL_BASELINE.md` and
+            `docs/validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md`.
+          '''.replace('          ', '')
+          if todo.count(old_todo) != 1:
+              raise SystemExit('RMA-064 TODO source block was not found exactly once')
+          todo_path.write_text(todo.replace(old_todo, new_todo), encoding='utf-8', newline='\n')
+
+          status_path = Path('docs/IMPLEMENTATION_STATUS.md')
+          status = status_path.read_text(encoding='utf-8')
+          old_series = '''**Current implementation series:** RMA-063 role-specific mechanical effects,
+          friction/stiction hysteresis, reversal-aware backlash, bounded compliance,
+          experiment switches, identification hooks, and strict behavioral validation
+          '''.replace('          ', '')
+          new_series = '''**Current implementation series:** RMA-064 shared power allocation,
+          source-impedance voltage sag, per-servo thermal evolution and derating,
+          latched shutdown, explicit safe recovery, diagnostics, and strict validation
+          '''.replace('          ', '')
+          if status.count(old_series) != 1:
+              raise SystemExit('implementation-series source text was not found exactly once')
+          status = status.replace(old_series, new_series)
+
+          marker = '## Current validation evidence\n'
+          section = '''### RMA-064 — shared power and thermal baseline
+
+          RMA-064 is complete. `PowerThermalModel` now coordinates all nine native
+          servo channels above the RMA-061 interface. One common previous-frame bus
+          voltage is supplied to every wrapped controller, requested currents are
+          aggregated, a proportional common scale enforces one source-current budget,
+          and source impedance produces deterministic voltage sag. Simultaneous peak
+          commands therefore compete for one finite source rather than nine independent
+          peak-current supplies.
+
+          Each channel has role-specific lumped thermal state with `I^2 R` heating,
+          ambient cooling, warning-to-shutdown derating, and a visible latched thermal
+          cutoff. Cooling alone never re-enables torque. Explicit clear requires torque
+          disabled and temperature below recovery, then safely resets the wrapped
+          channel while retaining nonthermal observed faults.
+
+          The source-bound `rma064_power_thermal_v1` registry pins the Reachy source,
+          RMA-062 electrical contract, and RMA-063 mechanical contract. The 5 V source,
+          0.12 ohm impedance, 5 A budget, and thermal constants are explicit
+          manufacturer-derived values or engineering estimates; no calibrated claim is
+          present and the documented 6.8-7.6 V robot input is not treated as the
+          unidentified internal servo rail.
+
+          Run `30607760504` passed byte-exact generation, eight schema/failure-path
+          tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+          integrated electrical/mechanical/power compilation, shared-current limiting,
+          source sag, common diagnostics, thermal derating, latched shutdown, explicit
+          recovery, role-safe lookup, and fail-closed mismatch tests on exact commit
+          `a9a8d4b172a8484cc01167051d5779ce892e6355`. Detailed evidence is in
+          [the RMA-064 validation record](validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md).
+
+          '''.replace('          ', '')
+          if status.count(marker) != 1:
+              raise SystemExit('validation insertion marker was not found exactly once')
+          status = status.replace(marker, section + marker)
+
+          old_evidence = '''- RMA-063 run `30606712074`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native mechanical behavior suite passed on
+            `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+          - Body-yaw, Stewart, and antenna mechanical vectors are role-specific
+            engineering estimates. Physical identification, shared-power/thermal
+            evolution, and production MuJoCo profile selection remain later tasks.
+          '''.replace('          ', '')
+          new_evidence = '''- RMA-064 run `30607760504`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete shared-power/thermal suite passed on
+            `a9a8d4b172a8484cc01167051d5779ce892e6355`.
+          - The committed bus and thermal constants remain explicit engineering
+            estimates pending physical capture; RMA-065 still owns collisions and
+            mechanical hard stops, and production MuJoCo profile selection remains
+            explicit future work.
+          - RMA-063 run `30606712074`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native mechanical behavior suite passed on
+            `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+          - Body-yaw, Stewart, and antenna mechanical vectors are role-specific
+            engineering estimates. Physical identification and production MuJoCo
+            profile selection remain later tasks.
+          '''.replace('          ', '')
+          if status.count(old_evidence) != 1:
+              raise SystemExit('RMA-063 evidence transition block was not found exactly once')
+          status_path.write_text(status.replace(old_evidence, new_evidence), encoding='utf-8', newline='\n')
+          PY
+
+          test -f docs/validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md
+          test -f .github/workflows/rma064-power-thermal.yml
+          test ! -e .github/rma064-payload.part00
+          git rm .github/workflows/rma064-close-records.yml
+          git diff --check
+          grep -F '**Status:** Complete (2026-07-30)' docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          grep -F 'RMA-064 is complete.' docs/IMPLEMENTATION_STATUS.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/IMPLEMENTATION_STATUS.md
+          git commit -m 'RMA-064: close validated power thermal baseline [skip ci]'
+          git push origin HEAD:master
