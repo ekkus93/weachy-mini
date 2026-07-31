@@ -1,4 +1,5 @@
 name: RMA-070 and RMA-071 Calibration Data
+# Permanent clean-tree validation gate.
 
 on:
   push:
