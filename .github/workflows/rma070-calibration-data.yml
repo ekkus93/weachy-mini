@@ -1,0 +1,94 @@
+name: RMA-070 and RMA-071 Calibration Data
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma070-calibration-data.yml'
+      - 'calibration/**'
+      - 'scripts/calibration_data.py'
+      - 'scripts/capture_reachy_calibration.py'
+      - 'scripts/estimate_calibration_clock_offset.py'
+      - 'scripts/validate_calibration_dataset.py'
+      - 'scripts/tests/test_calibration_*.py'
+      - 'docs/architecture/CALIBRATION_DATA_AND_CAPTURE.md'
+      - 'docs/validation/RMA_070_CALIBRATION_DATA_SCHEMA_VALIDATION_2026-07-31.md'
+      - 'docs/validation/RMA_071_CALIBRATION_CAPTURE_TOOLING_VALIDATION_2026-07-31.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma070-calibration-data.yml'
+      - 'calibration/**'
+      - 'scripts/calibration_data.py'
+      - 'scripts/capture_reachy_calibration.py'
+      - 'scripts/estimate_calibration_clock_offset.py'
+      - 'scripts/validate_calibration_dataset.py'
+      - 'scripts/tests/test_calibration_*.py'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+      - name: Validate committed dataset fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/calibration
+          python3 scripts/validate_calibration_dataset.py \
+            --input calibration/fixtures/minimal-calibration-dataset.json \
+            --summary-output build/calibration/committed-fixture-summary.json
+      - name: Exercise capture and clock import CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/estimate_calibration_clock_offset.py \
+            --pairs-csv calibration/fixtures/clock-pairs.csv \
+            --from-clock-id camera_clock \
+            --to-clock-id reachy_clock \
+            --maximum-uncertainty-ns 1000 \
+            --output build/calibration/estimated-camera-alignment.json
+
+          python3 scripts/capture_reachy_calibration.py \
+            --telemetry-jsonl calibration/fixtures/reachy-telemetry.jsonl \
+            --robot-metadata-json calibration/fixtures/robot-metadata.json \
+            --environment-json calibration/fixtures/environment.json \
+            --clock-metadata-json calibration/fixtures/clock-metadata.json \
+            --external-pose-csv calibration/fixtures/external-pose.csv \
+            --external-pose-clock-id camera_clock \
+            --force-torque-csv calibration/fixtures/force-torque.csv \
+            --force-torque-clock-id force_clock \
+            --force-torque-frame reachy_body \
+            --dataset-id workflow-fixture-capture \
+            --created-utc '2026-07-31T19:00:00Z' \
+            --operator-notes 'Synthetic CI fixture; not physical calibration evidence.' \
+            --output build/calibration/generated-capture.json
+
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/calibration/generated-capture.json \
+            --summary-output build/calibration/generated-capture-summary.json
+      - name: Upload calibration contract evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: calibration-data-evidence-${{ github.sha }}
+          path: build/calibration
+          if-no-files-found: error
+          retention-days: 30
