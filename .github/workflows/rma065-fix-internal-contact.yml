@@ -45,7 +45,7 @@ jobs:
 
           write_marker = (
               "          validator.write_text(text.replace(old, new, 1), "
-              "encoding='utf-8', newline='\\\\n')\n"
+              "encoding='utf-8', newline='\\n')\n"
           )
           fixture_lines = [
               "          text = text.replace(old, new, 1)",
@@ -95,7 +95,7 @@ jobs:
 
           tests_marker = (
               "          tests.write_text(test_text + regression, "
-              "encoding='utf-8', newline='\\\\n')\n"
+              "encoding='utf-8', newline='\\n')\n"
           )
           test_lines = [
               "          internal_regression = (",
