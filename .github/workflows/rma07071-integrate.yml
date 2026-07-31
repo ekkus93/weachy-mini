@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Integration
-# Trigger validated payload integration with visible status.
+# Archive integrity passed; run validated integration.
 
 on:
   push:
