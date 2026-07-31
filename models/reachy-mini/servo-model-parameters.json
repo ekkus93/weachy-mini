@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma061_servo_model_v1",
+  "source": {
+    "reachy_commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "parameter_audit_contract": "rma041_parameter_fidelity_v2",
+    "active_actuator_class": "chosen_actuator"
+  },
+  "quality_labels": [
+    "placeholder",
+    "manufacturer_estimate",
+    "calibrated"
+  ],
+  "command_modes": [
+    "disabled",
+    "position",
+    "velocity",
+    "torque"
+  ],
+  "command_fields": [
+    "sequence",
+    "sample_time_seconds",
+    "mode",
+    "target_position_radians",
+    "target_velocity_radians_per_second",
+    "profile_velocity_radians_per_second",
+    "profile_acceleration_radians_per_second_squared",
+    "feedforward_torque_newton_metres",
+    "torque_enabled"
+  ],
+  "observation_fields": [
+    "sample_time_seconds",
+    "position_radians",
+    "velocity_radians_per_second",
+    "applied_torque_newton_metres",
+    "estimated_current_amperes",
+    "supply_voltage_volts",
+    "temperature_celsius",
+    "fault_flags"
+  ],
+  "fault_flags": [
+    {"name": "over_current", "bit": 0},
+    {"name": "over_temperature", "bit": 1},
+    {"name": "under_voltage", "bit": 2},
+    {"name": "over_voltage", "bit": 3},
+    {"name": "encoder", "bit": 4},
+    {"name": "communication", "bit": 5},
+    {"name": "model_rejected", "bit": 6}
+  ],
+  "parameter_fields": [
+    "command_sample_period_seconds",
+    "command_latency_seconds",
+    "encoder_position_quantum_radians",
+    "encoder_velocity_quantum_radians_per_second",
+    "continuous_current_limit_amperes",
+    "peak_current_limit_amperes",
+    "peak_current_duration_seconds",
+    "stall_torque_newton_metres",
+    "no_load_speed_radians_per_second",
+    "nominal_voltage_volts",
+    "minimum_voltage_volts",
+    "maximum_voltage_volts",
+    "ambient_temperature_celsius",
+    "warning_temperature_celsius",
+    "shutdown_temperature_celsius"
+  ],
+  "parameter_sets": [
+    {
+      "id": "body_yaw_upstream_placeholder",
+      "role": "body_yaw",
+      "overall_quality": "placeholder",
+      "source_actuator_class": "chosen_actuator",
+      "source_evidence_id": "rma041_active_chosen_actuator_placeholder",
+      "parameters": {
+        "command_sample_period_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_command_sample_period_unknown"},
+        "command_latency_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_command_latency_unknown"},
+        "encoder_position_quantum_radians": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_encoder_position_quantum_unknown"},
+        "encoder_velocity_quantum_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_encoder_velocity_quantum_unknown"},
+        "continuous_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_continuous_current_limit_unknown"},
+        "peak_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_peak_current_limit_unknown"},
+        "peak_current_duration_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_peak_current_duration_unknown"},
+        "stall_torque_newton_metres": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_stall_torque_unknown"},
+        "no_load_speed_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_no_load_speed_unknown"},
+        "nominal_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_nominal_voltage_unknown"},
+        "minimum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_minimum_voltage_unknown"},
+        "maximum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_maximum_voltage_unknown"},
+        "ambient_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_ambient_temperature_unknown"},
+        "warning_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_warning_temperature_unknown"},
+        "shutdown_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_body_yaw_shutdown_temperature_unknown"}
+      },
+      "fault_model": {
+        "supported_flags": ["over_current", "over_temperature", "under_voltage", "over_voltage", "encoder", "communication", "model_rejected"],
+        "latching_flags": [],
+        "quality": "placeholder",
+        "evidence_id": "rma061_body_yaw_fault_semantics_placeholder"
+      }
+    },
+    {
+      "id": "stewart_upstream_placeholder",
+      "role": "stewart",
+      "overall_quality": "placeholder",
+      "source_actuator_class": "chosen_actuator",
+      "source_evidence_id": "rma041_active_chosen_actuator_placeholder",
+      "parameters": {
+        "command_sample_period_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_command_sample_period_unknown"},
+        "command_latency_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_command_latency_unknown"},
+        "encoder_position_quantum_radians": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_encoder_position_quantum_unknown"},
+        "encoder_velocity_quantum_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_encoder_velocity_quantum_unknown"},
+        "continuous_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_continuous_current_limit_unknown"},
+        "peak_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_peak_current_limit_unknown"},
+        "peak_current_duration_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_peak_current_duration_unknown"},
+        "stall_torque_newton_metres": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_stall_torque_unknown"},
+        "no_load_speed_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_no_load_speed_unknown"},
+        "nominal_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_nominal_voltage_unknown"},
+        "minimum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_minimum_voltage_unknown"},
+        "maximum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_maximum_voltage_unknown"},
+        "ambient_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_ambient_temperature_unknown"},
+        "warning_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_warning_temperature_unknown"},
+        "shutdown_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_stewart_shutdown_temperature_unknown"}
+      },
+      "fault_model": {
+        "supported_flags": ["over_current", "over_temperature", "under_voltage", "over_voltage", "encoder", "communication", "model_rejected"],
+        "latching_flags": [],
+        "quality": "placeholder",
+        "evidence_id": "rma061_stewart_fault_semantics_placeholder"
+      }
+    },
+    {
+      "id": "antenna_upstream_placeholder",
+      "role": "antenna",
+      "overall_quality": "placeholder",
+      "source_actuator_class": "chosen_actuator",
+      "source_evidence_id": "rma041_active_chosen_actuator_placeholder",
+      "parameters": {
+        "command_sample_period_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_command_sample_period_unknown"},
+        "command_latency_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_command_latency_unknown"},
+        "encoder_position_quantum_radians": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_encoder_position_quantum_unknown"},
+        "encoder_velocity_quantum_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_encoder_velocity_quantum_unknown"},
+        "continuous_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_continuous_current_limit_unknown"},
+        "peak_current_limit_amperes": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_peak_current_limit_unknown"},
+        "peak_current_duration_seconds": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_peak_current_duration_unknown"},
+        "stall_torque_newton_metres": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_stall_torque_unknown"},
+        "no_load_speed_radians_per_second": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_no_load_speed_unknown"},
+        "nominal_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_nominal_voltage_unknown"},
+        "minimum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_minimum_voltage_unknown"},
+        "maximum_voltage_volts": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_maximum_voltage_unknown"},
+        "ambient_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_ambient_temperature_unknown"},
+        "warning_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_warning_temperature_unknown"},
+        "shutdown_temperature_celsius": {"value": null, "quality": "placeholder", "evidence_id": "rma061_antenna_shutdown_temperature_unknown"}
+      },
+      "fault_model": {
+        "supported_flags": ["over_current", "over_temperature", "under_voltage", "over_voltage", "encoder", "communication", "model_rejected"],
+        "latching_flags": [],
+        "quality": "placeholder",
+        "evidence_id": "rma061_antenna_fault_semantics_placeholder"
+      }
+    }
+  ],
+  "actuator_bindings": [
+    {"actuator_name": "yaw_body", "parameter_set_id": "body_yaw_upstream_placeholder", "role": "body_yaw"},
+    {"actuator_name": "stewart_1", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "stewart_2", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "stewart_3", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "stewart_4", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "stewart_5", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "stewart_6", "parameter_set_id": "stewart_upstream_placeholder", "role": "stewart"},
+    {"actuator_name": "right_antenna", "parameter_set_id": "antenna_upstream_placeholder", "role": "antenna"},
+    {"actuator_name": "left_antenna", "parameter_set_id": "antenna_upstream_placeholder", "role": "antenna"}
+  ]
+}
