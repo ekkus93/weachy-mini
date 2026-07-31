@@ -1,0 +1,103 @@
+name: Integrate RMA-062 Electrical Controller
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma062-integrate.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact integration head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract, validate, and commit RMA-062
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f .github/rma062-payload.part00
+          printf '%s  %s\n' \
+            '97a13b37246be363f778f585d89a9c7ee5b3ccd314e7a20ff03e52d8bb963ed0' \
+            '/tmp/rma062-payload.tar.gz' > /tmp/rma062-payload.sha256
+          cat .github/rma062-payload.part* \
+            | base64 --decode > /tmp/rma062-payload.tar.gz
+          sha256sum --check /tmp/rma062-payload.sha256
+          tar -tzf /tmp/rma062-payload.tar.gz > /tmp/rma062-members.txt
+          if grep -E '(^|/)\.\.(/|$)|^/' /tmp/rma062-members.txt; then
+            printf '%s\n' 'RMA-062 payload contains an unsafe path.' >&2
+            exit 1
+          fi
+          test "$(wc -l < /tmp/rma062-members.txt)" -ge 10
+          tar -xzf /tmp/rma062-payload.tar.gz -C .
+
+          cmake_file='native/reachy_sim/CMakeLists.txt'
+          include_line='include("${CMAKE_CURRENT_LIST_DIR}/electrical_servo_model.cmake")'
+          if grep -Fqx "$include_line" "$cmake_file"; then
+            printf '%s\n' 'RMA-062 CMake include unexpectedly already exists.' >&2
+            exit 1
+          fi
+          printf '\n%s\n' "$include_line" >> "$cmake_file"
+
+          mkdir -p .github/workflows
+          mv \
+            .github/rma062-electrical-controller.yml.template \
+            .github/workflows/rma062-electrical-controller.yml
+
+          python3 scripts/generate_reachy_electrical_baseline.py --check
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*electrical*.py' \
+            -v
+
+          if grep -En 'UnityEngine|MonoBehaviour|GameObject|Transform|Unity::' \
+            native/reachy_sim/include/reachy_electrical_servo_model.hpp \
+            native/reachy_sim/src/reachy_electrical_servo_model.cpp; then
+            printf '%s\n' 'Native electrical servo model contains a Unity dependency.' >&2
+            exit 1
+          fi
+
+          cmake \
+            -S . \
+            -B build/rma062-integration \
+            -DBUILD_TESTING=ON \
+            -DREACHY_ENABLE_SANITIZERS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/rma062-integration \
+            --target reachy_electrical_servo_model_test \
+            --parallel 2
+          ctest \
+            --test-dir build/rma062-integration \
+            --output-on-failure \
+            -R '^reachy_electrical_servo_model_test$'
+
+          git rm \
+            .github/rma062-payload.part* \
+            .github/workflows/rma062-integrate.yml
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/rma062-electrical-controller.yml \
+            docs/architecture/ELECTRICAL_CONTROLLER_BASELINE.md \
+            models/reachy-mini/electrical-controller-baseline.json \
+            native/reachy_sim/CMakeLists.txt \
+            native/reachy_sim/electrical_servo_model.cmake \
+            native/reachy_sim/include/reachy_electrical_servo_model.hpp \
+            native/reachy_sim/src/reachy_electrical_baseline.generated.hpp \
+            native/reachy_sim/src/reachy_electrical_servo_model.cpp \
+            native/reachy_sim/tests/reachy_electrical_servo_model_test.cpp \
+            scripts/generate_reachy_electrical_baseline.py \
+            scripts/tests/test_generate_reachy_electrical_baseline.py
+          git commit -m 'RMA-062: integrate electrical controller baseline'
+          git push origin HEAD:master
