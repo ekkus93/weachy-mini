@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/rma065-wire-fixed-trigger'
+      - '.github/workflows/rma065-wire-fixed-bundle.yml'
 
 permissions:
   contents: write
