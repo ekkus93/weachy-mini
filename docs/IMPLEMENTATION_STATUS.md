@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-063 role-specific mechanical effects,
-friction/stiction hysteresis, reversal-aware backlash, bounded compliance,
-experiment switches, identification hooks, and strict behavioral validation
+**Current implementation series:** RMA-064 shared power allocation,
+source-impedance voltage sag, per-servo thermal evolution and derating,
+latched shutdown, explicit safe recovery, diagnostics, and strict validation
 
 ## Repository rules in force
 
@@ -418,15 +418,54 @@ and identification-state tests on exact commit
 `a15a1154e62a95999b482ed6b2e6f62f51379929`. Detailed evidence is in
 [the RMA-063 validation record](validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md).
 
+### RMA-064 — shared power and thermal baseline
+
+RMA-064 is complete. `PowerThermalModel` now coordinates all nine native
+servo channels above the RMA-061 interface. One common previous-frame bus
+voltage is supplied to every wrapped controller, requested currents are
+aggregated, a proportional common scale enforces one source-current budget,
+and source impedance produces deterministic voltage sag. Simultaneous peak
+commands therefore compete for one finite source rather than nine independent
+peak-current supplies.
+
+Each channel has role-specific lumped thermal state with `I^2 R` heating,
+ambient cooling, warning-to-shutdown derating, and a visible latched thermal
+cutoff. Cooling alone never re-enables torque. Explicit clear requires torque
+disabled and temperature below recovery, then safely resets the wrapped
+channel while retaining nonthermal observed faults.
+
+The source-bound `rma064_power_thermal_v1` registry pins the Reachy source,
+RMA-062 electrical contract, and RMA-063 mechanical contract. The 5 V source,
+0.12 ohm impedance, 5 A budget, and thermal constants are explicit
+manufacturer-derived values or engineering estimates; no calibrated claim is
+present and the documented 6.8-7.6 V robot input is not treated as the
+unidentified internal servo rail.
+
+Run `30607760504` passed byte-exact generation, eight schema/failure-path
+tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+integrated electrical/mechanical/power compilation, shared-current limiting,
+source sag, common diagnostics, thermal derating, latched shutdown, explicit
+recovery, role-safe lookup, and fail-closed mismatch tests on exact commit
+`a9a8d4b172a8484cc01167051d5779ce892e6355`. Detailed evidence is in
+[the RMA-064 validation record](validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md).
+
 ## Current validation evidence
 
+- RMA-064 run `30607760504`: exact generated-baseline check, eight
+  schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+  ASan/UBSan, and the complete shared-power/thermal suite passed on
+  `a9a8d4b172a8484cc01167051d5779ce892e6355`.
+- The committed bus and thermal constants remain explicit engineering
+  estimates pending physical capture; RMA-065 still owns collisions and
+  mechanical hard stops, and production MuJoCo profile selection remains
+  explicit future work.
 - RMA-063 run `30606712074`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
   ASan/UBSan, and the complete native mechanical behavior suite passed on
   `a15a1154e62a95999b482ed6b2e6f62f51379929`.
 - Body-yaw, Stewart, and antenna mechanical vectors are role-specific
-  engineering estimates. Physical identification, shared-power/thermal
-  evolution, and production MuJoCo profile selection remain later tasks.
+  engineering estimates. Physical identification and production MuJoCo
+  profile selection remain later tasks.
 - RMA-062 run `30605184722`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
   ASan/UBSan, and the complete native behavior suite passed on

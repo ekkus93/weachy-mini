@@ -935,16 +935,50 @@ public:
 
 ## RMA-064 — Add power and thermal model
 
-- [ ] Model shared supply voltage and source impedance.
-- [ ] Compute voltage sag under simultaneous load.
-- [ ] Add per-servo thermal state and configurable derating/shutdown.
-- [ ] Expose estimated current, voltage, and temperature in state/diagnostics.
-- [ ] Add fault-clear rules that match the chosen fidelity model.
+**Status:** Complete (2026-07-30)
+
+- [x] Model shared supply voltage and source impedance.
+- [x] Compute voltage sag under simultaneous load.
+- [x] Add per-servo thermal state and configurable derating/shutdown.
+- [x] Expose estimated current, voltage, and temperature in state/diagnostics.
+- [x] Add fault-clear rules that match the chosen fidelity model.
 
 **Acceptance criteria**
 
-- [ ] Simultaneous high-load commands cannot unrealistically use independent unlimited peak torque.
-- [ ] Thermal shutdown is visible and does not silently re-enable.
+- [x] Simultaneous high-load commands cannot unrealistically use independent unlimited peak torque.
+- [x] Thermal shutdown is visible and does not silently re-enable.
+
+**Completion evidence**
+
+- `PowerThermalModel` is a Unity-independent native C++17 fleet-level
+  coordinator for nine wrapped `ServoModel` channels. It uses one common
+  bus voltage, aggregates all requested current, enforces one shared source
+  budget, and applies source-impedance voltage sag without actuator-order
+  dependence.
+- The source-bound `rma064_power_thermal_v1` contract defines a visibly
+  noncalibrated 5 V, 0.12 ohm, 5 A shared-bus engineering baseline and
+  distinct body-yaw, Stewart, and antenna thermal parameter sets. It does
+  not mistake the documented 6.8-7.6 V robot input for the unidentified
+  internal Dynamixel rail.
+- Per-servo lumped thermal state uses manufacturer-derived winding
+  resistance, `I^2 R` heating, ambient cooling, role-specific thermal
+  resistance/capacitance estimates, linear warning-to-shutdown derating,
+  and latched zero-torque/current shutdown.
+- Cooling never silently re-enables a channel. Explicit clear succeeds only
+  below the recovery threshold with torque disabled, performs a safe wrapped
+  model reset, removes the thermal bit, and preserves other observed faults.
+- Per-channel diagnostics expose requested/delivered current, shared voltage,
+  temperature, heating/cooling power, derating, latch, and faults; bus
+  diagnostics expose source/evaluation/final voltage, voltage drop,
+  aggregate current, allocation scales, and undervoltage.
+- Hosted run `30607760504` passed exact generation, eight schema/failure
+  tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+  and the complete shared-current, sag, thermal derating, shutdown, explicit
+  clear, diagnostics, and role-mismatch CTest on exact commit
+  `a9a8d4b172a8484cc01167051d5779ce892e6355`.
+- Detailed design and evidence are in
+  `docs/architecture/POWER_THERMAL_BASELINE.md` and
+  `docs/validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md`.
 
 ## RMA-065 — Add collision and hard-stop model
 
