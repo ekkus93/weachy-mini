@@ -100,41 +100,47 @@ jobs:
 
           validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
           text = validator.read_text(encoding='utf-8')
-          internal_old = (
-              '    body = find_body(root, "stewart_link_rod")\n'
-              '    existing = body.find("geom[@name=\'rma065_internal_fixture\']")\n'
-          )
-          internal_new = (
-              '    body = find_body(root, "stewart_link_rod")\n'
-              '    rod = body.find("geom[@name=\'rma065_rod_1\']")\n'
-              '    if rod is None:\n'
-              '        raise CollisionValidationError(\n'
-              '            "rma065_rod_1 collision geom is missing"\n'
-              '        )\n'
-              '    fromto = rod.get("fromto")\n'
-              '    if fromto is None:\n'
-              '        raise CollisionValidationError(\n'
-              '            "rma065_rod_1 collision geom has no fromto"\n'
-              '        )\n'
-              '    endpoints = parse_vector(fromto, 6)\n'
-              '    midpoint = [\n'
-              '        (endpoints[index] + endpoints[index + 3]) * 0.5\n'
-              '        for index in range(3)\n'
-              '    ]\n'
-              '    existing = body.find("geom[@name=\'rma065_internal_fixture\']")\n'
-          )
-          if text.count(internal_old) != 1:
+          function_start = text.find("def internal_contact_fixture")
+          function_end = text.find("\ndef external_contact_fixture", function_start)
+          if function_start < 0 or function_end < 0:
+              raise SystemExit("internal contact fixture function boundaries missing")
+          block = text[function_start:function_end]
+          body_line = '    body = find_body(root, "stewart_link_rod")\n'
+          if block.count(body_line) != 1:
+              print("--- internal contact fixture block ---")
+              print(block)
               raise SystemExit(
-                  f'internal fixture body marker count={text.count(internal_old)}'
+                  f'internal fixture body line count={block.count(body_line)}'
               )
-          text = text.replace(internal_old, internal_new, 1)
+          body_replacement = (
+              body_line
+              + '    rod = body.find("geom[@name=\\'rma065_rod_1\\']")\n'
+              + '    if rod is None:\n'
+              + '        raise CollisionValidationError(\n'
+              + '            "rma065_rod_1 collision geom is missing"\n'
+              + '        )\n'
+              + '    fromto = rod.get("fromto")\n'
+              + '    if fromto is None:\n'
+              + '        raise CollisionValidationError(\n'
+              + '            "rma065_rod_1 collision geom has no fromto"\n'
+              + '        )\n'
+              + '    endpoints = parse_vector(fromto, 6)\n'
+              + '    midpoint = [\n'
+              + '        (endpoints[index] + endpoints[index + 3]) * 0.5\n'
+              + '        for index in range(3)\n'
+              + '    ]\n'
+          )
+          block = block.replace(body_line, body_replacement, 1)
           position_old = '    fixture.set("pos", "0.0 0.0 0.04")\n'
           position_new = '    fixture.set("pos", formatter(midpoint))\n'
-          if text.count(position_old) != 1:
+          if block.count(position_old) != 1:
+              print("--- internal contact fixture block ---")
+              print(block)
               raise SystemExit(
-                  f'internal fixture position marker count={text.count(position_old)}'
+                  f'internal fixture position count={block.count(position_old)}'
               )
-          text = text.replace(position_old, position_new, 1)
+          block = block.replace(position_old, position_new, 1)
+          text = text[:function_start] + block + text[function_end:]
           validator.write_text(text, encoding='utf-8', newline='\n')
 
           tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
