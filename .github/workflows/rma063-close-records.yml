@@ -1,0 +1,194 @@
+name: Close RMA-063 Records
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma063-close-records.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-records:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close RMA-063 tracking records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo_path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+          todo = todo_path.read_text(encoding="utf-8")
+          old_todo = """## RMA-063 — Implement friction, backlash, and compliance models
+
+          - [ ] Add Coulomb and viscous friction.
+          - [ ] Add stiction/breakaway behavior without numerical chatter.
+          - [ ] Add backlash/hysteresis state that handles direction reversal.
+          - [ ] Add configurable gear/joint compliance where supported.
+          - [ ] Add parameter-identification hooks.
+          - [ ] Keep each effect independently disableable for experiments.
+
+          **Acceptance criteria**
+
+          - [ ] Direction-reversal tests show expected dead-zone behavior.
+          - [ ] Disabling each effect returns to the prior baseline.
+          - [ ] Parameters are never silently copied between dissimilar motor types.
+          """.replace("          ", "")
+          new_todo = """## RMA-063 — Implement friction, backlash, and compliance models
+
+          **Status:** Complete (2026-07-30)
+
+          - [x] Add Coulomb and viscous friction.
+          - [x] Add stiction/breakaway behavior without numerical chatter.
+          - [x] Add backlash/hysteresis state that handles direction reversal.
+          - [x] Add configurable gear/joint compliance where supported.
+          - [x] Add parameter-identification hooks.
+          - [x] Keep each effect independently disableable for experiments.
+
+          **Acceptance criteria**
+
+          - [x] Direction-reversal tests show expected dead-zone behavior.
+          - [x] Disabling each effect returns to the prior baseline.
+          - [x] Parameters are never silently copied between dissimilar motor types.
+
+          **Completion evidence**
+
+          - `MechanicalServoModel` is a Unity-independent native C++17 decorator
+            around the RMA-061 `ServoModel` interface and can wrap the RMA-062
+            electrical/controller implementation without changing the public C ABI.
+          - Role-specific body-yaw, Stewart, and antenna parameter sets add Coulomb
+            and viscous friction, breakaway/stiction hysteresis, backlash play, and
+            bounded torsional compliance. Every scalar retains explicit evidence and
+            no value is labeled calibrated.
+          - The stiction state uses separate entry/exit speed thresholds; the backlash
+            play operator retains position output through direction reversal until the
+            opposite half-width is crossed; compliance torque and elastic deflection
+            are stateful and bounded.
+          - Friction, stiction, backlash, and compliance are independently switchable.
+            The all-disabled configuration preserves the wrapped command and complete
+            step result exactly, and configuration changes clear transient experiment
+            state.
+          - Copyable per-step identification samples and bounded accumulators expose
+            electrical/compliance/friction/output torque, reversal count, stuck count,
+            and maximum elastic deflection without invoking callbacks on the physics
+            thread.
+          - The deterministic generator rejects missing evidence, calibrated claims,
+            invalid breakaway/stiction ordering, unit drift, cross-role bindings, and
+            an identical complete parameter fingerprint copied between dissimilar
+            actuator roles.
+          - Hosted run `30606712074` passed exact generation, eight schema/failure
+            tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+            and the complete mechanical behavior CTest on exact commit
+            `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+          - Detailed design and evidence are in
+            `docs/architecture/MECHANICAL_EFFECTS_BASELINE.md` and
+            `docs/validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md`.
+          """.replace("          ", "")
+          if todo.count(old_todo) != 1:
+              raise SystemExit("RMA-063 TODO source block was not found exactly once")
+          todo_path.write_text(
+              todo.replace(old_todo, new_todo),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          status_path = Path("docs/IMPLEMENTATION_STATUS.md")
+          status = status_path.read_text(encoding="utf-8")
+          old_series = """**Current implementation series:** RMA-062 source-bound electrical/controller
+          timing baseline, quantized sampled commands, bounded torque-speed/current
+          behavior, explicit noncalibrated evidence, and strict behavioral validation
+          """.replace("          ", "")
+          new_series = """**Current implementation series:** RMA-063 role-specific mechanical effects,
+          friction/stiction hysteresis, reversal-aware backlash, bounded compliance,
+          experiment switches, identification hooks, and strict behavioral validation
+          """.replace("          ", "")
+          if status.count(old_series) != 1:
+              raise SystemExit("implementation-series source text was not found exactly once")
+          status = status.replace(old_series, new_series)
+
+          marker = "## Current validation evidence\n"
+          section = """### RMA-063 — friction, backlash, and compliance baseline
+
+          RMA-063 is complete. `MechanicalServoModel` now decorates any native
+          `ServoModel`, including the RMA-062 controller, with role-specific kinetic
+          friction, stiction/breakaway hysteresis, position-target backlash, and
+          reduced-order torsional compliance. It does not change the public simulation
+          C ABI or silently select a new production MuJoCo fidelity path.
+
+          The source-bound `rma063_mechanical_effects_v1` registry preserves all nine
+          ordered actuator bindings and defines distinct body-yaw, Stewart, and antenna
+          parameter vectors. Values are explicit engineering hypotheses rather than
+          physical measurements. The generator rejects calibrated claims and any full
+          parameter vector silently copied between dissimilar roles.
+
+          Every effect is independently switchable; all effects disabled reproduce the
+          wrapped baseline exactly. Reconfiguration resets transient hysteresis and
+          compliance state. Copyable identification samples and accumulators expose
+          reversal, stuck-state, torque-component, and deflection evidence without a
+          high-frequency callback.
+
+          Run `30606712074` passed byte-exact generation, eight schema/failure-path
+          tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+          integrated library/test compilation, reversal dead-zone, stiction hysteresis,
+          friction direction, bounded compliance, effect-disablement, role-isolation,
+          and identification-state tests on exact commit
+          `a15a1154e62a95999b482ed6b2e6f62f51379929`. Detailed evidence is in
+          [the RMA-063 validation record](validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md).
+
+          """.replace("          ", "")
+          if status.count(marker) != 1:
+              raise SystemExit("validation insertion marker was not found exactly once")
+          status = status.replace(marker, section + marker)
+
+          old_evidence = """- RMA-062 run `30605184722`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native behavior suite passed on
+            `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+          - The three role baselines are now torque-ready manufacturer/engineering
+            estimates, not calibrated models. RMA-063 through RMA-065 retain friction,
+            compliance, shared-power/thermal evolution, and physical identification.
+          """.replace("          ", "")
+          new_evidence = """- RMA-063 run `30606712074`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native mechanical behavior suite passed on
+            `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+          - Body-yaw, Stewart, and antenna mechanical vectors are role-specific
+            engineering estimates. Physical identification, shared-power/thermal
+            evolution, and production MuJoCo profile selection remain later tasks.
+          - RMA-062 run `30605184722`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native behavior suite passed on
+            `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+          """.replace("          ", "")
+          if status.count(old_evidence) != 1:
+              raise SystemExit("RMA-062 evidence transition block was not found exactly once")
+          status = status.replace(old_evidence, new_evidence)
+          status_path.write_text(status, encoding="utf-8", newline="\n")
+          PY
+
+          test -f docs/validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md
+          test -f .github/workflows/rma063-mechanical-effects.yml
+          test ! -e .github/rma063-payload.part00
+          git rm .github/workflows/rma063-close-records.yml
+          git diff --check
+          grep -F '**Status:** Complete (2026-07-30)' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          grep -F 'RMA-063 is complete.' docs/IMPLEMENTATION_STATUS.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/IMPLEMENTATION_STATUS.md
+          git commit -m 'RMA-063: close validated mechanical baseline [skip ci]'
+          git push origin HEAD:master
