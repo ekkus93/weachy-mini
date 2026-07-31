@@ -7,9 +7,12 @@ on:
       - '.github/workflows/rma074-physical-preflight.yml'
       - 'scripts/probe_reachy_physical_unit.py'
       - 'scripts/tests/test_rma074_physical_preflight.py'
-      - 'docs/architecture/PHYSICAL_CALIBRATION_AND_PROFILE_APPROVAL.md'
-      - 'docs/validation/RMA_074_PHYSICAL_CALIBRATION_VALIDATION_2026-07-31.md'
   workflow_dispatch:
+    inputs:
+      reachy_host:
+        description: 'Reachy Mini daemon host or IP; defaults to REACHY_MINI_HOST, localhost, then mDNS'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -96,14 +99,16 @@ jobs:
       - name: Run read-only physical-unit probe
         shell: bash
         env:
-          REACHY_MINI_HOST: ${{ vars.REACHY_MINI_HOST }}
+          DISPATCH_REACHY_HOST: ${{ inputs.reachy_host }}
+          CONFIGURED_REACHY_HOST: ${{ vars.REACHY_MINI_HOST }}
         run: |
           set -euo pipefail
           report_dir="${RUNNER_TEMP}/rma074-physical-preflight"
           mkdir -p "${report_dir}"
+          reachy_host="${DISPATCH_REACHY_HOST:-${CONFIGURED_REACHY_HOST:-}}"
           args=()
-          if [[ -n "${REACHY_MINI_HOST:-}" ]]; then
-            args+=(--host "${REACHY_MINI_HOST}")
+          if [[ -n "${reachy_host}" ]]; then
+            args+=(--host "${reachy_host}")
           fi
           python3 scripts/probe_reachy_physical_unit.py \
             "${args[@]}" \
