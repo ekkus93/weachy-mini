@@ -70,6 +70,7 @@ function(reachy_configure_sim_library target_name library_type)
             BASE_DIRS include
             FILES
                 include/reachy_sim.h
+                include/reachy_sim_state.h
                 include/reachy_sim_version.h
     )
     target_include_directories(
@@ -279,6 +280,7 @@ if(BUILD_TESTING)
             BASE_DIRS include
             FILES
                 include/reachy_sim.h
+                include/reachy_sim_state.h
                 include/reachy_sim_version.h
     )
     target_include_directories(
@@ -390,6 +392,30 @@ if(BUILD_TESTING)
         NAME reachy_sim_header_cpp_test
         COMMAND reachy_sim_header_cpp_test
     )
+endif()
+
+if(BUILD_TESTING AND REACHY_BUILD_MUJOCO_BACKEND)
+    add_executable(
+        reachy_sim_dynamics_state_runner
+        tests/reachy_sim_dynamics_state_runner.c
+    )
+    target_link_libraries(
+        reachy_sim_dynamics_state_runner
+        PRIVATE
+            reachy_sim
+    )
+    target_compile_features(
+        reachy_sim_dynamics_state_runner
+        PRIVATE
+            c_std_17
+    )
+    set_target_properties(
+        reachy_sim_dynamics_state_runner
+        PROPERTIES
+            C_EXTENSIONS OFF
+    )
+    reachy_enable_strict_warnings(reachy_sim_dynamics_state_runner)
+    reachy_enable_sanitizers(reachy_sim_dynamics_state_runner)
 endif()
 
 add_subdirectory(feasibility)

@@ -15,14 +15,36 @@
     "statement": "Coarse collision primitives and thresholds are engineering estimates pending physical validation."
   },
   "collision_masks": {
-    "shell": {"contype": 1, "conaffinity": 6},
-    "moving": {"contype": 2, "conaffinity": 5},
-    "external": {"contype": 4, "conaffinity": 3}
+    "shell": {
+      "contype": 1,
+      "conaffinity": 6
+    },
+    "moving": {
+      "contype": 2,
+      "conaffinity": 5
+    },
+    "external": {
+      "contype": 4,
+      "conaffinity": 3
+    }
   },
   "contact_parameters": {
-    "friction": [0.8, 0.02, 0.002],
-    "solref": [0.01, 1.0],
-    "solimp": [0.9, 0.95, 0.001, 0.5, 2.0],
+    "friction": [
+      0.8,
+      0.02,
+      0.002
+    ],
+    "solref": [
+      0.01,
+      1.0
+    ],
+    "solimp": [
+      0.9,
+      0.95,
+      0.001,
+      0.5,
+      2.0
+    ],
     "maximum_penetration_metres": 0.008,
     "contact_overload_newtons": 20.0,
     "contact_overload_impulse_newton_seconds": 0.05,
@@ -30,43 +52,473 @@
   },
   "existing_collision_role": "shell",
   "shapes": [
-    {"name": "rma065_base_shell", "body": "body_foot_3dprint", "role": "shell", "type": "cylinder", "pos": [0.0, 0.0, 0.02], "size": [0.085, 0.02], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-BASE"},
-    {"name": "rma065_arm_1", "body": "dc15_a01_horn_dummy", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_arm_2", "body": "dc15_a01_horn_dummy_2", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_arm_3", "body": "dc15_a01_horn_dummy_3", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_arm_4", "body": "dc15_a01_horn_dummy_4", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_arm_5", "body": "dc15_a01_horn_dummy_5", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_arm_6", "body": "dc15_a01_horn_dummy_6", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.035], "size": [0.009], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ARM"},
-    {"name": "rma065_rod_1", "body": "stewart_link_rod", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_rod_2", "body": "stewart_link_rod_2", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_rod_3", "body": "stewart_link_rod_3", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_rod_4", "body": "stewart_link_rod_4", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_rod_5", "body": "stewart_link_rod_5", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_rod_6", "body": "stewart_link_rod_6", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.075], "size": [0.0035], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ROD"},
-    {"name": "rma065_moving_platform", "body": "xl_330", "role": "shell", "type": "cylinder", "pos": [0.0, 0.0, -0.012], "size": [0.055, 0.008], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-PLATFORM"},
-    {"name": "rma065_head_shell", "body": "xl_330", "role": "shell", "type": "ellipsoid", "pos": [0.0, 0.0, 0.035], "size": [0.065, 0.06, 0.075], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-HEAD"},
-    {"name": "rma065_right_antenna", "body": "dc15_a01_horn_dummy_7", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.09], "size": [0.0045], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ANTENNA"},
-    {"name": "rma065_left_antenna", "body": "dc15_a01_horn_dummy_8", "role": "moving", "type": "capsule", "fromto": [0.0, 0.0, 0.0, 0.0, 0.0, 0.09], "size": [0.0045], "evidence_class": "engineering_estimate", "evidence_id": "RMA-065-COARSE-ANTENNA"}
+    {
+      "name": "rma065_base_shell",
+      "body": "body_foot_3dprint",
+      "role": "shell",
+      "type": "cylinder",
+      "pos": [
+        0.0,
+        0.0,
+        0.02
+      ],
+      "size": [
+        0.085,
+        0.02
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-COARSE-BASE"
+    },
+    {
+      "name": "rma065_arm_1",
+      "body": "dc15_a01_horn_dummy",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_arm_2",
+      "body": "dc15_a01_horn_dummy_2",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod_2",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_arm_3",
+      "body": "dc15_a01_horn_dummy_3",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod_3",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_arm_4",
+      "body": "dc15_a01_horn_dummy_4",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod_4",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_arm_5",
+      "body": "dc15_a01_horn_dummy_5",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod_5",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_arm_6",
+      "body": "dc15_a01_horn_dummy_6",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ARM-SEGMENT",
+      "segment_child_body": "stewart_link_rod_6",
+      "segment_start_inset_metres": 0.01,
+      "segment_end_inset_metres": 0.004
+    },
+    {
+      "name": "rma065_rod_1",
+      "body": "stewart_link_rod",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_site": "closing_1_1"
+    },
+    {
+      "name": "rma065_rod_2",
+      "body": "stewart_link_rod_2",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_site": "closing_2_1"
+    },
+    {
+      "name": "rma065_rod_3",
+      "body": "stewart_link_rod_3",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_site": "closing_3_1"
+    },
+    {
+      "name": "rma065_rod_4",
+      "body": "stewart_link_rod_4",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_site": "closing_4_1"
+    },
+    {
+      "name": "rma065_rod_5",
+      "body": "stewart_link_rod_5",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_site": "closing_5_1"
+    },
+    {
+      "name": "rma065_rod_6",
+      "body": "stewart_link_rod_6",
+      "role": "moving",
+      "type": "capsule",
+      "size": [
+        0.003
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-PINNED-KINEMATIC-ROD-SEGMENT",
+      "segment_start_inset_metres": 0.004,
+      "segment_end_inset_metres": 0.004,
+      "segment_child_body": "xl_330"
+    },
+    {
+      "name": "rma065_moving_platform",
+      "body": "xl_330",
+      "role": "shell",
+      "type": "cylinder",
+      "pos": [
+        0.0,
+        0.0,
+        -0.012
+      ],
+      "size": [
+        0.055,
+        0.008
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-COARSE-PLATFORM"
+    },
+    {
+      "name": "rma065_head_shell",
+      "body": "xl_330",
+      "role": "shell",
+      "type": "ellipsoid",
+      "pos": [
+        0.0,
+        0.0,
+        0.035
+      ],
+      "size": [
+        0.065,
+        0.06,
+        0.075
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-COARSE-HEAD"
+    },
+    {
+      "name": "rma065_right_antenna",
+      "body": "dc15_a01_horn_dummy_7",
+      "role": "moving",
+      "type": "capsule",
+      "fromto": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.09
+      ],
+      "size": [
+        0.0045
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-COARSE-ANTENNA"
+    },
+    {
+      "name": "rma065_left_antenna",
+      "body": "dc15_a01_horn_dummy_8",
+      "role": "moving",
+      "type": "capsule",
+      "fromto": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.09
+      ],
+      "size": [
+        0.0045
+      ],
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "RMA-065-COARSE-ANTENNA"
+    }
   ],
   "hard_stops": [
-    {"joint": "yaw_body", "actuator": "yaw_body", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_1", "actuator": "stewart_1", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_2", "actuator": "stewart_2", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_3", "actuator": "stewart_3", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_4", "actuator": "stewart_4", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_5", "actuator": "stewart_5", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "stewart_6", "actuator": "stewart_6", "range_source": "pinned_source", "soft_limit_inset_radians": 0.015, "margin_radians": 0.008},
-    {"joint": "right_antenna", "actuator": "right_antenna", "range_source": "engineering_estimate", "hard_range_radians": [-3.12, 3.12], "soft_range_radians": [-3.05, 3.05], "margin_radians": 0.01, "evidence_id": "RMA-065-ANTENNA-HARD-STOP-ESTIMATE"},
-    {"joint": "left_antenna", "actuator": "left_antenna", "range_source": "engineering_estimate", "hard_range_radians": [-3.12, 3.12], "soft_range_radians": [-3.05, 3.05], "margin_radians": 0.01, "evidence_id": "RMA-065-ANTENNA-HARD-STOP-ESTIMATE"}
+    {
+      "joint": "yaw_body",
+      "actuator": "yaw_body",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_1",
+      "actuator": "stewart_1",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_2",
+      "actuator": "stewart_2",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_3",
+      "actuator": "stewart_3",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_4",
+      "actuator": "stewart_4",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_5",
+      "actuator": "stewart_5",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "stewart_6",
+      "actuator": "stewart_6",
+      "range_source": "pinned_source",
+      "soft_limit_inset_radians": 0.015,
+      "margin_radians": 0.008
+    },
+    {
+      "joint": "right_antenna",
+      "actuator": "right_antenna",
+      "range_source": "engineering_estimate",
+      "hard_range_radians": [
+        -3.12,
+        3.12
+      ],
+      "soft_range_radians": [
+        -3.05,
+        3.05
+      ],
+      "margin_radians": 0.01,
+      "evidence_id": "RMA-065-ANTENNA-HARD-STOP-ESTIMATE"
+    },
+    {
+      "joint": "left_antenna",
+      "actuator": "left_antenna",
+      "range_source": "engineering_estimate",
+      "hard_range_radians": [
+        -3.12,
+        3.12
+      ],
+      "soft_range_radians": [
+        -3.05,
+        3.05
+      ],
+      "margin_radians": 0.01,
+      "evidence_id": "RMA-065-ANTENNA-HARD-STOP-ESTIMATE"
+    }
   ],
   "limit_solver": {
-    "solref": [0.004, 1.0],
-    "solimp": [0.95, 0.99, 0.001, 0.5, 2.0]
+    "solref": [
+      0.004,
+      1.0
+    ],
+    "solimp": [
+      0.95,
+      0.99,
+      0.001,
+      0.5,
+      2.0
+    ]
   },
   "android_budget": {
     "minimum_realtime_factor": 1.0,
     "maximum_p95_step_overhead_ratio": 0.35,
     "benchmark_steps": 50000,
     "physical_device_required": true
-  }
+  },
+  "collision_excludes": [
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy_2",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy_3",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy_4",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy_5",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "dc15_a01_horn_dummy_6",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod_2",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod_3",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod_4",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod_5",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "xl_330",
+      "body2": "stewart_link_rod_6",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-HEAD-MECHANISM-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod_2",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod_3",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod_4",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod_5",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    },
+    {
+      "body1": "body_down_3dprint",
+      "body2": "stewart_link_rod_6",
+      "evidence_class": "pinned_topology",
+      "evidence_id": "RMA-065-INTERNAL-BASE-ROD-ATTACHMENT-EXCLUSION"
+    }
+  ]
 }

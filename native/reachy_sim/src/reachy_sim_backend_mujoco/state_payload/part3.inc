@@ -1,3 +1,11 @@
+static ReachySimStatus mujoco_copy_dynamics_state(
+    ReachyMujocoBackendContext* context,
+    void* bytes,
+    size_t byte_capacity,
+    size_t* required_size,
+    char* error,
+    size_t error_size);
+
 static ReachySimStatus write_body_poses(
     const ReachyMujocoBackendContext* context,
     uint8_t* output,
@@ -51,10 +59,12 @@ static ReachySimStatus mujoco_copy_state(
 {
     ReachyMujocoBackendContext* const context = opaque_context;
     bool requested = false;
+    uint32_t requested_version = 0U;
     ReachySimStatus status = validate_state_request(
         bytes,
         byte_capacity,
         &requested,
+        &requested_version,
         error,
         error_size);
     if(status != REACHY_SIM_STATUS_OK)
@@ -65,6 +75,16 @@ static ReachySimStatus mujoco_copy_state(
     {
         return mujoco_copy_state_header_only(
             opaque_context,
+            bytes,
+            byte_capacity,
+            required_size,
+            error,
+            error_size);
+    }
+    if(requested_version == REACHY_SIM_DYNAMICS_STATE_FORMAT_VERSION)
+    {
+        return mujoco_copy_dynamics_state(
+            context,
             bytes,
             byte_capacity,
             required_size,

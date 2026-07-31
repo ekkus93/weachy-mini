@@ -160,7 +160,7 @@ static void test_authoritative_state_payload(void)
         REACHY_SIM_STATE_REQUEST_MAGIC,
         REACHY_SIM_ABI_VERSION,
         (uint32_t)sizeof(ReachySimStateRequest),
-        REACHY_SIM_STATE_FORMAT_VERSION + 1U,
+        REACHY_SIM_DYNAMICS_STATE_FORMAT_VERSION + 1U,
         0U};
     size_t unsupported_size = 0U;
     check_status(

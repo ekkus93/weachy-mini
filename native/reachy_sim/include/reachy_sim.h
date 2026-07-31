@@ -82,7 +82,9 @@ typedef enum ReachySimResetPose {
 
 typedef enum ReachySimHealthFlag {
     REACHY_SIM_HEALTH_FLAG_SLEEPING = UINT32_C(1) << 0,
-    REACHY_SIM_HEALTH_FLAG_MUJOCO_WARNING = UINT32_C(1) << 1
+    REACHY_SIM_HEALTH_FLAG_MUJOCO_WARNING = UINT32_C(1) << 1,
+    REACHY_SIM_HEALTH_FLAG_CONTACT_OVERLOAD = UINT32_C(1) << 2,
+    REACHY_SIM_HEALTH_FLAG_HARD_STOP = UINT32_C(1) << 3
 } ReachySimHealthFlag;
 
 typedef struct ReachySimConfig {

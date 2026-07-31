@@ -5,9 +5,18 @@ _Static_assert(
     sizeof(ReachySimStatePayloadHeader) == 136U,
     "ReachySimStatePayloadHeader layout changed");
 _Static_assert(
+    sizeof(ReachySimDynamicsStatePayloadHeader) == 208U,
+    "ReachySimDynamicsStatePayloadHeader layout changed");
+_Static_assert(
     sizeof(ReachySimActuatorObservation) == 40U,
     "ReachySimActuatorObservation layout changed");
 _Static_assert(sizeof(ReachySimBodyPose) == 64U, "ReachySimBodyPose layout changed");
+_Static_assert(
+    sizeof(ReachySimContactObservation) == 104U,
+    "ReachySimContactObservation layout changed");
+_Static_assert(
+    sizeof(ReachySimHardStopObservation) == 64U,
+    "ReachySimHardStopObservation layout changed");
 
 typedef struct ReachyMujocoStateLayout {
     size_t total_size;
@@ -21,10 +30,12 @@ static ReachySimStatus validate_state_request(
     const void* bytes,
     size_t byte_capacity,
     bool* requested,
+    uint32_t* requested_version,
     char* error,
     size_t error_size)
 {
     *requested = false;
+    *requested_version = 0U;
     if(bytes == NULL || byte_capacity < sizeof(uint64_t))
     {
         return REACHY_SIM_STATUS_OK;
@@ -55,7 +66,8 @@ static ReachySimStatus validate_state_request(
         write_message(error, error_size, "authoritative state request size mismatch");
         return REACHY_SIM_STATUS_STRUCT_SIZE_MISMATCH;
     }
-    if(request.state_format_version != REACHY_SIM_STATE_FORMAT_VERSION)
+    if(request.state_format_version != REACHY_SIM_STATE_FORMAT_VERSION &&
+       request.state_format_version != REACHY_SIM_DYNAMICS_STATE_FORMAT_VERSION)
     {
         write_message(error, error_size, "authoritative state format is unsupported");
         return REACHY_SIM_STATUS_UNSUPPORTED;
@@ -65,6 +77,7 @@ static ReachySimStatus validate_state_request(
         write_message(error, error_size, "authoritative state request reserved field is nonzero");
         return REACHY_SIM_STATUS_INVALID_ARGUMENT;
     }
+    *requested_version = request.state_format_version;
     return REACHY_SIM_STATUS_OK;
 }
 
@@ -118,4 +131,3 @@ static bool calculate_state_layout(
     }
     return true;
 }
-

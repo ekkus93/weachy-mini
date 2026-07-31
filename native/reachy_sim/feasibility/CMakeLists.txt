@@ -158,6 +158,28 @@ if(REACHY_BUILD_MUJOCO_PROBE)
             C_EXTENSIONS OFF
     )
     reachy_enable_strict_warnings(reachy_mujoco_compile_runner)
+    add_executable(
+        reachy_mujoco_collision_benchmark_runner
+        reachy_mujoco_collision_benchmark_runner.c
+    )
+    target_link_libraries(
+        reachy_mujoco_collision_benchmark_runner
+        PRIVATE
+            reachy_external_mujoco
+            m
+    )
+    target_compile_features(
+        reachy_mujoco_collision_benchmark_runner
+        PRIVATE
+            c_std_17
+    )
+    set_target_properties(
+        reachy_mujoco_collision_benchmark_runner
+        PROPERTIES
+            C_EXTENSIONS OFF
+    )
+    reachy_enable_strict_warnings(reachy_mujoco_collision_benchmark_runner)
+
 endif()
 
 if(REACHY_BUILD_MUJOCO_BACKEND)

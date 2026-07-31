@@ -5,9 +5,11 @@
 #include "reachy_sim_mujoco_backend_test/part3.inc"
 #undef main
 #include "reachy_sim_mujoco_backend_test/part_state_payload.inc"
+#include "reachy_sim_mujoco_backend_test/part_dynamics_state.inc"
 
 int main(void)
 {
     test_authoritative_state_payload();
+    test_dynamics_state_payload();
     return reachy_sim_mujoco_existing_main();
 }

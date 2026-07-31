@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import numpy as np
 import hashlib
 import json
 import math
@@ -153,7 +154,7 @@ def run_neutral_audit(
     max_normal_force = 0.0
     max_tangent_force = 0.0
     step_times: list[float] = []
-    contact_force = [0.0] * 6
+    contact_force = np.zeros(6, dtype=np.float64)
     for _ in range(steps):
         start = time.perf_counter_ns()
         mujoco.mj_step(model, data)
