@@ -42,15 +42,12 @@ jobs:
 
           validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
           source = validator.read_text(encoding='utf-8')
-          marker = '''    report = {
-              "contract": "rma065_collision_hard_stop_validation_v1",
-          '''
-          replacement = '''    report = {
-              "status": "ok",
-              "contract": "rma065_collision_hard_stop_validation_v1",
-          '''
+          marker = '        "contract": "rma065_collision_hard_stop_validation_v1",\n'
+          replacement = '        "status": "ok",\n' + marker
           if source.count(marker) != 1:
-              raise SystemExit(f'report construction marker count={source.count(marker)}')
+              raise SystemExit(f'report contract line count={source.count(marker)}')
+          if '        "status": "ok",\n' in source:
+              raise SystemExit('report status already exists unexpectedly')
           validator.write_text(
               source.replace(marker, replacement, 1),
               encoding='utf-8',
