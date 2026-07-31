@@ -1,0 +1,92 @@
+name: RMA-052 Guarded Finalizer
+
+on:
+  issues:
+    types:
+      - opened
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  finalize:
+    if: github.event.issue.title == '[automation] Finalize RMA-052 cleanly'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate permanent closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/rma052_close_docs.py
+          python3 scripts/rma052_close_docs.py
+          sed -i 's/[[:space:]]\+$//' \
+            docs/validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/local-unity-android-validation.yml')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              "    if: github.event_name != 'push' || "
+              "github.event.head_commit.message != 'RMA052_DIRECT_CLOSURE'\n",
+              '',
+              1,
+          )
+          text = text.replace(
+              'permissions:\n  contents: write\n',
+              'permissions:\n  contents: read\n',
+              1,
+          )
+          marker = '\n  # BEGIN RMA-052 DIRECT CLOSURE\n'
+          if text.count(marker) != 1:
+              raise SystemExit('RMA-052 closure marker was not unique.')
+          path.write_text(
+              text.split(marker, 1)[0].rstrip() + '\n',
+              encoding='utf-8',
+          )
+          PY
+          git diff --check
+          grep -Fq -- '- [x] Add development-build assertions' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          grep -Fq 'RMA-052 is complete.' docs/IMPLEMENTATION_STATUS.md
+          test -s \
+            docs/validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md
+          test ! -e \
+            docs/validation/RMA_052_VALIDATION_PENDING_2026-07-30.md
+
+      - name: Commit permanent closure
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email \
+            41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            .github/workflows/local-unity-android-validation.yml \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/IMPLEMENTATION_STATUS.md \
+            docs/architecture/AUTHORITATIVE_UNITY_RENDERING.md \
+            docs/validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md
+          git rm -f \
+            docs/validation/RMA_052_VALIDATION_PENDING_2026-07-30.md \
+            docs/validation/RMA_052_CLOSE_TRIGGER \
+            scripts/rma052_close_docs.py \
+            .github/workflows/rma052-docs-close-once.yml \
+            .github/workflows/rma052-finalize-issue-once.yml
+          git diff --cached --check
+          git commit -m 'RMA-052: close authoritative rendering invariants [skip ci]'
+          git push origin HEAD:master
+          closure_sha="$(git rev-parse HEAD)"
+          gh issue close "${ISSUE_NUMBER}" \
+            --comment "RMA-052 documentation closed by ${closure_sha}."
