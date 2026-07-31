@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   validate:
-    if: ${{ github.event_name != 'push' || github.event.head_commit.message != 'RMA-052: invoke direct documentation closure' }}
+    if: github.event_name != 'push' || github.event.head_commit.message != 'RMA052_DIRECT_CLOSURE'
     name: Validate Unity and Android on kawa
     runs-on:
       - self-hosted
@@ -100,7 +100,7 @@ jobs:
             editor_found=false
             for editor_root in \
               "${HOME}/Unity/Hub/Editor" \
-              "${HOME}/UnityHub/Editors" \
+              "${HOME}/UnityHub/Editors/${project_version}" \
               "${HOME}/.local/share/UnityHub/Editors" \
               "/opt/Unity/Hub/Editor" \
               "/opt/unity/editors"; do
@@ -248,7 +248,7 @@ jobs:
 
   # BEGIN RMA-052 DIRECT CLOSURE
   close-rma-052:
-    if: ${{ github.event_name == 'push' && github.event.head_commit.message == 'RMA-052: invoke direct documentation closure' }}
+    if: github.event_name == 'push' && github.event.head_commit.message == 'RMA052_DIRECT_CLOSURE'
     name: Close validated RMA-052 documentation
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -271,7 +271,7 @@ jobs:
           path = Path('.github/workflows/local-unity-android-validation.yml')
           text = path.read_text(encoding='utf-8')
           text = text.replace(
-              "    if: ${{ github.event_name != 'push' || github.event.head_commit.message != 'RMA-052: invoke direct documentation closure' }}\n",
+              "    if: github.event_name != 'push' || github.event.head_commit.message != 'RMA052_DIRECT_CLOSURE'\n",
               '',
               1,
           )
