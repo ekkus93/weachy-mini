@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Calibration Data
-# Permanent clean-tree validation gate.
+# Permanent clean-tree validation gate with explicit commit status.
 
 on:
   push:
@@ -28,12 +28,42 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Publish pending commit status
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/calibration-status.json"
+          import json
+          import os
+
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-070/RMA-071 Calibration Data",
+              "description": "Calibration contract and capture validation is running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/calibration-status.json" >/dev/null
       - name: Check out repository
         uses: actions/checkout@v6
       - name: Set up Python
@@ -93,3 +123,38 @@ jobs:
           path: build/calibration
           if-no-files-found: error
           retention-days: 30
+      - name: Publish final commit status
+        if: always() && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/calibration-status.json"
+          import json
+          import os
+
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-070/RMA-071 Calibration Data",
+              "description": (
+                  "Calibration contract and capture validation passed"
+                  if passed
+                  else "Calibration contract or capture validation failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/calibration-status.json" >/dev/null
