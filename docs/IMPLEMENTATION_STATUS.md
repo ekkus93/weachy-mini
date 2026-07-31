@@ -1,10 +1,8 @@
 # Implementation status
 
-**Updated:** 2026-07-30  
+**Updated:** 2026-07-31
 **Branch:** `master`  
-**Current implementation series:** RMA-064 shared power allocation,
-source-impedance voltage sag, per-servo thermal evolution and derating,
-latched shutdown, explicit safe recovery, diagnostics, and strict validation
+**Current implementation series:** RMA-065 collision geometry, mechanical hard stops, contact/overload telemetry, and physical Android complexity validation
 
 ## Repository rules in force
 
@@ -449,16 +447,50 @@ recovery, role-safe lookup, and fail-closed mismatch tests on exact commit
 `a9a8d4b172a8484cc01167051d5779ce892e6355`. Detailed evidence is in
 [the RMA-064 validation record](validation/RMA_064_POWER_THERMAL_BASELINE_VALIDATION_2026-07-30.md).
 
+### RMA-065 — collision and hard-stop baseline
+
+RMA-065 is complete. The pinned Reachy source now deterministically generates
+coarse collision coverage for the base/body shells, six motor arms, six rods,
+moving platform, head shell, and both antennas. Explicit mask roles and 18
+source-bound topology exclusions prevent unvalidated self-collision pairs while
+retaining representative moving-to-shell and external contact behavior.
+
+Mechanical hard stops are distinct from inset actuator soft ranges. Source yaw
+and Stewart ranges remain pinned-source values; antenna ranges remain explicit
+engineering estimates. State-format-v2 extends diagnostics with contact
+geom/body pairs, forces, impulses, penetration, classification and overload
+flags, plus hard-stop observations/events and health flags, without breaking
+the existing state-format-v1 contract.
+
+Permanent run `30654822714` passed 25 focused Python regressions, deterministic
+model generation, strict native compilation, ASan/UBSan, fake and real MuJoCo
+ABI/state tests, 5,000-step neutral/contact/hard-stop validation, Android API-26
+ARM64 cross-compilation, AArch64 verification, and the physical LG-H872 device
+gate on exact implementation commit
+`08bf637a12dbe77591d3827412a752d3d4e28fba`.
+
+The phone completed 50,000 source and 50,000 enhanced steps with zero warnings
+and zero penetration. Source/enhanced realtime factors were
+`9.180208968594009` and `9.97500021157112`; p95 step times were
+`238.5409898124635` us and `222.2909824922681` us, for overhead ratio
+`-0.06812249472499832` against the `0.35` ceiling. Collision and antenna-stop
+parameters remain visibly uncalibrated engineering estimates. Detailed evidence
+is in
+[the RMA-065 validation record](validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md).
+
 ## Current validation evidence
 
 - RMA-064 run `30607760504`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
   ASan/UBSan, and the complete shared-power/thermal suite passed on
   `a9a8d4b172a8484cc01167051d5779ce892e6355`.
-- The committed bus and thermal constants remain explicit engineering
-  estimates pending physical capture; RMA-065 still owns collisions and
-  mechanical hard stops, and production MuJoCo profile selection remains
-  explicit future work.
+- RMA-065 run `30654822714`: permanent hosted schema, report, strict
+  native, ASan/UBSan, real state-v2 telemetry, Android ARM64 build, and
+  physical LG-H872 50,000-step source/enhanced benchmarks passed on
+  `08bf637a12dbe77591d3827412a752d3d4e28fba`.
+- RMA-065 collision primitives, thresholds, and antenna stop ranges remain
+  explicit engineering estimates pending physical identification; production
+  fidelity-profile selection remains future work.
 - RMA-063 run `30606712074`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
   ASan/UBSan, and the complete native mechanical behavior suite passed on

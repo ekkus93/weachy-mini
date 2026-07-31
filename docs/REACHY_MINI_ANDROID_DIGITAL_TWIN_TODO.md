@@ -982,17 +982,47 @@ public:
 
 ## RMA-065 — Add collision and hard-stop model
 
-- [ ] Audit existing collision geometry.
-- [ ] Add coarse validated collision shapes for motor arms, rods, moving platform, head shell, body shell, and antennas where required.
-- [ ] Add mechanical hard stops distinct from soft command limits.
-- [ ] Expose contact pairs, impulses/forces, and overload events.
-- [ ] Benchmark contact cost on Android.
+**Status:** Complete (2026-07-31)
+
+- [x] Audit existing collision geometry.
+- [x] Add coarse validated collision shapes for motor arms, rods, moving platform, head shell, body shell, and antennas where required.
+- [x] Add mechanical hard stops distinct from soft command limits.
+- [x] Expose contact pairs, impulses/forces, and overload events.
+- [x] Benchmark contact cost on Android.
 
 **Acceptance criteria — dynamics baseline gate**
 
-- [ ] Representative internal and external contacts are stable.
-- [ ] Invalid commands cannot pass through hard stops without a reported fault.
-- [ ] Collision complexity remains within the measured device budget.
+- [x] Representative internal and external contacts are stable.
+- [x] Invalid commands cannot pass through hard stops without a reported fault.
+- [x] Collision complexity remains within the measured device budget.
+
+**Completion evidence**
+
+- The immutable pinned source model now generates 17 named coarse collision
+  primitives plus the retained source shell colliders, producing 25 active
+  collision geoms across 17 bodies and 9 explicit limited joints.
+- Shell, moving, and external masks are explicit. Topology exclusions are
+  source-bound and validated exactly; neutral simulation remains contact-free.
+- Soft actuator command ranges are inset from separate hard joint ranges.
+  Yaw and antenna outward-motion trials observe their limit constraints and
+  remain inside the hard range with zero MuJoCo warnings.
+- State-format-v2 diagnostics expose contact geom/body pairs, position,
+  normal, penetration, normal/tangent force, impulse, contact classification,
+  overload flags, hard-stop observations, events, and health flags while the
+  state-format-v1 ABI remains compatible.
+- Permanent run `30654822714` passed schema/failure tests, strict native
+  compilation, ASan/UBSan, real MuJoCo contact and hard-stop validation,
+  state-v2 telemetry, Android API-26 ARM64 build, AArch64 verification, and
+  the physical LG-H872 benchmark on exact implementation commit
+  `08bf637a12dbe77591d3827412a752d3d4e28fba`.
+- The phone completed 50,000 source and 50,000 enhanced steps with zero
+  warnings and zero penetration. Realtime factors were `9.180208968594009`
+  and `9.97500021157112`; enhanced p95 was `222.2909824922681` us and the
+  p95 overhead ratio was `-0.06812249472499832`, below the `0.35` budget.
+- Collision shapes, thresholds, and antenna ranges remain explicit
+  engineering estimates and are not labeled calibrated.
+- Detailed evidence is in
+  `docs/validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md`.
 
 ---
 
