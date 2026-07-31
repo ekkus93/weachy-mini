@@ -1,6 +1,12 @@
 name: RMA-052 Documentation Closure
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma052-docs-close-once.yml'
+      - 'scripts/rma052_close_docs.py'
   issues:
     types:
       - opened
@@ -11,7 +17,9 @@ permissions:
 
 jobs:
   close-rma-052:
-    if: github.event.issue.title == '[automation] Close RMA-052 documentation'
+    if: >-
+      github.event_name == 'push' ||
+      github.event.issue.title == '[automation] Close RMA-052 documentation'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -56,5 +64,7 @@ jobs:
           git commit -m 'RMA-052: close authoritative rendering invariants [skip ci]'
           git push origin HEAD:master
           closure_sha="$(git rev-parse HEAD)"
-          gh issue close "${ISSUE_NUMBER}" \
-            --comment "RMA-052 documentation closed by ${closure_sha}."
+          if [[ -n "${ISSUE_NUMBER}" ]]; then
+            gh issue close "${ISSUE_NUMBER}" \
+              --comment "RMA-052 documentation closed by ${closure_sha}."
+          fi
