@@ -1,0 +1,129 @@
+name: RMA-074 Calibration Approval Contract
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma074-approval-contract.yml'
+      - 'calibration/schemas/unit-calibrated-profile-v1.schema.json'
+      - 'scripts/calibration_profile_approval.py'
+      - 'scripts/approve_calibration_profile.py'
+      - 'scripts/resolve_calibration_mode.py'
+      - 'scripts/tests/test_rma074_calibration_profile_approval.py'
+      - 'docs/architecture/PHYSICAL_CALIBRATION_AND_PROFILE_APPROVAL.md'
+      - 'docs/validation/RMA_074_PHYSICAL_CALIBRATION_VALIDATION_2026-07-31.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending commit status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma074-approval-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-074 Approval Contract",
+              "description": "Unit approval, signature, and labeling tests are running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma074-approval-status.json" >/dev/null
+
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Validate approval contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl version
+          python3 -m compileall -q \
+            scripts/calibration_profile_approval.py \
+            scripts/approve_calibration_profile.py \
+            scripts/resolve_calibration_mode.py
+          python3 -m unittest \
+            scripts/tests/test_rma074_calibration_profile_approval.py \
+            -v
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          path = Path('calibration/schemas/unit-calibrated-profile-v1.schema.json')
+          schema = json.loads(path.read_text(encoding='utf-8'))
+          assert schema['properties']['contract_id']['const'] == 'rma074_unit_calibrated_profile_v1'
+          assert schema['properties']['calibrated']['const'] is True
+          assert set(schema['properties']['heldout_report']['properties']['metrics']['required']) == {
+              'joint_position', 'head_position', 'head_orientation', 'settling',
+              'overshoot', 'current', 'free_decay', 'contact',
+          }
+          print({'schema_sha256': hashlib.sha256(path.read_bytes()).hexdigest()})
+          PY
+          python3 scripts/approve_calibration_profile.py --help >/dev/null
+          python3 scripts/resolve_calibration_mode.py --help >/dev/null
+
+      - name: Prove missing approval resolves uncalibrated
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="${RUNNER_TEMP}/uncalibrated-mode.json"
+          set +e
+          python3 scripts/resolve_calibration_mode.py \
+            --compatibility calibration/fitting/rma073-compatibility.json \
+            --output "${output}"
+          status=$?
+          set -e
+          test "${status}" -eq 2
+          python3 - "${output}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          value = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          assert value['label'] == 'Uncalibrated'
+          assert value['calibrated'] is False
+          PY
+
+      - name: Publish final commit status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma074-approval-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-074 Approval Contract",
+              "description": "Unit approval contract passed" if passed else "Unit approval contract failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma074-approval-status.json" >/dev/null
