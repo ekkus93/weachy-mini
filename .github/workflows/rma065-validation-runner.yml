@@ -114,7 +114,7 @@ jobs:
               )
           body_replacement = (
               body_line
-              + '    rod = body.find("geom[@name=\\'rma065_rod_1\\']")\n'
+              + "    rod = body.find(\"geom[@name='rma065_rod_1']\")\n"
               + '    if rod is None:\n'
               + '        raise CollisionValidationError(\n'
               + '            "rma065_rod_1 collision geom is missing"\n'
