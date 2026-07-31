@@ -1,0 +1,50 @@
+name: RMA-065 Refresh Aggregate Hash
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/rma065-aggregate-hash-trigger'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify and refresh aggregate hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/rma065-fixed-v4.tar.gz"
+          cat .github/rma065-fixed-v4.part* | base64 --decode > "${archive}"
+          tar -tzf "${archive}" >/dev/null
+          actual="$(sha256sum "${archive}" | awk '{print $1}')"
+          [[ "${actual}" =~ ^[0-9a-f]{64}$ ]]
+          echo "RMA065_FIXED_V4_SHA256=${actual}"
+          ACTUAL="${actual}" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path('.github/workflows/rma065-integrate.yml')
+          text = path.read_text(encoding='utf-8')
+          old = 'd38d0f7d91edaffbea46578237d9551326a8b76fc7cabc02a55fe8a37917b43b'
+          actual = os.environ['ACTUAL']
+          if text.count(old) != 1:
+              raise SystemExit(f'aggregate checksum marker count={text.count(old)}')
+          path.write_text(text.replace(old, actual, 1), encoding='utf-8', newline='\n')
+          PY
+          rm .github/rma065-aggregate-hash-trigger
+          rm .github/workflows/rma065-refresh-aggregate-hash.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-065: refresh verified v4 aggregate checksum'
+          git push origin HEAD:master
