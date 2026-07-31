@@ -21,7 +21,7 @@ typedef struct ReachyStabilityPhase {
 } ReachyStabilityPhase;
 
 static const char REACHY_STABILITY_PROFILE_ID[] = "upstream_baseline";
-static const char REACHY_STABILITY_PROFILE_SHA256[] = "c1e9564cac6e967a6ee726c42a9d2882acf7d473d4302cbf808e20f92cddfecd";
+static const char REACHY_STABILITY_PROFILE_SHA256[] = "c1e0715133057e6815f0bc615107be74298b446b588abc22b0c7c0a688fb2f65";
 static const char REACHY_STABILITY_MODEL_SHA256[] = "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46";
 static const char REACHY_STABILITY_MUJOCO_VERSION[] = "3.9.0";
 static const char REACHY_STABILITY_UPSTREAM_COMMIT[] = "a739a6e461eb6d722901f1cfc225265ffc85c28d";
@@ -49,20 +49,20 @@ static const ReachyStabilityPhase REACHY_STABILITY_PHASES[REACHY_STABILITY_PHASE
     {"neutral_awake", "neutral", {0, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
     {"upstream_sleep_request", "sleep", {0, -0.98481566582258173, 1.2624661884298831, -0.24390294527381684, 0.20555342557667577, -1.2363885150358267, 1.0032234352772091, -3.0499999999999998, 3.0499999999999998}, UINT32_C(102)},
     {"neutral_after_sleep", "neutral", {0, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"body_yaw_positive_limit", "body_yaw_limit", {2.7925268031908792, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"body_yaw_negative_limit", "body_yaw_limit", {-2.7925268031909751, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_1_negative_limit", "head_actuator_limit", {0, -0.83775804095721962, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_1_positive_limit", "head_actuator_limit", {0, 1.3962634015955222, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_2_negative_limit", "head_actuator_limit", {0, 0, -1.3962634015956139, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_2_positive_limit", "head_actuator_limit", {0, 0, 1.2217304763958803, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_3_negative_limit", "head_actuator_limit", {0, 0, 0, -0.83775804095721729, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_3_positive_limit", "head_actuator_limit", {0, 0, 0, 1.3962634015955244, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_4_negative_limit", "head_actuator_limit", {0, 0, 0, 0, -1.3962634015953894, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_4_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0.83775804095735251, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_5_negative_limit", "head_actuator_limit", {0, 0, 0, 0, 0, -1.2217304763962082, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_5_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 1.3962634015952859, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_6_negative_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 0, -1.3962634015954123, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
-    {"head_motor_6_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 0, 0.83775804095732964, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"body_yaw_positive_limit", "body_yaw_limit", {2.7925268021908791, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"body_yaw_negative_limit", "body_yaw_limit", {-2.792526802190975, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_1_negative_limit", "head_actuator_limit", {0, -0.83775803995721965, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_1_positive_limit", "head_actuator_limit", {0, 1.3962634005955221, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_2_negative_limit", "head_actuator_limit", {0, 0, -1.396263400595614, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_2_positive_limit", "head_actuator_limit", {0, 0, 1.2217304753958802, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_3_negative_limit", "head_actuator_limit", {0, 0, 0, -0.83775803995721732, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_3_positive_limit", "head_actuator_limit", {0, 0, 0, 1.3962634005955243, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_4_negative_limit", "head_actuator_limit", {0, 0, 0, 0, -1.3962634005953893, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_4_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0.83775803995735254, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_5_negative_limit", "head_actuator_limit", {0, 0, 0, 0, 0, -1.2217304753962082, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_5_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 1.3962634005952861, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_6_negative_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 0, -1.3962634005954122, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
+    {"head_motor_6_positive_limit", "head_actuator_limit", {0, 0, 0, 0, 0, 0, 0.83775803995732956, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
     {"antennas_sleep_extreme", "antenna_extreme", {0, 0, 0, 0, 0, 0, 0, -3.0499999999999998, 3.0499999999999998}, UINT32_C(0)},
     {"antennas_mirrored_extreme", "antenna_extreme", {0, 0, 0, 0, 0, 0, 0, 3.0499999999999998, -3.0499999999999998}, UINT32_C(0)},
     {"neutral_final", "neutral", {0, 0, 0, 0, 0, 0, 0, -0.17449999999999999, 0.17449999999999999}, UINT32_C(0)},
