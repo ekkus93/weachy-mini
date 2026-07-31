@@ -487,16 +487,50 @@ namespace ReachyMini.Rendering
             public int qvel_count = 0;
         }
 
-        private sealed class FaultCapturingPoseSource : IReachyAuthoritativePoseSource
+        private sealed class FaultCapturingPoseSource :
+            IReachyReusableAuthoritativePoseSource
         {
             private readonly IReachyAuthoritativePoseSource inner;
+            private readonly IReachyReusableAuthoritativePoseSource reusableInner;
 
             public FaultCapturingPoseSource(IReachyAuthoritativePoseSource inner)
             {
                 this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
+                reusableInner = inner as IReachyReusableAuthoritativePoseSource ??
+                    throw new ArgumentException(
+                        "The production pose source must provide reusable pose buffers.",
+                        nameof(inner));
             }
 
             public string Fault { get; private set; } = string.Empty;
+
+            public int BodyCount => reusableInner.BodyCount;
+
+            public ReachyReusableAuthoritativePoseFrame CreatePoseFrame()
+            {
+                return reusableInner.CreatePoseFrame();
+            }
+
+            public bool TryCopyLatestPair(
+                ReachyReusableAuthoritativePoseFrame olderDestination,
+                ReachyReusableAuthoritativePoseFrame newerDestination)
+            {
+                if (!string.IsNullOrEmpty(Fault))
+                {
+                    return false;
+                }
+                try
+                {
+                    return reusableInner.TryCopyLatestPair(
+                        olderDestination,
+                        newerDestination);
+                }
+                catch (Exception exception)
+                {
+                    Fault = exception.Message;
+                    return false;
+                }
+            }
 
             public bool TryGetLatestPair(
                 out ReachyAuthoritativePoseSnapshot older,
