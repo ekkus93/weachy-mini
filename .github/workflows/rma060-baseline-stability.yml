@@ -1,0 +1,356 @@
+name: RMA-060 Baseline Stability
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma060-baseline-stability.yml'
+      - 'CMakeLists.txt'
+      - 'models/reachy-mini/upstream-baseline-stability.json'
+      - 'native/cmake/**'
+      - 'native/reachy_sim/CMakeLists.txt'
+      - 'native/reachy_sim/compat/**'
+      - 'native/reachy_sim/feasibility/CMakeLists.txt'
+      - 'native/reachy_sim/feasibility/reachy_mujoco_stability_runner*'
+      - 'native/reachy_sim/feasibility/reachy_stability_profile.generated.h'
+      - 'native/reachy_sim/src/**'
+      - 'scripts/build_mujoco_android.sh'
+      - 'scripts/build_reachy_stability_android.sh'
+      - 'scripts/generate_reachy_stability_header.py'
+      - 'scripts/import_reachy_assets.py'
+      - 'scripts/run_reachy_stability_android.sh'
+      - 'scripts/run_reachy_upstream_baseline_stability.py'
+      - 'scripts/source_checkout.py'
+      - 'scripts/tests/test_generate_reachy_stability_header.py'
+      - 'scripts/tests/test_upstream_baseline_stability.py'
+      - 'scripts/verify_source_checkout.py'
+      - 'third_party/mujoco-source.lock.json'
+      - 'third_party/reachy-mini-source.lock.json'
+      - 'toolchain.lock.json'
+  workflow_dispatch:
+    inputs:
+      run_device_stability:
+        description: Run the required long-duration gate on the physical Android runner
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma060-baseline-stability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-desktop:
+    name: Validate profile and build Android runner
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify generated stability contract and focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_reachy_stability_header.py \
+            --profile models/reachy-mini/upstream-baseline-stability.json \
+            --output \
+              native/reachy_sim/feasibility/reachy_stability_profile.generated.h \
+            --check
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*stability*.py' \
+            -v
+
+      - name: Export pinned versions and Reachy checkout metadata
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+
+          toolchain = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))
+          mujoco = json.loads(
+              Path("third_party/mujoco-source.lock.json").read_text(encoding="utf-8")
+          )
+          android = toolchain["android"]
+          values = {
+              "ANDROID_BUILD_TOOLS": android["build_tools"],
+              "ANDROID_CMAKE_VERSION": android["cmake"],
+              "ANDROID_COMPILE_SDK_PACKAGE": android["compile_sdk_package"],
+              "ANDROID_NDK_VERSION": android["ndk"],
+              "ANDROID_PLATFORM": f"android-{android['native_feasibility_min_sdk']}",
+              "MUJOCO_COMMIT": mujoco["commit"],
+              "MUJOCO_REPOSITORY": mujoco["repository"],
+              "MUJOCO_VERSION": mujoco["version"],
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path, PurePosixPath
+          from urllib.parse import urlparse
+
+          reachy = json.loads(
+              Path("third_party/reachy-mini-source.lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          repository_path = urlparse(reachy["repository"]).path
+          repository = repository_path.removesuffix(".git").strip("/")
+          if repository.count("/") != 1:
+              raise SystemExit(f"Invalid pinned Reachy repository: {repository!r}")
+          print(f"reachy_repository={repository}")
+          print(f"reachy_commit={reachy['commit']}")
+          print(f"reachy_model_directory={PurePosixPath(reachy['model_file']).parent}")
+          print(f"reachy_license_file={reachy['license_file']}")
+          print(f"reachy_output_subdirectory={reachy['output_subdirectory']}")
+          PY
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" \
+            --install \
+            "platform-tools" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          "${sdkmanager}" \
+            --channel=3 \
+            --install \
+            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}"
+
+          ndk_root="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          cmake_bin="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin"
+          test -f "${ndk_root}/source.properties"
+          test -x "${cmake_bin}/cmake"
+          test -x "${cmake_bin}/ninja"
+          {
+            printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}"
+            printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${cmake_bin}" >> "${GITHUB_PATH}"
+
+      - name: Check out pinned MuJoCo source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="${RUNNER_TEMP}/mujoco"
+          git init "${source_dir}"
+          git -C "${source_dir}" remote add origin "${MUJOCO_REPOSITORY}"
+          git -C "${source_dir}" fetch --depth=1 origin "${MUJOCO_COMMIT}"
+          git -C "${source_dir}" checkout --detach FETCH_HEAD
+          python3 scripts/verify_source_checkout.py \
+            --source "${source_dir}" \
+            --lock third_party/mujoco-source.lock.json
+          printf 'MUJOCO_SOURCE_DIR=%s\n' "${source_dir}" >> "${GITHUB_ENV}"
+
+      - name: Check out pinned Reachy MJCF and meshes
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.reachy_repository }}
+          ref: ${{ steps.pins.outputs.reachy_commit }}
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            ${{ steps.pins.outputs.reachy_model_directory }}
+            ${{ steps.pins.outputs.reachy_license_file }}
+          sparse-checkout-cone-mode: false
+
+      - name: Import pinned Reachy model package
+        shell: bash
+        env:
+          EXPECTED_REACHY_COMMIT: ${{ steps.pins.outputs.reachy_commit }}
+          REACHY_OUTPUT_SUBDIRECTORY: ${{ steps.pins.outputs.reachy_output_subdirectory }}
+        run: |
+          set -euo pipefail
+          actual_commit="$(git -C upstream/reachy-mini rev-parse HEAD)"
+          if [[ "${actual_commit}" != "${EXPECTED_REACHY_COMMIT}" ]]; then
+            printf 'Reachy source mismatch: expected %s, found %s.\n' \
+              "${EXPECTED_REACHY_COMMIT}" "${actual_commit}" >&2
+            exit 1
+          fi
+          if [[ -n "$(git -C upstream/reachy-mini status --porcelain --untracked-files=all)" ]]; then
+            printf '%s\n' 'Pinned Reachy source checkout is not clean.' >&2
+            exit 1
+          fi
+
+          import_root="${RUNNER_TEMP}/reachy-import"
+          python3 scripts/import_reachy_assets.py \
+            --source upstream/reachy-mini \
+            --output-root "${import_root}"
+          imported_model="${import_root}/${REACHY_OUTPUT_SUBDIRECTORY}"
+          test -f "${imported_model}/reachy_mini.xml"
+          test -f "${imported_model}/MODEL_MAP.json"
+          test -f "${imported_model}/PROVENANCE.json"
+          printf 'REACHY_IMPORTED_MODEL_DIR=%s\n' \
+            "${imported_model}" >> "${GITHUB_ENV}"
+
+      - name: Run required desktop stability schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install \
+            --disable-pip-version-check \
+            "mujoco==${MUJOCO_VERSION}"
+          report_dir="${RUNNER_TEMP}/rma060-desktop-report"
+          mkdir -p "${report_dir}"
+          desktop_report="${report_dir}/rma060-desktop-stability.json"
+          cycles="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          profile = json.loads(
+              Path("models/reachy-mini/upstream-baseline-stability.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          print(profile["long_duration_gate"]["required_android_cycles"])
+          PY
+          )"
+          python3 scripts/run_reachy_upstream_baseline_stability.py \
+            --model "${REACHY_IMPORTED_MODEL_DIR}/reachy_mini.xml" \
+            --profile models/reachy-mini/upstream-baseline-stability.json \
+            --cycles "${cycles}" \
+            --output "${desktop_report}"
+          python3 - "${desktop_report}" "${cycles}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          expected_cycles = int(sys.argv[2])
+          if report.get("status") != "ok":
+              raise SystemExit(f"desktop stability failed: {report}")
+          if report.get("cycles") != expected_cycles:
+              raise SystemExit(f"desktop cycle count mismatch: {report}")
+          if report.get("aggregate_metrics", {}).get("warning_count") != 0:
+              raise SystemExit(f"desktop stability produced warnings: {report}")
+          PY
+          printf 'RMA060_DESKTOP_REPORT_DIR=%s\n' "${report_dir}" >> "${GITHUB_ENV}"
+
+      - name: Build Android ARM64 stability runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="${RUNNER_TEMP}/weachy-rma060-android-arm64"
+          printf 'RMA060_ARTIFACT_DIR=%s\n' "${artifact_dir}" >> "${GITHUB_ENV}"
+
+          MUJOCO_ANDROID_PLATFORM="${ANDROID_PLATFORM}" \
+          MUJOCO_ANDROID_BUILD_DIR="${RUNNER_TEMP}/mujoco-build-rma060" \
+          MUJOCO_ANDROID_OUTPUT_DIR="${artifact_dir}" \
+          REACHY_PROBE_ANDROID_BUILD_DIR="${RUNNER_TEMP}/probe-build-rma060" \
+            bash scripts/build_reachy_stability_android.sh
+
+          cp -a "${REACHY_IMPORTED_MODEL_DIR}" "${artifact_dir}/reachy-model"
+          cp -a "${RMA060_DESKTOP_REPORT_DIR}" "${artifact_dir}/desktop-report"
+
+      - name: Verify Android stability artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          prebuilt_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt"
+          mapfile -t readelf_candidates < <(
+            find "${prebuilt_root}" \
+              \( -type f -o -type l \) \
+              -path '*/bin/llvm-readelf' \
+              -print
+          )
+          if [[ "${#readelf_candidates[@]}" -ne 1 ]]; then
+            printf 'Expected one NDK llvm-readelf, found %s.\n' \
+              "${#readelf_candidates[@]}" >&2
+            exit 1
+          fi
+          readelf="${readelf_candidates[0]}"
+          "${readelf}" -h "${RMA060_ARTIFACT_DIR}/reachy_mujoco_stability_runner" \
+            | tee "${RMA060_ARTIFACT_DIR}/stability-runner.elf-header.txt"
+          grep -F 'Machine:' "${RMA060_ARTIFACT_DIR}/stability-runner.elf-header.txt" \
+            | grep -F 'AArch64'
+          test -s "${RMA060_ARTIFACT_DIR}/libmujoco.so"
+          test -x "${RMA060_ARTIFACT_DIR}/reachy_mujoco_stability_runner"
+          test -s "${RMA060_ARTIFACT_DIR}/upstream-baseline-stability.json"
+          test -s "${RMA060_ARTIFACT_DIR}/RMA060_BUILD_INFO.txt"
+          test -s "${RMA060_ARTIFACT_DIR}/reachy-model/reachy_mini.xml"
+          test -s "${RMA060_ARTIFACT_DIR}/reachy-model/MODEL_MAP.json"
+          test -s "${RMA060_ARTIFACT_DIR}/reachy-model/PROVENANCE.json"
+          test -s \
+            "${RMA060_ARTIFACT_DIR}/desktop-report/rma060-desktop-stability.json"
+
+      - name: Upload RMA-060 Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-rma060-android-arm64-${{ github.sha }}
+          path: ${{ env.RMA060_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+  device-stability:
+    name: Run 30 simulated minutes on physical Android
+    if: ${{ github.event_name == 'push' || inputs.run_device_stability }}
+    needs: build-and-desktop
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download RMA-060 Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weachy-rma060-android-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/weachy-rma060-android-arm64
+
+      - name: Run physical Android baseline stability gate
+        shell: bash
+        env:
+          MUJOCO_ANDROID_OUTPUT_DIR: ${{ runner.temp }}/weachy-rma060-android-arm64
+          REACHY_STABILITY_REPORT_DIR: ${{ runner.temp }}/rma060-device-report
+        run: |
+          set -euo pipefail
+          bash scripts/run_reachy_stability_android.sh
+
+      - name: Upload physical-device stability evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-rma060-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma060-device-report
+          if-no-files-found: error
+          retention-days: 30
