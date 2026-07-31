@@ -55,7 +55,8 @@ jobs:
           set -euo pipefail
           original="${RUNNER_TEMP}/rma065-original.tar.gz"
           original_dir="${RUNNER_TEMP}/rma065-original"
-          fixed="${RUNNER_TEMP}/rma065-fixed.tar.gz"
+          fixed_v2="${RUNNER_TEMP}/rma065-fixed-v2.tar.gz"
+          fixed_v3="${RUNNER_TEMP}/rma065-fixed-v3.tar.gz"
 
           cat .github/rma065-payload.part* | base64 --decode > "${original}"
           printf '%s  %s\n' \
@@ -64,31 +65,27 @@ jobs:
           mkdir -p "${original_dir}"
           tar -xzf "${original}" -C "${original_dir}"
 
-          printf '%s  %s\n' \
-            'da79362260ca276c5d840d0c98c172fa43931a550ee9eca6ec10a484ea8f4bf2' \
-            '.github/rma065-fixed-v2.part00' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            '6eeefc857033e479d406a6a08803210e7e3dcbecfe61d0e5c8050d09e71c97b0' \
-            '.github/rma065-fixed-v2.part01' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            '3b47b7e43452f362029da5e755988e38c18b1d48fa51723d02c8b2799e124b21' \
-            '.github/rma065-fixed-v2.part02' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            '54e7b17e23cf52fc425fbff9bc569db06bd4807b3adf335ee59bdbf7ba4ac591' \
-            '.github/rma065-fixed-v2.part03' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            'c2075cb8f2865dfff23177b22895aee527b0207f86d2dd7a812c10e3f5ead320' \
-            '.github/rma065-fixed-v2.part04' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            '672ebd0842d20ebd7918b07157c11021e2522b772ab91c7b32bc19a35f25bdd6' \
-            '.github/rma065-fixed-v2.part05' | sha256sum --check --strict
-          printf '%s  %s\n' \
-            '06e067e7a22220e798974fdc985243f4c9fbe0942396339d24da61f4113a9cda' \
-            '.github/rma065-fixed-v2.part06' | sha256sum --check --strict
-          cat .github/rma065-fixed-v2.part* | base64 --decode > "${fixed}"
+          cat .github/rma065-fixed-v2.part* | base64 --decode > "${fixed_v2}"
           printf '%s  %s\n' \
             '7aaaab376547a99a0a82dcc504cf777f54dfde3605da3ada8349009387ebd847' \
-            "${fixed}" | sha256sum --check --strict
+            "${fixed_v2}" | sha256sum --check --strict
+
+          printf '%s  %s\n' \
+            'e434d831c140828d317cb8b8bb54e847653e3810fa43debee50c7f8d5cad3e4b' \
+            '.github/rma065-fixed-v3.part00' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'bbbb08c96371523e0fe741b9a242a289b4620353fb1b410bb9875a4ebdf84925' \
+            '.github/rma065-fixed-v3.part01' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '507f513a91b77e2628fe65e22fea18fa642d40ef918072ff13301deced56a73d' \
+            '.github/rma065-fixed-v3.part02' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'e6b2e5c25b404f3668490b33f11866164c79c60d5f4ee623285fa18c2ae8e654' \
+            '.github/rma065-fixed-v3.part03' | sha256sum --check --strict
+          cat .github/rma065-fixed-v3.part* | base64 --decode > "${fixed_v3}"
+          printf '%s  %s\n' \
+            '577e1945859a9f4d0e3b35b8a740a73121b0ec0fb4eb6a3c83ce2e16ea09489d' \
+            "${fixed_v3}" | sha256sum --check --strict
 
           rsync -a --exclude scripts/apply_rma065_source_edits.py "${original_dir}/" ./
           cp "${original_dir}/scripts/apply_rma065_source_edits.py" scripts/.rma065-apply.py
@@ -104,7 +101,8 @@ jobs:
           PY
           python3 scripts/.rma065-apply.py
           rm scripts/.rma065-apply.py
-          tar -xzf "${fixed}" -C .
+          tar -xzf "${fixed_v2}" -C .
+          tar -xzf "${fixed_v3}" -C .
 
           python3 - <<'PY'
           from pathlib import Path
@@ -222,6 +220,7 @@ jobs:
           rm -f .github/rma065-payload.part*
           rm -f .github/rma065-fixed-bundle.b64
           rm -f .github/rma065-fixed-v2.part*
+          rm -f .github/rma065-fixed-v3.part*
           rm -f .github/rma065-debug-trigger
           rm -f .github/rma065-wire-fixed-trigger
           git diff --check
