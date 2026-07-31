@@ -1,0 +1,39 @@
+name: RMA-065 Fix Chunk Checksum
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-fix-chunk-checksum.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Correct stored v4 chunk checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/rma065-integrate.yml')
+          text = path.read_text(encoding='utf-8')
+          old = '50bb9f97b9515b12f3d126da1d11a88621e9ac5371715b489af06da5069ac845'
+          new = '9a32472e500d126efe6809cb50c36ed0376dc303943cb67265d44ddf68764c74'
+          if text.count(old) != 1:
+              raise SystemExit(f'old checksum occurrence count={text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
+          rm .github/workflows/rma065-fix-chunk-checksum.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-065: correct split topology chunk checksum [skip ci]'
+          git push origin HEAD:master
