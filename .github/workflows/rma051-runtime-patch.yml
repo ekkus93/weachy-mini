@@ -1,0 +1,38 @@
+name: RMA-051 Guarded Runtime Wrapper Patch
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'scripts/rma051_patch_runtime.py'
+      - '.github/workflows/rma051-runtime-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply guarded reusable-source wrapper patch
+        run: |
+          set -euo pipefail
+          python3 scripts/rma051_patch_runtime.py
+          git diff --check
+      - name: Commit verified runtime wrapper
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs
+          git rm scripts/rma051_patch_runtime.py .github/workflows/rma051-runtime-patch.yml
+          git diff --cached --check
+          git commit -m 'RMA-051: preserve reusable source through fault wrapper'
+          git push origin HEAD:master
