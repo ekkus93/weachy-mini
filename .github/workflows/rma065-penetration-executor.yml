@@ -119,6 +119,30 @@ jobs:
           set -euo pipefail
           bash "${RUNNER_TEMP}/reconstruct.sh"
           bash "${RUNNER_TEMP}/fixture.sh"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['RUNNER_TEMP']) / 'derive.sh'
+          text = path.read_text(encoding='utf-8')
+          old = (
+              "          radius_matches = re.findall(\n"
+              "              r'\\.set\\(\"size\",\\s*\"([0-9.eE+\\-]+)\"\\)',\n"
+              "              helper,\n"
+              "          )\n"
+          )
+          new = (
+              "          radius_matches = re.findall(\n"
+              "              r'(?:\"size\"\\s*:\\s*|\\.set\\(\"size\",\\s*)\"([0-9.eE+\\-]+)\"',\n"
+              "              helper,\n"
+              "          )\n"
+          )
+          if text.count(old) != 1:
+              raise SystemExit(
+                  f'derived-radius parser marker count={text.count(old)}'
+              )
+          path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+          PY
           bash "${RUNNER_TEMP}/derive.sh"
 
       - name: Validate schema and native ABI
