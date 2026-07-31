@@ -1,0 +1,137 @@
+name: Integrate RMA-064 Power Thermal
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma064-integrate.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Publish pending integration status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-064 Integration',
+              description: 'Payload extraction, strict build, shared-load and thermal tests are running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Check out exact integration head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract, validate, and commit RMA-064
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -f .github/rma064-payload.part00
+          cat .github/rma064-payload.part* | base64 --decode > /tmp/rma064-payload.tar.gz
+          printf '%s  %s\n' \
+            '2d8ae86513746777bfdf94814c877eec1a709fdeaf1b7b44391cefb9fdb22c8a' \
+            '/tmp/rma064-payload.tar.gz' > /tmp/rma064-payload.sha256
+          sha256sum --check /tmp/rma064-payload.sha256
+          tar -tzf /tmp/rma064-payload.tar.gz > /tmp/rma064-members.txt
+          if grep -E '(^|/)\.\.(/|$)|^/' /tmp/rma064-members.txt; then
+            printf '%s\n' 'RMA-064 payload contains an unsafe path.' >&2
+            exit 1
+          fi
+          test "$(wc -l < /tmp/rma064-members.txt)" -eq 9
+          tar -xzf /tmp/rma064-payload.tar.gz -C .
+
+          cmake_file='native/reachy_sim/CMakeLists.txt'
+          include_line='include("${CMAKE_CURRENT_LIST_DIR}/power_thermal_model.cmake")'
+          if grep -Fqx "$include_line" "$cmake_file"; then
+            printf '%s\n' 'RMA-064 CMake include unexpectedly already exists.' >&2
+            exit 1
+          fi
+          printf '\n%s\n' "$include_line" >> "$cmake_file"
+
+          python3 scripts/generate_reachy_power_thermal_baseline.py --check
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*power_thermal*.py' \
+            -v
+
+          if grep -En 'UnityEngine|MonoBehaviour|GameObject|Transform|Unity::' \
+            native/reachy_sim/include/reachy_power_thermal_model.hpp \
+            native/reachy_sim/src/reachy_power_thermal_model.cpp; then
+            printf '%s\n' 'Native power/thermal model contains a Unity dependency.' >&2
+            exit 1
+          fi
+          if grep -En 'PowerThermalEvidenceClass::Calibrated|"calibrated"' \
+            native/reachy_sim/src/reachy_power_thermal_baseline.generated.hpp \
+            models/reachy-mini/power-thermal-baseline.json; then
+            printf '%s\n' 'RMA-064 baseline contains a calibrated claim.' >&2
+            exit 1
+          fi
+
+          cmake \
+            -S . \
+            -B build/rma064-integration \
+            -DBUILD_TESTING=ON \
+            -DREACHY_ENABLE_SANITIZERS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build/rma064-integration \
+            --target reachy_power_thermal_model_test \
+            --parallel 2
+          ctest \
+            --test-dir build/rma064-integration \
+            --output-on-failure \
+            -R '^reachy_power_thermal_model_test$'
+
+          git rm \
+            .github/rma064-payload.part* \
+            .github/workflows/rma064-integrate.yml
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/architecture/POWER_THERMAL_BASELINE.md \
+            models/reachy-mini/power-thermal-baseline.json \
+            native/reachy_sim/CMakeLists.txt \
+            native/reachy_sim/power_thermal_model.cmake \
+            native/reachy_sim/include/reachy_power_thermal_model.hpp \
+            native/reachy_sim/src/reachy_power_thermal_baseline.generated.hpp \
+            native/reachy_sim/src/reachy_power_thermal_model.cpp \
+            native/reachy_sim/tests/reachy_power_thermal_model_test.cpp \
+            scripts/generate_reachy_power_thermal_baseline.py \
+            scripts/tests/test_generate_reachy_power_thermal_baseline.py
+          git commit -m 'RMA-064: integrate shared power and thermal baseline [skip ci]'
+          git push origin HEAD:master
+
+      - name: Publish final integration status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          INTEGRATION_RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.INTEGRATION_RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-064 Integration',
+              description: passed
+                ? 'Payload, strict build, shared-current, sag, thermal and clear tests passed'
+                : 'RMA-064 integration failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
