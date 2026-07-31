@@ -101,3 +101,5 @@ jobs:
             scripts/tests/test_generate_reachy_electrical_baseline.py
           git commit -m 'RMA-062: integrate electrical controller baseline'
           git push origin HEAD:master
+
+# Triggered through the contents API so the integration workflow runs.
