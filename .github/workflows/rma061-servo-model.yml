@@ -1,3 +1,4 @@
+# Initial validation trigger for the integrated native target.
 name: RMA-061 Servo Model Contract
 
 on:
