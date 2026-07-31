@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma065-collision-audit.yml'
+      - 'scripts/audit_reachy_collision_model.py'
   workflow_dispatch:
 
 permissions:
@@ -58,137 +59,35 @@ jobs:
           python3 scripts/import_reachy_assets.py \
             --source upstream/reachy-mini \
             --output-root "${RUNNER_TEMP}/reachy-import"
-          model="${RUNNER_TEMP}/reachy-import/reachy-mini-official/reachy_mini.xml"
-          test -f "${model}"
-          mkdir -p "${RUNNER_TEMP}/rma065-audit"
-          python3 - "${model}" "${RUNNER_TEMP}/rma065-audit/collision-audit.json" <<'PY'
-          import hashlib
+          output_subdirectory="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('third_party/reachy-mini-source.lock.json').read_text())['output_subdirectory'])
+          PY
+          )"
+          model="${RUNNER_TEMP}/reachy-import/${output_subdirectory}/reachy_mini.xml"
+          report="${RUNNER_TEMP}/rma065-audit/collision-audit.json"
+          python3 scripts/audit_reachy_collision_model.py \
+            --model "${model}" \
+            --output "${report}" \
+            --expected-sha256 efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46 \
+            --steps 5000 \
+            --contract rma065_pinned_collision_audit_v1
+          python3 - "${report}" <<'PY'
           import json
           import sys
-          from collections import Counter, defaultdict
           from pathlib import Path
-          import xml.etree.ElementTree as ET
-
-          import mujoco
-          import numpy as np
-
-          model_path = Path(sys.argv[1])
-          output_path = Path(sys.argv[2])
-          model_sha256 = hashlib.sha256(model_path.read_bytes()).hexdigest()
-          expected_sha256 = 'efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46'
-          if model_sha256 != expected_sha256:
-              raise SystemExit(
-                  f'pinned model hash mismatch: expected {expected_sha256}, found {model_sha256}'
-              )
-
-          root = ET.parse(model_path).getroot()
-          source_bodies = []
-          for body in root.findall('.//body'):
-              source_bodies.append({
-                  'name': body.get('name'),
-                  'direct_geoms': len(body.findall('./geom')),
-                  'direct_joints': [j.get('name') for j in body.findall('./joint')],
-              })
-          source_collision_geoms = []
-          for geom in root.findall('.//geom'):
-              if geom.get('class') == 'collision' or geom.get('contype') not in (None, '0'):
-                  source_collision_geoms.append(dict(sorted(geom.attrib.items())))
-
-          model = mujoco.MjModel.from_xml_path(str(model_path))
-          data = mujoco.MjData(model)
-          mujoco.mj_forward(model, data)
-          collision_by_body = defaultdict(list)
-          geom_records = []
-          for geom_id in range(model.ngeom):
-              name = (
-                  mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
-                  or f'geom_{geom_id}'
-              )
-              body_id = int(model.geom_bodyid[geom_id])
-              body_name = (
-                  mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id)
-                  or f'body_{body_id}'
-              )
-              record = {
-                  'id': geom_id,
-                  'name': name,
-                  'body': body_name,
-                  'type': int(model.geom_type[geom_id]),
-                  'contype': int(model.geom_contype[geom_id]),
-                  'conaffinity': int(model.geom_conaffinity[geom_id]),
-                  'group': int(model.geom_group[geom_id]),
-                  'size': [float(value) for value in model.geom_size[geom_id]],
-              }
-              geom_records.append(record)
-              if record['contype'] or record['conaffinity']:
-                  collision_by_body[body_name].append(record)
-
-          contacts = Counter()
-          max_penetration = 0.0
-          max_contacts = 0
-          warning_count = 0
-          for _ in range(5000):
-              mujoco.mj_step(model, data)
-              max_contacts = max(max_contacts, int(data.ncon))
-              warning_count = max(
-                  warning_count,
-                  sum(int(item.number) for item in data.warning),
-              )
-              for index in range(data.ncon):
-                  contact = data.contact[index]
-                  geom1 = (
-                      mujoco.mj_id2name(
-                          model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom1)
-                      )
-                      or str(int(contact.geom1))
-                  )
-                  geom2 = (
-                      mujoco.mj_id2name(
-                          model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom2)
-                      )
-                      or str(int(contact.geom2))
-                  )
-                  contacts[tuple(sorted((geom1, geom2)))] += 1
-                  max_penetration = max(
-                      max_penetration,
-                      max(0.0, -float(contact.dist)),
-                  )
-
-          audit = {
-              'contract': 'rma065_pinned_collision_audit_v1',
-              'model_sha256': model_sha256,
-              'compiled_counts': {
-                  'nbody': model.nbody,
-                  'njnt': model.njnt,
-                  'ngeom': model.ngeom,
-                  'nconmax': model.nconmax,
-                  'nq': model.nq,
-                  'nv': model.nv,
-              },
-              'source_body_count': len(source_bodies),
-              'source_bodies': source_bodies,
-              'source_collision_geom_count': len(source_collision_geoms),
-              'source_collision_geoms': source_collision_geoms,
-              'compiled_geom_count': len(geom_records),
-              'compiled_collision_body_count': len(collision_by_body),
-              'compiled_collision_by_body': dict(sorted(collision_by_body.items())),
-              'neutral_5000_steps': {
-                  'max_contacts': max_contacts,
-                  'max_penetration_metres': max_penetration,
-                  'warning_count': warning_count,
-                  'pairs': [
-                      {'pair': list(pair), 'steps': count}
-                      for pair, count in contacts.most_common()
-                  ],
-                  'finite_qpos': bool(np.isfinite(data.qpos).all()),
-                  'finite_qvel': bool(np.isfinite(data.qvel).all()),
-              },
-          }
-          output_path.write_text(
-              json.dumps(audit, indent=2, sort_keys=True) + '\n',
-              encoding='utf-8',
-          )
-          print(json.dumps(audit, indent=2, sort_keys=True))
+          report = json.loads(Path(sys.argv[1]).read_text())
+          neutral = report['neutral_audit']
+          if neutral['warning_count'] != 0:
+              raise SystemExit(f"neutral audit produced warnings: {neutral}")
+          if not neutral['finite_qpos'] or not neutral['finite_qvel']:
+              raise SystemExit(f"neutral audit produced non-finite state: {neutral}")
+          counts = report['compiled_inventory']['counts']
+          expected = {'nbody': 19, 'njnt': 16, 'nu': 9, 'neq': 5, 'nq': 37, 'nv': 30}
+          for key, value in expected.items():
+              if counts.get(key) != value:
+                  raise SystemExit(f"compiled count mismatch for {key}: {counts}")
           PY
 
       - name: Upload collision audit
