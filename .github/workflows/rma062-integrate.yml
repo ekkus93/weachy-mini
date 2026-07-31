@@ -55,6 +55,16 @@ jobs:
           test "$(wc -l < /tmp/rma062-members.txt)" -ge 10
           tar -xzf /tmp/rma062-payload.tar.gz -C .
 
+          test_file='scripts/tests/test_generate_reachy_electrical_baseline.py'
+          sed -i \
+            's|ROOT / "models" / "electrical-controller-baseline.json"|ROOT / "models" / "reachy-mini" / "electrical-controller-baseline.json"|' \
+            "$test_file"
+          sed -i \
+            's|ROOT / "src" / "reachy_electrical_baseline.generated.hpp"|ROOT / "native" / "reachy_sim" / "src" / "reachy_electrical_baseline.generated.hpp"|' \
+            "$test_file"
+          grep -F 'models" / "reachy-mini" / "electrical-controller-baseline.json' "$test_file"
+          grep -F 'native" / "reachy_sim" / "src" / "reachy_electrical_baseline.generated.hpp' "$test_file"
+
           cmake_file='native/reachy_sim/CMakeLists.txt'
           include_line='include("${CMAKE_CURRENT_LIST_DIR}/electrical_servo_model.cmake")'
           if grep -Fqx "$include_line" "$cmake_file"; then
