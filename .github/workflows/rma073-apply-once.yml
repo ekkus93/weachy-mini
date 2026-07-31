@@ -49,6 +49,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/apply_rma073_once.py
+          python3 scripts/apply_rma073_part2_once.py
+          python3 scripts/apply_rma073_part3_once.py
           git diff --check
       - name: Validate implementation before commit
         shell: bash
