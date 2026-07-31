@@ -1,0 +1,41 @@
+name: RMA-065 Debug Source Export
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/rma065-debug-trigger'
+      - '.github/workflows/rma065-debug-source.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct verified payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/rma065-payload.tar.gz"
+          payload="${RUNNER_TEMP}/rma065-payload"
+          cat .github/rma065-payload.part* | base64 --decode > "${archive}"
+          printf '%s  %s\n' \
+            '133b4959d137607b1640c24cd12b6ef99b00f8c3e851d2a406d6495364deda0c' \
+            "${archive}" | sha256sum --check --strict
+          mkdir -p "${payload}"
+          tar -xzf "${archive}" -C "${payload}"
+          mkdir -p rma065-debug
+          cp "${payload}/scripts/generate_reachy_collision_model.py" rma065-debug/
+          cp "${payload}/scripts/run_reachy_collision_hard_stop_validation.py" rma065-debug/
+          cp "${payload}/scripts/tests/test_generate_reachy_collision_model.py" rma065-debug/
+          cp "${payload}/models/reachy-mini/collision-hard-stop-baseline.json" rma065-debug/
+          cp "${payload}/scripts/apply_rma065_source_edits.py" rma065-debug/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rma065-debug-source
+          path: rma065-debug
+          if-no-files-found: error
+          retention-days: 1
