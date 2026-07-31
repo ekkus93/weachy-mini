@@ -1,3 +1,4 @@
+# retry: checksum-verified chunked payload transport
 name: Integrate RMA-063 Mechanical Effects
 
 on:
