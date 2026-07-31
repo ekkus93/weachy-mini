@@ -98,8 +98,20 @@ jobs:
             'e942a283bde58a20a078794bef83e48de7bf6c743e6f604dd9f56cb123b3e064' \
             '.github/rma065-fixed-v4.part01' | sha256sum --check --strict
           printf '%s  %s\n' \
-            '04f15b311443695ad11a6fb363b882301103178a41116b9bc764c3d8a948eb22' \
-            '.github/rma065-fixed-v4.part02' | sha256sum --check --strict
+            '0509f5eea24f61fbb811be2faaf76ad90b8f9434a3412cb157c4bfeeaa55bcff' \
+            '.github/rma065-fixed-v4.part02.00' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'ddb2f75cdbaec18ff4f98682c6376ee485d16c4d17b5146285ec9a38a124434a' \
+            '.github/rma065-fixed-v4.part02.01' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '50bb9f97b9515b12f3d126da1d11a88621e9ac5371715b489af06da5069ac845' \
+            '.github/rma065-fixed-v4.part02.02' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'a462eebd918e5fc365ec1b319edb1d3184092d2d09269631e8852eb0ed0c471e' \
+            '.github/rma065-fixed-v4.part02.03' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'a4da3572dddf997a68fc49d2782d7079e2d0d1cdebf9871aae177ec0a2b68d33' \
+            '.github/rma065-fixed-v4.part02.04' | sha256sum --check --strict
           printf '%s  %s\n' \
             '1610ddd8a8e77f566624acf2ef1183854896fe468410c1a389bd33bc6a449b48' \
             '.github/rma065-fixed-v4.part03' | sha256sum --check --strict
