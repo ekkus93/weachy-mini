@@ -1,0 +1,136 @@
+name: RMA-065 External Fixture Diagnostic
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-external-fixture-diagnostic.yml'
+
+permissions:
+  statuses: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 External Fixture Diagnostic',
+              description: 'Inspecting the reconstructed external contact fixture',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check out pinned Reachy model
+        uses: actions/checkout@v4
+        with:
+          repository: pollen-robotics/reachy_mini
+          ref: a739a6e461eb6d722901f1cfc225265ffc85c28d
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            src/reachy_mini/descriptions/reachy_mini/mjcf
+            LICENSE
+          sparse-checkout-cone-mode: false
+
+      - name: Reconstruct the exact current validator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check pyyaml
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+
+          workflow = yaml.safe_load(
+              Path('.github/workflows/rma065-penetration-executor.yml').read_text(
+                  encoding='utf-8'
+              )
+          )
+          steps = workflow['jobs']['execute']['steps']
+          wanted = {
+              'Extract exact verified stages': 'extract.sh',
+              'Reconstruct and apply fixture contract': 'reconstruct-current.sh',
+          }
+          found = set()
+          for step in steps:
+              name = step.get('name')
+              if name not in wanted:
+                  continue
+              run = step.get('run')
+              if not isinstance(run, str) or not run.strip():
+                  raise SystemExit(f'current executor step has no shell body: {name}')
+              target = Path(os.environ['RUNNER_TEMP']) / wanted[name]
+              target.write_text(run, encoding='utf-8', newline='\n')
+              target.chmod(0o755)
+              found.add(name)
+          missing = sorted(set(wanted) - found)
+          if missing:
+              raise SystemExit(f'current executor steps missing: {missing}')
+          PY
+          bash "${RUNNER_TEMP}/extract.sh"
+          bash "${RUNNER_TEMP}/reconstruct-current.sh"
+
+      - name: Print external fixture and assertion context
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          source = path.read_text(encoding='utf-8')
+          fixture_start = source.find('def external_contact_fixture')
+          fixture_end = source.find('\ndef ', fixture_start + 1)
+          if fixture_start < 0 or fixture_end < 0:
+              raise SystemExit('external contact fixture function boundaries missing')
+          print('--- external_contact_fixture ---')
+          print(source[fixture_start:fixture_end])
+
+          needle = 'external fixture penetration exceeds the profile'
+          assertion = source.find(needle)
+          if assertion < 0:
+              raise SystemExit('external penetration assertion is missing')
+          context_start = max(0, source.rfind('\n', 0, max(0, assertion - 1800)))
+          context_end = source.find('\n', assertion + len(needle) + 600)
+          if context_end < 0:
+              context_end = len(source)
+          print('--- external assertion context ---')
+          print(source[context_start:context_end])
+          PY
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 External Fixture Diagnostic',
+              description: passed
+                ? 'External fixture source and assertion captured'
+                : 'External fixture diagnostic failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
