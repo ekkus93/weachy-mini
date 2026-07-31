@@ -33,6 +33,9 @@ namespace ReachyMini.Rendering
         private float invariantRotationToleranceDegrees = 0.05f;
 
         private IReachyAuthoritativePoseSource? poseSource;
+        private IReachyReusableAuthoritativePoseSource? reusablePoseSource;
+        private ReachyReusableAuthoritativePoseFrame? reusableOlderPose;
+        private ReachyReusableAuthoritativePoseFrame? reusableNewerPose;
         private Vector3[] expectedPositions = Array.Empty<Vector3>();
         private Quaternion[] expectedRotations = Array.Empty<Quaternion>();
         private bool hasAppliedPose;
@@ -44,6 +47,11 @@ namespace ReachyMini.Rendering
         public string Fault => fault;
 
         public int AuthoritativeBodyCount => authoritativeBodies.Length;
+
+        public bool UsesReusablePoseBuffers =>
+            reusablePoseSource != null &&
+            reusableOlderPose != null &&
+            reusableNewerPose != null;
 
         public void ConfigureBodies(ReachyPresentationBody[] bodies)
         {
@@ -59,6 +67,7 @@ namespace ReachyMini.Rendering
             authoritativeBodies = copy;
             expectedPositions = new Vector3[copy.Length];
             expectedRotations = new Quaternion[copy.Length];
+            ConfigureReusablePoseBuffers();
             hasAppliedPose = false;
             fault = string.Empty;
             Status = poseSource == null
@@ -68,7 +77,26 @@ namespace ReachyMini.Rendering
 
         public void BindPoseSource(IReachyAuthoritativePoseSource source)
         {
-            poseSource = source ?? throw new ArgumentNullException(nameof(source));
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+            IReachyReusableAuthoritativePoseSource? reusable =
+                source as IReachyReusableAuthoritativePoseSource;
+            if (reusable != null &&
+                authoritativeBodies.Length > 0 &&
+                reusable.BodyCount != authoritativeBodies.Length)
+            {
+                throw new ArgumentException(
+                    $"The reusable pose source contains {reusable.BodyCount} bodies, " +
+                    $"but the generated presentation contains " +
+                    $"{authoritativeBodies.Length}.",
+                    nameof(source));
+            }
+
+            poseSource = source;
+            reusablePoseSource = reusable;
+            ConfigureReusablePoseBuffers();
             fault = string.Empty;
             hasAppliedPose = false;
             Status = ReachyAuthoritativeRendererStatus.WaitingForSnapshots;
@@ -122,6 +150,17 @@ namespace ReachyMini.Rendering
             {
                 throw new ArgumentNullException(nameof(newer));
             }
+            return RenderAtSimulationTimeCore(
+                older,
+                newer,
+                targetSimulationTime);
+        }
+
+        private bool RenderAtSimulationTimeCore(
+            IReachyAuthoritativePoseFrame older,
+            IReachyAuthoritativePoseFrame newer,
+            double targetSimulationTime)
+        {
             if (Status == ReachyAuthoritativeRendererStatus.Faulted)
             {
                 return false;
@@ -181,6 +220,7 @@ namespace ReachyMini.Rendering
                 {
                     ValidateBindingsOrThrow(authoritativeBodies);
                     EnsureExpectedStorage();
+                    ConfigureReusablePoseBuffers();
                 }
                 catch (ArgumentException exception)
                 {
@@ -200,23 +240,54 @@ namespace ReachyMini.Rendering
                 Status = ReachyAuthoritativeRendererStatus.Unbound;
                 return;
             }
+
+            IReachyReusableAuthoritativePoseSource? reusable = reusablePoseSource;
+            if (reusable != null)
+            {
+                ReachyReusableAuthoritativePoseFrame? older = reusableOlderPose;
+                ReachyReusableAuthoritativePoseFrame? newer = reusableNewerPose;
+                if (older == null || newer == null)
+                {
+                    EnterFault(
+                        "Reusable authoritative pose buffers were not initialized.");
+                    return;
+                }
+                if (!reusable.TryCopyLatestPair(older, newer))
+                {
+                    Status = ReachyAuthoritativeRendererStatus.WaitingForSnapshots;
+                    return;
+                }
+
+                double reusableTargetTime = Math.Max(
+                    older.SimulationTime,
+                    newer.SimulationTime - interpolationBackTimeSeconds);
+                RenderAtSimulationTimeCore(
+                    older,
+                    newer,
+                    reusableTargetTime);
+                return;
+            }
+
             if (!poseSource.TryGetLatestPair(
-                out ReachyAuthoritativePoseSnapshot older,
-                out ReachyAuthoritativePoseSnapshot newer))
+                out ReachyAuthoritativePoseSnapshot legacyOlder,
+                out ReachyAuthoritativePoseSnapshot legacyNewer))
             {
                 Status = ReachyAuthoritativeRendererStatus.WaitingForSnapshots;
                 return;
             }
 
             double targetTime = Math.Max(
-                older.SimulationTime,
-                newer.SimulationTime - interpolationBackTimeSeconds);
-            RenderAtSimulationTime(older, newer, targetTime);
+                legacyOlder.SimulationTime,
+                legacyNewer.SimulationTime - interpolationBackTimeSeconds);
+            RenderAtSimulationTimeCore(
+                legacyOlder,
+                legacyNewer,
+                targetTime);
         }
 
         private bool ValidateSnapshotPair(
-            ReachyAuthoritativePoseSnapshot older,
-            ReachyAuthoritativePoseSnapshot newer)
+            IReachyAuthoritativePoseFrame older,
+            IReachyAuthoritativePoseFrame newer)
         {
             if (authoritativeBodies.Length == 0)
             {
@@ -297,8 +368,8 @@ namespace ReachyMini.Rendering
         }
 
         private static float CalculateInterpolationAlpha(
-            ReachyAuthoritativePoseSnapshot older,
-            ReachyAuthoritativePoseSnapshot newer,
+            IReachyAuthoritativePoseFrame older,
+            IReachyAuthoritativePoseFrame newer,
             double targetSimulationTime)
         {
             if (older.DiscontinuityId != newer.DiscontinuityId)
@@ -396,6 +467,26 @@ namespace ReachyMini.Rendering
 
             componentName = string.Empty;
             return false;
+        }
+
+        private void ConfigureReusablePoseBuffers()
+        {
+            if (reusablePoseSource == null || authoritativeBodies.Length == 0)
+            {
+                reusableOlderPose = null;
+                reusableNewerPose = null;
+                return;
+            }
+            if (reusablePoseSource.BodyCount != authoritativeBodies.Length)
+            {
+                throw new ArgumentException(
+                    $"The reusable pose source contains " +
+                    $"{reusablePoseSource.BodyCount} bodies, but the generated " +
+                    $"presentation contains {authoritativeBodies.Length}.");
+            }
+
+            reusableOlderPose = reusablePoseSource.CreatePoseFrame();
+            reusableNewerPose = reusablePoseSource.CreatePoseFrame();
         }
 
         private void EnsureExpectedStorage()
