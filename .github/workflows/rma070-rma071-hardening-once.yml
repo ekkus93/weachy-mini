@@ -1,0 +1,199 @@
+name: RMA-070 and RMA-071 One-Shot Hardening
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma070-rma071-hardening-once.yml'
+      - 'scripts/apply_rma070_rma071_hardening_once.py'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish bootstrap pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/bootstrap-status.json"
+          import json
+          import os
+
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-070/RMA-071 Hardening Bootstrap",
+              "description": "Applying one-shot fail-closed calibration hardening",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/bootstrap-status.json" >/dev/null
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Apply hardening patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_rma070_rma071_hardening_once.py
+      - name: Run hardened contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+      - name: Run hardened integration commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/calibration-hardening
+          mkdir -p build/calibration-hardening
+          python3 scripts/validate_calibration_dataset.py \
+            --input calibration/fixtures/minimal-calibration-dataset.json \
+            --summary-output build/calibration-hardening/committed-fixture-summary.json
+          python3 scripts/estimate_calibration_clock_offset.py \
+            --pairs-csv calibration/fixtures/clock-pairs.csv \
+            --from-clock-id camera_clock \
+            --to-clock-id reachy_clock \
+            --maximum-uncertainty-ns 1000 \
+            --output build/calibration-hardening/estimated-camera-alignment.json
+          python3 scripts/capture_reachy_calibration.py \
+            --telemetry-jsonl calibration/fixtures/reachy-telemetry.jsonl \
+            --robot-metadata-json calibration/fixtures/robot-metadata.json \
+            --environment-json calibration/fixtures/environment.json \
+            --clock-metadata-json calibration/fixtures/clock-metadata.json \
+            --external-pose-csv calibration/fixtures/external-pose.csv \
+            --external-pose-clock-id camera_clock \
+            --force-torque-csv calibration/fixtures/force-torque.csv \
+            --force-torque-clock-id force_clock \
+            --force-torque-frame reachy_body \
+            --dataset-id hardened-workflow-fixture-capture \
+            --created-utc '2026-07-31T21:00:00Z' \
+            --operator-notes 'Synthetic hardened CI fixture; not physical calibration evidence.' \
+            --output build/calibration-hardening/generated-capture.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/calibration-hardening/generated-capture.json \
+            --summary-output build/calibration-hardening/generated-capture-summary.json
+      - name: Remove one-shot machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm scripts/apply_rma070_rma071_hardening_once.py
+          rm .github/workflows/rma070-rma071-hardening-once.yml
+      - name: Commit hardened tree
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-070/RMA-071: harden untrusted calibration boundaries'
+          git push origin HEAD:master
+          new_sha="$(git rev-parse HEAD)"
+          echo "sha=${new_sha}" >> "${GITHUB_OUTPUT}"
+          echo "HARDENED_SHA=${new_sha}" >> "${GITHUB_ENV}"
+      - name: Upload hardened evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: calibration-hardening-evidence-${{ env.HARDENED_SHA }}
+          path: build/calibration-hardening
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish hardened commit status
+        if: always() && steps.commit.outputs.sha != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HARDENED_SHA: ${{ steps.commit.outputs.sha }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/hardened-status.json"
+          import json
+          import os
+
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-070/RMA-071 Calibration Data",
+              "description": (
+                  "Hardened calibration contract and capture validation passed"
+                  if passed
+                  else "Hardened calibration contract or capture validation failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${HARDENED_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/hardened-status.json" >/dev/null
+      - name: Publish bootstrap final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/bootstrap-status.json"
+          import json
+          import os
+
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-070/RMA-071 Hardening Bootstrap",
+              "description": (
+                  "One-shot hardening completed and cleaned itself up"
+                  if passed
+                  else "One-shot hardening failed; inspect the workflow run"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/bootstrap-status.json" >/dev/null
