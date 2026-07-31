@@ -134,6 +134,64 @@ jobs:
           path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
           PY
           bash "${RUNNER_TEMP}/derive.sh"
+          python3 - <<'PYSTRICT'
+          from pathlib import Path
+
+          validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          source = validator.read_text(encoding='utf-8')
+          old = '    maximum_penetration = parse_vector(penetration_data, 1)[0]\n'
+          new = (
+              '    penetration_parts = penetration_data.split()\n'
+              '    if len(penetration_parts) != 1:\n'
+              '        raise CollisionValidationError(\n'
+              '            "generated model penetration limit must contain one value"\n'
+              '        )\n'
+              '    try:\n'
+              '        maximum_penetration = float(penetration_parts[0])\n'
+              '    except ValueError as exc:\n'
+              '        raise CollisionValidationError(\n'
+              '            "generated model penetration limit is not numeric"\n'
+              '        ) from exc\n'
+              '    if not (0.0 < maximum_penetration < float("inf")):\n'
+              '        raise CollisionValidationError(\n'
+              '            "generated model penetration limit must be finite and positive"\n'
+              '        )\n'
+          )
+          if source.count(old) != 1:
+              raise SystemExit(
+                  f'penetration parse helper marker count={source.count(old)}'
+              )
+          validator.write_text(source.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          test_source = tests.read_text(encoding='utf-8')
+          class_name = 'class CollisionPenetrationParsingRegressionTests'
+          if class_name in test_source:
+              raise SystemExit('penetration parsing regression already exists unexpectedly')
+          regression = r'''
+
+          class CollisionPenetrationParsingRegressionTests(unittest.TestCase):
+              def test_penetration_limit_is_parsed_locally_and_strictly(self):
+                  source = Path(
+                      "scripts/run_reachy_collision_hard_stop_validation.py"
+                  ).read_text(encoding="utf-8")
+                  self.assertIn(
+                      "penetration_parts = penetration_data.split()",
+                      source,
+                  )
+                  self.assertIn(
+                      '0.0 < maximum_penetration < float("inf")',
+                      source,
+                  )
+                  self.assertNotIn(
+                      "parse_vector(penetration_data",
+                      source,
+                  )
+          '''
+          tests.write_text(test_source + regression, encoding='utf-8', newline='\n')
+          PYSTRICT
+          git diff --check
+          python3 -m py_compile scripts/run_reachy_collision_hard_stop_validation.py
 
       - name: Validate schema and native ABI
         shell: bash
