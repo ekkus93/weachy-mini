@@ -27,18 +27,11 @@ jobs:
 
           path = Path('.github/workflows/rma065-integrate.yml')
           text = path.read_text(encoding='utf-8')
-          old = '''          cp "${payload_dir}/scripts/apply_rma065_source_edits.py" \\
-            scripts/.rma065-apply-source-edits.py
-          python3 scripts/.rma065-apply-source-edits.py
-'''
-          new = '''          cp "${payload_dir}/scripts/apply_rma065_source_edits.py" \\
-            scripts/.rma065-apply-source-edits.py
-          python3 -c 'from pathlib import Path; p=Path("scripts/.rma065-apply-source-edits.py"); t=p.read_text(encoding="utf-8"); old="    runner_marker = \\\"\\\"\\\"if(REACHY_BUILD_MUJOCO_PROBE)\\n    add_subdirectory(feasibility)\\nendif()\\n\\\"\\\"\\\""; new="    runner_marker = \\\"\\\"\\\"add_subdirectory(feasibility)\\n\\\"\\\"\\\""; count=t.count(old); count == 1 or (_ for _ in ()).throw(SystemExit(f"transport helper CMake marker count={count}")); p.write_text(t.replace(old,new),encoding="utf-8",newline="\\n")'
-          python3 scripts/.rma065-apply-source-edits.py
-'''
-          if text.count(old) != 1:
-              raise SystemExit('integration helper invocation was not found exactly once')
-          path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          needle = 'python3 scripts/.rma065-apply-source-edits.py'
+          patch = 'python3 -c \'from pathlib import Path; p=Path("scripts/.rma065-apply-source-edits.py"); t=p.read_text(encoding="utf-8"); old="    runner_marker = \\\"\\\"\\\"if(REACHY_BUILD_MUJOCO_PROBE)\\n    add_subdirectory(feasibility)\\nendif()\\n\\\"\\\"\\\""; new="    runner_marker = \\\"\\\"\\\"add_subdirectory(feasibility)\\n\\\"\\\"\\\""; count=t.count(old); count == 1 or (_ for _ in ()).throw(SystemExit(f"transport helper CMake marker count={count}")); p.write_text(t.replace(old,new),encoding="utf-8",newline="\\n")\'\n          python3 scripts/.rma065-apply-source-edits.py'
+          if text.count(needle) != 1:
+              raise SystemExit(f'integration helper invocation count={text.count(needle)}')
+          path.write_text(text.replace(needle, patch), encoding='utf-8', newline='\n')
           PY
 
           git rm .github/workflows/rma065-patch-integration.yml
