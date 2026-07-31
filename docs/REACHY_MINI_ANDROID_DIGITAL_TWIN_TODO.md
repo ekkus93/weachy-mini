@@ -885,18 +885,53 @@ public:
 
 ## RMA-063 — Implement friction, backlash, and compliance models
 
-- [ ] Add Coulomb and viscous friction.
-- [ ] Add stiction/breakaway behavior without numerical chatter.
-- [ ] Add backlash/hysteresis state that handles direction reversal.
-- [ ] Add configurable gear/joint compliance where supported.
-- [ ] Add parameter-identification hooks.
-- [ ] Keep each effect independently disableable for experiments.
+**Status:** Complete (2026-07-30)
+
+- [x] Add Coulomb and viscous friction.
+- [x] Add stiction/breakaway behavior without numerical chatter.
+- [x] Add backlash/hysteresis state that handles direction reversal.
+- [x] Add configurable gear/joint compliance where supported.
+- [x] Add parameter-identification hooks.
+- [x] Keep each effect independently disableable for experiments.
 
 **Acceptance criteria**
 
-- [ ] Direction-reversal tests show expected dead-zone behavior.
-- [ ] Disabling each effect returns to the prior baseline.
-- [ ] Parameters are never silently copied between dissimilar motor types.
+- [x] Direction-reversal tests show expected dead-zone behavior.
+- [x] Disabling each effect returns to the prior baseline.
+- [x] Parameters are never silently copied between dissimilar motor types.
+
+**Completion evidence**
+
+- `MechanicalServoModel` is a Unity-independent native C++17 decorator
+  around the RMA-061 `ServoModel` interface and can wrap the RMA-062
+  electrical/controller implementation without changing the public C ABI.
+- Role-specific body-yaw, Stewart, and antenna parameter sets add Coulomb
+  and viscous friction, breakaway/stiction hysteresis, backlash play, and
+  bounded torsional compliance. Every scalar retains explicit evidence and
+  no value is labeled calibrated.
+- The stiction state uses separate entry/exit speed thresholds; the backlash
+  play operator retains position output through direction reversal until the
+  opposite half-width is crossed; compliance torque and elastic deflection
+  are stateful and bounded.
+- Friction, stiction, backlash, and compliance are independently switchable.
+  The all-disabled configuration preserves the wrapped command and complete
+  step result exactly, and configuration changes clear transient experiment
+  state.
+- Copyable per-step identification samples and bounded accumulators expose
+  electrical/compliance/friction/output torque, reversal count, stuck count,
+  and maximum elastic deflection without invoking callbacks on the physics
+  thread.
+- The deterministic generator rejects missing evidence, calibrated claims,
+  invalid breakaway/stiction ordering, unit drift, cross-role bindings, and
+  an identical complete parameter fingerprint copied between dissimilar
+  actuator roles.
+- Hosted run `30606712074` passed exact generation, eight schema/failure
+  tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+  and the complete mechanical behavior CTest on exact commit
+  `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+- Detailed design and evidence are in
+  `docs/architecture/MECHANICAL_EFFECTS_BASELINE.md` and
+  `docs/validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md`.
 
 ## RMA-064 — Add power and thermal model
 

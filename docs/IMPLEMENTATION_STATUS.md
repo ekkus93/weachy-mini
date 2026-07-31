@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-062 source-bound electrical/controller
-timing baseline, quantized sampled commands, bounded torque-speed/current
-behavior, explicit noncalibrated evidence, and strict behavioral validation
+**Current implementation series:** RMA-063 role-specific mechanical effects,
+friction/stiction hysteresis, reversal-aware backlash, bounded compliance,
+experiment switches, identification hooks, and strict behavioral validation
 
 ## Repository rules in force
 
@@ -390,15 +390,47 @@ transitions on exact commit
 `699c7b0adcc56263b307b76cc24b4f642dbe5f04`. Detailed evidence is in
 [the RMA-062 validation record](validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md).
 
+### RMA-063 — friction, backlash, and compliance baseline
+
+RMA-063 is complete. `MechanicalServoModel` now decorates any native
+`ServoModel`, including the RMA-062 controller, with role-specific kinetic
+friction, stiction/breakaway hysteresis, position-target backlash, and
+reduced-order torsional compliance. It does not change the public simulation
+C ABI or silently select a new production MuJoCo fidelity path.
+
+The source-bound `rma063_mechanical_effects_v1` registry preserves all nine
+ordered actuator bindings and defines distinct body-yaw, Stewart, and antenna
+parameter vectors. Values are explicit engineering hypotheses rather than
+physical measurements. The generator rejects calibrated claims and any full
+parameter vector silently copied between dissimilar roles.
+
+Every effect is independently switchable; all effects disabled reproduce the
+wrapped baseline exactly. Reconfiguration resets transient hysteresis and
+compliance state. Copyable identification samples and accumulators expose
+reversal, stuck-state, torque-component, and deflection evidence without a
+high-frequency callback.
+
+Run `30606712074` passed byte-exact generation, eight schema/failure-path
+tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+integrated library/test compilation, reversal dead-zone, stiction hysteresis,
+friction direction, bounded compliance, effect-disablement, role-isolation,
+and identification-state tests on exact commit
+`a15a1154e62a95999b482ed6b2e6f62f51379929`. Detailed evidence is in
+[the RMA-063 validation record](validation/RMA_063_MECHANICAL_EFFECTS_BASELINE_VALIDATION_2026-07-30.md).
+
 ## Current validation evidence
 
+- RMA-063 run `30606712074`: exact generated-baseline check, eight
+  schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+  ASan/UBSan, and the complete native mechanical behavior suite passed on
+  `a15a1154e62a95999b482ed6b2e6f62f51379929`.
+- Body-yaw, Stewart, and antenna mechanical vectors are role-specific
+  engineering estimates. Physical identification, shared-power/thermal
+  evolution, and production MuJoCo profile selection remain later tasks.
 - RMA-062 run `30605184722`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
   ASan/UBSan, and the complete native behavior suite passed on
   `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
-- The three role baselines are now torque-ready manufacturer/engineering
-  estimates, not calibrated models. RMA-063 through RMA-065 retain friction,
-  compliance, shared-power/thermal evolution, and physical identification.
 - RMA-061 run `30601191456`: exact generated-registry check, eight
   schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
   ASan/UBSan, and native CTest all passed on
