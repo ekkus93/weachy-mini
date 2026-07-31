@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-060 named upstream-baseline dynamics,
-generated native contract, full-step monitoring, desktop reference validation,
-and physical Android long-duration acceptance
+**Current implementation series:** RMA-061 native pluggable servo contract,
+source-bound role registry, explicit parameter-quality semantics, generated
+bindings, and strict sanitizer-backed validation
 
 ## Repository rules in force
 
@@ -340,8 +340,39 @@ exact upstream sleep request and its explicit intentional overrange mask.
 Detailed evidence is in
 [the RMA-060 validation record](validation/RMA_060_UPSTREAM_BASELINE_STABILITY_VALIDATION_2026-07-30.md).
 
+### RMA-061 — pluggable servo model contract
+
+RMA-061 is complete. A Unity-independent C++17 `ServoModel` interface now
+carries sampled commands, operating mode, targets, motion-profile limits,
+authoritative observations, requested torque, estimated current,
+temperature, and explicit fault state. The public C simulation ABI remains
+unchanged; later actuator implementations plug into this native boundary.
+
+The source-bound `rma061_servo_model_v1` JSON registry defines exact quality
+labels and three role-specific sets for body yaw, Stewart actuators, and
+antennas. Every official-model actuator has an ordered explicit binding.
+Unknown electrical, encoder, torque-speed, voltage, thermal, and fault values
+remain evidence-bearing null placeholders rather than invented constants.
+A calibrated set is invalid unless all required fields and the fault model
+are populated and calibrated, and the committed placeholder sets are visibly
+not ready for torque computation.
+
+Run `30601191456` passed byte-exact registry regeneration, eight positive and
+failure-path schema tests, native Unity-dependency rejection, GNU 13.3 strict
+warnings, ASan/UBSan, library compilation, plug-in derivation, registry lookup,
+validation-ordering/fault tests, and CTest on exact commit
+`68c035ab20ec20a28c8b287914d43dcaf7ad1c67`. Detailed evidence is in
+[the RMA-061 validation record](validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md).
+
 ## Current validation evidence
 
+- RMA-061 run `30601191456`: exact generated-registry check, eight
+  schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
+  ASan/UBSan, and native CTest all passed on
+  `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+- The three committed role sets remain explicit `placeholder` contracts and
+  `IsTorqueModelReady=false`; RMA-062 must add documented noncalibrated
+  electrical/controller values before torque fidelity is enabled.
 - RMA-060 run `30599288952`: generated-profile tests, pinned source/model
   import, the complete 900,000-step desktop schedule, Android ARM64 build and
   AArch64 verification, physical LG-H872 API-26 900,000-step execution,

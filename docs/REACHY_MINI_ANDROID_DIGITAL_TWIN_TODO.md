@@ -774,10 +774,36 @@ while running:
 
 ## RMA-061 — Define pluggable servo model
 
-- [ ] Create a servo model interface independent of Unity.
-- [ ] Represent command sample time, mode, target, profile velocity/acceleration, encoder quantization, current limit, torque-speed behavior, voltage, temperature, and fault state.
-- [ ] Add per-actuator parameter sets for body, Stewart, and antenna motors.
-- [ ] Add explicit `placeholder`, `manufacturer_estimate`, and `calibrated` parameter quality labels.
+**Status:** Complete (2026-07-30)
+
+- [x] Create a servo model interface independent of Unity.
+- [x] Represent command sample time, mode, target, profile velocity/acceleration, encoder quantization, current limit, torque-speed behavior, voltage, temperature, and fault state.
+- [x] Add per-actuator parameter sets for body, Stewart, and antenna motors.
+- [x] Add explicit `placeholder`, `manufacturer_estimate`, and `calibrated` parameter quality labels.
+
+**Completion evidence**
+
+- `native/reachy_sim/include/reachy_servo_model.hpp` defines the native
+  C++17 command, observation, result, role, mode, fault, quality, validation,
+  and replaceable `ServoModel` contracts without Unity ownership.
+- `models/reachy-mini/servo-model-parameters.json` is the authoritative
+  `rma061_servo_model_v1` registry. It binds the pinned source/audit and
+  explicitly maps all nine official actuators to distinct body-yaw, Stewart,
+  or antenna role parameter sets.
+- All command timing, encoder, current, torque-speed, voltage, temperature,
+  and fault parameters are represented as evidence-bearing qualified scalars.
+  Unknown values remain null `placeholder` values; null manufacturer estimates
+  and incomplete calibrated sets are rejected.
+- The deterministic generator emits the committed native registry and rejects
+  stale output, missing/reordered/cross-role bindings, unknown quality labels,
+  and unsupported calibrated claims.
+- Hosted run `30601191456` passed exact regeneration, eight schema failure
+  tests, Unity-dependency rejection, GNU 13.3 strict warnings, ASan/UBSan,
+  native library/test compilation, and the complete CTest contract on exact
+  commit `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+- Detailed design and evidence are in
+  `docs/architecture/PLUGGABLE_SERVO_MODEL.md` and
+  `docs/validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md`.
 
 Suggested native concept:
 
