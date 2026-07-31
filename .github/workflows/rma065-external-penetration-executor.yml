@@ -1,0 +1,314 @@
+name: RMA-065 External Penetration Executor
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-external-penetration-executor.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  execute:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 External Penetration Executor',
+              description: 'Controlled external contact and hard-stop gates are running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Check out pinned Reachy model
+        uses: actions/checkout@v4
+        with:
+          repository: pollen-robotics/reachy_mini
+          ref: a739a6e461eb6d722901f1cfc225265ffc85c28d
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            src/reachy_mini/descriptions/reachy_mini/mjcf
+            LICENSE
+          sparse-checkout-cone-mode: false
+
+      - name: Extract current verified pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check pyyaml
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import yaml
+
+          workflow = yaml.safe_load(
+              Path('.github/workflows/rma065-penetration-executor.yml').read_text(
+                  encoding='utf-8'
+              )
+          )
+          steps = workflow['jobs']['execute']['steps']
+          wanted = {
+              'Extract exact verified stages': 'extract.sh',
+              'Reconstruct and apply fixture contract': 'reconstruct-current.sh',
+              'Validate schema and native ABI': 'validate-abi-current.sh',
+              'Validate real MuJoCo contacts and hard stops': 'validate-mujoco-current.sh',
+              'Commit validated implementation': 'commit-current.sh',
+          }
+          found = set()
+          for step in steps:
+              name = step.get('name')
+              if name not in wanted:
+                  continue
+              run = step.get('run')
+              if not isinstance(run, str) or not run.strip():
+                  raise SystemExit(f'current executor step has no shell body: {name}')
+              target = Path(os.environ['RUNNER_TEMP']) / wanted[name]
+              target.write_text(run, encoding='utf-8', newline='\n')
+              target.chmod(0o755)
+              found.add(name)
+          missing = sorted(set(wanted) - found)
+          if missing:
+              raise SystemExit(f'current executor steps missing: {missing}')
+          PY
+          bash "${RUNNER_TEMP}/extract.sh"
+          bash "${RUNNER_TEMP}/reconstruct-current.sh"
+
+      - name: Replace external fixture with controlled probe pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          source = validator.read_text(encoding='utf-8')
+          function_start = source.find('def external_contact_fixture')
+          function_end = source.find('\ndef ', function_start + 1)
+          if function_start < 0 or function_end < 0:
+              raise SystemExit('external contact fixture function boundaries missing')
+          original = source[function_start:function_end]
+          required = [
+              '"rma065_head_shell"',
+              '"size": "0.025"',
+              '"rma065_fixture_external_sphere"',
+          ]
+          missing = [token for token in required if token not in original]
+          if missing:
+              print('--- unexpected external contact fixture ---')
+              print(original)
+              raise SystemExit(f'external fixture markers missing: {missing}')
+
+          replacement = '''def external_contact_fixture(
+              mujoco: Any,
+              model_path: Path,
+              output_path: Path,
+          ) -> None:
+              base_model = mujoco.MjModel.from_xml_path(str(model_path))
+              data = mujoco.MjData(base_model)
+              mujoco.mj_forward(base_model, data)
+              geom_id = object_id(
+                  mujoco,
+                  base_model,
+                  mujoco.mjtObj.mjOBJ_GEOM,
+                  "rma065_head_shell",
+              )
+              body_id = int(base_model.geom_bodyid[geom_id])
+              body_name = mujoco.mj_id2name(
+                  base_model,
+                  mujoco.mjtObj.mjOBJ_BODY,
+                  body_id,
+              )
+              if not body_name:
+                  raise CollisionValidationError(
+                      "rma065_head_shell parent body has no name"
+                  )
+              centre = [float(value) for value in data.geom_xpos[geom_id]]
+
+              tree = ET.parse(model_path)
+              root = tree.getroot()
+              for geom in root.findall(".//geom"):
+                  geom.set("contype", "0")
+                  geom.set("conaffinity", "0")
+
+              penetration_nodes = [
+                  node
+                  for node in root.findall("./custom/numeric")
+                  if "penetration" in (node.get("name") or "").lower()
+              ]
+              if len(penetration_nodes) != 1:
+                  raise CollisionValidationError(
+                      "generated model must expose exactly one penetration limit"
+                  )
+              penetration_data = penetration_nodes[0].get("data")
+              if penetration_data is None:
+                  raise CollisionValidationError(
+                      "generated model penetration limit has no data"
+                  )
+              penetration_parts = penetration_data.split()
+              if len(penetration_parts) != 1:
+                  raise CollisionValidationError(
+                      "generated model penetration limit must contain one value"
+                  )
+              try:
+                  maximum_penetration = float(penetration_parts[0])
+              except ValueError as exc:
+                  raise CollisionValidationError(
+                      "generated model penetration limit is not numeric"
+                  ) from exc
+              if not (0.0 < maximum_penetration < float("inf")):
+                  raise CollisionValidationError(
+                      "generated model penetration limit must be finite and positive"
+                  )
+
+              probe_radius = 0.008
+              target_penetration = maximum_penetration / 16.0
+              centre_separation = 2.0 * probe_radius - target_penetration
+              if not (
+                  0.0 < target_penetration < maximum_penetration
+                  and 0.0 < centre_separation < 2.0 * probe_radius
+              ):
+                  raise CollisionValidationError(
+                      "derived external fixture penetration is invalid"
+                  )
+              direction = [centre_separation, 0.0, 0.0]
+              shell_point = [
+                  centre[index] - 0.5 * direction[index]
+                  for index in range(3)
+              ]
+              external_point = [
+                  centre[index] + 0.5 * direction[index]
+                  for index in range(3)
+              ]
+              shell_local = local_from_world(data, body_id, shell_point)
+
+              bodies = {
+                  body.get("name"): body
+                  for body in root.findall(".//body")
+                  if body.get("name")
+              }
+              shell_body = bodies.get(body_name)
+              if shell_body is None:
+                  raise CollisionValidationError(
+                      f"rma065_head_shell parent body is missing: {body_name}"
+                  )
+              worldbody = root.find("worldbody")
+              if worldbody is None:
+                  raise CollisionValidationError("model has no worldbody")
+              add_probe_geom(
+                  shell_body,
+                  "rma065_fixture_external_shell",
+                  shell_local,
+                  1,
+                  6,
+              )
+              add_probe_geom(
+                  worldbody,
+                  "rma065_fixture_external_sphere",
+                  external_point,
+                  4,
+                  3,
+              )
+              ET.indent(tree, space="  ")
+              tree.write(output_path, encoding="utf-8", xml_declaration=True)
+          
+          '''
+          source = source[:function_start] + replacement + source[function_end:]
+          validator.write_text(source, encoding='utf-8', newline='\n')
+
+          tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          test_source = tests.read_text(encoding='utf-8')
+          class_name = 'class CollisionExternalFixtureRegressionTests'
+          if class_name in test_source:
+              raise SystemExit('external fixture regression already exists unexpectedly')
+          regression = r'''
+
+          class CollisionExternalFixtureRegressionTests(unittest.TestCase):
+              def test_external_fixture_uses_isolated_controlled_probe_pair(self):
+                  source = Path(
+                      "scripts/run_reachy_collision_hard_stop_validation.py"
+                  ).read_text(encoding="utf-8")
+                  function = source[
+                      source.index("def external_contact_fixture"):
+                      source.index("\ndef ", source.index("def external_contact_fixture") + 1)
+                  ]
+                  self.assertIn(
+                      '"rma065_fixture_external_shell"',
+                      function,
+                  )
+                  self.assertIn(
+                      'target_penetration = maximum_penetration / 16.0',
+                      function,
+                  )
+                  self.assertIn(
+                      'for geom in root.findall(".//geom"):',
+                      function,
+                  )
+                  self.assertNotIn('"size": "0.025"', function)
+          '''
+          tests.write_text(test_source + regression, encoding='utf-8', newline='\n')
+          PY
+          git diff --check
+          python3 -m py_compile scripts/run_reachy_collision_hard_stop_validation.py
+
+      - name: Validate schema and native ABI
+        shell: bash
+        run: bash "${RUNNER_TEMP}/validate-abi-current.sh"
+
+      - name: Validate real MuJoCo contacts and hard stops
+        shell: bash
+        run: bash "${RUNNER_TEMP}/validate-mujoco-current.sh"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma065-external-penetration-evidence
+          path: |
+            ${{ runner.temp }}/rma065-reports
+            ${{ runner.temp }}/rma065-enhanced/RMA065_COLLISION_METADATA.json
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Commit validated implementation
+        shell: bash
+        run: bash "${RUNNER_TEMP}/commit-current.sh"
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 External Penetration Executor',
+              description: passed
+                ? 'Schema, ABI, contacts, hard stops, and source commit passed'
+                : 'RMA-065 external penetration validation failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
