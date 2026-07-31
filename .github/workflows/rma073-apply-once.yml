@@ -1,0 +1,75 @@
+name: RMA-073 Apply Once
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma073-apply-once.yml'
+      - 'scripts/apply_rma073_once.py'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Apply RMA-073 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_rma073_once.py
+          git diff --check
+      - name: Validate implementation before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl version
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+          rm -rf build/rma073
+          mkdir -p build/rma073
+          python3 scripts/generate_rma073_synthetic_data.py \
+            --output-dir build/rma073 \
+            --summary-output build/rma073/generation-summary.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/rma073/training.json \
+            --summary-output build/rma073/training-validation.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/rma073/heldout.json \
+            --summary-output build/rma073/heldout-validation.json
+          python3 scripts/fit_calibration_profile.py \
+            --plan build/rma073/fit-plan.json \
+            --dataset-root build/rma073 \
+            --private-key calibration/fixtures/keys/rma073-test-ed25519-private.pem \
+            --public-key calibration/fixtures/keys/rma073-test-ed25519-public.pem \
+            --public-key-id rma073-test-key-v1 \
+            --created-utc '2026-07-31T21:03:00Z' \
+            --output build/rma073/profile.json \
+            --verification-output build/rma073/profile-verification.json
+          python3 scripts/verify_calibration_profile.py \
+            --profile build/rma073/profile.json \
+            --public-key calibration/fixtures/keys/rma073-test-ed25519-public.pem \
+            --expected-compatibility calibration/fitting/rma073-compatibility.json \
+            --summary-output build/rma073/independent-verification.json
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-073: add parameter fitting and held-out validation'
+          git push origin HEAD:master
