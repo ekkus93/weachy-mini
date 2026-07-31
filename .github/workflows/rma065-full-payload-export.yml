@@ -24,12 +24,14 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'pending',
-              context: 'RMA-065 Full Payload Export',
-              description: 'Exporting verified full implementation payload',
+              context: 'RMA-065 Full Source Export',
+              description: 'Exporting verified payload and exact master tree',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
       - uses: actions/checkout@v4
-      - name: Reconstruct verified payload
+        with:
+          fetch-depth: 0
+      - name: Reconstruct verified payload and archive source tree
         shell: bash
         run: |
           set -euo pipefail
@@ -37,10 +39,13 @@ jobs:
           printf '%s  %s\n' \
             '133b4959d137607b1640c24cd12b6ef99b00f8c3e851d2a406d6495364deda0c' \
             rma065-payload.tar.gz | sha256sum --check --strict
+          tar --exclude=.git -czf rma065-master-tree.tar.gz .
       - uses: actions/upload-artifact@v4
         with:
-          name: rma065-full-payload
-          path: rma065-payload.tar.gz
+          name: rma065-full-source
+          path: |
+            rma065-payload.tar.gz
+            rma065-master-tree.tar.gz
           if-no-files-found: error
           retention-days: 1
       - name: Publish final status
@@ -56,7 +61,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: passed ? 'success' : 'failure',
-              context: 'RMA-065 Full Payload Export',
-              description: passed ? 'Full payload exported' : 'Full payload export failed',
+              context: 'RMA-065 Full Source Export',
+              description: passed ? 'Payload and master tree exported' : 'Full source export failed',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
