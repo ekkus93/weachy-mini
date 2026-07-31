@@ -1,0 +1,137 @@
+name: RMA-065 Add Report Status
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-add-report-status.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 Report Status Patch',
+              description: 'Adding explicit success status after all validation assertions',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add explicit success status and regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          source = validator.read_text(encoding='utf-8')
+          marker = '''    report = {
+        "contract": "rma065_collision_hard_stop_validation_v1",
+'''
+          replacement = '''    report = {
+        "status": "ok",
+        "contract": "rma065_collision_hard_stop_validation_v1",
+'''
+          if source.count(marker) != 1:
+              raise SystemExit(f'report construction marker count={source.count(marker)}')
+          validator.write_text(
+              source.replace(marker, replacement, 1),
+              encoding='utf-8',
+              newline='\n',
+          )
+
+          tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          test_source = tests.read_text(encoding='utf-8')
+          class_name = 'class CollisionValidationReportStatusTests'
+          if class_name in test_source:
+              raise SystemExit('report status regression already exists unexpectedly')
+          regression = r'''
+
+          class CollisionValidationReportStatusTests(unittest.TestCase):
+              def test_success_status_is_emitted_with_validation_contract(self):
+                  source = Path(
+                      "scripts/run_reachy_collision_hard_stop_validation.py"
+                  ).read_text(encoding="utf-8")
+                  report_start = source.index("    report = {")
+                  report_end = source.index("    args.output.parent", report_start)
+                  report_source = source[report_start:report_end]
+                  self.assertIn('"status": "ok"', report_source)
+                  self.assertIn(
+                      '"contract": "rma065_collision_hard_stop_validation_v1"',
+                      report_source,
+                  )
+                  self.assertLess(
+                      source.index("    report = {"),
+                      source.index("    args.output.parent"),
+                  )
+          '''
+          tests.write_text(
+              test_source + regression,
+              encoding='utf-8',
+              newline='\n',
+          )
+          PY
+          git diff --check
+          python3 -m py_compile scripts/run_reachy_collision_hard_stop_validation.py
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*collision_model*.py' \
+            -v
+
+      - name: Commit source-only patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            scripts/run_reachy_collision_hard_stop_validation.py \
+            scripts/tests/test_generate_reachy_collision_model.py
+          mapfile -t staged < <(git diff --cached --name-only)
+          expected=(
+            scripts/run_reachy_collision_hard_stop_validation.py
+            scripts/tests/test_generate_reachy_collision_model.py
+          )
+          if [[ "${staged[*]}" != "${expected[*]}" ]]; then
+            printf 'Unexpected staged paths: %s\n' "${staged[*]}" >&2
+            exit 1
+          fi
+          git commit -m 'RMA-065: emit explicit successful validation status'
+          git push origin HEAD:master
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 Report Status Patch',
+              description: passed
+                ? 'Explicit report status committed; permanent gate triggered'
+                : 'Report status patch failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
