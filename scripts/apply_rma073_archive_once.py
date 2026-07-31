@@ -21,8 +21,8 @@ CHUNKS = [
     ("chunk-005.b64", "6cd464db4294c550f4d38b846991e40f81cf7658e5bb73795febb4d02346e343"),
     ("chunk-006.b64", "fc08d087ea53cf89bf568d3fbb1515426088c7d45bbdaae442abc2c409042fe3"),
     ("chunk-007.b64", "51427ff91419e493a8ff456549474a1a6522bb11d66f000cab3c439e1e7fbccf"),
-    ("chunk-008.b64", "0538c80d2a05b03bc08571faf30f3228931134cbbafc7b9dbb2b2bdba967a4ac"),
-    ("chunk-009.b64", "ab0b66311f9aa55b221ccc8b7d57579d2373f32128bff7846474b4c93d0aba0e"),
+    ("chunk-008.b64", "f55acd2ed5dbc50c0717934056af9d18b38b38b9df44c8c044d6ad7534156bce"),
+    ("chunk-009.b64", "a69d59e49ccb11ac92d0e4996e080cd3dc7ff3da0133466331b62627dc52a5f1"),
 ]
 EXPECTED_FILES = {
     ".github/workflows/rma073-calibration-fitting.yml",
