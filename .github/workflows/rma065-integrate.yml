@@ -15,7 +15,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/github-script@v7
+      - name: Publish pending status
+        uses: actions/github-script@v7
         with:
           script: |
             await github.rest.repos.createCommitStatus({
@@ -36,7 +37,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - uses: actions/checkout@v4
+      - name: Check out pinned Reachy model
+        uses: actions/checkout@v4
         with:
           repository: pollen-robotics/reachy_mini
           ref: a739a6e461eb6d722901f1cfc225265ffc85c28d
@@ -49,7 +51,7 @@ jobs:
             LICENSE
           sparse-checkout-cone-mode: false
 
-      - name: Reconstruct verified source
+      - name: Reconstruct verified implementation
         shell: bash
         run: |
           set -euo pipefail
@@ -57,6 +59,7 @@ jobs:
           original_dir="${RUNNER_TEMP}/rma065-original"
           fixed_v2="${RUNNER_TEMP}/rma065-fixed-v2.tar.gz"
           fixed_v3="${RUNNER_TEMP}/rma065-fixed-v3.tar.gz"
+          fixed_v4="${RUNNER_TEMP}/rma065-fixed-v4.tar.gz"
 
           cat .github/rma065-payload.part* | base64 --decode > "${original}"
           printf '%s  %s\n' \
@@ -87,9 +90,26 @@ jobs:
             '577e1945859a9f4d0e3b35b8a740a73121b0ec0fb4eb6a3c83ce2e16ea09489d' \
             "${fixed_v3}" | sha256sum --check --strict
 
+          printf '%s  %s\n' \
+            '1ea5069e0897e9d2ccc504b2bd709a128a0dc98de0b0e5321c828c711597f98f' \
+            '.github/rma065-fixed-v4.part00' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'e942a283bde58a20a078794bef83e48de7bf6c743e6f604dd9f56cb123b3e064' \
+            '.github/rma065-fixed-v4.part01' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '04f15b311443695ad11a6fb363b882301103178a41116b9bc764c3d8a948eb22' \
+            '.github/rma065-fixed-v4.part02' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '1610ddd8a8e77f566624acf2ef1183854896fe468410c1a389bd33bc6a449b48' \
+            '.github/rma065-fixed-v4.part03' | sha256sum --check --strict
+          cat .github/rma065-fixed-v4.part* | base64 --decode > "${fixed_v4}"
+          printf '%s  %s\n' \
+            'd38d0f7d91edaffbea46578237d9551326a8b76fc7cabc02a55fe8a37917b43b' \
+            "${fixed_v4}" | sha256sum --check --strict
+
           rsync -a --exclude scripts/apply_rma065_source_edits.py "${original_dir}/" ./
           cp "${original_dir}/scripts/apply_rma065_source_edits.py" scripts/.rma065-apply.py
-          python3 - <<'PY'
+          python3 - <<'PYHELPER'
           from pathlib import Path
           path = Path('scripts/.rma065-apply.py')
           text = path.read_text(encoding='utf-8')
@@ -98,13 +118,15 @@ jobs:
           if text.count(old) != 1:
               raise SystemExit(f'CMake marker count={text.count(old)}')
           path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
-          PY
+          PYHELPER
           python3 scripts/.rma065-apply.py
           rm scripts/.rma065-apply.py
+
           tar -xzf "${fixed_v2}" -C .
           tar -xzf "${fixed_v3}" -C .
+          tar -xzf "${fixed_v4}" -C .
 
-          python3 - <<'PY'
+          python3 - <<'PYNATIVE'
           from pathlib import Path
           path = Path('native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc')
           text = path.read_text(encoding='utf-8')
@@ -115,9 +137,9 @@ jobs:
           text = text.replace(declaration, '#ifndef REACHY_FAKE_MUJOCO\n' + declaration, 1)
           text = text.replace(marker, '\n#endif\n' + marker, 1)
           path.write_text(text, encoding='utf-8', newline='\n')
-          PY
+          PYNATIVE
 
-          python3 - <<'PY'
+          python3 - <<'PYBUFFERS'
           from pathlib import Path
           changes = {
               'scripts/audit_reachy_collision_model.py': (
@@ -140,10 +162,10 @@ jobs:
                       raise SystemExit(f'{relative}: import marker count={text.count(marker)}')
                   text = text.replace(marker, marker + 'import numpy as np\n', 1)
               path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
-          PY
+          PYBUFFERS
           git diff --check
 
-      - name: Validate schema, ABI, contacts, and hard stops
+      - name: Validate schema and native ABI
         shell: bash
         run: |
           set -euo pipefail
@@ -153,7 +175,6 @@ jobs:
             scripts/generate_reachy_collision_model.py \
             scripts/run_reachy_collision_hard_stop_validation.py
           bash -n scripts/build_rma065_android.sh scripts/run_rma065_android.sh
-
           cmake -S . -B build/rma065-fake \
             -DBUILD_TESTING=ON \
             -DREACHY_ENABLE_SANITIZERS=ON \
@@ -162,6 +183,10 @@ jobs:
           ctest --test-dir build/rma065-fake --output-on-failure \
             -R '^reachy_sim_mujoco_backend_test$'
 
+      - name: Validate real MuJoCo contacts and hard stops
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 -m pip install --disable-pip-version-check mujoco==3.9.0
           import_root="${RUNNER_TEMP}/reachy-import"
           enhanced="${RUNNER_TEMP}/rma065-enhanced"
@@ -221,6 +246,7 @@ jobs:
           rm -f .github/rma065-fixed-bundle.b64
           rm -f .github/rma065-fixed-v2.part*
           rm -f .github/rma065-fixed-v3.part*
+          rm -f .github/rma065-fixed-v4.part*
           rm -f .github/rma065-debug-trigger
           rm -f .github/rma065-wire-fixed-trigger
           git diff --check
@@ -230,7 +256,8 @@ jobs:
           git commit -m 'RMA-065: integrate collision and hard-stop baseline [skip ci]'
           git push origin HEAD:master
 
-      - if: always()
+      - name: Publish final status
+        if: always()
         uses: actions/github-script@v7
         env:
           RESULT: ${{ job.status }}
