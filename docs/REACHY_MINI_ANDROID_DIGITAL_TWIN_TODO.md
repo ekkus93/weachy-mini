@@ -1144,11 +1144,44 @@ public:
 
 ## RMA-073 — Implement parameter fitting and held-out validation
 
-- [ ] Separate training/fitting datasets from held-out validation datasets.
-- [ ] Fit friction, backlash, latency, controller, voltage, compliance, and thermal parameters where data supports them.
-- [ ] Report confidence or sensitivity.
-- [ ] Generate a signed/hashed calibration profile manifest.
-- [ ] Reject profiles incompatible with model or simulator versions.
+**Status:** Complete (2026-07-31)
+
+- [x] Separate training/fitting datasets from held-out validation datasets.
+- [x] Fit friction, backlash, latency, controller, voltage, compliance, and thermal parameters where data supports them.
+- [x] Report confidence or sensitivity.
+- [x] Generate a signed/hashed calibration profile manifest.
+- [x] Reject profiles incompatible with model or simulator versions.
+
+**Completion evidence**
+
+- `rma073_calibration_fit_plan_v1` binds each RMA-070 dataset by canonical
+  SHA-256 and immutable `fitting` or `heldout` role. IDs, paths, and hashes
+  cannot be reused across the split, all datasets must describe the same robot
+  and register configuration, and unsafe or out-of-root paths fail closed.
+- The fitting stage consumes only fitting-role datasets and freezes its output
+  before held-out data is loaded. Friction, backlash, command latency,
+  controller gains, supply voltage/source impedance, compliance, and thermal
+  parameters are estimated only when their required streams and observation
+  counts exist; unsupported families retain an explicit reason and no value.
+- Every fitted family reports observation count, training error or robust
+  spread, a dataset-qualified confidence label, and leave-one-out or robust
+  sensitivity. Held-out validation records the independent metric, threshold,
+  sample count, and pass/fail result for each supported family.
+- `rma073_calibration_profile_manifest_v1` preserves exact fit-plan, fitting
+  dataset, held-out dataset, model, MuJoCo, ABI, and RMA-061 through RMA-064
+  contract identities. It carries a canonical SHA-256 and Ed25519 signature.
+  Verification rejects content drift, the wrong public key, or any exact
+  compatibility mismatch.
+- RMA-073 can emit only `fit_candidate_unapproved` manifests with
+  `calibrated=false`; attempts to sign a calibrated claim fail closed. The
+  committed key pair is an explicitly non-secret synthetic test fixture.
+- Deterministic synthetic training and held-out data validate all seven
+  estimators without claiming physical Reachy measurements. Physical data,
+  unit-specific fitting, profile approval, and the calibrated label remain
+  RMA-074 work.
+- Detailed design and accepted automated evidence are in
+  `docs/architecture/CALIBRATION_PARAMETER_FITTING.md` and
+  `docs/validation/RMA_073_PARAMETER_FITTING_VALIDATION_2026-07-31.md`.
 
 ## RMA-074 — Produce first calibrated profile
 

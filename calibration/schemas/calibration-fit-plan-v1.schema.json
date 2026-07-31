@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weachy-mini.invalid/schemas/calibration-fit-plan-v1.schema.json",
+  "title": "RMA-073 calibration fit plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id", "schema_version", "plan_id", "created_utc", "profile_id",
+    "profile_kind", "compatibility", "datasets", "actuator_id", "windows",
+    "validation_thresholds", "integrity"
+  ],
+  "properties": {
+    "contract_id": {"const": "rma073_calibration_fit_plan_v1"},
+    "schema_version": {"const": 1},
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "created_utc": {"type": "string", "format": "date-time"},
+    "profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profile_kind": {"const": "fit_candidate_unapproved"},
+    "compatibility": {"type": "object"},
+    "datasets": {"type": "array", "minItems": 2, "maxItems": 64},
+    "actuator_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "windows": {"type": "object"},
+    "validation_thresholds": {"type": "object"},
+    "integrity": {"type": "object"}
+  }
+}

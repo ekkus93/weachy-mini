@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weachy-mini.invalid/schemas/calibration-profile-manifest-v1.schema.json",
+  "title": "RMA-073 signed calibration profile manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id", "schema_version", "profile_id", "profile_kind", "calibrated",
+    "approval_state", "created_utc", "generator", "compatibility", "datasets",
+    "parameter_results", "heldout_validation", "integrity", "signature"
+  ],
+  "properties": {
+    "contract_id": {"const": "rma073_calibration_profile_manifest_v1"},
+    "schema_version": {"const": 1},
+    "profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profile_kind": {"const": "fit_candidate_unapproved"},
+    "calibrated": {"const": false},
+    "approval_state": {"const": "unapproved_fit_candidate"},
+    "created_utc": {"type": "string", "format": "date-time"},
+    "generator": {"type": "object"},
+    "compatibility": {"type": "object"},
+    "datasets": {"type": "array", "minItems": 2, "maxItems": 64},
+    "parameter_results": {"type": "object"},
+    "heldout_validation": {"type": "object"},
+    "integrity": {"type": "object"},
+    "signature": {"type": "object"}
+  }
+}
