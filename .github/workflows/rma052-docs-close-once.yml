@@ -1,3 +1,4 @@
+# One-shot closure workflow; removed by its successful run.
 name: RMA-052 Documentation Closure
 
 on:
