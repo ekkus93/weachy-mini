@@ -24,77 +24,82 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'RMA-065 V4 Recovery',
-              description: 'Locating the damaged v4 payload member',
+              description: 'Comparing damaged validator against v3',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
 
       - uses: actions/checkout@v4
 
-      - name: Recover and fingerprint every readable member
+      - name: Compare v3 and recovered v4 validator
         shell: bash
         run: |
           set -euo pipefail
-          archive="${RUNNER_TEMP}/rma065-fixed-v4.tar.gz"
-          raw_tar="${RUNNER_TEMP}/rma065-fixed-v4.tar"
-          recovered="${RUNNER_TEMP}/rma065-fixed-v4"
+          v3_archive="${RUNNER_TEMP}/rma065-fixed-v3.tar.gz"
+          v3_dir="${RUNNER_TEMP}/rma065-fixed-v3"
+          v4_archive="${RUNNER_TEMP}/rma065-fixed-v4.tar.gz"
+          v4_tar="${RUNNER_TEMP}/rma065-fixed-v4.tar"
+          v4_dir="${RUNNER_TEMP}/rma065-fixed-v4"
 
-          cat .github/rma065-fixed-v4.part* | base64 --decode > "${archive}"
+          cat .github/rma065-fixed-v3.part* | base64 --decode > "${v3_archive}"
+          printf '%s  %s\n' \
+            '577e1945859a9f4d0e3b35b8a740a73121b0ec0fb4eb6a3c83ce2e16ea09489d' \
+            "${v3_archive}" | sha256sum --check --strict
+          mkdir -p "${v3_dir}"
+          tar -xzf "${v3_archive}" -C "${v3_dir}"
+
+          cat .github/rma065-fixed-v4.part* | base64 --decode > "${v4_archive}"
           printf '%s  %s\n' \
             'b11e6c22ae306937e53fb712870f96bf8194edab37001b6f868258b5c172d6fe' \
-            "${archive}" | sha256sum --check --strict
-
+            "${v4_archive}" | sha256sum --check --strict
           set +e
-          gzip -dc "${archive}" > "${raw_tar}"
+          gzip -dc "${v4_archive}" > "${v4_tar}"
           gzip_rc=$?
-          tar -tf "${raw_tar}" > "${RUNNER_TEMP}/manifest.txt"
-          list_rc=$?
-          mkdir -p "${recovered}"
-          tar -xf "${raw_tar}" -C "${recovered}"
+          mkdir -p "${v4_dir}"
+          tar -xf "${v4_tar}" -C "${v4_dir}"
           extract_rc=$?
           set -e
+          echo "gzip_rc=${gzip_rc} extract_rc=${extract_rc}"
 
-          echo "gzip_rc=${gzip_rc} list_rc=${list_rc} extract_rc=${extract_rc}"
-          echo '--- manifest ---'
-          cat "${RUNNER_TEMP}/manifest.txt"
-          echo '--- recovered files ---'
-          find "${recovered}" -type f -printf '%s %p\n' | sort
-          echo '--- hashes ---'
-          find "${recovered}" -type f -print0 | sort -z | xargs -0 -r sha256sum
+          V3="${v3_dir}/scripts/run_reachy_collision_hard_stop_validation.py" \
+          V4="${v4_dir}/scripts/run_reachy_collision_hard_stop_validation.py" \
+          python3 - <<'PY'
+          import difflib
+          import os
+          from pathlib import Path
 
-          for relative in \
-            models/reachy-mini/collision-hard-stop-baseline.json \
-            scripts/generate_reachy_collision_model.py \
-            scripts/run_reachy_collision_hard_stop_validation.py; do
-            path="${recovered}/${relative}"
-            echo "--- ${relative} tail ---"
-            if [[ -f "${path}" ]]; then
-              tail -c 256 "${path}" | od -An -tx1c
-            else
-              echo MISSING
-            fi
-          done
+          v3_path = Path(os.environ['V3'])
+          v4_path = Path(os.environ['V4'])
+          v3 = v3_path.read_bytes()
+          v4 = v4_path.read_bytes()
+          print(f'v3_size={len(v3)} v4_size={len(v4)}')
+          first_mismatch = next((i for i, (a, b) in enumerate(zip(v3, v4)) if a != b), None)
+          print(f'first_mismatch={first_mismatch}')
+          nulls = [i for i, byte in enumerate(v4) if byte == 0]
+          print(f'null_count={len(nulls)} first_null={nulls[0] if nulls else None} last_null={nulls[-1] if nulls else None}')
 
-          echo '--- syntax results ---'
-          set +e
-          python3 -m json.tool \
-            "${recovered}/models/reachy-mini/collision-hard-stop-baseline.json" >/dev/null
-          echo "json_rc=$?"
-          python3 -m py_compile \
-            "${recovered}/scripts/generate_reachy_collision_model.py"
-          echo "generator_rc=$?"
-          python3 -m py_compile \
-            "${recovered}/scripts/run_reachy_collision_hard_stop_validation.py"
-          echo "validation_rc=$?"
-          set -e
+          v3_text = v3.decode('utf-8')
+          v4_text = v4.replace(b'\x00', b'<NUL>').decode('utf-8', errors='replace')
+          diff = list(difflib.unified_diff(
+              v3_text.splitlines(),
+              v4_text.splitlines(),
+              fromfile='v3-validator.py',
+              tofile='recovered-v4-validator.py',
+              n=5,
+              lineterm='',
+          ))
+          print(f'diff_lines={len(diff)}')
+          for line in diff[:800]:
+              print(line)
+          if len(diff) > 800:
+              print(f'... truncated {len(diff) - 800} diff lines ...')
+          PY
 
-          # This diagnostic remains fail-closed until every recovered member is pinned.
+          # Diagnostic remains fail-closed.
           exit 1
 
       - name: Publish final status
         if: always()
         uses: actions/github-script@v7
-        env:
-          RESULT: ${{ job.status }}
         with:
           script: |
             await github.rest.repos.createCommitStatus({
@@ -103,6 +108,6 @@ jobs:
               sha: context.sha,
               state: 'failure',
               context: 'RMA-065 V4 Recovery',
-              description: 'Diagnostic completed; recovered files are not yet trusted',
+              description: 'Validator comparison captured; no damaged code trusted',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
