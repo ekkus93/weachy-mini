@@ -94,6 +94,20 @@ jobs:
           text = text.replace(marker, '\n#endif\n' + marker, 1)
           path.write_text(text, encoding='utf-8', newline='\n')
           PYDYNAMICS
+          python3 - <<'PYGENERATOR'
+          from pathlib import Path
+          path = Path('scripts/generate_reachy_collision_model.py')
+          text = path.read_text(encoding='utf-8')
+          removed = [
+              '    root.set("rma065_contract", profile["contract"])\n',
+              '    root.set("rma065_calibrated", "false")\n',
+          ]
+          for line in removed:
+              if text.count(line) != 1:
+                  raise SystemExit(f'unsupported root attribute line count={text.count(line)}: {line!r}')
+              text = text.replace(line, '', 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PYGENERATOR
           rm scripts/.rma065-apply-source-edits.py
           test -f native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc
           test -f models/reachy-mini/collision-hard-stop-baseline.json
