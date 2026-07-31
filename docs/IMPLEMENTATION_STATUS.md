@@ -2,9 +2,10 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-050 deterministic Unity prefab and scene,
-full-model presentation hierarchy, auditable mesh scale/basis conversion, and
-fixed camera/lighting acceptance after RMA-041/RMA-042 model-integrity closure
+**Current implementation series:** RMA-051 allocation-free authoritative
+state-to-render mapping, timestamp interpolation, discontinuity handling,
+generated diagnostics, and physical Android acceptance after RMA-050 prefab
+closure
 
 ## Repository rules in force
 
@@ -241,25 +242,47 @@ The detailed contract is in
 with validation evidence in
 [the RMA-050 validation record](validation/RMA_050_UNITY_PREFAB_VALIDATION_2026-07-30.md).
 
-### RMA-051/RMA-052 — authoritative state mapping and invariant foundations
+### RMA-051 — authoritative state-to-render mapping
 
-The production state-format-v1 envelope publishes model identity, sequence,
-simulation time, continuity, qpos, qvel, actuator observations, canonical body
-poses, calibration identity, warnings, constraint counts, and residuals. The
-managed parser validates all offsets, counts, identities, ordering, finiteness,
-and quaternions, then publishes immutable pose pairs.
+RMA-051 is complete. The production state-format-v1 envelope publishes model
+identity, sequence, simulation time, continuity, qpos, qvel, actuator
+observations, canonical body poses, calibration identity, warnings, constraint
+counts, and residuals. The managed parser validates all offsets, counts,
+identities, ordering, finiteness, and quaternions.
 
-Unity interpolates by simulation timestamps, snaps across discontinuities, and
-never feeds presentation transforms back into MuJoCo. Rigidbody, articulation,
-Animator, Timeline, and other competing writers are rejected or detected.
+The production pose source retains previous, latest, and capture state frames
+and rotates them when the worker publishes a new state. The renderer creates two
+caller-owned reusable pose frames at bind time and copies the latest ordered pair
+into them. Immutable snapshots remain available for diagnostics and legacy
+callers, but the production render loop performs no pose-array or snapshot
+allocation.
+
+Unity interpolates by simulation timestamps, gives identical transforms for the
+same target time regardless of 30/60 FPS render cadence, snaps across reset or
+reload discontinuities, and never feeds presentation transforms back into
+MuJoCo. Focused regressions require zero managed bytes in both the production
+source-copy loop and the generated-prefab steady-state render loop.
+
+The generated optional diagnostics overlay starts disabled and maps all 18 body
+axes plus all 16 joint names. External transform writes fault visibly;
+Rigidbody, articulation, Animator, Timeline, and other competing writers are
+rejected or detected. These mechanisms provide foundations for RMA-052, but the
+separate formal RMA-052 invariant-closure task remains open.
+
 Physical acceptance verifies body yaw, head, both antennas, all six Stewart
 links, reset continuity, renderer health, and absence of a hidden kinematic
-fallback.
+fallback. Installed HOME/resume acceptance verifies real Android sleep/wake
+lifecycle behavior without suspended-time catch-up. The official model has no
+sleep/rest keyframe, so `SleepRest` remains typed `UNSUPPORTED` rather than
+fabricating a pose.
 
-The physical acceptance scripts now share one deterministic device contract:
-wake, unlock, collapse overlays, acknowledge immersive confirmation, keep awake,
+The physical acceptance scripts share one deterministic device contract: wake,
+unlock, collapse overlays, acknowledge immersive confirmation, keep awake,
 launch the exact Unity activity, verify focused-window ownership, capture
-structured evidence, and restore device power policy.
+structured evidence, and restore device power policy. The detailed contract is
+in [Authoritative Unity rendering](architecture/AUTHORITATIVE_UNITY_RENDERING.md),
+with validation evidence in
+[the RMA-051 validation record](validation/RMA_051_STATE_TO_RENDER_MAPPING_VALIDATION_2026-07-30.md).
 
 ## Current validation evidence
 
@@ -272,6 +295,16 @@ structured evidence, and restore device power policy.
   IL2CPP build/verification, installed lifecycle acceptance, physical
   authoritative-rendering acceptance, evidence uploads, and APK upload passed on
   the same exact commit.
+- Hosted RMA-051 run `30593459422`: managed warnings-as-errors and native-backed
+  lifecycle/state tests, native warnings/sanitizers, exact pinned-model
+  conversion and reference generation, Ruff/actionlint/ShellCheck/static policy,
+  and Android lint/tests passed on
+  `09d5f6d3cf48a5b167f09629de520112ae60d5a6`.
+- Self-hosted RMA-051 run `30593459413`: generated presentation preparation,
+  production ARM64 MuJoCo staging, Unity EditMode/PlayMode tests including
+  allocation and mapping regressions, ARM64 API-26 IL2CPP build/verification,
+  installed lifecycle acceptance, physical authoritative rendering, evidence
+  uploads, and APK upload passed on the same exact commit.
 
 - Focused RMA-041 audit run `30587841758`: Ruff, 11 positive/failure-path tests,
   static evidence validation, and deterministic patch artifact publication passed
@@ -319,6 +352,7 @@ structured evidence, and restore device power policy.
 
 ## Open hard gates
 
+- RMA-052 formal authoritative-rendering invariant closure;
 - RMA-060 long-duration official-model baseline dynamics and monitoring;
 - RMA-012 offline licenses, attribution, and unofficial-project notice;
 - API-31 development APK and release AAB validation;

@@ -627,17 +627,52 @@ while running:
 
 ## RMA-051 — Implement state-to-render mapping
 
-- [ ] Read the latest two authoritative state snapshots.
-- [ ] Interpolate render transforms by simulation timestamps without feeding results back to physics.
-- [ ] Handle reset/discontinuity without interpolating through impossible poses.
-- [ ] Eliminate per-frame allocations.
-- [ ] Add an optional debug overlay of body axes and joint names.
+- [x] Read the latest two authoritative state snapshots.
+- [x] Interpolate render transforms by simulation timestamps without feeding results back to physics.
+- [x] Handle reset/discontinuity without interpolating through impossible poses.
+- [x] Eliminate per-frame allocations.
+- [x] Add an optional debug overlay of body axes and joint names.
 
 **Acceptance criteria**
 
-- [ ] Rendering at 30 and 60 FPS displays the same underlying trajectory.
-- [ ] A test detects any script that attempts to authoritatively drive simulated transforms.
-- [ ] Sleep/wake and antenna motion align with MuJoCo bodies.
+- [x] Rendering at 30 and 60 FPS displays the same underlying trajectory.
+- [x] A test detects any script that attempts to authoritatively drive simulated transforms.
+- [x] Sleep/wake and antenna motion align with MuJoCo bodies.
+
+**Completion evidence — 2026-07-30**
+
+- The production pose source rotates three preallocated authoritative-state
+  frames and copies the latest ordered pair into two renderer-owned reusable
+  pose frames. The immutable snapshot API remains available for diagnostics,
+  but the production `LateUpdate` path no longer constructs pose arrays or
+  snapshots.
+- Timestamp interpolation, render-cadence independence, ordered publication,
+  and reset/discontinuity snapping are covered by focused managed and Unity
+  tests. The 30/60 FPS criterion is represented by rendering the same target
+  simulation timestamp through different render-call cadences and requiring
+  identical transforms.
+- Allocation regressions require zero managed bytes across 128 production
+  source-pair copies and 128 generated-prefab render iterations after warmup.
+- The generated optional diagnostics overlay starts disabled and retains all
+  18 body-axis bindings and all 16 joint labels without writing transforms.
+- External transform writes fault instead of being overwritten, while
+  Rigidbody, ArticulationBody, Animator, Animation, Timeline, and joint writers
+  remain prohibited on the authoritative hierarchy.
+- Hosted quality run `30593459422` passed managed, native, official-model,
+  static, and Android gates on exact commit
+  `09d5f6d3cf48a5b167f09629de520112ae60d5a6`.
+- Self-hosted `kawa` run `30593459413` passed generated Unity tests, ARM64
+  API-26 IL2CPP build/verification, installed HOME/resume lifecycle acceptance,
+  and physical authoritative-rendering acceptance on the same exact commit.
+  Device evidence verifies body/head motion, both antennas, all six Stewart
+  links, ordered simulation time, reset continuity, renderer health, and no
+  hidden kinematic fallback.
+- The official pinned model provides no named sleep/rest keyframe. `SleepRest`
+  therefore remains typed `UNSUPPORTED` rather than inventing a pose; real
+  device sleep/wake lifecycle behavior and neutral/reset mapping are verified
+  without fabricating unsupported model state.
+- Detailed evidence is recorded in
+  `docs/validation/RMA_051_STATE_TO_RENDER_MAPPING_VALIDATION_2026-07-30.md`.
 
 ## RMA-052 — Add authoritative-rendering invariant checks
 
