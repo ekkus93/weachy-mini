@@ -70,7 +70,10 @@ jobs:
           rsync -a \
             --exclude 'scripts/apply_rma065_source_edits.py' \
             "${payload_dir}/" ./
-          python3 "${payload_dir}/scripts/apply_rma065_source_edits.py"
+          cp "${payload_dir}/scripts/apply_rma065_source_edits.py" \
+            scripts/.rma065-apply-source-edits.py
+          python3 scripts/.rma065-apply-source-edits.py
+          rm scripts/.rma065-apply-source-edits.py
           test -f native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc
           test -f models/reachy-mini/collision-hard-stop-baseline.json
           git diff --check
