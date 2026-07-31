@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Transport Diagnostic
-# Recheck repaired member and complete archive.
+# Verify independently hashed split member and archive.
 
 on:
   push:
