@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma065-integrate.yml'
+      - '.github/rma065-fixed-v4.part*'
 
 permissions:
   contents: write
