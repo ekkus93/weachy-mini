@@ -131,7 +131,7 @@ def update_status() -> None:
     text = STATUS_PATH.read_text(encoding="utf-8")
     text = replace_once(
         text,
-        "**Updated:** 2026-07-30",
+        "**Updated:** 2026-07-30  ",
         "**Updated:** 2026-07-31",
         "status date",
     )
