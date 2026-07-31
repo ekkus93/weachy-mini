@@ -1,0 +1,197 @@
+{
+  "$id": "https://example.invalid/weachy-mini/calibration/calibration-experiment-plan-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Logical JSON contract. scripts/calibration_experiment.py is the authoritative bounded validator.",
+  "properties": {
+    "actuators": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "maximum_position_rad": {
+            "type": "number"
+          },
+          "maximum_velocity_rad_s": {
+            "exclusiveMinimum": 0,
+            "type": "number"
+          },
+          "minimum_position_rad": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "minimum_position_rad",
+          "maximum_position_rad",
+          "maximum_velocity_rad_s"
+        ],
+        "type": "object"
+      },
+      "maxProperties": 32,
+      "minProperties": 1,
+      "type": "object"
+    },
+    "description": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "experiments": {
+      "items": {
+        "properties": {
+          "experiment_id": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "backlash_reversal",
+              "free_decay",
+              "frequency_response",
+              "gravity_static_pose",
+              "multi_actuator",
+              "step_response",
+              "thermal_cycle",
+              "unloaded_sweep"
+            ]
+          }
+        },
+        "required": [
+          "experiment_id",
+          "type"
+        ],
+        "type": "object"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "integrity": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "plan_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "plan_sha256"
+      ],
+      "type": "object"
+    },
+    "plan_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "robot": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_robot_id": {
+          "type": "string"
+        },
+        "firmware_constraint": {
+          "type": "string"
+        },
+        "hardware_revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expected_robot_id",
+        "hardware_revision",
+        "firmware_constraint"
+      ],
+      "type": "object"
+    },
+    "safety_limits": {
+      "additionalProperties": false,
+      "properties": {
+        "maximum_concurrent_actuators": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maximum_duration_seconds": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "maximum_schedule_actions": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maximum_temperature_c": {
+          "type": "number"
+        },
+        "maximum_total_current_a": {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "minimum_bus_voltage_v": {
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "maximum_duration_seconds",
+        "maximum_schedule_actions",
+        "maximum_temperature_c",
+        "minimum_bus_voltage_v",
+        "maximum_total_current_a",
+        "maximum_concurrent_actuators"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "contract_id": {
+          "const": "rma072_calibration_experiment_plan_v1"
+        },
+        "schema_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "contract_id",
+        "schema_version",
+        "schema_sha256"
+      ],
+      "type": "object"
+    },
+    "timing": {
+      "additionalProperties": false,
+      "properties": {
+        "command_rate_hz": {
+          "maximum": 2000,
+          "minimum": 1,
+          "type": "number"
+        },
+        "primary_clock_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "command_rate_hz",
+        "primary_clock_id"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema",
+    "plan_id",
+    "description",
+    "robot",
+    "timing",
+    "safety_limits",
+    "actuators",
+    "experiments",
+    "integrity"
+  ],
+  "title": "RMA-072 Calibration Experiment Plan v1",
+  "type": "object"
+}
