@@ -1089,13 +1089,58 @@ public:
 
 ## RMA-072 — Implement experiment runner
 
-- [ ] Implement scripted unloaded sweeps.
-- [ ] Implement gravity-loaded static-pose tests.
-- [ ] Implement step and frequency-response tests.
-- [ ] Implement backlash direction-reversal tests.
-- [ ] Implement torque-disabled/free-decay tests.
-- [ ] Implement multi-actuator and warm/cold tests.
-- [ ] Add safety notes for physical test execution.
+**Status:** Complete (2026-07-31)
+
+- [x] Implement scripted unloaded sweeps.
+- [x] Implement gravity-loaded static-pose tests.
+- [x] Implement step and frequency-response tests.
+- [x] Implement backlash direction-reversal tests.
+- [x] Implement torque-disabled/free-decay tests.
+- [x] Implement multi-actuator and warm/cold tests.
+- [x] Add safety notes for physical test execution.
+
+**Completion evidence**
+
+- `rma072_calibration_experiment_plan_v1` defines a versioned, canonical-hash
+  bound plan for robot identity, monotonic timing, actuator soft/profile
+  limits, resource ceilings, live electrical/thermal abort limits, and ordered
+  experiments.
+- The deterministic compiler covers unloaded sweeps, gravity-loaded static
+  poses, step response, sinusoidal frequency response, backlash reversals,
+  torque-disabled free decay, simultaneous multi-actuator commands, and
+  warm/cold thermal cycles. The committed synthetic smoke plan compiles to 347
+  actions over 23.4 seconds with schedule SHA-256
+  `96fa8b8131765b0f1d7c3ef61ba95c8038c5ee6cf52fcfd615902df776bfdcfd`.
+- Dry-run output includes a versioned manifest, the complete action schedule,
+  and RMA-070-shaped command JSONL. The permanent gate imported 312 generated
+  command samples through the RMA-071 capture tool and validated dataset
+  SHA-256
+  `138652fd99c1ccc54e081c6fca81260cf09681f35d4f144617751aaa5bdc035b`.
+- Physical execution remains behind the `ExperimentAdapter` boundary. Exact
+  plan hash, robot identity, operator presence, workspace clearance,
+  emergency-stop verification, acknowledgement, and explicit motion
+  authorization are required before startup. Voltage, current, temperature,
+  emergency-stop availability, and robot fault state are checked before every
+  action; any violation or adapter exception invokes emergency stop and
+  records an aborted run.
+- The schedule explicitly disables torque for free-decay release and for every
+  used actuator during final safe shutdown. The CLI has no generic physical
+  motion switch.
+- Permanent workflow run `30667664533` passed Python compilation, all 39
+  calibration regression tests, all eight experiment families, the dry-run
+  CLI, the RMA-070/RMA-071 bridge, and evidence hashing on exact implementation
+  commit `de8b95eee5ffdae90c9409fa49887d3d603d6913`.
+- Artifact `8807575014`,
+  `rma072-experiment-runner-evidence-de8b95eee5ffdae90c9409fa49887d3d603d6913`,
+  has ZIP SHA-256
+  `be4aaea8262b240d10a57f6c75f63666a83eac5202c352657a60c921f2a9bb06`.
+- The committed fixture and automated execution are synthetic orchestration
+  evidence only. A production Reachy adapter and physical unit data remain
+  RMA-074 work.
+- Detailed design, safety, and evidence are in
+  `docs/architecture/CALIBRATION_EXPERIMENT_RUNNER.md`,
+  `docs/operations/CALIBRATION_EXPERIMENT_SAFETY.md`, and
+  `docs/validation/RMA_072_EXPERIMENT_RUNNER_VALIDATION_2026-07-31.md`.
 
 ## RMA-073 — Implement parameter fitting and held-out validation
 
