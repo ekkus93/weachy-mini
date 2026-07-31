@@ -119,6 +119,64 @@ jobs:
           set -euo pipefail
           bash "${RUNNER_TEMP}/reconstruct.sh"
           bash "${RUNNER_TEMP}/fixture.sh"
+          python3 - <<'PYISOLATE'
+          from pathlib import Path
+
+          validator = Path('scripts/run_reachy_collision_hard_stop_validation.py')
+          source = validator.read_text(encoding='utf-8')
+          function_start = source.find('def internal_contact_fixture')
+          function_end = source.find('\ndef external_contact_fixture', function_start)
+          if function_start < 0 or function_end < 0:
+              raise SystemExit('internal contact fixture function boundaries missing')
+          block = source[function_start:function_end]
+          old = (
+              '    tree = ET.parse(model_path)\n'
+              '    root = tree.getroot()\n'
+              '    bodies = {\n'
+          )
+          new = (
+              '    tree = ET.parse(model_path)\n'
+              '    root = tree.getroot()\n'
+              '    for geom in root.findall(".//geom"):\n'
+              '        geom.set("contype", "0")\n'
+              '        geom.set("conaffinity", "0")\n'
+              '    bodies = {\n'
+          )
+          if block.count(old) != 1:
+              print('--- internal contact fixture block ---')
+              print(block)
+              raise SystemExit(
+                  f'internal fixture isolation marker count={block.count(old)}'
+              )
+          block = block.replace(old, new, 1)
+          source = source[:function_start] + block + source[function_end:]
+          validator.write_text(source, encoding='utf-8', newline='\n')
+
+          tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
+          test_source = tests.read_text(encoding='utf-8')
+          class_name = 'class CollisionInternalFixtureIsolationRegressionTests'
+          if class_name in test_source:
+              raise SystemExit('fixture isolation regression already exists unexpectedly')
+          regression = r'''
+
+          class CollisionInternalFixtureIsolationRegressionTests(unittest.TestCase):
+              def test_internal_fixture_disables_preexisting_collision_geoms(self):
+                  source = Path(
+                      "scripts/run_reachy_collision_hard_stop_validation.py"
+                  ).read_text(encoding="utf-8")
+                  function = source[
+                      source.index("def internal_contact_fixture"):
+                      source.index("\ndef external_contact_fixture")
+                  ]
+                  self.assertIn(
+                      'for geom in root.findall(".//geom"):',
+                      function,
+                  )
+                  self.assertIn('geom.set("contype", "0")', function)
+                  self.assertIn('geom.set("conaffinity", "0")', function)
+          '''
+          tests.write_text(test_source + regression, encoding='utf-8', newline='\n')
+          PYISOLATE
           python3 - <<'PY'
           import os
           from pathlib import Path
