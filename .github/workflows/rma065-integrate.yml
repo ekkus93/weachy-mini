@@ -116,18 +116,23 @@ jobs:
           python3 - <<'PYBUFFERS'
           from pathlib import Path
 
-          old = 'contact_force = [0.0] * 6'
-          new = 'contact_force = np.zeros(6, dtype=np.float64)'
+          replacements_by_file = {
+              'scripts/audit_reachy_collision_model.py': (
+                  'contact_force = [0.0] * 6',
+                  'contact_force = np.zeros(6, dtype=np.float64)',
+              ),
+              'scripts/run_reachy_collision_hard_stop_validation.py': (
+                  'force = [0.0] * 6',
+                  'force = np.zeros(6, dtype=np.float64)',
+              ),
+          }
           replacements = 0
-          for relative in (
-              'scripts/audit_reachy_collision_model.py',
-              'scripts/run_reachy_collision_hard_stop_validation.py',
-          ):
+          for relative, (old, new) in replacements_by_file.items():
               script = Path(relative)
               source = script.read_text(encoding='utf-8')
               count = source.count(old)
-              if count == 0:
-                  continue
+              if count != 1:
+                  raise SystemExit(f'{relative}: contact buffer marker count={count}')
               if 'import numpy as np\n' not in source:
                   import_marker = 'import argparse\n'
                   if source.count(import_marker) != 1:
@@ -137,11 +142,11 @@ jobs:
                       import_marker + 'import numpy as np\n',
                       1,
                   )
-              source = source.replace(old, new)
-              replacements += count
+              source = source.replace(old, new, 1)
+              replacements += 1
               script.write_text(source, encoding='utf-8', newline='\n')
-          if replacements == 0:
-              raise SystemExit('no Python-list mj_contactForce buffers were replaced')
+          if replacements != len(replacements_by_file):
+              raise SystemExit(f'contact buffer replacement count={replacements}')
           PYBUFFERS
           python3 - <<'PYTEST'
           from pathlib import Path
@@ -151,8 +156,8 @@ jobs:
           marker = 'if __name__ == "__main__":\n    unittest.main()\n'
           if text.count(marker) != 1:
               raise SystemExit(f'unit-test main marker count={text.count(marker)}')
-          regression = '''class CollisionContactBufferTests(unittest.TestCase):
-              def test_contact_force_uses_writable_numpy_float64_buffer(self):
+          regression = '''class CollisionRuntimeRegressionTests(unittest.TestCase):
+              def test_contact_force_uses_writable_numpy_float64_buffers(self):
                   from pathlib import Path
 
                   for relative in (
@@ -162,8 +167,20 @@ jobs:
                       source = Path(relative).read_text(encoding="utf-8")
                       if "mj_contactForce" not in source:
                           continue
-                      self.assertIn("contact_force = np.zeros(6, dtype=np.float64)", source)
-                      self.assertNotIn("contact_force = [0.0] * 6", source)
+                      self.assertIn("import numpy as np", source)
+                      self.assertIn("np.zeros(6, dtype=np.float64)", source)
+                      self.assertNotIn("[0.0] * 6", source)
+
+              def test_explicit_soft_ranges_replace_inherited_ranges(self):
+                  from pathlib import Path
+
+                  source = Path("scripts/generate_reachy_collision_model.py").read_text(
+                      encoding="utf-8"
+                  )
+                  self.assertIn(
+                      'actuator.attrib.pop("inheritrange", None)',
+                      source,
+                  )
 
 
           '''
