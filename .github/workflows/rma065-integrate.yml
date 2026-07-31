@@ -57,8 +57,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          payload_tgz=".github/rma065-payload.tar.gz"
+          payload_b64="${RUNNER_TEMP}/rma065-payload.b64"
+          payload_tgz="${RUNNER_TEMP}/rma065-payload.tar.gz"
           payload_dir="${RUNNER_TEMP}/rma065-payload"
+          cat .github/rma065-payload.part* > "${payload_b64}"
+          base64 --decode "${payload_b64}" > "${payload_tgz}"
           printf '%s  %s\n' \
             '133b4959d137607b1640c24cd12b6ef99b00f8c3e851d2a406d6495364deda0c' \
             "${payload_tgz}" | sha256sum --check --strict
@@ -222,7 +225,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/rma065-payload.tar.gz
+          git rm .github/rma065-payload.part*
           git rm .github/workflows/rma065-integrate.yml
           git diff --check
           git config user.name 'github-actions[bot]'
