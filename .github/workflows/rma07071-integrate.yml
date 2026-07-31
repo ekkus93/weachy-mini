@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Integration
-# Format production Python before strict lint and integration.
+# Apply the six explicit strict-Ruff source corrections before integration.
 
 on:
   push:
@@ -62,6 +62,71 @@ jobs:
             'a97fca162607a122d1d8cc41a8687974abdceed571c3dbbc43b6d0a6a5a18b4b' \
             "${archive}" | sha256sum --check --strict
           tar -xzf "${archive}" -C .
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              source_path = Path(path)
+              source = source_path.read_text(encoding="utf-8")
+              if source.count(old) != 1:
+                  raise SystemExit(
+                      f"{path}: expected one correction marker, found {source.count(old)}"
+                  )
+              source_path.write_text(
+                  source.replace(old, new, 1),
+                  encoding="utf-8",
+                  newline="\n",
+              )
+
+          replace_once(
+              "scripts/calibration_data.py",
+              "not isinstance(value, (int, float))",
+              "not isinstance(value, int | float)",
+          )
+          replace_once(
+              "scripts/calibration_data.py",
+              '''        if sample_type in {"imu", "external_pose", "force_torque"}:
+              if "coordinate_frame" not in stream:
+                  raise _error(path, "requires coordinate_frame")
+          ''',
+              '''        if (
+              sample_type in {"imu", "external_pose", "force_torque"}
+              and "coordinate_frame" not in stream
+          ):
+              raise _error(path, "requires coordinate_frame")
+          ''',
+          )
+          replace_once(
+              "scripts/capture_reachy_calibration.py",
+              '''                f"line {line_number} keys invalid: missing={sorted(missing)} unexpected={sorted(unexpected)}"
+          ''',
+              '''                f"line {line_number} keys invalid: missing={sorted(missing)} "
+              f"unexpected={sorted(unexpected)}"
+          ''',
+          )
+          replace_once(
+              "scripts/capture_reachy_calibration.py",
+              '''                f"CSV columns for {path.name} must be exactly {expected_columns}; found {reader.fieldnames}"
+          ''',
+              '''                f"CSV columns for {path.name} must be exactly {expected_columns}; "
+              f"found {reader.fieldnames}"
+          ''',
+          )
+          replace_once(
+              "scripts/capture_reachy_calibration.py",
+              '''                "--force-torque-clock-id and --force-torque-frame are required with --force-torque-csv"
+          ''',
+              '''                "--force-torque-clock-id and --force-torque-frame are required "
+              "with --force-torque-csv"
+          ''',
+          )
+          replace_once(
+              "scripts/estimate_calibration_clock_offset.py",
+              "median_offset = int(round(statistics.median(offsets)))",
+              "median_offset = round(statistics.median(offsets))",
+          )
+          PY
 
           python3 -m pip install --disable-pip-version-check ruff==0.12.0
           production_python=(
