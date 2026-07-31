@@ -1,21 +1,20 @@
-name: RMA-065 Debug Source Export
+name: RMA-065 Wire Deterministic Fix
 
 on:
   push:
     branches: [master]
     paths:
-      - '.github/rma065-debug-trigger'
       - '.github/workflows/rma065-debug-source.yml'
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 jobs:
-  export:
+  wire:
     runs-on: ubuntu-24.04
     steps:
-      - name: Publish debug export status
+      - name: Publish pending status
         uses: actions/github-script@v7
         with:
           script: |
@@ -24,36 +23,58 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: 'pending',
-              context: 'RMA-065 Debug Source Export',
-              description: 'Exporting verified RMA-065 source bundle',
+              context: 'RMA-065 Wire Deterministic Fix',
+              description: 'Wiring pinned kinematic collision segments',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
       - uses: actions/checkout@v4
-      - name: Reconstruct verified payload
+        with:
+          fetch-depth: 0
+      - name: Patch integration workflow
         shell: bash
         run: |
           set -euo pipefail
-          archive="${RUNNER_TEMP}/rma065-payload.tar.gz"
-          payload="${RUNNER_TEMP}/rma065-payload"
-          cat .github/rma065-payload.part* | base64 --decode > "${archive}"
-          printf '%s  %s\n' \
-            '133b4959d137607b1640c24cd12b6ef99b00f8c3e851d2a406d6495364deda0c' \
-            "${archive}" | sha256sum --check --strict
-          mkdir -p "${payload}"
-          tar -xzf "${archive}" -C "${payload}"
-          mkdir -p rma065-debug
-          cp "${payload}/scripts/generate_reachy_collision_model.py" rma065-debug/
-          cp "${payload}/scripts/run_reachy_collision_hard_stop_validation.py" rma065-debug/
-          cp "${payload}/scripts/tests/test_generate_reachy_collision_model.py" rma065-debug/
-          cp "${payload}/models/reachy-mini/collision-hard-stop-baseline.json" rma065-debug/
-          cp "${payload}/scripts/apply_rma065_source_edits.py" rma065-debug/
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rma065-debug-source
-          path: rma065-debug
-          if-no-files-found: error
-          retention-days: 1
-      - name: Publish final debug export status
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/rma065-integrate.yml')
+          text = path.read_text(encoding='utf-8')
+          start = "          python3 - <<'PYGENERATOR'\n"
+          end = "          PYGENERATOR\n"
+          if text.count(start) != 1 or text.count(end) != 1:
+              raise SystemExit(
+                  f'generator patch block markers start={text.count(start)} end={text.count(end)}'
+              )
+          before, rest = text.split(start, 1)
+          _, after = rest.split(end, 1)
+          replacement = '''          fixed_archive="${RUNNER_TEMP}/rma065-fixed-bundle.tar.gz"
+          base64 --decode .github/rma065-fixed-bundle.b64 > "${fixed_archive}"
+          printf '%s  %s\\n' \\
+            'ddb5d1bd9f9344578fad124f35f3e6dc3c40f008c585d28ab8a9bd3b392e25b7' \\
+            "${fixed_archive}" | sha256sum --check --strict
+          tar -xzf "${fixed_archive}" -C .
+'''
+          text = before + replacement + after
+          cleanup = "          git rm .github/rma065-payload.part*\n"
+          cleanup_replacement = '''          git rm .github/rma065-payload.part*
+          git rm .github/rma065-fixed-bundle.b64
+          git rm .github/rma065-debug-trigger
+          git rm .github/workflows/rma065-debug-source.yml
+          git rm .github/rma065-wire-fixed-trigger
+          git rm .github/workflows/rma065-wire-fixed-bundle.yml
+'''
+          if text.count(cleanup) != 1:
+              raise SystemExit(f'cleanup marker count={text.count(cleanup)}')
+          text = text.replace(cleanup, cleanup_replacement, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/rma065-integrate.yml
+          git commit -m 'RMA-065: wire deterministic kinematic segments'
+          git push origin HEAD:master
+      - name: Publish final status
         if: always()
         uses: actions/github-script@v7
         env:
@@ -66,7 +87,7 @@ jobs:
               repo: context.repo.repo,
               sha: context.sha,
               state: passed ? 'success' : 'failure',
-              context: 'RMA-065 Debug Source Export',
-              description: passed ? 'Verified source bundle exported' : 'Source export failed',
+              context: 'RMA-065 Wire Deterministic Fix',
+              description: passed ? 'Pinned kinematic segments wired' : 'Deterministic wiring failed',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
