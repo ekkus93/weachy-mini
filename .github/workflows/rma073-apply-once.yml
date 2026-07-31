@@ -3,6 +3,8 @@ name: RMA-073 Apply Once
 on:
   push:
     branches: [master]
+    paths:
+      - 'scripts/rma073-bootstrap-payload/READY'
   workflow_dispatch:
 
 permissions:
@@ -25,7 +27,7 @@ jobs:
           print(json.dumps({
               "state": "pending",
               "context": "RMA-073 Bootstrap",
-              "description": "One-shot implementation and validation is running",
+              "description": "Verified implementation archive is running",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
@@ -44,13 +46,11 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Apply RMA-073 implementation
+      - name: Apply verified RMA-073 archive
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/apply_rma073_once.py
-          python3 scripts/apply_rma073_part2_once.py
-          python3 scripts/apply_rma073_part3_once.py
+          python3 scripts/apply_rma073_archive_once.py
           git diff --check
       - name: Validate implementation before commit
         shell: bash
@@ -87,7 +87,7 @@ jobs:
             --public-key calibration/fixtures/keys/rma073-test-ed25519-public.pem \
             --expected-compatibility calibration/fitting/rma073-compatibility.json \
             --summary-output build/rma073/independent-verification.json
-      - name: Commit implementation
+      - name: Commit clean implementation
         shell: bash
         run: |
           set -euo pipefail
@@ -110,7 +110,7 @@ jobs:
           print(json.dumps({
               "state": "success" if passed else "failure",
               "context": "RMA-073 Bootstrap",
-              "description": "One-shot implementation passed" if passed else "One-shot implementation failed",
+              "description": "Verified implementation passed" if passed else "Verified implementation failed",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
