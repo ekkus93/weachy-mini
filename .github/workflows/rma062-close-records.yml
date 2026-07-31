@@ -1,0 +1,196 @@
+name: Close RMA-062 Records
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma062-close-records.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-records:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close RMA-062 tracking records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo_path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+          todo = todo_path.read_text(encoding="utf-8")
+          old_todo = """## RMA-062 — Implement electrical and controller timing baseline
+
+          - [ ] Model command update interval and configurable latency.
+          - [ ] Model encoder quantization and target quantization.
+          - [ ] Implement bounded position control with saturation.
+          - [ ] Add torque-speed limiting and voltage dependence from documented specifications as an explicitly noncalibrated baseline.
+          - [ ] Add current-limit and torque-disable behavior.
+          - [ ] Verify unit consistency.
+
+          **Tests**
+
+          - [ ] zero-error torque;
+          - [ ] saturation signs;
+          - [ ] voltage scaling;
+          - [ ] quantization boundaries;
+          - [ ] delayed command application;
+          - [ ] torque-disable gravity response;
+          - [ ] fault transition behavior.
+          """.replace("          ", "")
+          new_todo = """## RMA-062 — Implement electrical and controller timing baseline
+
+          **Status:** Complete (2026-07-30)
+
+          - [x] Model command update interval and configurable latency.
+          - [x] Model encoder quantization and target quantization.
+          - [x] Implement bounded position control with saturation.
+          - [x] Add torque-speed limiting and voltage dependence from documented specifications as an explicitly noncalibrated baseline.
+          - [x] Add current-limit and torque-disable behavior.
+          - [x] Verify unit consistency.
+
+          **Tests**
+
+          - [x] zero-error torque;
+          - [x] saturation signs;
+          - [x] voltage scaling;
+          - [x] quantization boundaries;
+          - [x] delayed command application;
+          - [x] torque-disable gravity response;
+          - [x] fault transition behavior.
+
+          **Completion evidence**
+
+          - `ElectricalServoModel` is a Unity-independent native C++17
+            implementation of the RMA-061 plug-in contract. It serializes commands
+            at the pinned 100 Hz SDK cadence, applies configurable latency without
+            moving the 500 Hz physics clock, and fails closed on sequence regression,
+            queue overflow, or non-finite data.
+          - The source-bound `rma062_electrical_controller_v1` contract maps the
+            custom body XC330-M288-PG proxy, six XL330-M288-T Stewart motors, and two
+            XL330-M077-T antenna motors to distinct noncalibrated role baselines.
+          - Position/velocity encoders and targets are quantized from documented
+            Dynamixel units. Position, velocity, and torque modes are bounded by
+            profile limits, a linear torque-speed envelope, voltage scaling, and a
+            current-derived torque ceiling.
+          - The model uses the documented 3.7-6.0 V servo domain and does not confuse
+            the robot's 6.8-7.6 V input with an undocumented internal servo rail.
+            Continuous-current ratio, peak-current duration, latency, and controller
+            gains remain explicit engineering estimates rather than calibrated claims.
+          - Torque disable returns zero motor torque/current while passive gravity
+            remains active. Voltage faults are transient; over-current,
+            over-temperature, encoder, communication, and model-rejected faults latch.
+          - Hosted run `30605184722` passed exact generation, eight schema/failure
+            tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+            and the complete behavioral CTest suite on exact commit
+            `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+          - Detailed design and evidence are in
+            `docs/architecture/ELECTRICAL_CONTROLLER_BASELINE.md` and
+            `docs/validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md`.
+          """.replace("          ", "")
+          if todo.count(old_todo) != 1:
+              raise SystemExit("RMA-062 TODO source block was not found exactly once")
+          todo_path.write_text(
+              todo.replace(old_todo, new_todo),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          status_path = Path("docs/IMPLEMENTATION_STATUS.md")
+          status = status_path.read_text(encoding="utf-8")
+          old_series = """**Current implementation series:** RMA-061 native pluggable servo contract,
+          source-bound role registry, explicit parameter-quality semantics, generated
+          bindings, and strict sanitizer-backed validation
+          """.replace("          ", "")
+          new_series = """**Current implementation series:** RMA-062 source-bound electrical/controller
+          timing baseline, quantized sampled commands, bounded torque-speed/current
+          behavior, explicit noncalibrated evidence, and strict behavioral validation
+          """.replace("          ", "")
+          if status.count(old_series) != 1:
+              raise SystemExit("implementation-series source text was not found exactly once")
+          status = status.replace(old_series, new_series)
+
+          marker = "## Current validation evidence\n"
+          section = """### RMA-062 — electrical and controller timing baseline
+
+          RMA-062 is complete. `ElectricalServoModel` now provides the first concrete
+          native implementation of the RMA-061 actuator plug-in boundary. It models
+          the pinned 100 Hz command cadence, explicit latency, a fixed command queue,
+          monotonic sequencing, encoder and target quantization, optional profile
+          bounds, position/velocity/torque control, torque-speed and voltage limits,
+          current limiting, torque disable, and typed transient/latching faults.
+
+          The source-bound `rma062_electrical_controller_v1` registry preserves the
+          exact body, Stewart, and antenna hardware mapping and binds the pinned Reachy
+          source/configuration plus documented ROBOTIS motor units and 6 V performance
+          points. The model uses the documented 3.7-6.0 V servo domain; the robot-level
+          6.8-7.6 V input is not treated as the unidentified internal servo rail.
+          Latency, controller gains, continuous-current ratio, and peak-current window
+          remain explicit engineering estimates. No value is labeled calibrated.
+
+          Run `30605184722` passed byte-exact generation, eight schema/failure-path
+          tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+          library/test compilation, and behavior coverage for zero error, signed
+          saturation, voltage scaling, quantization boundaries, delayed application,
+          torque-disable gravity response, command sampling/profile bounds, and fault
+          transitions on exact commit
+          `699c7b0adcc56263b307b76cc24b4f642dbe5f04`. Detailed evidence is in
+          [the RMA-062 validation record](validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md).
+
+          """.replace("          ", "")
+          if status.count(marker) != 1:
+              raise SystemExit("validation insertion marker was not found exactly once")
+          status = status.replace(marker, section + marker)
+
+          old_evidence = """- RMA-061 run `30601191456`: exact generated-registry check, eight
+            schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
+            ASan/UBSan, and native CTest all passed on
+            `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+          - The three committed role sets remain explicit `placeholder` contracts and
+            `IsTorqueModelReady=false`; RMA-062 must add documented noncalibrated
+            electrical/controller values before torque fidelity is enabled.
+          """.replace("          ", "")
+          new_evidence = """- RMA-062 run `30605184722`: exact generated-baseline check, eight
+            schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+            ASan/UBSan, and the complete native behavior suite passed on
+            `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+          - The three role baselines are now torque-ready manufacturer/engineering
+            estimates, not calibrated models. RMA-063 through RMA-065 retain friction,
+            compliance, shared-power/thermal evolution, and physical identification.
+          - RMA-061 run `30601191456`: exact generated-registry check, eight
+            schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
+            ASan/UBSan, and native CTest all passed on
+            `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+          """.replace("          ", "")
+          if status.count(old_evidence) != 1:
+              raise SystemExit("RMA-061 evidence transition block was not found exactly once")
+          status = status.replace(old_evidence, new_evidence)
+          status_path.write_text(status, encoding="utf-8", newline="\n")
+          PY
+
+          test -f docs/validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md
+          test -f .github/workflows/rma062-electrical-controller.yml
+          test ! -e .github/rma062-payload.part00
+          git rm .github/workflows/rma062-close-records.yml
+          git diff --check
+          grep -F '**Status:** Complete (2026-07-30)' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          grep -F 'RMA-062 is complete.' docs/IMPLEMENTATION_STATUS.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/IMPLEMENTATION_STATUS.md
+          git commit -m 'RMA-062: close validated electrical baseline [skip ci]'
+          git push origin HEAD:master
