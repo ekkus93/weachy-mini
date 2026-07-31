@@ -2,7 +2,7 @@
 
 This document defines the RMA-050 through RMA-052 presentation contract. MuJoCo
 remains the only source of robot body transforms. Unity imports and renders
-visual assets, interpolates immutable MuJoCo body-pose snapshots, and detects any
+visual assets, interpolates ordered MuJoCo body-pose frames, and detects any
 competing transform writer. It does not simulate or cosmetically replace robot
 motion.
 
@@ -85,42 +85,57 @@ quaternion validity. A malformed, mismatched, stale, or unavailable source fails
 visibly. It is not replaced by reference fixtures or a kinematic source.
 
 The dedicated simulation worker owns mutable stepping and publishes immutable
-state. The renderer reads managed pose snapshots; it does not consurrently
-operate on MuJoCo. Native ABI version 2 additionally enforces one nonblocking
-exclusive operation per handle and reports same-handle contention as retryable
+state. The renderer reads managed pose frames; it does not concurrently operate
+on MuJoCo. Native ABI version 2 additionally enforces one nonblocking exclusive
+operation per handle and reports same-handle contention as retryable
 `HANDLE_BUSY`.
 
 ## Snapshot and interpolation contract
 
-`IReachyAuthoritativePoseSource` publishes the latest two immutable
-`ReachyAuthoritativePoseSnapshot` objects. Each snapshot contains:
+`IReachyAuthoritativePoseFrame` is the read-only rendering contract. Every frame
+contains:
 
 - a monotonically increasing sequence within one continuity epoch;
 - simulation time;
 - a discontinuity identifier changed by reset or model reload;
 - a fixed ordered set of MuJoCo world-space body poses.
 
+The compatibility `IReachyAuthoritativePoseSource` API still returns immutable
+`ReachyAuthoritativePoseSnapshot` objects for diagnostics and existing callers.
+The production renderer instead binds
+`IReachyReusableAuthoritativePoseSource`, creates two caller-owned
+`ReachyReusableAuthoritativePoseFrame` instances once, and copies the newest
+ordered pair into those buffers without allocating.
+
+`ReachySimAuthoritativePoseSource` owns three reusable native state frames:
+previous, latest, and capture scratch. A newly published state rotates those
+frames rather than constructing a pose array or snapshot. Re-reading the same
+published worker state preserves the existing pair. The immutable compatibility
+API is intentionally not used by the production render loop because constructing
+an immutable diagnostic snapshot requires a defensive copy.
+
 `ReachyAuthoritativeRenderer` validates body count, canonical model-body order,
 body identity, sequence order, time order, and finite poses before writing
 transforms. Rendering is evaluated against simulation timestamps, not Unity
-frame count. The default presentation time is slightly behind the newest
-snapshot so interpolation occurs between the two authoritative samples.
+frame count. The default presentation time is slightly behind the newest frame
+so interpolation occurs between the two authoritative samples.
 
 A reset or model reload changes the discontinuity identifier. The renderer then
-snaps to the newer snapshot and does not interpolate through an impossible pose.
-A snapshot mismatch, invalid ordering, or missing binding faults the renderer;
-it does not retain a moving cosmetic fallback.
+snaps to the newer frame and does not interpolate through an impossible pose. A
+frame mismatch, invalid ordering, or missing binding faults the renderer; it does
+not retain a moving cosmetic fallback.
 
-`ReachyAuthoritativePoseBuffer` is thread-safe and retains only the newest pair.
-Publishing an out-of-order sample in the same continuity epoch is rejected.
+`ReachyAuthoritativePoseBuffer` remains the thread-safe immutable compatibility
+buffer and retains only the newest pair. Publishing an out-of-order sample in the
+same continuity epoch is rejected.
 
 ## Invariant enforcement
 
 After applying a pose, the renderer records the exact expected Unity world
 transform for every authoritative body. On the next late-frame update it checks
-for position or rotation drift before applying another snapshot. Drift faults
-and disables the renderer, making Animator, script, Timeline, or physics
-interference visible instead of silently overwriting it.
+for position or rotation drift before applying another frame. Drift faults and
+disables the renderer, making Animator, script, Timeline, or physics interference
+visible instead of silently overwriting it.
 
 The authoritative hierarchy rejects these component classes on a mapped body or
 its visual descendants:
@@ -132,8 +147,8 @@ its visual descendants:
 - `PlayableDirector`.
 
 The renderer executes late in the frame and performs no successful-path
-collection or array allocation. Body bindings and expected-pose arrays are
-created during configuration.
+collection or array allocation. Body bindings, expected-pose arrays, native state
+frames, and reusable render frames are created during configuration.
 
 ## Optional diagnostics
 
