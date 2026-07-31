@@ -1,0 +1,437 @@
+name: RMA-065 Collision and Hard Stops
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma065-collision-hard-stop.yml'
+      - 'CMakeLists.txt'
+      - 'models/reachy-mini/collision-hard-stop-baseline.json'
+      - 'native/cmake/**'
+      - 'native/reachy_sim/CMakeLists.txt'
+      - 'native/reachy_sim/compat/**'
+      - 'native/reachy_sim/feasibility/CMakeLists.txt'
+      - 'native/reachy_sim/feasibility/reachy_mujoco_collision_benchmark_runner.c'
+      - 'native/reachy_sim/include/reachy_sim.h'
+      - 'native/reachy_sim/src/**'
+      - 'native/reachy_sim/tests/**'
+      - 'scripts/audit_reachy_collision_model.py'
+      - 'scripts/build_mujoco_android.sh'
+      - 'scripts/build_rma065_android.sh'
+      - 'scripts/generate_reachy_collision_model.py'
+      - 'scripts/import_reachy_assets.py'
+      - 'scripts/run_reachy_collision_hard_stop_validation.py'
+      - 'scripts/run_rma065_android.sh'
+      - 'scripts/source_checkout.py'
+      - 'scripts/tests/test_generate_reachy_collision_model.py'
+      - 'scripts/verify_source_checkout.py'
+      - 'third_party/mujoco-source.lock.json'
+      - 'third_party/reachy-mini-source.lock.json'
+      - 'toolchain.lock.json'
+  workflow_dispatch:
+    inputs:
+      run_device_benchmark:
+        description: Run the required benchmark on the physical Android runner
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma065-collision-hard-stop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-desktop:
+    name: Validate desktop model and build Android benchmark
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Publish pending commit status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 Collision Hard Stops',
+              description: 'Desktop, Android build, and physical-device gates are running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Validate profile, generators, and focused tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m json.tool \
+            models/reachy-mini/collision-hard-stop-baseline.json >/dev/null
+          python3 -m py_compile \
+            scripts/audit_reachy_collision_model.py \
+            scripts/generate_reachy_collision_model.py \
+            scripts/run_reachy_collision_hard_stop_validation.py
+          bash -n \
+            scripts/build_rma065_android.sh \
+            scripts/run_rma065_android.sh
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*collision_model*.py' \
+            -v
+
+      - name: Export pinned toolchain and source metadata
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+
+          toolchain = json.loads(Path('toolchain.lock.json').read_text(encoding='utf-8'))
+          mujoco = json.loads(
+              Path('third_party/mujoco-source.lock.json').read_text(encoding='utf-8')
+          )
+          android = toolchain['android']
+          values = {
+              'ANDROID_BUILD_TOOLS': android['build_tools'],
+              'ANDROID_CMAKE_VERSION': android['cmake'],
+              'ANDROID_COMPILE_SDK_PACKAGE': android['compile_sdk_package'],
+              'ANDROID_NDK_VERSION': android['ndk'],
+              'ANDROID_PLATFORM': f"android-{android['native_feasibility_min_sdk']}",
+              'MUJOCO_COMMIT': mujoco['commit'],
+              'MUJOCO_REPOSITORY': mujoco['repository'],
+              'MUJOCO_VERSION': mujoco['version'],
+          }
+          for key, value in values.items():
+              print(f'{key}={value}')
+          PY
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path, PurePosixPath
+          from urllib.parse import urlparse
+
+          reachy = json.loads(
+              Path('third_party/reachy-mini-source.lock.json').read_text(
+                  encoding='utf-8'
+              )
+          )
+          repository_path = urlparse(reachy['repository']).path
+          repository = repository_path.removesuffix('.git').strip('/')
+          if repository.count('/') != 1:
+              raise SystemExit(f'Invalid pinned Reachy repository: {repository!r}')
+          print(f"reachy_repository={repository}")
+          print(f"reachy_commit={reachy['commit']}")
+          print(f"reachy_model_directory={PurePosixPath(reachy['model_file']).parent}")
+          print(f"reachy_license_file={reachy['license_file']}")
+          print(f"reachy_output_subdirectory={reachy['output_subdirectory']}")
+          PY
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" \
+            --install \
+            'platform-tools' \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          "${sdkmanager}" \
+            --channel=3 \
+            --install \
+            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}"
+
+          ndk_root="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          cmake_bin="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin"
+          test -f "${ndk_root}/source.properties"
+          test -x "${cmake_bin}/cmake"
+          test -x "${cmake_bin}/ninja"
+          {
+            printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}"
+            printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${cmake_bin}" >> "${GITHUB_PATH}"
+
+      - name: Check out pinned MuJoCo source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_dir="${RUNNER_TEMP}/mujoco"
+          git init "${source_dir}"
+          git -C "${source_dir}" remote add origin "${MUJOCO_REPOSITORY}"
+          git -C "${source_dir}" fetch --depth=1 origin "${MUJOCO_COMMIT}"
+          git -C "${source_dir}" checkout --detach FETCH_HEAD
+          python3 scripts/verify_source_checkout.py \
+            --source "${source_dir}" \
+            --lock third_party/mujoco-source.lock.json
+          printf 'MUJOCO_SOURCE_DIR=%s\n' "${source_dir}" >> "${GITHUB_ENV}"
+
+      - name: Check out pinned Reachy MJCF and meshes
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.reachy_repository }}
+          ref: ${{ steps.pins.outputs.reachy_commit }}
+          path: upstream/reachy-mini
+          fetch-depth: 1
+          lfs: true
+          persist-credentials: false
+          sparse-checkout: |
+            ${{ steps.pins.outputs.reachy_model_directory }}
+            ${{ steps.pins.outputs.reachy_license_file }}
+          sparse-checkout-cone-mode: false
+
+      - name: Import pinned model and generate collision-enhanced package
+        shell: bash
+        env:
+          EXPECTED_REACHY_COMMIT: ${{ steps.pins.outputs.reachy_commit }}
+          REACHY_OUTPUT_SUBDIRECTORY: ${{ steps.pins.outputs.reachy_output_subdirectory }}
+        run: |
+          set -euo pipefail
+          actual_commit="$(git -C upstream/reachy-mini rev-parse HEAD)"
+          if [[ "${actual_commit}" != "${EXPECTED_REACHY_COMMIT}" ]]; then
+            printf 'Reachy source mismatch: expected %s, found %s.\n' \
+              "${EXPECTED_REACHY_COMMIT}" "${actual_commit}" >&2
+            exit 1
+          fi
+          if [[ -n "$(git -C upstream/reachy-mini status --porcelain --untracked-files=all)" ]]; then
+            printf '%s\n' 'Pinned Reachy source checkout is not clean.' >&2
+            exit 1
+          fi
+
+          import_root="${RUNNER_TEMP}/reachy-import"
+          enhanced_root="${RUNNER_TEMP}/rma065-enhanced"
+          python3 scripts/import_reachy_assets.py \
+            --source upstream/reachy-mini \
+            --output-root "${import_root}"
+          source_model_dir="${import_root}/${REACHY_OUTPUT_SUBDIRECTORY}"
+          test -f "${source_model_dir}/reachy_mini.xml"
+          test -f "${source_model_dir}/MODEL_MAP.json"
+          test -f "${source_model_dir}/PROVENANCE.json"
+
+          python3 scripts/generate_reachy_collision_model.py \
+            --profile models/reachy-mini/collision-hard-stop-baseline.json \
+            --source-model "${source_model_dir}/reachy_mini.xml" \
+            --output-model "${enhanced_root}/reachy_mini.xml" \
+            --metadata "${enhanced_root}/RMA065_COLLISION_METADATA.json" \
+            --copy-package
+          python3 scripts/generate_reachy_collision_model.py \
+            --profile models/reachy-mini/collision-hard-stop-baseline.json \
+            --source-model "${source_model_dir}/reachy_mini.xml" \
+            --output-model "${enhanced_root}/reachy_mini.xml" \
+            --metadata "${enhanced_root}/RMA065_COLLISION_METADATA.json" \
+            --check
+
+          {
+            printf 'RMA065_SOURCE_MODEL_DIR=%s\n' "${source_model_dir}"
+            printf 'RMA065_ENHANCED_MODEL_DIR=%s\n' "${enhanced_root}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Run desktop collision and hard-stop gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install \
+            --disable-pip-version-check \
+            "mujoco==${MUJOCO_VERSION}"
+          report_dir="${RUNNER_TEMP}/rma065-desktop-report"
+          mkdir -p "${report_dir}"
+
+          python3 scripts/audit_reachy_collision_model.py \
+            --model "${RMA065_ENHANCED_MODEL_DIR}/reachy_mini.xml" \
+            --output "${report_dir}/rma065-enhanced-audit.json" \
+            --steps 5000 \
+            --contract rma065_enhanced_collision_audit_v1
+          python3 scripts/run_reachy_collision_hard_stop_validation.py \
+            --source-model "${RMA065_SOURCE_MODEL_DIR}/reachy_mini.xml" \
+            --enhanced-model "${RMA065_ENHANCED_MODEL_DIR}/reachy_mini.xml" \
+            --profile models/reachy-mini/collision-hard-stop-baseline.json \
+            --output "${report_dir}/rma065-collision-hard-stop-validation.json" \
+            --neutral-steps 5000
+
+          python3 - "${report_dir}" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          report_dir = Path(sys.argv[1])
+          audit = json.loads(
+              (report_dir / 'rma065-enhanced-audit.json').read_text(encoding='utf-8')
+          )
+          validation = json.loads(
+              (report_dir / 'rma065-collision-hard-stop-validation.json').read_text(
+                  encoding='utf-8'
+              )
+          )
+          if audit.get('neutral', {}).get('warning_count') != 0:
+              raise SystemExit(f'desktop audit produced warnings: {audit}')
+          if validation.get('status') != 'ok':
+              raise SystemExit(f'desktop collision validation failed: {validation}')
+          PY
+          printf 'RMA065_DESKTOP_REPORT_DIR=%s\n' "${report_dir}" >> "${GITHUB_ENV}"
+
+      - name: Build Android ARM64 collision benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="${RUNNER_TEMP}/weachy-rma065-android-arm64"
+          printf 'RMA065_ARTIFACT_DIR=%s\n' "${artifact_dir}" >> "${GITHUB_ENV}"
+
+          MUJOCO_ANDROID_PLATFORM="${ANDROID_PLATFORM}" \
+          MUJOCO_ANDROID_BUILD_DIR="${RUNNER_TEMP}/mujoco-build-rma065" \
+          MUJOCO_ANDROID_OUTPUT_DIR="${artifact_dir}" \
+          REACHY_PROBE_ANDROID_BUILD_DIR="${RUNNER_TEMP}/probe-build-rma065" \
+          RMA065_SOURCE_MODEL_DIR="${RMA065_SOURCE_MODEL_DIR}" \
+          RMA065_ENHANCED_MODEL_DIR="${RMA065_ENHANCED_MODEL_DIR}" \
+            bash scripts/build_rma065_android.sh
+
+          cp -a "${RMA065_DESKTOP_REPORT_DIR}" "${artifact_dir}/desktop-report"
+          cp \
+            "${RMA065_ENHANCED_MODEL_DIR}/RMA065_COLLISION_METADATA.json" \
+            "${artifact_dir}/RMA065_COLLISION_METADATA.json"
+
+      - name: Verify Android benchmark artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          prebuilt_root="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt"
+          mapfile -t readelf_candidates < <(
+            find "${prebuilt_root}" \
+              \( -type f -o -type l \) \
+              -path '*/bin/llvm-readelf' \
+              -print
+          )
+          if [[ "${#readelf_candidates[@]}" -ne 1 ]]; then
+            printf 'Expected one NDK llvm-readelf, found %s.\n' \
+              "${#readelf_candidates[@]}" >&2
+            exit 1
+          fi
+          readelf="${readelf_candidates[0]}"
+          "${readelf}" -h \
+            "${RMA065_ARTIFACT_DIR}/reachy_mujoco_collision_benchmark_runner" \
+            | tee "${RMA065_ARTIFACT_DIR}/collision-benchmark-runner.elf-header.txt"
+          grep -F 'Machine:' \
+            "${RMA065_ARTIFACT_DIR}/collision-benchmark-runner.elf-header.txt" \
+            | grep -F 'AArch64'
+
+          for required in \
+            libmujoco.so \
+            reachy_mujoco_collision_benchmark_runner \
+            source-model/reachy_mini.xml \
+            enhanced-model/reachy_mini.xml \
+            collision-hard-stop-baseline.json \
+            RMA065_COLLISION_METADATA.json \
+            desktop-report/rma065-enhanced-audit.json \
+            desktop-report/rma065-collision-hard-stop-validation.json; do
+            if [[ ! -s "${RMA065_ARTIFACT_DIR}/${required}" ]]; then
+              printf 'Android benchmark artifact is incomplete: %s\n' \
+                "${RMA065_ARTIFACT_DIR}/${required}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Upload RMA-065 Android benchmark artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-rma065-android-arm64-${{ github.sha }}
+          path: ${{ env.RMA065_ARTIFACT_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+  device-benchmark:
+    name: Benchmark collision model on physical Android
+    if: ${{ github.event_name == 'push' || inputs.run_device_benchmark }}
+    needs: build-and-desktop
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download RMA-065 Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: weachy-rma065-android-arm64-${{ github.sha }}
+          path: ${{ runner.temp }}/weachy-rma065-android-arm64
+
+      - name: Run physical Android collision benchmark
+        shell: bash
+        env:
+          MUJOCO_ANDROID_OUTPUT_DIR: ${{ runner.temp }}/weachy-rma065-android-arm64
+          RMA065_ANDROID_REPORT_DIR: ${{ runner.temp }}/rma065-device-report
+        run: |
+          set -euo pipefail
+          bash scripts/run_rma065_android.sh
+
+      - name: Upload physical-device benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weachy-rma065-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma065-device-report
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-result:
+    name: Publish RMA-065 commit status
+    if: always()
+    needs:
+      - build-and-desktop
+      - device-benchmark
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Publish final commit status
+        uses: actions/github-script@v7
+        env:
+          BUILD_RESULT: ${{ needs.build-and-desktop.result }}
+          DEVICE_RESULT: ${{ needs.device-benchmark.result }}
+        with:
+          script: |
+            const buildResult = process.env.BUILD_RESULT;
+            const deviceResult = process.env.DEVICE_RESULT;
+            const passed = buildResult === 'success' && deviceResult === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 Collision Hard Stops',
+              description: passed
+                ? 'Desktop, Android build, and physical-device benchmark passed'
+                : `build=${buildResult}, device=${deviceResult}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
