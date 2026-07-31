@@ -1,28 +1,39 @@
 # RMA-074 Physical Calibration Validation
 
 **Date:** 2026-07-31  
-**Status:** In progress — blocked by physical Reachy Mini connectivity
+**Status:** Deferred — no physical Reachy Mini is available; not required for the emulator MVP
 
-## Completion boundary
+## Scope decision
 
-RMA-074 cannot be accepted from synthetic data or a simulator. Completion
-requires a real Reachy Mini unit, separate physical fitting and held-out
-datasets, a unit-specific fitted profile, the complete required held-out metric
-report, accurate calibrated/uncalibrated labeling, and a redistributable
-repository report.
+The project owner does not have a physical Reachy Mini. The LG Android phone and
+the `kawa` self-hosted runner are test infrastructure for the emulated Reachy
+Mini; neither is a physical calibration source.
+
+RMA-074 explicitly requires measurements from a real Reachy Mini, separate
+physical fitting and held-out datasets, a unit-specific fitted profile, and a
+real held-out report. Those requirements cannot be truthfully satisfied with
+MuJoCo output, synthetic fixtures, the Android phone, or an emulated daemon.
+
+RMA-074 therefore remains incomplete and is deferred until physical hardware
+and suitable instrumentation become available. It does not block RMA-080 or
+later emulator implementation. No USB setup, Reachy daemon installation, robot
+hostname, or physical motion procedure is required for current development.
 
 No RMA-074 completion or calibrated-profile claim is made by this record.
 
-## Read-only physical-unit gate
+## Retained optional physical-unit gate
 
-The permanent preflight gate targets the existing `kawa` self-hosted runner and
-uses only HTTP GET requests. It checks daemon status, a physical hardware
+The optional manual preflight targets the `kawa` self-hosted runner and uses
+only HTTP GET requests. It checks daemon status, a physical hardware
 identifier, current joints, body yaw, antenna positions, and head pose. It
 rejects simulation, mock, unready, faulted, malformed, or non-finite responses.
 The raw unit identifier and network host are never retained. The probe issues
 zero motion commands and zero torque commands.
 
-Workflow run `30672584330` executed on exact commit
+The workflow is manual-only. Normal repository pushes do not run or fail this
+physical-hardware check.
+
+Historical workflow run `30672584330` executed on exact commit
 `d937416d3a5b353142a60ee99714ef30ea8c9f71`:
 
 - the hosted contract job passed all eight preflight tests;
@@ -38,16 +49,17 @@ Workflow run `30672584330` executed on exact commit
   has ZIP SHA-256
   `534cba39dc896a4411dcd56b1d51b4ef26aa2029047d11bb784f6f5e3a8e74f7`.
 
-This is a connectivity blocker, not a failed calibration result: no physical
-measurements were acquired and no robot was moved.
+This result is expected given the absence of physical hardware. It is not an
+emulator defect or a failed calibration result: no physical measurements were
+acquired and no robot was moved.
 
-## Calibrated-profile approval contract
+## Retained calibrated-profile approval contract
 
-The repository now contains a separate RMA-074 approval layer rather than
-weakening the RMA-073 fit-candidate contract. It requires:
+The repository contains a separate RMA-074 approval layer rather than weakening
+the RMA-073 fit-candidate contract. It requires:
 
 - a verified RMA-073 candidate that remains unapproved before promotion;
-- a successful read-only preflight for the same hashed unit identity;
+- a successful physical preflight for the same hashed unit identity;
 - two separately captured physical fitting and held-out datasets;
 - exact dataset hashes and distinct physical capture-run identifiers;
 - joint-position, head-position, head-orientation, settling, overshoot,
@@ -60,8 +72,8 @@ weakening the RMA-073 fit-candidate contract. It requires:
 - exact connected-unit identity before resolving the UI label to
   `Calibrated for this unit`.
 
-Missing, invalid, incompatible, or unit-mismatched approval evidence resolves to
-`Uncalibrated` with a diagnostic reason.
+Missing, invalid, incompatible, synthetic, or unit-mismatched approval evidence
+resolves to `Uncalibrated` with a diagnostic reason.
 
 Hosted approval workflow run `30673242557` passed on exact commit
 `e2e8c40a72620456c8bf8aab1cd4ee90a5203c08`:
@@ -77,21 +89,20 @@ Hosted approval workflow run `30673242557` passed on exact commit
 - schema SHA-256 was
   `1bbdac52b91131b40678832e9b6714cd7e9cc20c1a25b05142bd7fcb63afa5b2`.
 
-## Required remaining physical evidence
+## Emulator labeling requirement
 
-- make a real Reachy Mini daemon reachable from `kawa`, either locally or by
-  configuring `REACHY_MINI_HOST`;
-- obtain a successful read-only physical-unit artifact;
-- review and install a production `ExperimentAdapter` with real current,
-  voltage, temperature, fault, and emergency-stop safety sources;
-- receive exact operator presence, workspace-clearance, emergency-stop, plan
-  hash, unit identity, and physical-motion authorization inputs;
-- capture separate physical fitting and held-out datasets;
-- fit the unit-specific RMA-073 candidate;
-- produce the complete physical held-out report;
-- sign the RMA-074 approval with a non-fixture key;
-- publish the approved unit profile and final redistributable report;
-- complete application-level profile selection and labeling integration.
+Until real unit-specific evidence exists, the application must report the
+active dynamics as an uncalibrated baseline or engineering-estimate
+servo-fidelity mode. It must not display `Calibrated for this unit` or make a
+mature physical-accuracy claim.
 
-RMA-074 remains open until the physical evidence above exists and passes its
-thresholds.
+## Future resumption conditions
+
+RMA-074 may be resumed only if a physical Reachy Mini and suitable measurement
+instrumentation become available. At that time it will require a successful
+physical preflight, reviewed production adapter, run-specific safety
+authorization, separate fitting and held-out captures, complete held-out metric
+report, non-fixture signature, and exact-head evidence.
+
+The current ordered implementation work continues at **RMA-080 — Create
+application state architecture**.
