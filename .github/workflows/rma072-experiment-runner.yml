@@ -1,0 +1,164 @@
+name: RMA-072 Calibration Experiment Runner
+# Permanent clean-tree validation gate.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma072-experiment-runner.yml'
+      - 'calibration/experiments/**'
+      - 'calibration/schemas/calibration-experiment-plan-v1.schema.json'
+      - 'scripts/calibration_experiment.py'
+      - 'scripts/run_calibration_experiment.py'
+      - 'scripts/tests/test_calibration_experiment.py'
+      - 'docs/architecture/CALIBRATION_EXPERIMENT_RUNNER.md'
+      - 'docs/operations/CALIBRATION_EXPERIMENT_SAFETY.md'
+      - 'docs/validation/RMA_072_EXPERIMENT_RUNNER_VALIDATION_2026-07-31.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma072-experiment-runner.yml'
+      - 'calibration/experiments/**'
+      - 'calibration/schemas/calibration-experiment-plan-v1.schema.json'
+      - 'scripts/calibration_experiment.py'
+      - 'scripts/run_calibration_experiment.py'
+      - 'scripts/tests/test_calibration_experiment.py'
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending commit status
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma072-status.json"
+          import json
+          import os
+
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-072 Calibration Experiments",
+              "description": "Experiment-plan and safety validation is running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma072-status.json" >/dev/null
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Run calibration regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+      - name: Compile all experiment families
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/rma072
+          mkdir -p build/rma072
+          python3 scripts/run_calibration_experiment.py \
+            --plan calibration/experiments/rma072-smoke-plan.json \
+            --manifest-output build/rma072/run-manifest.json \
+            --schedule-output build/rma072/schedule.json \
+            --command-jsonl-output build/rma072/commands.jsonl \
+            --created-utc '2026-07-31T21:00:00Z'
+      - name: Bridge commands through RMA-070 and RMA-071
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/capture_reachy_calibration.py \
+            --telemetry-jsonl build/rma072/commands.jsonl \
+            --robot-metadata-json calibration/fixtures/robot-metadata.json \
+            --environment-json calibration/fixtures/environment.json \
+            --clock-metadata-json calibration/fixtures/clock-metadata.json \
+            --dataset-id rma072-workflow-command-capture \
+            --created-utc '2026-07-31T21:00:00Z' \
+            --operator-notes 'Synthetic RMA-072 orchestration evidence; no physical motion.' \
+            --output build/rma072/rma070-command-dataset.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/rma072/rma070-command-dataset.json \
+            --summary-output build/rma072/rma070-command-dataset-summary.json
+      - name: Record evidence hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd build/rma072
+            sha256sum \
+              commands.jsonl \
+              run-manifest.json \
+              schedule.json \
+              rma070-command-dataset.json \
+              rma070-command-dataset-summary.json \
+              > SHA256SUMS
+          )
+      - name: Upload experiment-runner evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: rma072-experiment-runner-evidence-${{ github.sha }}
+          path: build/rma072
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish final commit status
+        if: always() && github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma072-status.json"
+          import json
+          import os
+
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-072 Calibration Experiments",
+              "description": (
+                  "Experiment-plan and safety validation passed"
+                  if passed
+                  else "Experiment-plan or safety validation failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma072-status.json" >/dev/null
