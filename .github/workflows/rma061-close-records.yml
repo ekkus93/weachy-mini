@@ -1,0 +1,150 @@
+name: Close RMA-061 Records
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma061-close-records.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  close-records:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Close RMA-061 tracking records
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo_path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+          todo = todo_path.read_text(encoding="utf-8")
+          old_todo = """## RMA-061 — Define pluggable servo model
+
+          - [ ] Create a servo model interface independent of Unity.
+          - [ ] Represent command sample time, mode, target, profile velocity/acceleration, encoder quantization, current limit, torque-speed behavior, voltage, temperature, and fault state.
+          - [ ] Add per-actuator parameter sets for body, Stewart, and antenna motors.
+          - [ ] Add explicit `placeholder`, `manufacturer_estimate`, and `calibrated` parameter quality labels.
+          """.replace("          ", "")
+          new_todo = """## RMA-061 — Define pluggable servo model
+
+          **Status:** Complete (2026-07-30)
+
+          - [x] Create a servo model interface independent of Unity.
+          - [x] Represent command sample time, mode, target, profile velocity/acceleration, encoder quantization, current limit, torque-speed behavior, voltage, temperature, and fault state.
+          - [x] Add per-actuator parameter sets for body, Stewart, and antenna motors.
+          - [x] Add explicit `placeholder`, `manufacturer_estimate`, and `calibrated` parameter quality labels.
+
+          **Completion evidence**
+
+          - `native/reachy_sim/include/reachy_servo_model.hpp` defines the native
+            C++17 command, observation, result, role, mode, fault, quality, validation,
+            and replaceable `ServoModel` contracts without Unity ownership.
+          - `models/reachy-mini/servo-model-parameters.json` is the authoritative
+            `rma061_servo_model_v1` registry. It binds the pinned source/audit and
+            explicitly maps all nine official actuators to distinct body-yaw, Stewart,
+            or antenna role parameter sets.
+          - All command timing, encoder, current, torque-speed, voltage, temperature,
+            and fault parameters are represented as evidence-bearing qualified scalars.
+            Unknown values remain null `placeholder` values; null manufacturer estimates
+            and incomplete calibrated sets are rejected.
+          - The deterministic generator emits the committed native registry and rejects
+            stale output, missing/reordered/cross-role bindings, unknown quality labels,
+            and unsupported calibrated claims.
+          - Hosted run `30601191456` passed exact regeneration, eight schema failure
+            tests, Unity-dependency rejection, GNU 13.3 strict warnings, ASan/UBSan,
+            native library/test compilation, and the complete CTest contract on exact
+            commit `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+          - Detailed design and evidence are in
+            `docs/architecture/PLUGGABLE_SERVO_MODEL.md` and
+            `docs/validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md`.
+          """.replace("          ", "")
+          if todo.count(old_todo) != 1:
+              raise SystemExit("RMA-061 TODO source block was not found exactly once")
+          todo_path.write_text(
+              todo.replace(old_todo, new_todo),
+              encoding="utf-8",
+              newline="\n",
+          )
+
+          status_path = Path("docs/IMPLEMENTATION_STATUS.md")
+          status = status_path.read_text(encoding="utf-8")
+          old_series = """**Current implementation series:** RMA-060 named upstream-baseline dynamics,
+          generated native contract, full-step monitoring, desktop reference validation,
+          and physical Android long-duration acceptance
+          """.replace("          ", "")
+          new_series = """**Current implementation series:** RMA-061 native pluggable servo contract,
+          source-bound role registry, explicit parameter-quality semantics, generated
+          bindings, and strict sanitizer-backed validation
+          """.replace("          ", "")
+          if status.count(old_series) != 1:
+              raise SystemExit("implementation-series source text was not found exactly once")
+          status = status.replace(old_series, new_series)
+
+          marker = "## Current validation evidence\n"
+          section = """### RMA-061 — pluggable servo model contract
+
+          RMA-061 is complete. A Unity-independent C++17 `ServoModel` interface now
+          carries sampled commands, operating mode, targets, motion-profile limits,
+          authoritative observations, requested torque, estimated current,
+          temperature, and explicit fault state. The public C simulation ABI remains
+          unchanged; later actuator implementations plug into this native boundary.
+
+          The source-bound `rma061_servo_model_v1` JSON registry defines exact quality
+          labels and three role-specific sets for body yaw, Stewart actuators, and
+          antennas. Every official-model actuator has an ordered explicit binding.
+          Unknown electrical, encoder, torque-speed, voltage, thermal, and fault values
+          remain evidence-bearing null placeholders rather than invented constants.
+          A calibrated set is invalid unless all required fields and the fault model
+          are populated and calibrated, and the committed placeholder sets are visibly
+          not ready for torque computation.
+
+          Run `30601191456` passed byte-exact registry regeneration, eight positive and
+          failure-path schema tests, native Unity-dependency rejection, GNU 13.3 strict
+          warnings, ASan/UBSan, library compilation, plug-in derivation, registry lookup,
+          validation-ordering/fault tests, and CTest on exact commit
+          `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`. Detailed evidence is in
+          [the RMA-061 validation record](validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md).
+
+          """.replace("          ", "")
+          if status.count(marker) != 1:
+              raise SystemExit("validation insertion marker was not found exactly once")
+          status = status.replace(marker, section + marker)
+
+          evidence_marker = "## Current validation evidence\n\n"
+          evidence = """- RMA-061 run `30601191456`: exact generated-registry check, eight
+            schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
+            ASan/UBSan, and native CTest all passed on
+            `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
+          - The three committed role sets remain explicit `placeholder` contracts and
+            `IsTorqueModelReady=false`; RMA-062 must add documented noncalibrated
+            electrical/controller values before torque fidelity is enabled.
+          """.replace("          ", "")
+          if status.count(evidence_marker) != 1:
+              raise SystemExit("validation evidence heading was not found exactly once")
+          status = status.replace(evidence_marker, evidence_marker + evidence)
+          status_path.write_text(status, encoding="utf-8", newline="\n")
+          PY
+
+          git rm .github/workflows/rma061-close-records.yml
+          git diff --check
+          grep -F '**Status:** Complete (2026-07-30)' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          grep -F 'RMA-061 is complete.' docs/IMPLEMENTATION_STATUS.md
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/IMPLEMENTATION_STATUS.md
+          git commit -m 'RMA-061: close validated servo contract [skip ci]'
+          git push origin HEAD:master
