@@ -1,0 +1,179 @@
+name: RMA-065 Fix Internal Contact Fixture
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma065-fix-internal-contact.yml'
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-065 Internal Fixture Patch',
+              description: 'Deriving internal contact fixture from collider geometry',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch fixture and regression coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/rma065-clean-integration.yml')
+          text = path.read_text(encoding='utf-8')
+
+          write_marker = (
+              "          validator.write_text(text.replace(old, new, 1), "
+              "encoding='utf-8', newline='\\\\n')\n"
+          )
+          fixture_lines = [
+              "          text = text.replace(old, new, 1)",
+              "          internal_old = (",
+              "              '    body = find_body(root, \"stewart_link_rod\")\\n'",
+              "              '    existing = body.find(\"geom[@name=\\'rma065_internal_fixture\\']\")\\n'",
+              "          )",
+              "          internal_new = (",
+              "              '    body = find_body(root, \"stewart_link_rod\")\\n'",
+              "              '    rod = body.find(\"geom[@name=\\'rma065_rod_1\\']\")\\n'",
+              "              '    if rod is None:\\n'",
+              "              '        raise CollisionValidationError(\\n'",
+              "              '            \"rma065_rod_1 collision geom is missing\"\\n'",
+              "              '        )\\n'",
+              "              '    fromto = rod.get(\"fromto\")\\n'",
+              "              '    if fromto is None:\\n'",
+              "              '        raise CollisionValidationError(\\n'",
+              "              '            \"rma065_rod_1 collision geom has no fromto\"\\n'",
+              "              '        )\\n'",
+              "              '    endpoints = parse_vector(fromto, 6)\\n'",
+              "              '    midpoint = [\\n'",
+              "              '        (endpoints[index] + endpoints[index + 3]) * 0.5\\n'",
+              "              '        for index in range(3)\\n'",
+              "              '    ]\\n'",
+              "              '    existing = body.find(\"geom[@name=\\'rma065_internal_fixture\\']\")\\n'",
+              "          )",
+              "          if text.count(internal_old) != 1:",
+              "              raise SystemExit(",
+              "                  f'internal fixture body marker count={text.count(internal_old)}'",
+              "              )",
+              "          text = text.replace(internal_old, internal_new, 1)",
+              "          position_old = '    fixture.set(\"pos\", \"0.0 0.0 0.04\")\\n'",
+              "          position_new = '    fixture.set(\"pos\", formatter(midpoint))\\n'",
+              "          if text.count(position_old) != 1:",
+              "              raise SystemExit(",
+              "                  f'internal fixture position marker count={text.count(position_old)}'",
+              "              )",
+              "          text = text.replace(position_old, position_new, 1)",
+              "          validator.write_text(text, encoding='utf-8', newline='\\n')",
+          ]
+          fixture_patch = "\n".join(fixture_lines) + "\n"
+          if text.count(write_marker) != 1:
+              raise SystemExit(
+                  f'validator write marker count={text.count(write_marker)}'
+              )
+          text = text.replace(write_marker, fixture_patch, 1)
+
+          tests_marker = (
+              "          tests.write_text(test_text + regression, "
+              "encoding='utf-8', newline='\\\\n')\n"
+          )
+          test_lines = [
+              "          internal_regression = (",
+              "              '\\n\\nclass CollisionInternalFixtureRegressionTests(unittest.TestCase):\\n'",
+              "              '    def test_internal_fixture_tracks_generated_rod_midpoint(self):\\n'",
+              "              '        source = Path(\\n'",
+              "              '            \"scripts/run_reachy_collision_hard_stop_validation.py\"\\n'",
+              "              '        ).read_text(encoding=\"utf-8\")\\n'",
+              "              '        self.assertIn(\\n'",
+              "              '            \\'body.find(\"geom[@name=\\\\\\'rma065_rod_1\\\\\\']\")\\',\\n'",
+              "              '            source,\\n'",
+              "              '        )\\n'",
+              "              '        self.assertIn(\\n'",
+              "              '            \\'fixture.set(\"pos\", formatter(midpoint))\\',\\n'",
+              "              '            source,\\n'",
+              "              '        )\\n'",
+              "              '        self.assertNotIn(\\n'",
+              "              '            \\'fixture.set(\"pos\", \"0.0 0.0 0.04\")\\',\\n'",
+              "              '            source,\\n'",
+              "              '        )\\n'",
+              "          )",
+              "          if 'class CollisionInternalFixtureRegressionTests' in test_text:",
+              "              raise SystemExit(",
+              "                  'internal fixture regression test already exists unexpectedly'",
+              "              )",
+              "          tests.write_text(",
+              "              test_text + regression + internal_regression,",
+              "              encoding='utf-8',",
+              "              newline='\\n',",
+              "          )",
+          ]
+          tests_patch = "\n".join(test_lines) + "\n"
+          if text.count(tests_marker) != 1:
+              raise SystemExit(
+                  f'tests write marker count={text.count(tests_marker)}'
+              )
+          text = text.replace(tests_marker, tests_patch, 1)
+
+          cleanup_marker = (
+              "          rm -f .github/workflows/rma065-clean-integration.yml\n"
+          )
+          cleanup_replacement = (
+              cleanup_marker
+              + "          rm -f .github/workflows/rma065-fix-internal-contact.yml\n"
+          )
+          if text.count(cleanup_marker) != 1:
+              raise SystemExit(
+                  f'cleanup marker count={text.count(cleanup_marker)}'
+              )
+          text = text.replace(cleanup_marker, cleanup_replacement, 1)
+
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PY
+
+          rm .github/workflows/rma065-fix-internal-contact.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'RMA-065: center internal fixture on generated rod collider'
+          git push origin HEAD:master
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-065 Internal Fixture Patch',
+              description: passed
+                ? 'Internal fixture patch committed; full gate triggered'
+                : 'Internal fixture patch failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
