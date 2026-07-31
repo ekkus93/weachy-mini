@@ -1,8 +1,8 @@
 # RMA-071 Calibration Capture Tooling Validation
 
 **Date:** 2026-07-31
-**Validated implementation commit:** `IMPLEMENTATION_COMMIT`
-**Integration workflow run:** `INTEGRATION_RUN`
+**Validated implementation commit:** `bba44600441165bc9b264ee211e7db25d2ababc4`
+**Integration workflow run:** `30662958335`
 **Decision:** Tooling implementation complete; physical robot capture deferred
 
 ## Scope

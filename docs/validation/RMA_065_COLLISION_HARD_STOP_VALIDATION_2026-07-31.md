@@ -126,6 +126,25 @@ Selected staged-file SHA-256 values:
 - native contact-state JSON:
   `d2646dc78ececf95ff4ca7e095449dbac5308d881262ce71b88204695074fe98`.
 
+## Final clean-tree sign-off
+
+After the implementation evidence above was accepted, temporary integration
+payloads and workflows were removed. Permanent workflow run `30656777715`
+passed on final clean-tree commit
+`39e592dde3c59927c77f8b78a47a036446659334`, including the hosted model,
+native state-v2, Android ARM64, and physical 50,000-step source plus 50,000-step
+enhanced gates.
+
+The final source/enhanced realtime factors were `9.19459209506869` and
+`10.08312168777667`; p95 step times were `235.20799004472792` us and
+`215.72998957708478` us, for overhead ratio `-0.08281181461539266`. Both runs
+reported zero warnings and zero penetration.
+
+Final artifacts were Android ARM64 artifact `8803607049` with ZIP SHA-256
+`8d8e8e293c7ad1df838a8a89793bccded4ea3a1b6a1579cc8ab9a38574f4e966`
+and device report `8803873987` with ZIP SHA-256
+`b06b07c9b57939547dd08a3a393f0fe7dc9f0158776c402c5dee879cdf5483e8`.
+
 ## Acceptance conclusion
 
 All RMA-065 dynamics-baseline criteria passed: representative internal and

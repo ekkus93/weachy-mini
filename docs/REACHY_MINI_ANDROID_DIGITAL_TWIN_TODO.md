@@ -1030,18 +1030,62 @@ public:
 
 ## RMA-070 — Define calibration data schema
 
-- [ ] Add versioned JSON/CBOR/Parquet-compatible schemas for command, joint, current/load, voltage, IMU, external pose, force, and temperature samples.
-- [ ] Include monotonic timestamps and clock/source metadata.
-- [ ] Include robot identity, firmware, register configuration, ambient conditions, and dataset hash.
-- [ ] Validate untrusted imports with size and range limits.
+**Status:** Complete (2026-07-31)
+
+- [x] Add versioned JSON/CBOR/Parquet-compatible schemas for command, joint, current/load, voltage, IMU, external pose, force, and temperature samples.
+- [x] Include monotonic timestamps and clock/source metadata.
+- [x] Include robot identity, firmware, register configuration, ambient conditions, and dataset hash.
+- [x] Validate untrusted imports with size and range limits.
+
+**Completion evidence**
+
+- `rma070_calibration_dataset_v1` defines a strict JSON envelope and all eight
+  sample tables. The companion column manifest maps the same records to CBOR
+  and one Parquet table per stream with fixed-size vectors and nullable
+  optional fields.
+- The validator rejects unknown members, duplicate identifiers, non-finite
+  values, nonmonotonic timestamps, sequence reuse, invalid ranges, malformed
+  hashes, missing clock mappings, false synchronization claims, and resource
+  ceilings before accepting an imported dataset.
+- Canonical SHA-256 covers the complete dataset with only the self-referential
+  digest field omitted. Robot register configuration and schema files carry
+  independent hashes.
+- Synthetic fixtures cover every sample type without claiming physical
+  calibration. Focused tests and CLI validation passed in workflow run
+  `30662958335` for implementation commit `bba44600441165bc9b264ee211e7db25d2ababc4`.
+- Detailed design and evidence are in
+  `docs/architecture/CALIBRATION_DATA_AND_CAPTURE.md` and
+  `docs/validation/RMA_070_CALIBRATION_DATA_SCHEMA_VALIDATION_2026-07-31.md`.
 
 ## RMA-071 — Build calibration capture tooling
 
-- [ ] Create tooling to capture physical Reachy telemetry.
-- [ ] Support external camera/pose data import.
-- [ ] Support force/torque test data import.
-- [ ] Synchronize sources or estimate clock offset explicitly.
-- [ ] Never treat unsynchronized data as synchronized without uncertainty metadata.
+**Status:** Complete (2026-07-31)
+
+- [x] Create tooling to capture physical Reachy telemetry.
+- [x] Support external camera/pose data import.
+- [x] Support force/torque test data import.
+- [x] Synchronize sources or estimate clock offset explicitly.
+- [x] Never treat unsynchronized data as synchronized without uncertainty metadata.
+
+**Completion evidence**
+
+- The capture CLI consumes bounded JSONL from a file or live standard input,
+  preserving source timestamps, clock IDs, immutable stream metadata, source
+  hashes, firmware/register metadata, and the final dataset hash.
+- Strict external-pose and force/torque CSV importers reject header drift,
+  malformed or excessive rows, and undeclared source clocks.
+- The clock estimator uses the median paired-event offset and maximum residual
+  as conservative uncertainty. Excess uncertainty fails closed unless the
+  caller explicitly accepts an `unsynchronized` result with nonzero
+  uncertainty.
+- Synthetic integration tests exercise all eight stream types, metadata-drift
+  failure, CSV failure, synchronized and unsynchronized clock outcomes, and
+  final RMA-070 validation. They passed in workflow run `30662958335` for
+  implementation commit `bba44600441165bc9b264ee211e7db25d2ababc4`.
+- No physical Reachy dataset was fabricated. Physical unit capture and a
+  calibrated held-out profile remain RMA-074 work.
+- Detailed evidence is in
+  `docs/validation/RMA_071_CALIBRATION_CAPTURE_TOOLING_VALIDATION_2026-07-31.md`.
 
 ## RMA-072 — Implement experiment runner
 

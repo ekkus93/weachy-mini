@@ -2,7 +2,7 @@
 
 **Updated:** 2026-07-31
 **Branch:** `master`  
-**Current implementation series:** RMA-065 collision geometry, mechanical hard stops, contact/overload telemetry, and physical Android complexity validation
+**Current implementation series:** RMA-070 calibration data contract and RMA-071 capture, import, and clock-synchronization tooling
 
 ## Repository rules in force
 
@@ -478,7 +478,32 @@ parameters remain visibly uncalibrated engineering estimates. Detailed evidence
 is in
 [the RMA-065 validation record](validation/RMA_065_COLLISION_HARD_STOP_VALIDATION_2026-07-31.md).
 
+### RMA-070 — calibration data schema
+
+RMA-070 is complete. The repository now has a storage-neutral, versioned
+calibration dataset contract for commands, joints, electrical/load samples,
+IMU, external pose, force/torque, and temperature. Monotonic nanosecond clocks,
+source-to-primary alignments, synchronization uncertainty, robot/firmware/
+register identity, environment, source hashes, schema hashes, and canonical
+dataset integrity are explicit and fail closed.
+
+### RMA-071 — calibration capture tooling
+
+RMA-071 is complete as tooling. Bounded live/file JSONL capture, strict
+external-pose and force/torque CSV import, paired-event clock-offset estimation,
+and explicit unsynchronized results are implemented. Workflow run `30662958335`
+validated implementation commit `bba44600441165bc9b264ee211e7db25d2ababc4` with synthetic
+fixtures. No physical dataset or calibrated-profile claim was made; physical
+capture remains part of RMA-074.
+
 ## Current validation evidence
+
+- RMA-070/RMA-071 workflow run `30662958335`: all focused schema,
+  bounded-import, hashing, JSONL capture, strict CSV import, and clock-offset
+  tests passed for implementation commit `bba44600441165bc9b264ee211e7db25d2ababc4`.
+- Calibration fixtures are synthetic and cannot be used as physical
+  calibration evidence. Physical Reachy capture and held-out calibration
+  remain RMA-074 work.
 
 - RMA-064 run `30607760504`: exact generated-baseline check, eight
   schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
