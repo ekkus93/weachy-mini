@@ -676,15 +676,48 @@ while running:
 
 ## RMA-052 — Add authoritative-rendering invariant checks
 
-- [ ] Add development-build assertions comparing Unity rendered transforms to the mapped MuJoCo snapshot.
-- [ ] Report drift above tolerance.
-- [ ] Ensure animation, Timeline, Animator, and physics components cannot write mapped transforms.
-- [ ] Disable or reject Unity Rigidbody/ArticulationBody components on authoritative robot bodies.
+**Status:** Complete (2026-07-30)
+
+- [x] Add development-build assertions comparing Unity rendered
+  transforms to the mapped MuJoCo snapshot.
+- [x] Report drift above tolerance.
+- [x] Ensure animation, Timeline, Animator, and physics components cannot
+  write mapped transforms.
+- [x] Disable or reject Unity Rigidbody/ArticulationBody components on
+  authoritative robot bodies.
 
 **Acceptance criteria — authoritative rendering gate**
 
-- [ ] Forced transform modification is detected in tests/development builds.
-- [ ] Production rendering contains no hidden kinematic fallback.
+- [x] Forced transform modification is detected in tests/development builds.
+- [x] Production rendering contains no hidden kinematic fallback.
+
+**Completion evidence — 2026-07-30**
+
+- The renderer records expected Unity world transforms, authoritative
+  sequence, interpolation target time, continuity identity, and configured
+  tolerances after every mapped MuJoCo pose.
+- `Application.onBeforeRender` performs the final frame-boundary comparison.
+  Editor and development players emit an assertion before entering the same
+  fail-closed renderer fault used by release players.
+- `ReachyAuthoritativeInvariantReport` preserves expected/actual transforms,
+  drift, body identity, sequence/time/continuity, and both tolerances.
+  Invalid, zero, negative, NaN, and infinite tolerances are rejected.
+- Tests force transform drift and require the assertion, retained report,
+  renderer fault, and disabled motion authority. Descendant tests reject
+  Rigidbody, Rigidbody2D, ArticulationBody, Animator, legacy Animation,
+  and PlayableDirector/Timeline writers.
+- Hosted run `30594656829` passed managed, native, official-model, static,
+  and Android gates on exact commit
+  `5d5bc2cb078ef5432c0ad6f95599890150330da6`.
+- Self-hosted `kawa` run `30594656835` passed Unity tests, production ARM64
+  MuJoCo staging, API-26 IL2CPP build/verification, installed lifecycle and
+  physical authoritative-rendering acceptance, and artifact uploads on the
+  same exact commit.
+- Physical evidence retained renderer status `Rendering`, runtime status
+  `Running`, all 18 canonical body bindings, canonical motion/reset checks,
+  and `hidden_kinematic_fallback=false`.
+- Detailed evidence is in
+  `docs/validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md`.
 
 ---
 

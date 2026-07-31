@@ -2,10 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-051 allocation-free authoritative
-state-to-render mapping, timestamp interpolation, discontinuity handling,
-generated diagnostics, and physical Android acceptance after RMA-050 prefab
-closure
+**Current implementation series:** RMA-052 pre-render authoritative
+invariant assertions, exact drift diagnostics, prohibited-writer rejection,
+and physical Android acceptance after RMA-051 state-to-render closure
 
 ## Repository rules in force
 
@@ -284,8 +283,41 @@ in [Authoritative Unity rendering](architecture/AUTHORITATIVE_UNITY_RENDERING.md
 with validation evidence in
 [the RMA-051 validation record](validation/RMA_051_STATE_TO_RENDER_MAPPING_VALIDATION_2026-07-30.md).
 
+### RMA-052 — authoritative-rendering invariant closure
+
+RMA-052 is complete. Every rendered pose retains the expected Unity world
+transforms derived from the mapped MuJoCo pair, plus authoritative sequence,
+interpolation target time, continuity identity, and finite positive drift
+tolerances.
+
+The renderer validates before the next pose and at
+`Application.onBeforeRender`. Development players assert on drift; release
+players execute the same comparison without the assertion log. Every build
+faults, disables the renderer, and propagates failure into the production
+runtime rather than overwriting a competing writer or using cosmetic motion.
+
+`ReachyAuthoritativeInvariantReport` retains body identity, expected/actual
+transforms, measured drift, sequence/time/continuity, and both tolerances.
+The authoritative hierarchy rejects physics, articulation, Animator, legacy
+Animation, and PlayableDirector/Timeline writers on mapped descendants.
+
+Hosted run `30594656829` and self-hosted `kawa` run `30594656835` passed on
+exact commit `5d5bc2cb078ef5432c0ad6f95599890150330da6`. Device evidence
+retained the production MuJoCo source, renderer health, canonical motion and
+reset checks, and `hidden_kinematic_fallback=false`. Detailed evidence is in
+the [RMA-052 validation record](validation/RMA_052_AUTHORITATIVE_RENDERING_INVARIANTS_2026-07-30.md).
+
 ## Current validation evidence
 
+- Hosted RMA-052 run `30594656829`: managed/native tests, sanitizers,
+  pinned-model conversion/reference generation, static policy, and Android
+  checks passed on exact commit
+  `5d5bc2cb078ef5432c0ad6f95599890150330da6`.
+- Self-hosted RMA-052 run `30594656835`: generated presentation preparation,
+  production ARM64 MuJoCo staging, Unity invariant tests, ARM64 API-26
+  IL2CPP build/verification, installed lifecycle acceptance, physical
+  authoritative rendering, evidence uploads, and APK upload passed on the
+  same exact commit.
 - Hosted RMA-050 run `30591010118`: Ruff/actionlint/ShellCheck/static policy,
   focused converter failure coverage, exact pinned-model Unity visual conversion,
   native warnings/sanitizers, managed tests, and Android tests passed on
@@ -352,7 +384,6 @@ with validation evidence in
 
 ## Open hard gates
 
-- RMA-052 formal authoritative-rendering invariant closure;
 - RMA-060 long-duration official-model baseline dynamics and monitoring;
 - RMA-012 offline licenses, attribution, and unofficial-project notice;
 - API-31 development APK and release AAB validation;

@@ -131,14 +131,25 @@ same continuity epoch is rejected.
 
 ## Invariant enforcement
 
-After applying a pose, the renderer records the exact expected Unity world
-transform for every authoritative body. On the next late-frame update it checks
-for position or rotation drift before applying another frame. Drift faults and
-disables the renderer, making Animator, script, Timeline, or physics interference
-visible instead of silently overwriting it.
+After applying a pose, the renderer records expected Unity world transforms
+plus authoritative sequence, interpolation target time, continuity identity,
+and configured position/rotation tolerances. It validates before the next
+pose and through `Application.onBeforeRender`, catching later `LateUpdate`
+writers before presentation.
 
-The authoritative hierarchy rejects these component classes on a mapped body or
-its visual descendants:
+Editor and development players assert with body, sequence, simulation time,
+continuity, measured drift, and tolerance. Release players execute the same
+comparison without the assertion log. In every build, drift creates a
+retained `ReachyAuthoritativeInvariantReport`, faults and disables the
+renderer, and propagates into the production runtime. It never restores the
+pose silently, accepts competing authority, or selects cosmetic fallback.
+
+The report contains expected/actual position and rotation, measured drift,
+body identity, sequence/time/continuity, and thresholds. Tolerances must be
+finite and positive.
+
+The authoritative hierarchy rejects these component classes on mapped
+bodies or visual descendants:
 
 - `Rigidbody` and `Rigidbody2D`;
 - `Joint` and `Joint2D`;
@@ -146,9 +157,9 @@ its visual descendants:
 - `Animator` and legacy `Animation`;
 - `PlayableDirector`.
 
-The renderer executes late in the frame and performs no successful-path
-collection or array allocation. Body bindings, expected-pose arrays, native state
-frames, and reusable render frames are created during configuration.
+The successful render path performs no collection or array allocation.
+Bindings, reusable source frames, expected-pose arrays, and invariant storage
+are created during configuration.
 
 ## Optional diagnostics
 
