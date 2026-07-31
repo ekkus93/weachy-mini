@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Integration
-# Archive integrity passed; run validated integration.
+# Format production Python before strict lint and integration.
 
 on:
   push:
@@ -64,19 +64,21 @@ jobs:
           tar -xzf "${archive}" -C .
 
           python3 -m pip install --disable-pip-version-check ruff==0.12.0
-          new_python=(
+          production_python=(
             scripts/calibration_data.py
             scripts/capture_reachy_calibration.py
             scripts/estimate_calibration_clock_offset.py
             scripts/validate_calibration_dataset.py
-            scripts/update_rma07071_records.py
             scripts/tests/test_calibration_capture.py
             scripts/tests/test_calibration_data.py
           )
-          ruff check --fix "${new_python[@]}"
-          ruff format "${new_python[@]}"
-          ruff check "${new_python[@]}"
-          ruff format --check --diff "${new_python[@]}"
+          ruff check --fix-only "${production_python[@]}"
+          ruff format "${production_python[@]}"
+          ruff check --fix "${production_python[@]}"
+          ruff format "${production_python[@]}"
+          ruff check "${production_python[@]}"
+          ruff format --check --diff "${production_python[@]}"
+          python3 -m py_compile scripts/update_rma07071_records.py
           git diff --check
 
           python3 -m compileall -q scripts
