@@ -1,0 +1,117 @@
+name: RMA-061 Servo Model Contract
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma061-servo-model.yml'
+      - 'models/reachy-mini/servo-model-parameters.json'
+      - 'native/reachy_sim/CMakeLists.txt'
+      - 'native/reachy_sim/include/reachy_servo_model.hpp'
+      - 'native/reachy_sim/src/reachy_servo_model.cpp'
+      - 'native/reachy_sim/src/reachy_servo_parameters.generated.hpp'
+      - 'native/reachy_sim/tests/reachy_servo_model_test.cpp'
+      - 'scripts/generate_reachy_servo_parameters.py'
+      - 'scripts/tests/test_generate_reachy_servo_parameters.py'
+      - 'docs/architecture/PLUGGABLE_SERVO_MODEL.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma061-servo-model-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate native servo contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending commit status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-061 Servo Model Contract',
+              description: 'Schema, generated registry, and native tests are running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify generated registry and schema failure paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_reachy_servo_parameters.py --check
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*servo*.py' \
+            -v
+
+      - name: Reject Unity ownership in native servo contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -En 'UnityEngine|MonoBehaviour|GameObject|Transform|Unity::' \
+            native/reachy_sim/include/reachy_servo_model.hpp \
+            native/reachy_sim/src/reachy_servo_model.cpp; then
+            printf '%s\n' 'Native servo contract contains a Unity dependency.' >&2
+            exit 1
+          fi
+
+      - name: Configure strict native build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/rma061 \
+            -DBUILD_TESTING=ON \
+            -DREACHY_ENABLE_SANITIZERS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build and run servo contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/rma061 --target reachy_servo_model_test --parallel 2
+          ctest \
+            --test-dir build/rma061 \
+            --output-on-failure \
+            -R '^reachy_servo_model_test$'
+
+      - name: Publish final commit status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          VALIDATION_RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.VALIDATION_RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-061 Servo Model Contract',
+              description: passed
+                ? 'Schema, generated registry, strict native build, and tests passed'
+                : 'RMA-061 servo contract validation failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
