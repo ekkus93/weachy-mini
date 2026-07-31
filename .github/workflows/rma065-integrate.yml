@@ -64,7 +64,28 @@ jobs:
           mkdir -p "${original_dir}"
           tar -xzf "${original}" -C "${original_dir}"
 
-          base64 --decode .github/rma065-fixed-bundle.b64 > "${fixed}"
+          printf '%s  %s\n' \
+            'da79362260ca276c5d840d0c98c172fa43931a550ee9eca6ec10a484ea8f4bf2' \
+            '.github/rma065-fixed-v2.part00' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '6eeefc857033e479d406a6a08803210e7e3dcbecfe61d0e5c8050d09e71c97b0' \
+            '.github/rma065-fixed-v2.part01' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '3b47b7e43452f362029da5e755988e38c18b1d48fa51723d02c8b2799e124b21' \
+            '.github/rma065-fixed-v2.part02' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '54e7b17e23cf52fc425fbff9bc569db06bd4807b3adf335ee59bdbf7ba4ac591' \
+            '.github/rma065-fixed-v2.part03' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            'c2075cb8f2865dfff23177b22895aee527b0207f86d2dd7a812c10e3f5ead320' \
+            '.github/rma065-fixed-v2.part04' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '672ebd0842d20ebd7918b07157c11021e2522b772ab91c7b32bc19a35f25bdd6' \
+            '.github/rma065-fixed-v2.part05' | sha256sum --check --strict
+          printf '%s  %s\n' \
+            '06e067e7a22220e798974fdc985243f4c9fbe0942396339d24da61f4113a9cda' \
+            '.github/rma065-fixed-v2.part06' | sha256sum --check --strict
+          cat .github/rma065-fixed-v2.part* | base64 --decode > "${fixed}"
           printf '%s  %s\n' \
             '7aaaab376547a99a0a82dcc504cf777f54dfde3605da3ada8349009387ebd847' \
             "${fixed}" | sha256sum --check --strict
@@ -198,16 +219,11 @@ jobs:
           set -euo pipefail
           rm -rf upstream build
           find scripts -type d -name __pycache__ -prune -exec rm -rf {} +
-          git rm .github/rma065-payload.part*
-          git rm .github/rma065-fixed-bundle.b64
-          git rm .github/rma065-debug-trigger
-          git rm .github/rma065-wire-fixed-trigger
-          git rm .github/workflows/rma065-debug-source.yml
-          git rm .github/workflows/rma065-full-payload-export.yml
-          git rm .github/workflows/rma065-integrate.yml
-          git rm .github/workflows/rma065-patch-integration.yml
-          git rm .github/workflows/rma065-update-fixed-checksum.yml
-          git rm .github/workflows/rma065-wire-fixed-bundle.yml
+          rm -f .github/rma065-payload.part*
+          rm -f .github/rma065-fixed-bundle.b64
+          rm -f .github/rma065-fixed-v2.part*
+          rm -f .github/rma065-debug-trigger
+          rm -f .github/rma065-wire-fixed-trigger
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
