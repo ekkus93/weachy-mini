@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Resolve the user-facing calibrated/uncalibrated mode fail closed."""
+"""Resolve the user-facing calibrated/uncalibrated mode fail closed.
+
+No approval, invalid evidence, incompatible runtime, or unit mismatch always
+returns the explicit Uncalibrated state and a nonzero process status.
+"""
 
 from __future__ import annotations
 
