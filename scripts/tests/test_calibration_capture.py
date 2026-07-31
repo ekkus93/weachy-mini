@@ -141,6 +141,38 @@ class CalibrationCaptureTests(unittest.TestCase):
         self.assertEqual(alignment["method"], "unsynchronized")
         self.assertGreater(alignment["uncertainty_ns"], 0)
 
+    def test_jsonl_duplicate_keys_are_rejected(self) -> None:
+        text = (
+            '{"stream_id":"first","stream_id":"second",'
+            '"sample_type":"joint","clock_id":"clock","sample":{}}\n'
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate key"):
+            capture.read_telemetry_jsonl(
+                io.StringIO(text),
+                maximum_records=10,
+                maximum_bytes=10_000,
+            )
+
+    def test_clock_pair_csv_header_order_and_duplicates_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_text:
+            path = Path(temp_text) / "pairs.csv"
+            path.write_text(
+                "source_timestamp_ns,primary_timestamp_ns\n1,2\n3,4\n5,6\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "columns must be exactly"):
+                clock_offset.read_pairs(path, 10)
+
+    def test_clock_alignment_rejects_same_source_and_target(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            clock_offset.estimate_alignment(
+                [(1, 1), (2, 2), (3, 3)],
+                from_clock_id="same",
+                to_clock_id="same",
+                maximum_uncertainty_ns=10,
+                allow_unsynchronized=False,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

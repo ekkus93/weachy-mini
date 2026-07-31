@@ -98,6 +98,56 @@ class CalibrationDataTests(unittest.TestCase):
         descriptor = calibration_data.schema_descriptor(ROOT / "calibration/schemas")
         self.assertEqual(descriptor, self.fixture["schema"])
 
+    def test_schema_hashes_are_pinned_during_validation(self) -> None:
+        changed = copy.deepcopy(self.fixture)
+        changed["schema"]["schema_sha256"] = "0" * 64
+        changed = calibration_data.finalize_dataset(changed)
+        with self.assertRaisesRegex(
+            calibration_data.CalibrationValidationError, "pinned v1 schema"
+        ):
+            calibration_data.validate_dataset(changed)
+
+    def test_duplicate_json_object_keys_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_text:
+            path = Path(temp_text) / "duplicate.json"
+            path.write_text('{"value": 1, "value": 2}\n', encoding="utf-8")
+            with self.assertRaisesRegex(
+                calibration_data.CalibrationValidationError, "duplicate key"
+            ):
+                calibration_data.load_json_file(path)
+
+    def test_environment_notes_obey_general_string_limit(self) -> None:
+        changed = copy.deepcopy(self.fixture)
+        changed["environment"]["notes"] = "12345"
+        changed = calibration_data.finalize_dataset(changed)
+        limits = calibration_data.ImportLimits(maximum_string_length=4)
+        with self.assertRaisesRegex(
+            calibration_data.CalibrationValidationError, "maximum string length"
+        ):
+            calibration_data.validate_dataset(changed, limits=limits)
+
+    def test_clock_collection_limit_is_enforced(self) -> None:
+        limits = calibration_data.ImportLimits(maximum_clocks=2)
+        with self.assertRaisesRegex(
+            calibration_data.CalibrationValidationError, "too many clocks"
+        ):
+            calibration_data.validate_dataset(self.fixture, limits=limits)
+
+    def test_schema_descriptor_rejects_unversioned_file_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_text:
+            root = Path(temp_text)
+            source = ROOT / "calibration/schemas"
+            (root / "calibration-dataset-v1.schema.json").write_bytes(
+                (source / "calibration-dataset-v1.schema.json").read_bytes() + b"\n"
+            )
+            (root / "calibration-stream-columns-v1.json").write_bytes(
+                (source / "calibration-stream-columns-v1.json").read_bytes()
+            )
+            with self.assertRaisesRegex(
+                calibration_data.CalibrationValidationError, "pinned v1 hash"
+            ):
+                calibration_data.schema_descriptor(root)
+
 
 if __name__ == "__main__":
     unittest.main()

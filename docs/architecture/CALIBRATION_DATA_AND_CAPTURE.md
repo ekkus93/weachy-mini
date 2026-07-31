@@ -24,7 +24,7 @@ The implementation has four permanent parts:
 
 The `rma070_calibration_dataset_v1` envelope contains:
 
-- exact schema and column-manifest hashes;
+- exact schema and column-manifest hashes pinned by the v1 validator;
 - a stable dataset identifier and UTC creation timestamp;
 - robot identity, hardware revision, firmware, register configuration, and a
   hash of that configuration;
@@ -134,7 +134,7 @@ The capture tool supports two strict CSV forms:
 - force/torque with timestamp, sequence, sensor identity, force vector, and
   torque vector.
 
-CSV headers must match exactly. Unknown columns, missing columns, empty data,
+CSV headers, including order and uniqueness, must match exactly. Unknown columns, missing columns, empty data,
 non-numeric values, excessive size, or excessive row counts fail visibly. The
 caller must provide the source clock ID. A non-primary source cannot enter a
 valid dataset without explicit alignment and uncertainty metadata.
@@ -146,13 +146,14 @@ are:
 
 - 256 MiB per JSON or CSV input;
 - 64 streams;
+- 64 clocks and 63 source-to-primary alignments;
 - 1,000,000 samples per stream;
 - 2,000,000 samples total;
 - 256 source files;
 - 4,096 register entries;
 - 4,096 characters per general string.
 
-The validator rejects unknown object members, duplicate identifiers,
+The validator rejects duplicate JSON object keys, unknown object members, duplicate identifiers,
 non-finite numbers, malformed hashes, nonmonotonic samples, sequence reuse,
 out-of-range import values, invalid quaternion norms, undeclared clocks,
 missing alignments, false synchronization claims, and canonical hash mismatch.

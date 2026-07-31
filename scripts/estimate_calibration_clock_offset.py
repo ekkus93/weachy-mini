@@ -18,11 +18,20 @@ def estimate_alignment(
     maximum_uncertainty_ns: int,
     allow_unsynchronized: bool,
 ) -> dict[str, object]:
+    if from_clock_id == to_clock_id:
+        raise ValueError("source and primary clock IDs must differ")
+    if maximum_uncertainty_ns < 0 or maximum_uncertainty_ns > 10**18:
+        raise ValueError("maximum uncertainty must be between 0 and 10^18 ns")
     if len(rows) < 3:
         raise ValueError("at least three paired synchronization events are required")
+    for target, source in rows:
+        if target < 0 or source < 0 or target > 10**19 or source > 10**19:
+            raise ValueError("paired timestamps must be between 0 and 10^19 ns")
     offsets = [target - source for target, source in rows]
     median_offset = round(statistics.median(offsets))
     uncertainty = max(abs(offset - median_offset) for offset in offsets)
+    if abs(median_offset) > 10**18 or uncertainty > 10**18:
+        raise ValueError("estimated alignment exceeds the v1 import bounds")
     synchronized = uncertainty <= maximum_uncertainty_ns
     if not synchronized and not allow_unsynchronized:
         raise ValueError(
@@ -45,9 +54,9 @@ def read_pairs(path: Path, maximum_rows: int) -> list[tuple[int, int]]:
     rows: list[tuple[int, int]] = []
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
-        expected = {"primary_timestamp_ns", "source_timestamp_ns"}
-        if set(reader.fieldnames or []) != expected:
-            raise ValueError(f"synchronization CSV columns must be exactly {sorted(expected)}")
+        expected = ["primary_timestamp_ns", "source_timestamp_ns"]
+        if reader.fieldnames != expected:
+            raise ValueError(f"synchronization CSV columns must be exactly {expected}")
         for row_index, row in enumerate(reader, start=2):
             if len(rows) >= maximum_rows:
                 raise ValueError("synchronization CSV contains too many rows")
@@ -76,8 +85,8 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    if args.maximum_uncertainty_ns < 0:
-        raise ValueError("maximum uncertainty must be non-negative")
+    if args.maximum_rows <= 0:
+        raise ValueError("maximum rows must be positive")
     rows = read_pairs(args.pairs_csv, args.maximum_rows)
     alignment = estimate_alignment(
         rows,

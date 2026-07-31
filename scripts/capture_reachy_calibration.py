@@ -15,9 +15,11 @@ from typing import Any, TextIO
 
 from calibration_data import (
     DEFAULT_LIMITS,
+    CalibrationValidationError,
     canonical_json_bytes,
     finalize_dataset,
     load_json_file,
+    load_json_text,
     schema_descriptor,
     validate_dataset,
 )
@@ -27,13 +29,10 @@ TOOL_VERSION = "1.0.0"
 
 
 def _strict_json_line(line: str, line_number: int) -> dict[str, Any]:
-    def reject_constant(value: str) -> None:
-        raise ValueError(f"line {line_number} contains non-finite constant {value}")
-
     try:
-        value = json.loads(line, parse_constant=reject_constant)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"line {line_number} is invalid JSON: {exc.msg}") from exc
+        value = load_json_text(line, source=f"telemetry line {line_number}")
+    except CalibrationValidationError as exc:
+        raise ValueError(str(exc)) from exc
     if not isinstance(value, dict):
         raise ValueError(f"line {line_number} must contain a JSON object")
     return value

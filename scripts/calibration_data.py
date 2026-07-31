@@ -17,6 +17,8 @@ CONTRACT_ID = "rma070_calibration_dataset_v1"
 SCHEMA_VERSION = 1
 COLUMN_MANIFEST_ID = "rma070_calibration_columns_v1"
 HASH_ALGORITHM = "sha256"
+EXPECTED_SCHEMA_SHA256 = "5268d353bf98f26df840bf3950e02e0dfdd420b575f1595c26c4fcc602548a28"
+EXPECTED_COLUMN_MANIFEST_SHA256 = "f3f851734455f2e79408825d58ff641a8469e0dbf1f5ae41c4866b5d6a4f4dc9"
 ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 SAMPLE_TYPES = {
@@ -70,6 +72,8 @@ class ImportLimits:
 
     maximum_file_bytes: int = 256 * 1024 * 1024
     maximum_streams: int = 64
+    maximum_clocks: int = 64
+    maximum_clock_alignments: int = 63
     maximum_samples_per_stream: int = 1_000_000
     maximum_total_samples: int = 2_000_000
     maximum_source_files: int = 256
@@ -235,13 +239,22 @@ def _validate_schema(schema: Any, limits: ImportLimits) -> None:
         raise _error("schema.contract_id", f"must equal {CONTRACT_ID}")
     if _require_integer(value["schema_version"], "schema.schema_version") != SCHEMA_VERSION:
         raise _error("schema.schema_version", f"must equal {SCHEMA_VERSION}")
-    _validate_hash(value["schema_sha256"], "schema.schema_sha256")
+    schema_sha256 = _validate_hash(value["schema_sha256"], "schema.schema_sha256")
+    if schema_sha256 != EXPECTED_SCHEMA_SHA256:
+        raise _error("schema.schema_sha256", "does not match the pinned v1 schema")
     if (
         _require_string(value["column_manifest_id"], "schema.column_manifest_id", limits)
         != COLUMN_MANIFEST_ID
     ):
         raise _error("schema.column_manifest_id", f"must equal {COLUMN_MANIFEST_ID}")
-    _validate_hash(value["column_manifest_sha256"], "schema.column_manifest_sha256")
+    column_manifest_sha256 = _validate_hash(
+        value["column_manifest_sha256"], "schema.column_manifest_sha256"
+    )
+    if column_manifest_sha256 != EXPECTED_COLUMN_MANIFEST_SHA256:
+        raise _error(
+            "schema.column_manifest_sha256",
+            "does not match the pinned v1 column manifest",
+        )
 
 
 def _validate_register_value(value: Any, path: str, limits: ImportLimits) -> None:
@@ -292,7 +305,7 @@ def _validate_robot(robot: Any, limits: ImportLimits) -> None:
         raise _error("robot.register_configuration_sha256", "does not match register_configuration")
 
 
-def _validate_environment(environment: Any) -> None:
+def _validate_environment(environment: Any, limits: ImportLimits) -> None:
     value = _require_dict(environment, "environment")
     _require_exact_keys(
         value,
@@ -321,8 +334,8 @@ def _validate_environment(environment: Any) -> None:
             minimum=0.0,
             maximum=200.0,
         )
-    if "notes" in value and value["notes"] is not None and not isinstance(value["notes"], str):
-        raise _error("environment.notes", "must be a string or null")
+    if "notes" in value and value["notes"] is not None:
+        _require_string(value["notes"], "environment.notes", limits)
 
 
 def _validate_capture(capture: Any, clock_ids: set[str], limits: ImportLimits) -> tuple[str, str]:
@@ -350,6 +363,8 @@ def _validate_capture(capture: Any, clock_ids: set[str], limits: ImportLimits) -
 
 def _validate_clocks(clocks: Any, limits: ImportLimits) -> set[str]:
     values = _require_list(clocks, "clocks")
+    if len(values) > limits.maximum_clocks:
+        raise _error("clocks", "contains too many clocks")
     if not values:
         raise _error("clocks", "must contain at least one clock")
     clock_ids: set[str] = set()
@@ -387,6 +402,8 @@ def _validate_alignments(
     limits: ImportLimits,
 ) -> tuple[dict[str, dict[str, Any]], str]:
     values = _require_list(alignments, "clock_alignments")
+    if len(values) > limits.maximum_clock_alignments:
+        raise _error("clock_alignments", "contains too many alignments")
     by_source: dict[str, dict[str, Any]] = {}
     synchronized_count = 0
     unsynchronized_count = 0
@@ -794,7 +811,7 @@ def validate_dataset(
     _require_id(value["dataset_id"], "dataset.dataset_id", limits)
     _validate_iso_utc(value["created_utc"], "dataset.created_utc", limits)
     _validate_robot(value["robot"], limits)
-    _validate_environment(value["environment"])
+    _validate_environment(value["environment"], limits)
     clock_ids = _validate_clocks(value["clocks"], limits)
     primary_clock_id, declared_sync_state = _validate_capture(value["capture"], clock_ids, limits)
     alignments, derived_sync_state = _validate_alignments(
@@ -837,17 +854,46 @@ def validate_dataset(
     }
 
 
-def _reject_json_constant(value: str) -> None:
-    raise CalibrationValidationError(f"JSON contains non-finite constant {value}")
+def load_json_text(text: str, *, source: str = "JSON") -> Any:
+    """Load strict JSON text, rejecting duplicate keys and non-finite constants."""
+
+    def reject_constant(value: str) -> None:
+        raise CalibrationValidationError(f"{source}: contains non-finite constant {value}")
+
+    def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise CalibrationValidationError(
+                    f"{source}: JSON object contains duplicate key {key!r}"
+                )
+            result[key] = value
+        return result
+
+    try:
+        return json.loads(
+            text,
+            parse_constant=reject_constant,
+            object_pairs_hook=reject_duplicate_keys,
+        )
+    except json.JSONDecodeError as exc:
+        raise CalibrationValidationError(
+            f"{source}: invalid JSON at line {exc.lineno} column {exc.colno}: {exc.msg}"
+        ) from exc
 
 
 def load_json_file(path: Path, *, limits: ImportLimits = DEFAULT_LIMITS) -> Any:
-    """Load bounded strict JSON, rejecting NaN and Infinity."""
+    """Load bounded strict UTF-8 JSON without a stat/read race."""
 
-    size = path.stat().st_size
+    data = path.read_bytes()
+    size = len(data)
     if size > limits.maximum_file_bytes:
         raise _error(str(path), f"file size {size} exceeds {limits.maximum_file_bytes}")
-    return json.loads(path.read_text(encoding="utf-8"), parse_constant=_reject_json_constant)
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise CalibrationValidationError(f"{path}: is not valid UTF-8") from exc
+    return load_json_text(text, source=str(path))
 
 
 def schema_descriptor(schema_root: Path) -> dict[str, Any]:
@@ -855,10 +901,19 @@ def schema_descriptor(schema_root: Path) -> dict[str, Any]:
 
     schema_path = schema_root / "calibration-dataset-v1.schema.json"
     columns_path = schema_root / "calibration-stream-columns-v1.json"
-    return {
+    descriptor = {
         "contract_id": CONTRACT_ID,
         "schema_version": SCHEMA_VERSION,
         "schema_sha256": hashlib.sha256(schema_path.read_bytes()).hexdigest(),
         "column_manifest_id": COLUMN_MANIFEST_ID,
         "column_manifest_sha256": hashlib.sha256(columns_path.read_bytes()).hexdigest(),
     }
+    if descriptor["schema_sha256"] != EXPECTED_SCHEMA_SHA256:
+        raise CalibrationValidationError(
+            "calibration-dataset-v1.schema.json does not match the pinned v1 hash"
+        )
+    if descriptor["column_manifest_sha256"] != EXPECTED_COLUMN_MANIFEST_SHA256:
+        raise CalibrationValidationError(
+            "calibration-stream-columns-v1.json does not match the pinned v1 hash"
+        )
+    return descriptor
