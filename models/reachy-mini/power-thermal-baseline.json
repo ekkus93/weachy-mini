@@ -1,0 +1,193 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma064_power_thermal_v1",
+  "overall_evidence_class": "engineering_estimate",
+  "source": {
+    "reachy_commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "hardware_document_path": "docs/source/platforms/reachy_mini/hardware.md",
+    "hardware_document_sha": "6a41ef2edb40b4b87f655bb7fa8b745a14f60435",
+    "rma062_validated_commit": "699c7b0adcc56263b307b76cc24b4f642dbe5f04",
+    "rma063_validated_commit": "a15a1154e62a95999b482ed6b2e6f62f51379929",
+    "electrical_contract_path": "models/reachy-mini/electrical-controller-baseline.json",
+    "mechanical_contract_path": "models/reachy-mini/mechanical-effects-baseline.json"
+  },
+  "unit_contract": {
+    "shared_supply": {
+      "open_circuit_voltage_volts": "V",
+      "source_resistance_ohms": "ohm",
+      "current_limit_amperes": "A",
+      "minimum_bus_voltage_volts": "V"
+    },
+    "thermal": {
+      "winding_resistance_ohms": "ohm",
+      "thermal_resistance_celsius_per_watt": "degC/W",
+      "thermal_capacitance_joules_per_celsius": "J/degC",
+      "warning_temperature_celsius": "degC",
+      "shutdown_temperature_celsius": "degC",
+      "recovery_temperature_celsius": "degC"
+    }
+  },
+  "model_semantics": {
+    "shared_voltage": "all_nine_channels_use_one_previous_frame_bus_voltage",
+    "same_frame_current_sharing": "proportional_global_scale_at_shared_source_current_limit",
+    "source_sag": "algebraic_open_circuit_voltage_minus_total_current_times_source_resistance",
+    "voltage_correction": "bounded_fixed_point_scale_without_same_frame_voltage_boost",
+    "thermal_model": "per_servo_lumped_i_squared_r_heating_and_linear_ambient_cooling",
+    "derating": "linear_from_warning_temperature_to_zero_at_shutdown",
+    "shutdown": "latched_zero_torque_and_current",
+    "fault_clear": "explicit_only_below_recovery_temperature_with_torque_disabled",
+    "production_selection": "not_selected_by_rma064"
+  },
+  "shared_supply": {
+    "id": "reachy_mini_shared_servo_bus_estimate",
+    "overall_evidence_class": "engineering_estimate",
+    "source_evidence_id": "rma064_internal_servo_bus_not_documented_engineering_baseline",
+    "open_circuit_voltage_volts": {
+      "value": 5.0,
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "robotis_recommended_operating_voltage_5_volts_not_robot_input_voltage"
+    },
+    "source_resistance_ohms": {
+      "value": 0.12,
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "rma064_shared_wiring_regulator_battery_impedance_estimate"
+    },
+    "current_limit_amperes": {
+      "value": 5.0,
+      "evidence_class": "engineering_estimate",
+      "evidence_id": "rma064_conservative_shared_servo_current_budget_not_hardware_rating"
+    },
+    "minimum_bus_voltage_volts": {
+      "value": 3.7,
+      "evidence_class": "manufacturer_derived",
+      "evidence_id": "robotis_documented_minimum_servo_input_voltage"
+    },
+    "limitations": [
+      "The pinned hardware document specifies 6.8-7.6 V at the robot and power-board input but does not identify the internal Dynamixel rail.",
+      "The 5 V source, 0.12 ohm impedance, and 5 A current budget are explicit engineering estimates pending physical bus capture.",
+      "The source current budget is intentionally below the aggregate nine-servo peak-current demand so simultaneous load is shared."
+    ]
+  },
+  "thermal_baselines": [
+    {
+      "id": "body_yaw_xc330_m288_pg_thermal_estimate",
+      "role": "body_yaw",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma064_body_yaw_thermal_estimate_from_xc330_proxy",
+      "winding_resistance_ohms": {
+        "value": 2.7906976744186047,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "six_volts_divided_by_xc330_proxy_2_15_amp_stall_current"
+      },
+      "thermal_resistance_celsius_per_watt": {
+        "value": 18.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_body_yaw_lumped_thermal_resistance_estimate"
+      },
+      "thermal_capacitance_joules_per_celsius": {
+        "value": 12.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_body_yaw_lumped_thermal_capacitance_estimate"
+      },
+      "warning_temperature_celsius": {
+        "value": 65.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma062_five_degree_margin_below_robotis_limit"
+      },
+      "shutdown_temperature_celsius": {
+        "value": 70.0,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "robotis_xc330_proxy_temperature_limit"
+      },
+      "recovery_temperature_celsius": {
+        "value": 55.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_body_yaw_explicit_thermal_recovery_hysteresis"
+      }
+    },
+    {
+      "id": "stewart_xl330_m288_thermal_estimate",
+      "role": "stewart",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma064_stewart_thermal_estimate_from_xl330_m288",
+      "winding_resistance_ohms": {
+        "value": 3.4482758620689657,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "six_volts_divided_by_xl330_m288_1_74_amp_stall_current"
+      },
+      "thermal_resistance_celsius_per_watt": {
+        "value": 22.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_stewart_lumped_thermal_resistance_estimate"
+      },
+      "thermal_capacitance_joules_per_celsius": {
+        "value": 8.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_stewart_lumped_thermal_capacitance_estimate"
+      },
+      "warning_temperature_celsius": {
+        "value": 65.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma062_five_degree_margin_below_robotis_limit"
+      },
+      "shutdown_temperature_celsius": {
+        "value": 70.0,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "robotis_xl330_m288_temperature_limit"
+      },
+      "recovery_temperature_celsius": {
+        "value": 55.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_stewart_explicit_thermal_recovery_hysteresis"
+      }
+    },
+    {
+      "id": "antenna_xl330_m077_thermal_estimate",
+      "role": "antenna",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma064_antenna_thermal_estimate_from_xl330_m077",
+      "winding_resistance_ohms": {
+        "value": 3.4482758620689657,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "six_volts_divided_by_xl330_m077_1_74_amp_stall_current"
+      },
+      "thermal_resistance_celsius_per_watt": {
+        "value": 28.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_antenna_lumped_thermal_resistance_estimate"
+      },
+      "thermal_capacitance_joules_per_celsius": {
+        "value": 4.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_antenna_lumped_thermal_capacitance_estimate"
+      },
+      "warning_temperature_celsius": {
+        "value": 60.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_antenna_early_derating_engineering_margin"
+      },
+      "shutdown_temperature_celsius": {
+        "value": 70.0,
+        "evidence_class": "manufacturer_derived",
+        "evidence_id": "robotis_xl330_m077_temperature_limit"
+      },
+      "recovery_temperature_celsius": {
+        "value": 50.0,
+        "evidence_class": "engineering_estimate",
+        "evidence_id": "rma064_antenna_explicit_thermal_recovery_hysteresis"
+      }
+    }
+  ],
+  "actuator_bindings": [
+    {"actuator_name": "yaw_body", "baseline_id": "body_yaw_xc330_m288_pg_thermal_estimate", "role": "body_yaw"},
+    {"actuator_name": "stewart_1", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_2", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_3", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_4", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_5", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_6", "baseline_id": "stewart_xl330_m288_thermal_estimate", "role": "stewart"},
+    {"actuator_name": "right_antenna", "baseline_id": "antenna_xl330_m077_thermal_estimate", "role": "antenna"},
+    {"actuator_name": "left_antenna", "baseline_id": "antenna_xl330_m077_thermal_estimate", "role": "antenna"}
+  ]
+}
