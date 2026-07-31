@@ -9,6 +9,22 @@ SOURCE_MODEL_DIR="${RMA065_SOURCE_MODEL_DIR:?RMA065_SOURCE_MODEL_DIR is required
 ENHANCED_MODEL_DIR="${RMA065_ENHANCED_MODEL_DIR:?RMA065_ENHANCED_MODEL_DIR is required}"
 PROFILE_PATH="${ROOT_DIR}/models/reachy-mini/collision-hard-stop-baseline.json"
 
+if [[ -z "${MUJOCO_SOURCE_DIR:-}" ]]; then
+    if [[ -z "${RMA065_HOSTED_WORK_DIR:-}" ]]; then
+        printf '%s\n' \
+            'MUJOCO_SOURCE_DIR is required when RMA065_HOSTED_WORK_DIR is unavailable.' \
+            >&2
+        exit 1
+    fi
+    MUJOCO_SOURCE_DIR="${RMA065_HOSTED_WORK_DIR}/mujoco"
+fi
+if [[ ! -d "${MUJOCO_SOURCE_DIR}/.git" ]]; then
+    printf 'Pinned MuJoCo source checkout is missing: %s\n' \
+        "${MUJOCO_SOURCE_DIR}" >&2
+    exit 1
+fi
+export MUJOCO_SOURCE_DIR
+
 for required in \
     "${SOURCE_MODEL_DIR}/reachy_mini.xml" \
     "${ENHANCED_MODEL_DIR}/reachy_mini.xml" \
