@@ -393,3 +393,5 @@ if(BUILD_TESTING)
 endif()
 
 add_subdirectory(feasibility)
+
+include("${CMAKE_CURRENT_LIST_DIR}/electrical_servo_model.cmake")

@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma062_electrical_controller_v1",
+  "overall_quality": "manufacturer_estimate",
+  "source": {
+    "reachy_commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "hardware_document_path": "docs/source/platforms/reachy_mini/hardware.md",
+    "hardware_document_sha": "6a41ef2edb40b4b87f655bb7fa8b745a14f60435",
+    "hardware_config_path": "src/reachy_mini/assets/config/hardware_config.yaml",
+    "hardware_config_sha": "f50fe2ea19c7bd37c00899ba7019960f15524e69",
+    "robotis_manuals": {
+      "xc330_m288_t": "https://emanual.robotis.com/docs/en/dxl/x/xc330-m288/",
+      "xl330_m288_t": "https://emanual.robotis.com/docs/en/dxl/x/xl330-m288/",
+      "xl330_m077_t": "https://emanual.robotis.com/docs/en/dxl/x/xl330-m077/"
+    }
+  },
+  "unit_contract": {
+    "servo_parameters": {
+      "command_sample_period_seconds": "s",
+      "command_latency_seconds": "s",
+      "encoder_position_quantum_radians": "rad",
+      "encoder_velocity_quantum_radians_per_second": "rad/s",
+      "continuous_current_limit_amperes": "A",
+      "peak_current_limit_amperes": "A",
+      "peak_current_duration_seconds": "s",
+      "stall_torque_newton_metres": "N*m",
+      "no_load_speed_radians_per_second": "rad/s",
+      "nominal_voltage_volts": "V",
+      "minimum_voltage_volts": "V",
+      "maximum_voltage_volts": "V",
+      "ambient_temperature_celsius": "degC",
+      "warning_temperature_celsius": "degC",
+      "shutdown_temperature_celsius": "degC"
+    },
+    "controller_parameters": {
+      "target_position_quantum_radians": "rad",
+      "target_velocity_quantum_radians_per_second": "rad/s",
+      "position_gain_newton_metres_per_radian": "N*m/rad",
+      "velocity_gain_newton_metre_seconds_per_radian": "N*m*s/rad",
+      "performance_reference_voltage_volts": "V"
+    },
+    "conversions": {
+      "encoder_position": "2*pi/4096 rad per pulse",
+      "velocity": "0.229 rev/min converted with 2*pi/60",
+      "no_load_speed": "rev/min converted with 2*pi/60"
+    }
+  },
+  "baseline_semantics": {
+    "physics_timestep_seconds": 0.002,
+    "command_update_hz": 100.0,
+    "latency_samples": 1,
+    "target_and_encoder_quantization": "nearest_increment_half_away_from_zero",
+    "position_controller": "profiled_pd_plus_feedforward",
+    "torque_speed_curve": "linear_zero_torque_at_voltage_scaled_no_load_speed",
+    "voltage_scaling": "linear_below_6V_reference_clamped_above_reference",
+    "current_limit": "continuous_limit_with_250ms_peak_window",
+    "torque_disable": "zero_actuator_torque_without_gravity_compensation",
+    "thermal_scope": "observation_fault_thresholds_only_rma064_owns_thermal_dynamics"
+  },
+  "fault_flags": [
+    {
+      "name": "over_current",
+      "bit": 0
+    },
+    {
+      "name": "over_temperature",
+      "bit": 1
+    },
+    {
+      "name": "under_voltage",
+      "bit": 2
+    },
+    {
+      "name": "over_voltage",
+      "bit": 3
+    },
+    {
+      "name": "encoder",
+      "bit": 4
+    },
+    {
+      "name": "communication",
+      "bit": 5
+    },
+    {
+      "name": "model_rejected",
+      "bit": 6
+    }
+  ],
+  "baselines": [
+    {
+      "id": "body_yaw_xc330_m288_pg_estimate",
+      "role": "body_yaw",
+      "overall_quality": "manufacturer_estimate",
+      "source_actuator_class": "xc330_m288_pg_proxy",
+      "source_evidence_id": "pollen_hardware_mapping_body_yaw_to_xc330_m288_pg_proxy",
+      "servo_parameters": {
+        "command_sample_period_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "pollen_sdk_default_play_frequency_100_hz"
+        },
+        "command_latency_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_one_command_period_latency_estimate"
+        },
+        "encoder_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_4096_pulses_per_revolution"
+        },
+        "encoder_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_velocity_unit_0_229_rpm"
+        },
+        "continuous_current_limit_amperes": {
+          "value": 1.075,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_conservative_half_stall_current_continuous_estimate"
+        },
+        "peak_current_limit_amperes": {
+          "value": 2.15,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_six_volt_stall_current"
+        },
+        "peak_current_duration_seconds": {
+          "value": 0.25,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_bounded_peak_window_engineering_estimate"
+        },
+        "stall_torque_newton_metres": {
+          "value": 1.1,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_six_volt_stall_torque"
+        },
+        "no_load_speed_radians_per_second": {
+          "value": 10.157816246606997,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_six_volt_no_load_speed"
+        },
+        "nominal_voltage_volts": {
+          "value": 5.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_recommended_operating_voltage_5_volts"
+        },
+        "minimum_voltage_volts": {
+          "value": 3.7,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_documented_minimum_input_voltage"
+        },
+        "maximum_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_documented_maximum_input_voltage_6_volts"
+        },
+        "ambient_temperature_celsius": {
+          "value": 25.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_room_temperature_initial_condition"
+        },
+        "warning_temperature_celsius": {
+          "value": 65.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_five_degree_margin_below_robotis_limit"
+        },
+        "shutdown_temperature_celsius": {
+          "value": 70.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_temperature_limit"
+        }
+      },
+      "fault_model": {
+        "supported_flags": [
+          "over_current",
+          "over_temperature",
+          "under_voltage",
+          "over_voltage",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "latching_flags": [
+          "over_current",
+          "over_temperature",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "quality": "manufacturer_estimate",
+        "evidence_id": "pollen_shutdown_mask_52_plus_rma062_fail_closed_mapping"
+      },
+      "controller_parameters": {
+        "target_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_position_one_pulse"
+        },
+        "target_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_velocity_unit_0_229_rpm"
+        },
+        "position_gain_newton_metres_per_radian": {
+          "value": 6.302535746439056,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_body_yaw_stall_at_ten_degree_error_gain"
+        },
+        "velocity_gain_newton_metre_seconds_per_radian": {
+          "value": 0.12605071492878112,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_body_yaw_twenty_millisecond_damping_estimate"
+        },
+        "performance_reference_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xc330_m288_pg_proxy_highest_documented_performance_point"
+        }
+      },
+      "upstream_position_pid_raw_p": 200,
+      "limitations": [
+        "The Reachy base uses a custom XC330-M288-PG with plastic gears.",
+        "Torque, speed, current, encoder, and temperature values proxy XC330-M288-T and are not measurements of the custom PG variant.",
+        "The pinned Reachy document gives 6.8-7.6 V at the robot input but does not identify the regulated Dynamixel bus voltage; this model uses the motor e-manual 3.7-6.0 V domain and does not infer the internal rail."
+      ]
+    },
+    {
+      "id": "stewart_xl330_m288_estimate",
+      "role": "stewart",
+      "overall_quality": "manufacturer_estimate",
+      "source_actuator_class": "xl330_m288_t",
+      "source_evidence_id": "pollen_hardware_mapping_stewart_to_xl330_m288_t",
+      "servo_parameters": {
+        "command_sample_period_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "pollen_sdk_default_play_frequency_100_hz"
+        },
+        "command_latency_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_one_command_period_latency_estimate"
+        },
+        "encoder_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_4096_pulses_per_revolution"
+        },
+        "encoder_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_velocity_unit_0_229_rpm"
+        },
+        "continuous_current_limit_amperes": {
+          "value": 0.87,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_conservative_half_stall_current_continuous_estimate"
+        },
+        "peak_current_limit_amperes": {
+          "value": 1.74,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_six_volt_stall_current"
+        },
+        "peak_current_duration_seconds": {
+          "value": 0.25,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_bounded_peak_window_engineering_estimate"
+        },
+        "stall_torque_newton_metres": {
+          "value": 0.6,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_six_volt_stall_torque"
+        },
+        "no_load_speed_radians_per_second": {
+          "value": 12.880529879718152,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_six_volt_no_load_speed"
+        },
+        "nominal_voltage_volts": {
+          "value": 5.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_recommended_operating_voltage_5_volts"
+        },
+        "minimum_voltage_volts": {
+          "value": 3.7,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_documented_minimum_input_voltage"
+        },
+        "maximum_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_documented_maximum_input_voltage_6_volts"
+        },
+        "ambient_temperature_celsius": {
+          "value": 25.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_room_temperature_initial_condition"
+        },
+        "warning_temperature_celsius": {
+          "value": 65.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_five_degree_margin_below_robotis_limit"
+        },
+        "shutdown_temperature_celsius": {
+          "value": 70.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_temperature_limit"
+        }
+      },
+      "fault_model": {
+        "supported_flags": [
+          "over_current",
+          "over_temperature",
+          "under_voltage",
+          "over_voltage",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "latching_flags": [
+          "over_current",
+          "over_temperature",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "quality": "manufacturer_estimate",
+        "evidence_id": "pollen_shutdown_mask_52_plus_rma062_fail_closed_mapping"
+      },
+      "controller_parameters": {
+        "target_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_position_one_pulse"
+        },
+        "target_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_velocity_unit_0_229_rpm"
+        },
+        "position_gain_newton_metres_per_radian": {
+          "value": 3.437746770784939,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_stewart_stall_at_ten_degree_error_gain"
+        },
+        "velocity_gain_newton_metre_seconds_per_radian": {
+          "value": 0.06875493541569878,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_stewart_twenty_millisecond_damping_estimate"
+        },
+        "performance_reference_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m288_t_highest_documented_performance_point"
+        }
+      },
+      "upstream_position_pid_raw_p": 300,
+      "limitations": [
+        "Manufacturer stall values are momentary ratings, not continuous output.",
+        "Controller gains and peak duration are engineering estimates and require physical identification.",
+        "Friction, backlash, compliance, shared-supply sag, and thermal dynamics are deferred.",
+        "The pinned Reachy document gives 6.8-7.6 V at the robot input but does not identify the regulated Dynamixel bus voltage; this model uses the motor e-manual 3.7-6.0 V domain and does not infer the internal rail."
+      ]
+    },
+    {
+      "id": "antenna_xl330_m077_estimate",
+      "role": "antenna",
+      "overall_quality": "manufacturer_estimate",
+      "source_actuator_class": "xl330_m077_t",
+      "source_evidence_id": "pollen_hardware_mapping_antenna_to_xl330_m077_t",
+      "servo_parameters": {
+        "command_sample_period_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "pollen_sdk_default_play_frequency_100_hz"
+        },
+        "command_latency_seconds": {
+          "value": 0.01,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_one_command_period_latency_estimate"
+        },
+        "encoder_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_4096_pulses_per_revolution"
+        },
+        "encoder_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_velocity_unit_0_229_rpm"
+        },
+        "continuous_current_limit_amperes": {
+          "value": 0.87,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_conservative_half_stall_current_continuous_estimate"
+        },
+        "peak_current_limit_amperes": {
+          "value": 1.74,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_six_volt_stall_current"
+        },
+        "peak_current_duration_seconds": {
+          "value": 0.25,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_bounded_peak_window_engineering_estimate"
+        },
+        "stall_torque_newton_metres": {
+          "value": 0.228,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_six_volt_stall_torque"
+        },
+        "no_load_speed_radians_per_second": {
+          "value": 47.752208334564855,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_six_volt_no_load_speed"
+        },
+        "nominal_voltage_volts": {
+          "value": 5.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_recommended_operating_voltage_5_volts"
+        },
+        "minimum_voltage_volts": {
+          "value": 3.7,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_documented_minimum_input_voltage"
+        },
+        "maximum_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_documented_maximum_input_voltage_6_volts"
+        },
+        "ambient_temperature_celsius": {
+          "value": 25.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_room_temperature_initial_condition"
+        },
+        "warning_temperature_celsius": {
+          "value": 65.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_five_degree_margin_below_robotis_limit"
+        },
+        "shutdown_temperature_celsius": {
+          "value": 70.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_temperature_limit"
+        }
+      },
+      "fault_model": {
+        "supported_flags": [
+          "over_current",
+          "over_temperature",
+          "under_voltage",
+          "over_voltage",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "latching_flags": [
+          "over_current",
+          "over_temperature",
+          "encoder",
+          "communication",
+          "model_rejected"
+        ],
+        "quality": "manufacturer_estimate",
+        "evidence_id": "pollen_shutdown_mask_52_plus_rma062_fail_closed_mapping"
+      },
+      "controller_parameters": {
+        "target_position_quantum_radians": {
+          "value": 0.0015339807878856412,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_position_one_pulse"
+        },
+        "target_velocity_quantum_radians_per_second": {
+          "value": 0.023980823922402087,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_goal_velocity_unit_0_229_rpm"
+        },
+        "position_gain_newton_metres_per_radian": {
+          "value": 1.306343772898277,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_antenna_stall_at_ten_degree_error_gain"
+        },
+        "velocity_gain_newton_metre_seconds_per_radian": {
+          "value": 0.02612687545796554,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "rma062_antenna_twenty_millisecond_damping_estimate"
+        },
+        "performance_reference_voltage_volts": {
+          "value": 6.0,
+          "quality": "manufacturer_estimate",
+          "evidence_id": "robotis_xl330_m077_t_highest_documented_performance_point"
+        }
+      },
+      "upstream_position_pid_raw_p": 200,
+      "limitations": [
+        "Manufacturer stall values are momentary ratings, not continuous output.",
+        "The pinned MJCF has no antenna hard-stop range; controller bounds are not mechanical limits.",
+        "Controller gains and peak duration are engineering estimates and require physical identification.",
+        "The pinned Reachy document gives 6.8-7.6 V at the robot input but does not identify the regulated Dynamixel bus voltage; this model uses the motor e-manual 3.7-6.0 V domain and does not infer the internal rail."
+      ]
+    }
+  ],
+  "actuator_bindings": [
+    {
+      "actuator_name": "yaw_body",
+      "baseline_id": "body_yaw_xc330_m288_pg_estimate",
+      "role": "body_yaw"
+    },
+    {
+      "actuator_name": "stewart_1",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "stewart_2",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "stewart_3",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "stewart_4",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "stewart_5",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "stewart_6",
+      "baseline_id": "stewart_xl330_m288_estimate",
+      "role": "stewart"
+    },
+    {
+      "actuator_name": "right_antenna",
+      "baseline_id": "antenna_xl330_m077_estimate",
+      "role": "antenna"
+    },
+    {
+      "actuator_name": "left_antenna",
+      "baseline_id": "antenna_xl330_m077_estimate",
+      "role": "antenna"
+    }
+  ]
+}
