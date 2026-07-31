@@ -1,5 +1,5 @@
 name: RMA-070 and RMA-071 Integration
-# Apply the six explicit strict-Ruff source corrections before integration.
+# Apply deterministic, indentation-safe source corrections before integration.
 
 on:
   push:
@@ -66,12 +66,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
+          def replace_once(path: str, old: str, new: str, label: str) -> None:
               source_path = Path(path)
               source = source_path.read_text(encoding="utf-8")
-              if source.count(old) != 1:
+              count = source.count(old)
+              if count != 1:
                   raise SystemExit(
-                      f"{path}: expected one correction marker, found {source.count(old)}"
+                      f"{path}: correction {label!r} marker count={count}"
                   )
               source_path.write_text(
                   source.replace(old, new, 1),
@@ -83,48 +84,56 @@ jobs:
               "scripts/calibration_data.py",
               "not isinstance(value, (int, float))",
               "not isinstance(value, int | float)",
+              "numeric union",
           )
           replace_once(
               "scripts/calibration_data.py",
-              '''        if sample_type in {"imu", "external_pose", "force_torque"}:
-              if "coordinate_frame" not in stream:
-                  raise _error(path, "requires coordinate_frame")
-          ''',
-              '''        if (
-              sample_type in {"imu", "external_pose", "force_torque"}
-              and "coordinate_frame" not in stream
-          ):
-              raise _error(path, "requires coordinate_frame")
-          ''',
+              (
+                  '        if sample_type in {"imu", "external_pose", "force_torque"}:\n'
+                  '            if "coordinate_frame" not in stream:\n'
+                  '                raise _error(path, "requires coordinate_frame")\n'
+              ),
+              (
+                  "        if (\n"
+                  '            sample_type in {"imu", "external_pose", "force_torque"}\n'
+                  '            and "coordinate_frame" not in stream\n'
+                  "        ):\n"
+                  '            raise _error(path, "requires coordinate_frame")\n'
+              ),
+              "coordinate frame condition",
           )
           replace_once(
               "scripts/capture_reachy_calibration.py",
-              '''                f"line {line_number} keys invalid: missing={sorted(missing)} unexpected={sorted(unexpected)}"
-          ''',
-              '''                f"line {line_number} keys invalid: missing={sorted(missing)} "
-              f"unexpected={sorted(unexpected)}"
-          ''',
+              'f"line {line_number} keys invalid: missing={sorted(missing)} unexpected={sorted(unexpected)}"',
+              (
+                  'f"line {line_number} keys invalid: missing={sorted(missing)} "\n'
+                  '                f"unexpected={sorted(unexpected)}"'
+              ),
+              "JSONL key diagnostic",
           )
           replace_once(
               "scripts/capture_reachy_calibration.py",
-              '''                f"CSV columns for {path.name} must be exactly {expected_columns}; found {reader.fieldnames}"
-          ''',
-              '''                f"CSV columns for {path.name} must be exactly {expected_columns}; "
-              f"found {reader.fieldnames}"
-          ''',
+              'f"CSV columns for {path.name} must be exactly {expected_columns}; found {reader.fieldnames}"',
+              (
+                  'f"CSV columns for {path.name} must be exactly {expected_columns}; "\n'
+                  '                f"found {reader.fieldnames}"'
+              ),
+              "CSV column diagnostic",
           )
           replace_once(
               "scripts/capture_reachy_calibration.py",
-              '''                "--force-torque-clock-id and --force-torque-frame are required with --force-torque-csv"
-          ''',
-              '''                "--force-torque-clock-id and --force-torque-frame are required "
-              "with --force-torque-csv"
-          ''',
+              '"--force-torque-clock-id and --force-torque-frame are required with --force-torque-csv"',
+              (
+                  '"--force-torque-clock-id and --force-torque-frame are required "\n'
+                  '                "with --force-torque-csv"'
+              ),
+              "force torque argument diagnostic",
           )
           replace_once(
               "scripts/estimate_calibration_clock_offset.py",
               "median_offset = int(round(statistics.median(offsets)))",
               "median_offset = round(statistics.median(offsets))",
+              "median offset type",
           )
           PY
 
