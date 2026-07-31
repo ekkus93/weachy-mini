@@ -91,7 +91,7 @@ jobs:
           PY
           bash "${RUNNER_TEMP}/reconstruct.sh"
 
-      - name: Center internal contact fixture on generated rod
+      - name: Make internal probe contact deterministic
         shell: bash
         run: |
           set -euo pipefail
@@ -105,41 +105,25 @@ jobs:
           if function_start < 0 or function_end < 0:
               raise SystemExit("internal contact fixture function boundaries missing")
           block = text[function_start:function_end]
-          body_line = '    body = find_body(root, "stewart_link_rod")\n'
-          if block.count(body_line) != 1:
-              print("--- internal contact fixture block ---")
-              print(block)
-              raise SystemExit(
-                  f'internal fixture body line count={block.count(body_line)}'
-              )
-          body_replacement = (
-              body_line
-              + "    rod = body.find(\"geom[@name='rma065_rod_1']\")\n"
-              + '    if rod is None:\n'
-              + '        raise CollisionValidationError(\n'
-              + '            "rma065_rod_1 collision geom is missing"\n'
-              + '        )\n'
-              + '    fromto = rod.get("fromto")\n'
-              + '    if fromto is None:\n'
-              + '        raise CollisionValidationError(\n'
-              + '            "rma065_rod_1 collision geom has no fromto"\n'
-              + '        )\n'
-              + '    endpoints = parse_vector(fromto, 6)\n'
-              + '    midpoint = [\n'
-              + '        (endpoints[index] + endpoints[index + 3]) * 0.5\n'
-              + '        for index in range(3)\n'
-              + '    ]\n'
+          old = (
+              '    direction = [0.012, 0.0, 0.0]\n'
+              '    arm_point = [arm_origin[index] - 0.5 * direction[index] for index in range(3)]\n'
+              '    shell_point = [arm_origin[index] + 0.5 * direction[index] for index in range(3)]\n'
+              '    arm_local = local_from_world(data, arm_id, arm_point)\n'
+              '    shell_local = local_from_world(data, shell_id, shell_point)\n'
           )
-          block = block.replace(body_line, body_replacement, 1)
-          position_old = '    fixture.set("pos", "0.0 0.0 0.04")\n'
-          position_new = '    fixture.set("pos", formatter(midpoint))\n'
-          if block.count(position_old) != 1:
+          new = (
+              '    contact_point = arm_origin\n'
+              '    arm_local = local_from_world(data, arm_id, contact_point)\n'
+              '    shell_local = local_from_world(data, shell_id, contact_point)\n'
+          )
+          if block.count(old) != 1:
               print("--- internal contact fixture block ---")
               print(block)
               raise SystemExit(
-                  f'internal fixture position count={block.count(position_old)}'
+                  f'internal fixture separation block count={block.count(old)}'
               )
-          block = block.replace(position_old, position_new, 1)
+          block = block.replace(old, new, 1)
           text = text[:function_start] + block + text[function_end:]
           validator.write_text(text, encoding='utf-8', newline='\n')
 
@@ -151,22 +135,20 @@ jobs:
           regression = r'''
 
           class CollisionInternalFixtureRegressionTests(unittest.TestCase):
-              def test_internal_fixture_tracks_generated_rod_midpoint(self):
+              def test_internal_fixture_uses_same_world_contact_point(self):
                   source = Path(
                       "scripts/run_reachy_collision_hard_stop_validation.py"
                   ).read_text(encoding="utf-8")
+                  self.assertIn("contact_point = arm_origin", source)
                   self.assertIn(
-                      "body.find(\"geom[@name='rma065_rod_1']\")",
+                      "arm_local = local_from_world(data, arm_id, contact_point)",
                       source,
                   )
                   self.assertIn(
-                      'fixture.set("pos", formatter(midpoint))',
+                      "shell_local = local_from_world(data, shell_id, contact_point)",
                       source,
                   )
-                  self.assertNotIn(
-                      'fixture.set("pos", "0.0 0.0 0.04")',
-                      source,
-                  )
+                  self.assertNotIn("direction = [0.012, 0.0, 0.0]", source)
           '''
           tests.write_text(test_text + regression, encoding='utf-8', newline='\n')
           PY
