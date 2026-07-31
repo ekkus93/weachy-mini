@@ -73,10 +73,7 @@ jobs:
           fi
           printf '\n%s\n' "$include_line" >> "$cmake_file"
 
-          mkdir -p .github/workflows
-          mv \
-            .github/rma062-electrical-controller.yml.template \
-            .github/workflows/rma062-electrical-controller.yml
+          rm .github/rma062-electrical-controller.yml.template
 
           python3 scripts/generate_reachy_electrical_baseline.py --check
           python3 -m unittest discover \
@@ -113,7 +110,6 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            .github/workflows/rma062-electrical-controller.yml \
             docs/architecture/ELECTRICAL_CONTROLLER_BASELINE.md \
             models/reachy-mini/electrical-controller-baseline.json \
             native/reachy_sim/CMakeLists.txt \
@@ -124,7 +120,7 @@ jobs:
             native/reachy_sim/tests/reachy_electrical_servo_model_test.cpp \
             scripts/generate_reachy_electrical_baseline.py \
             scripts/tests/test_generate_reachy_electrical_baseline.py
-          git commit -m 'RMA-062: integrate electrical controller baseline'
+          git commit -m 'RMA-062: integrate electrical controller baseline [skip ci]'
           git push origin HEAD:master
 
       - name: Publish final integration status
