@@ -91,7 +91,7 @@ jobs:
           PY
           bash "${RUNNER_TEMP}/reconstruct.sh"
 
-      - name: Make internal probe contact deterministic
+      - name: Make internal mask contact independent of topology exclusions
         shell: bash
         run: |
           set -euo pipefail
@@ -104,27 +104,66 @@ jobs:
           function_end = text.find("\ndef external_contact_fixture", function_start)
           if function_start < 0 or function_end < 0:
               raise SystemExit("internal contact fixture function boundaries missing")
-          block = text[function_start:function_end]
-          old = (
-              '    direction = [0.012, 0.0, 0.0]\n'
-              '    arm_point = [arm_origin[index] - 0.5 * direction[index] for index in range(3)]\n'
-              '    shell_point = [arm_origin[index] + 0.5 * direction[index] for index in range(3)]\n'
-              '    arm_local = local_from_world(data, arm_id, arm_point)\n'
-              '    shell_local = local_from_world(data, shell_id, shell_point)\n'
-          )
-          new = (
-              '    contact_point = arm_origin\n'
-              '    arm_local = local_from_world(data, arm_id, contact_point)\n'
-              '    shell_local = local_from_world(data, shell_id, contact_point)\n'
-          )
-          if block.count(old) != 1:
-              print("--- internal contact fixture block ---")
-              print(block)
-              raise SystemExit(
-                  f'internal fixture separation block count={block.count(old)}'
+          original = text[function_start:function_end]
+          replacement = '''def internal_contact_fixture(
+              mujoco: Any,
+              model_path: Path,
+              output_path: Path,
+          ) -> None:
+              base_model = mujoco.MjModel.from_xml_path(str(model_path))
+              data = mujoco.MjData(base_model)
+              mujoco.mj_forward(base_model, data)
+              arm_id = object_id(
+                  mujoco,
+                  base_model,
+                  mujoco.mjtObj.mjOBJ_BODY,
+                  "dc15_a01_horn_dummy",
               )
-          block = block.replace(old, new, 1)
-          text = text[:function_start] + block + text[function_end:]
+              arm_origin = [float(value) for value in data.xpos[arm_id]]
+              direction = [0.012, 0.0, 0.0]
+              arm_point = [
+                  arm_origin[index] - 0.5 * direction[index]
+                  for index in range(3)
+              ]
+              shell_point = [
+                  arm_origin[index] + 0.5 * direction[index]
+                  for index in range(3)
+              ]
+              arm_local = local_from_world(data, arm_id, arm_point)
+
+              tree = ET.parse(model_path)
+              root = tree.getroot()
+              bodies = {
+                  body.get("name"): body
+                  for body in root.findall(".//body")
+                  if body.get("name")
+              }
+              worldbody = root.find("worldbody")
+              if worldbody is None:
+                  raise CollisionValidationError("model has no worldbody")
+              add_probe_geom(
+                  bodies["dc15_a01_horn_dummy"],
+                  "rma065_fixture_internal_moving",
+                  arm_local,
+                  2,
+                  5,
+              )
+              add_probe_geom(
+                  worldbody,
+                  "rma065_fixture_internal_shell",
+                  shell_point,
+                  1,
+                  6,
+              )
+              ET.indent(tree, space="  ")
+              tree.write(output_path, encoding="utf-8", xml_declaration=True)
+          
+          '''
+          if 'shell_id = object_id(' not in original:
+              print("--- internal contact fixture block ---")
+              print(original)
+              raise SystemExit('expected topology-coupled shell fixture is missing')
+          text = text[:function_start] + replacement + text[function_end:]
           validator.write_text(text, encoding='utf-8', newline='\n')
 
           tests = Path('scripts/tests/test_generate_reachy_collision_model.py')
@@ -135,20 +174,23 @@ jobs:
           regression = r'''
 
           class CollisionInternalFixtureRegressionTests(unittest.TestCase):
-              def test_internal_fixture_uses_same_world_contact_point(self):
+              def test_internal_shell_probe_is_world_attached(self):
                   source = Path(
                       "scripts/run_reachy_collision_hard_stop_validation.py"
                   ).read_text(encoding="utf-8")
-                  self.assertIn("contact_point = arm_origin", source)
+                  self.assertIn('worldbody = root.find("worldbody")', source)
                   self.assertIn(
-                      "arm_local = local_from_world(data, arm_id, contact_point)",
+                      '"rma065_fixture_internal_shell",\n'
+                      '        shell_point,\n'
+                      '        1,\n'
+                      '        6,',
                       source,
                   )
-                  self.assertIn(
-                      "shell_local = local_from_world(data, shell_id, contact_point)",
-                      source,
-                  )
-                  self.assertNotIn("direction = [0.012, 0.0, 0.0]", source)
+                  function = source[
+                      source.index("def internal_contact_fixture"):
+                      source.index("\ndef external_contact_fixture")
+                  ]
+                  self.assertNotIn("shell_id = object_id(", function)
           '''
           tests.write_text(test_text + regression, encoding='utf-8', newline='\n')
           PY
