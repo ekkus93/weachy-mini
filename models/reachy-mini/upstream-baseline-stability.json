@@ -40,17 +40,44 @@
     "hold_steps": 500,
     "interpolation": "minimum_jerk"
   },
+  "long_duration_gate": {
+    "required_android_cycles": 45,
+    "required_simulated_seconds": 1800.0,
+    "representative_hardware_required": true,
+    "timestep_deviation_decision": "not_required",
+    "minimum_solver_realtime_factor": 1.0
+  },
   "phases": [
     {
       "name": "neutral_awake",
       "category": "neutral",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "upstream_sleep_request",
       "category": "sleep",
-      "targets_radians": [0.0, -0.9848156658225817, 1.2624661884298831, -0.24390294527381684, 0.20555342557667577, -1.2363885150358267, 1.0032234352772091, -3.05, 3.05],
+      "targets_radians": [
+        0.0,
+        -0.9848156658225817,
+        1.2624661884298831,
+        -0.24390294527381684,
+        0.20555342557667577,
+        -1.2363885150358267,
+        1.0032234352772091,
+        -3.05,
+        3.05
+      ],
       "allowed_out_of_range_actuators": [
         "stewart_1",
         "stewart_2",
@@ -61,109 +88,289 @@
     {
       "name": "neutral_after_sleep",
       "category": "neutral",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "body_yaw_positive_limit",
       "category": "body_yaw_limit",
-      "targets_radians": [2.792526803190879, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        2.792526803190879,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "body_yaw_negative_limit",
       "category": "body_yaw_limit",
-      "targets_radians": [-2.792526803190975, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        -2.792526803190975,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_1_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, -0.8377580409572196, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        -0.8377580409572196,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_1_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 1.3962634015955222, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        1.3962634015955222,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_2_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, -1.396263401595614, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        -1.396263401595614,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_2_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 1.2217304763958803, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        1.2217304763958803,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_3_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, -0.8377580409572173, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        -0.8377580409572173,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_3_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 1.3962634015955244, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        1.3962634015955244,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_4_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, -1.3962634015953894, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.3962634015953894,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_4_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.8377580409573525, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.8377580409573525,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_5_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, -1.2217304763962082, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.2217304763962082,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_5_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 1.396263401595286, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.396263401595286,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_6_negative_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.3962634015954123, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.3962634015954123,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "head_motor_6_positive_limit",
       "category": "head_actuator_limit",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.8377580409573296, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.8377580409573296,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "antennas_sleep_extreme",
       "category": "antenna_extreme",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -3.05, 3.05],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -3.05,
+        3.05
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "antennas_mirrored_extreme",
       "category": "antenna_extreme",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.05, -3.05],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        3.05,
+        -3.05
+      ],
       "allowed_out_of_range_actuators": []
     },
     {
       "name": "neutral_final",
       "category": "neutral",
-      "targets_radians": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -0.1745, 0.1745],
+      "targets_radians": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.1745,
+        0.1745
+      ],
       "allowed_out_of_range_actuators": []
     }
   ]
