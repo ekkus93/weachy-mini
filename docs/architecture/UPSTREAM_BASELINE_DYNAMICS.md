@@ -40,6 +40,11 @@ The ordered schedule begins and ends in neutral and covers:
 - positive and negative limits for all six Stewart actuators;
 - both antenna extremes and mirrored antenna extremes.
 
+Body-yaw and Stewart boundary commands use the profile-declared 1e-9 radian
+inward inset. This keeps the commands inside MuJoCo's compiled actuator ranges
+when decimal-to-binary conversion differs by an ulp, while remaining effectively
+at the audited upstream limits. The inset is not an allowed overrange exception.
+
 The upstream sleep command requests four Stewart targets outside their encoded
 actuator control ranges. This is retained as explicit source evidence, not hidden
 or normalized. The profile names the four affected actuators, the generated
