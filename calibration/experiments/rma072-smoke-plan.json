@@ -1,0 +1,127 @@
+{
+  "actuators": {
+    "antenna_right": {
+      "maximum_position_rad": 0.8,
+      "maximum_velocity_rad_s": 1.5,
+      "minimum_position_rad": -0.8
+    },
+    "stewart_1": {
+      "maximum_position_rad": 0.4,
+      "maximum_velocity_rad_s": 0.5,
+      "minimum_position_rad": -0.4
+    },
+    "yaw_body": {
+      "maximum_position_rad": 1.0,
+      "maximum_velocity_rad_s": 1.0,
+      "minimum_position_rad": -1.0
+    }
+  },
+  "description": "Synthetic CI plan exercising every RMA-072 experiment type; not physical calibration evidence.",
+  "experiments": [
+    {
+      "actuator_id": "yaw_body",
+      "end_position_rad": 0.4,
+      "experiment_id": "unloaded-yaw-sweep",
+      "repetitions": 2,
+      "start_position_rad": -0.4,
+      "sweep_seconds": 2.0,
+      "type": "unloaded_sweep"
+    },
+    {
+      "experiment_id": "gravity-static-pose",
+      "gravity_loaded": true,
+      "hold_seconds": 1.0,
+      "positions_rad": {
+        "stewart_1": 0.05,
+        "yaw_body": 0.1
+      },
+      "type": "gravity_static_pose"
+    },
+    {
+      "actuator_id": "yaw_body",
+      "experiment_id": "yaw-step-response",
+      "initial_position_rad": 0.0,
+      "post_hold_seconds": 1.0,
+      "pre_hold_seconds": 0.5,
+      "target_position_rad": 0.3,
+      "type": "step_response"
+    },
+    {
+      "actuator_id": "antenna_right",
+      "amplitude_rad": 0.2,
+      "center_position_rad": 0.0,
+      "cycles_per_frequency": 2,
+      "experiment_id": "antenna-frequency-response",
+      "frequencies_hz": [
+        0.5,
+        1.0
+      ],
+      "type": "frequency_response"
+    },
+    {
+      "actuator_id": "stewart_1",
+      "amplitude_rad": 0.08,
+      "center_position_rad": 0.0,
+      "dwell_seconds": 0.2,
+      "experiment_id": "stewart-backlash-reversal",
+      "repetitions": 3,
+      "type": "backlash_reversal"
+    },
+    {
+      "actuator_id": "antenna_right",
+      "experiment_id": "antenna-free-decay",
+      "initial_position_rad": 0.3,
+      "observe_seconds": 1.0,
+      "settle_seconds": 0.5,
+      "type": "free_decay"
+    },
+    {
+      "experiment_id": "coupled-static-command",
+      "hold_seconds": 1.0,
+      "positions_rad": {
+        "antenna_right": -0.1,
+        "stewart_1": -0.04,
+        "yaw_body": -0.15
+      },
+      "type": "multi_actuator"
+    },
+    {
+      "actuator_id": "yaw_body",
+      "cold_hold_seconds": 1.0,
+      "cooldown_seconds": 1.0,
+      "dwell_seconds": 0.2,
+      "experiment_id": "yaw-warm-cold-cycle",
+      "lower_position_rad": -0.2,
+      "type": "thermal_cycle",
+      "upper_position_rad": 0.2,
+      "warm_cycles": 3
+    }
+  ],
+  "integrity": {
+    "algorithm": "sha256",
+    "plan_sha256": "780e43538fce5c2ad14357c1ea37a3ea4da90d9621dd610c1c19b981a23ddd8b"
+  },
+  "plan_id": "rma072-smoke-plan-v1",
+  "robot": {
+    "expected_robot_id": "synthetic-reachy-mini-ci",
+    "firmware_constraint": "synthetic-ci-only",
+    "hardware_revision": "synthetic"
+  },
+  "safety_limits": {
+    "maximum_concurrent_actuators": 3,
+    "maximum_duration_seconds": 120.0,
+    "maximum_schedule_actions": 10000,
+    "maximum_temperature_c": 55.0,
+    "maximum_total_current_a": 4.0,
+    "minimum_bus_voltage_v": 4.5
+  },
+  "schema": {
+    "contract_id": "rma072_calibration_experiment_plan_v1",
+    "schema_sha256": "19d53c9b4a45559164d18af6a5ffbcef27375177c56681485c534fe2fbb35b71",
+    "schema_version": 1
+  },
+  "timing": {
+    "command_rate_hz": 20.0,
+    "primary_clock_id": "reachy_clock"
+  }
+}
