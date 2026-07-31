@@ -1,0 +1,124 @@
+name: RMA-062 Electrical Controller Baseline
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma062-electrical-controller.yml'
+      - 'models/reachy-mini/electrical-controller-baseline.json'
+      - 'native/reachy_sim/CMakeLists.txt'
+      - 'native/reachy_sim/electrical_servo_model.cmake'
+      - 'native/reachy_sim/include/reachy_electrical_servo_model.hpp'
+      - 'native/reachy_sim/src/reachy_electrical_servo_model.cpp'
+      - 'native/reachy_sim/src/reachy_electrical_baseline.generated.hpp'
+      - 'native/reachy_sim/tests/reachy_electrical_servo_model_test.cpp'
+      - 'scripts/generate_reachy_electrical_baseline.py'
+      - 'scripts/tests/test_generate_reachy_electrical_baseline.py'
+      - 'docs/architecture/ELECTRICAL_CONTROLLER_BASELINE.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma062-electrical-controller-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate electrical controller baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending commit status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: 'pending',
+              context: 'RMA-062 Electrical Controller Baseline',
+              description: 'Source contract, units, strict native build, and behavior tests are running',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify generated baseline and failure paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate_reachy_electrical_baseline.py --check
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_*electrical*.py' \
+            -v
+
+      - name: Reject Unity ownership and calibrated claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -En 'UnityEngine|MonoBehaviour|GameObject|Transform|Unity::' \
+            native/reachy_sim/include/reachy_electrical_servo_model.hpp \
+            native/reachy_sim/src/reachy_electrical_servo_model.cpp; then
+            printf '%s\n' 'Native electrical servo model contains a Unity dependency.' >&2
+            exit 1
+          fi
+          if grep -En 'ParameterQuality::Calibrated|"calibrated"' \
+            native/reachy_sim/src/reachy_electrical_baseline.generated.hpp \
+            models/reachy-mini/electrical-controller-baseline.json; then
+            printf '%s\n' 'RMA-062 baseline contains a calibrated claim.' >&2
+            exit 1
+          fi
+
+      - name: Configure strict native build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/rma062 \
+            -DBUILD_TESTING=ON \
+            -DREACHY_ENABLE_SANITIZERS=ON \
+            -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build and run electrical behavior tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build build/rma062 --target reachy_electrical_servo_model_test --parallel 2
+          ctest \
+            --test-dir build/rma062 \
+            --output-on-failure \
+            -R '^reachy_electrical_servo_model_test$'
+
+      - name: Publish final commit status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          VALIDATION_RESULT: ${{ job.status }}
+        with:
+          script: |
+            const passed = process.env.VALIDATION_RESULT === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: passed ? 'success' : 'failure',
+              context: 'RMA-062 Electrical Controller Baseline',
+              description: passed
+                ? 'Source/units, generated baseline, strict native build, and behavior tests passed'
+                : 'RMA-062 electrical controller validation failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
