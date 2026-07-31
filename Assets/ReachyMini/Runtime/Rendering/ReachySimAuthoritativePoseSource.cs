@@ -9,21 +9,20 @@ using ReachyMini.Simulation;
 namespace ReachyMini.Rendering
 {
     public sealed class ReachySimAuthoritativePoseSource :
-        IReachyAuthoritativePoseSource,
+        IReachyReusableAuthoritativePoseSource,
         IDisposable
     {
+        private readonly object stateGate = new object();
         private readonly IReachySimAuthoritativeStateReader? stateReader;
         private readonly IReachyPublishedAuthoritativeStateSource? publishedStateSource;
         private readonly bool ownsStateReader;
         private readonly ReachySimAuthoritativeStateLayout layout;
         private readonly string[] bodyNames;
-        private readonly ReachySimAuthoritativeStateFrame stateFrame;
-        private readonly ReachyAuthoritativePoseBuffer poseBuffer =
-            new ReachyAuthoritativePoseBuffer();
-        private bool hasPublishedState;
-        private ulong lastSequence;
-        private double lastSimulationTime;
-        private uint lastContinuityId;
+        private ReachySimAuthoritativeStateFrame previousStateFrame;
+        private ReachySimAuthoritativeStateFrame latestStateFrame;
+        private ReachySimAuthoritativeStateFrame captureStateFrame;
+        private bool hasLatestState;
+        private bool hasPreviousState;
         private bool disposed;
 
         public ReachySimAuthoritativePoseSource(
@@ -103,8 +102,10 @@ namespace ReachyMini.Rendering
                 }
                 bodyNames[index] = name;
             }
-            stateFrame = stateReader?.CreateFrame() ??
-                publishedStateSource!.CreateAuthoritativeStateFrame();
+
+            previousStateFrame = CreateStateFrame();
+            latestStateFrame = CreateStateFrame();
+            captureStateFrame = CreateStateFrame();
         }
 
         public ulong ModelHash => layout.ModelHash;
@@ -156,58 +157,144 @@ namespace ReachyMini.Rendering
             }
         }
 
+        public ReachyReusableAuthoritativePoseFrame CreatePoseFrame()
+        {
+            ThrowIfDisposed();
+            return new ReachyReusableAuthoritativePoseFrame(bodyNames);
+        }
+
+        public bool TryCopyLatestPair(
+            ReachyReusableAuthoritativePoseFrame olderDestination,
+            ReachyReusableAuthoritativePoseFrame newerDestination)
+        {
+            if (olderDestination == null)
+            {
+                throw new ArgumentNullException(nameof(olderDestination));
+            }
+            if (newerDestination == null)
+            {
+                throw new ArgumentNullException(nameof(newerDestination));
+            }
+            if (olderDestination.BodyCount != BodyCount ||
+                newerDestination.BodyCount != BodyCount)
+            {
+                throw new ArgumentException(
+                    "Reusable pose destinations were created for a different body mapping.");
+            }
+
+            lock (stateGate)
+            {
+                ThrowIfDisposed();
+                CaptureLatestState();
+                if (!hasPreviousState)
+                {
+                    return false;
+                }
+                olderDestination.CopyFrom(previousStateFrame);
+                newerDestination.CopyFrom(latestStateFrame);
+                return true;
+            }
+        }
+
         public bool TryGetLatestPair(
             out ReachyAuthoritativePoseSnapshot older,
             out ReachyAuthoritativePoseSnapshot newer)
         {
-            ThrowIfDisposed();
-            if (publishedStateSource != null)
+            lock (stateGate)
             {
-                if (!publishedStateSource.TryCaptureLatestAuthoritativeState(
-                        stateFrame))
+                ThrowIfDisposed();
+                CaptureLatestState();
+                if (!hasPreviousState)
                 {
                     older = null!;
                     newer = null!;
                     return false;
                 }
-            }
-            else
-            {
-                stateReader!.Capture(stateFrame);
-            }
-            if (!hasPublishedState ||
-                stateFrame.Sequence != lastSequence ||
-                stateFrame.SimulationTime != lastSimulationTime ||
-                stateFrame.ContinuityId != lastContinuityId)
-            {
-                PublishCurrentState();
-            }
 
-            return poseBuffer.TryGetLatestPair(out older, out newer);
+                older = CreateImmutableSnapshot(previousStateFrame);
+                newer = CreateImmutableSnapshot(latestStateFrame);
+                return true;
+            }
         }
 
         public void Dispose()
         {
-            if (disposed)
+            lock (stateGate)
             {
-                return;
-            }
-            disposed = true;
-            if (ownsStateReader)
-            {
-                stateReader?.Dispose();
+                if (disposed)
+                {
+                    return;
+                }
+                disposed = true;
+                if (ownsStateReader)
+                {
+                    stateReader?.Dispose();
+                }
             }
             GC.SuppressFinalize(this);
         }
 
-        private void PublishCurrentState()
+        private ReachySimAuthoritativeStateFrame CreateStateFrame()
+        {
+            return stateReader?.CreateFrame() ??
+                publishedStateSource!.CreateAuthoritativeStateFrame();
+        }
+
+        private void CaptureLatestState()
+        {
+            bool captured;
+            if (publishedStateSource != null)
+            {
+                captured = publishedStateSource.TryCaptureLatestAuthoritativeState(
+                    captureStateFrame);
+            }
+            else
+            {
+                stateReader!.Capture(captureStateFrame);
+                captured = true;
+            }
+            if (!captured)
+            {
+                return;
+            }
+            if (hasLatestState && SameIdentity(captureStateFrame, latestStateFrame))
+            {
+                return;
+            }
+            if (hasLatestState &&
+                captureStateFrame.ContinuityId == latestStateFrame.ContinuityId &&
+                (captureStateFrame.Sequence <= latestStateFrame.Sequence ||
+                 captureStateFrame.SimulationTime <= latestStateFrame.SimulationTime))
+            {
+                throw new InvalidOperationException(
+                    "Authoritative state sequence and simulation time must increase " +
+                    "within a continuity epoch.");
+            }
+
+            if (!hasLatestState)
+            {
+                ReachySimAuthoritativeStateFrame reusable = latestStateFrame;
+                latestStateFrame = captureStateFrame;
+                captureStateFrame = reusable;
+                hasLatestState = true;
+                return;
+            }
+
+            ReachySimAuthoritativeStateFrame oldest = previousStateFrame;
+            previousStateFrame = latestStateFrame;
+            latestStateFrame = captureStateFrame;
+            captureStateFrame = oldest;
+            hasPreviousState = true;
+        }
+
+        private ReachyAuthoritativePoseSnapshot CreateImmutableSnapshot(
+            ReachySimAuthoritativeStateFrame source)
         {
             ReachyMujocoBodyPose[] poses =
-                new ReachyMujocoBodyPose[stateFrame.BodyPoseCount];
+                new ReachyMujocoBodyPose[source.BodyPoseCount];
             for (int index = 0; index < poses.Length; ++index)
             {
-                ReachySimBodyPoseSnapshot nativePose =
-                    stateFrame.GetBodyPose(index);
+                ReachySimBodyPoseSnapshot nativePose = source.GetBodyPose(index);
                 uint expectedBodyId = checked((uint)index + 1U);
                 if (nativePose.BodyId != expectedBodyId)
                 {
@@ -227,16 +314,20 @@ namespace ReachyMini.Rendering
                     nativePose.QuaternionZ);
             }
 
-            poseBuffer.Publish(
-                new ReachyAuthoritativePoseSnapshot(
-                    stateFrame.Sequence,
-                    stateFrame.SimulationTime,
-                    stateFrame.ContinuityId,
-                    poses));
-            hasPublishedState = true;
-            lastSequence = stateFrame.Sequence;
-            lastSimulationTime = stateFrame.SimulationTime;
-            lastContinuityId = stateFrame.ContinuityId;
+            return new ReachyAuthoritativePoseSnapshot(
+                source.Sequence,
+                source.SimulationTime,
+                source.ContinuityId,
+                poses);
+        }
+
+        private static bool SameIdentity(
+            ReachySimAuthoritativeStateFrame left,
+            ReachySimAuthoritativeStateFrame right)
+        {
+            return left.Sequence == right.Sequence &&
+                left.SimulationTime == right.SimulationTime &&
+                left.ContinuityId == right.ContinuityId;
         }
 
         private void ThrowIfDisposed()
