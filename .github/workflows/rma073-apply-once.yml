@@ -3,18 +3,39 @@ name: RMA-073 Apply Once
 on:
   push:
     branches: [master]
-    paths:
-      - '.github/workflows/rma073-apply-once.yml'
-      - 'scripts/apply_rma073_once.py'
+  workflow_dispatch:
 
 permissions:
   contents: write
+  statuses: write
 
 jobs:
   apply:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma073-bootstrap-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-073 Bootstrap",
+              "description": "One-shot implementation and validation is running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma073-bootstrap-status.json" >/dev/null
       - name: Check out repository
         uses: actions/checkout@v6
         with:
@@ -73,3 +94,28 @@ jobs:
           git add -A
           git commit -m 'RMA-073: add parameter fitting and held-out validation'
           git push origin HEAD:master
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma073-bootstrap-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-073 Bootstrap",
+              "description": "One-shot implementation passed" if passed else "One-shot implementation failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma073-bootstrap-status.json" >/dev/null
