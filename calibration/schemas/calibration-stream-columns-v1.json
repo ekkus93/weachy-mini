@@ -1,0 +1,334 @@
+{
+  "contract_id": "rma070_calibration_columns_v1",
+  "sample_tables": {
+    "command": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "actuator_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "mode",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "torque_enabled",
+          "type": "boolean",
+          "unit": null
+        },
+        {
+          "name": "target_position_rad",
+          "type": "float64?",
+          "unit": "rad"
+        },
+        {
+          "name": "target_velocity_rad_s",
+          "type": "float64?",
+          "unit": "rad/s"
+        },
+        {
+          "name": "profile_velocity_rad_s",
+          "type": "float64?",
+          "unit": "rad/s"
+        },
+        {
+          "name": "profile_acceleration_rad_s2",
+          "type": "float64?",
+          "unit": "rad/s^2"
+        },
+        {
+          "name": "feedforward_torque_nm",
+          "type": "float64?",
+          "unit": "N*m"
+        }
+      ]
+    },
+    "current_load": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "actuator_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "current_a",
+          "type": "float64",
+          "unit": "A"
+        },
+        {
+          "name": "estimated_load_nm",
+          "type": "float64",
+          "unit": "N*m"
+        }
+      ]
+    },
+    "external_pose": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "frame_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "child_frame_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "position_m",
+          "type": "fixed_list<float64,3>",
+          "unit": "m"
+        },
+        {
+          "name": "orientation_xyzw",
+          "type": "fixed_list<float64,4>",
+          "unit": null
+        },
+        {
+          "name": "confidence",
+          "type": "float64?",
+          "unit": null
+        }
+      ]
+    },
+    "force_torque": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "sensor_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "force_n",
+          "type": "fixed_list<float64,3>",
+          "unit": "N"
+        },
+        {
+          "name": "torque_nm",
+          "type": "fixed_list<float64,3>",
+          "unit": "N*m"
+        }
+      ]
+    },
+    "imu": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "sensor_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "acceleration_m_s2",
+          "type": "fixed_list<float64,3>",
+          "unit": "m/s^2"
+        },
+        {
+          "name": "angular_velocity_rad_s",
+          "type": "fixed_list<float64,3>",
+          "unit": "rad/s"
+        },
+        {
+          "name": "orientation_xyzw",
+          "type": "fixed_list<float64,4>?",
+          "unit": null
+        }
+      ]
+    },
+    "joint": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "actuator_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "position_rad",
+          "type": "float64",
+          "unit": "rad"
+        },
+        {
+          "name": "velocity_rad_s",
+          "type": "float64",
+          "unit": "rad/s"
+        },
+        {
+          "name": "applied_torque_nm",
+          "type": "float64",
+          "unit": "N*m"
+        },
+        {
+          "name": "fault_flags",
+          "type": "uint64",
+          "unit": null
+        }
+      ]
+    },
+    "temperature": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "sensor_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "temperature_c",
+          "type": "float64",
+          "unit": "degC"
+        }
+      ]
+    },
+    "voltage": {
+      "fields": [
+        {
+          "name": "timestamp_ns",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "sequence",
+          "type": "uint64",
+          "unit": null
+        },
+        {
+          "name": "arrival_timestamp_ns",
+          "type": "uint64?",
+          "unit": null
+        },
+        {
+          "name": "source_id",
+          "type": "utf8",
+          "unit": null
+        },
+        {
+          "name": "voltage_v",
+          "type": "float64",
+          "unit": "V"
+        }
+      ]
+    }
+  },
+  "schema_version": 1,
+  "sequence_contract": {
+    "column": "sequence",
+    "requirement": "strictly increasing within each stream",
+    "type": "uint64"
+  },
+  "storage_mapping": {
+    "cbor": "the same maps, arrays, UTF-8 strings, integers, booleans, nulls, and finite IEEE-754 values",
+    "json": "one dataset object with ordered sample arrays",
+    "parquet": "one table per stream; optional fields are nullable columns and vectors are fixed-size lists"
+  },
+  "timestamp_contract": {
+    "column": "timestamp_ns",
+    "requirement": "monotonic nondecreasing within each stream",
+    "type": "uint64",
+    "unit": "nanosecond"
+  }
+}

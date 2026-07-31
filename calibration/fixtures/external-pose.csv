@@ -1,0 +1,2 @@
+timestamp_ns,sequence,frame_id,child_frame_id,position_x_m,position_y_m,position_z_m,orientation_x,orientation_y,orientation_z,orientation_w,confidence
+995000,1,world,reachy_head,0.0,0.0,0.25,0.0,0.0,0.0,1.0,0.99

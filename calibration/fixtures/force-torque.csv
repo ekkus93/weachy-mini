@@ -1,0 +1,2 @@
+timestamp_ns,sequence,sensor_id,force_x_n,force_y_n,force_z_n,torque_x_nm,torque_y_nm,torque_z_nm
+1002000,1,wrist_ft,0.0,0.0,1.5,0.01,0.0,0.0

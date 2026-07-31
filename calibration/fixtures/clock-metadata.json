@@ -1,0 +1,49 @@
+{
+  "clock_alignments": [
+    {
+      "from_clock_id": "camera_clock",
+      "method": "paired_events_median",
+      "offset_ns": 5000,
+      "sample_count": 5,
+      "synchronized": true,
+      "to_clock_id": "reachy_clock",
+      "uncertainty_ns": 100
+    },
+    {
+      "from_clock_id": "force_clock",
+      "method": "paired_events_median",
+      "offset_ns": -2000,
+      "sample_count": 5,
+      "synchronized": true,
+      "to_clock_id": "reachy_clock",
+      "uncertainty_ns": 200
+    }
+  ],
+  "clocks": [
+    {
+      "clock_id": "reachy_clock",
+      "clock_type": "device_monotonic",
+      "epoch_description": "Reachy telemetry process monotonic epoch",
+      "nominal_hz": 500.0,
+      "source": "synthetic Reachy fixture",
+      "tick_unit": "nanosecond"
+    },
+    {
+      "clock_id": "camera_clock",
+      "clock_type": "camera_monotonic",
+      "epoch_description": "External camera monotonic epoch",
+      "nominal_hz": 60.0,
+      "source": "synthetic camera fixture",
+      "tick_unit": "nanosecond"
+    },
+    {
+      "clock_id": "force_clock",
+      "clock_type": "sensor_monotonic",
+      "epoch_description": "Force sensor monotonic epoch",
+      "nominal_hz": 1000.0,
+      "source": "synthetic force fixture",
+      "tick_unit": "nanosecond"
+    }
+  ],
+  "primary_clock_id": "reachy_clock"
+}

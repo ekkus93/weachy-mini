@@ -1,0 +1,1506 @@
+{
+  "$defs": {
+    "samples": {
+      "command": {
+        "additionalProperties": false,
+        "properties": {
+          "actuator_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "feedforward_torque_nm": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "mode": {
+            "enum": [
+              "disabled",
+              "position",
+              "velocity",
+              "torque"
+            ]
+          },
+          "profile_acceleration_rad_s2": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "profile_velocity_rad_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "target_position_rad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "target_velocity_rad_s": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "torque_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "actuator_id",
+          "mode",
+          "torque_enabled"
+        ],
+        "type": "object"
+      },
+      "current_load": {
+        "additionalProperties": false,
+        "properties": {
+          "actuator_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_a": {
+            "type": "number"
+          },
+          "estimated_load_nm": {
+            "type": "number"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "actuator_id",
+          "current_a",
+          "estimated_load_nm"
+        ],
+        "type": "object"
+      },
+      "external_pose": {
+        "additionalProperties": false,
+        "properties": {
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "child_frame_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "frame_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "orientation_xyzw": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 4,
+            "minItems": 4,
+            "type": "array"
+          },
+          "position_m": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "frame_id",
+          "child_frame_id",
+          "position_m",
+          "orientation_xyzw"
+        ],
+        "type": "object"
+      },
+      "force_torque": {
+        "additionalProperties": false,
+        "properties": {
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "force_n": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "sensor_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "torque_nm": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "sensor_id",
+          "force_n",
+          "torque_nm"
+        ],
+        "type": "object"
+      },
+      "imu": {
+        "additionalProperties": false,
+        "properties": {
+          "acceleration_m_s2": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "angular_velocity_rad_s": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "orientation_xyzw": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 4,
+                "minItems": 4,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sensor_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "sensor_id",
+          "acceleration_m_s2",
+          "angular_velocity_rad_s"
+        ],
+        "type": "object"
+      },
+      "joint": {
+        "additionalProperties": false,
+        "properties": {
+          "actuator_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "applied_torque_nm": {
+            "type": "number"
+          },
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fault_flags": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "position_rad": {
+            "type": "number"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "velocity_rad_s": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "actuator_id",
+          "position_rad",
+          "velocity_rad_s",
+          "applied_torque_nm",
+          "fault_flags"
+        ],
+        "type": "object"
+      },
+      "temperature": {
+        "additionalProperties": false,
+        "properties": {
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sensor_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "temperature_c": {
+            "minimum": -273.15,
+            "type": "number"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "sensor_id",
+          "temperature_c"
+        ],
+        "type": "object"
+      },
+      "voltage": {
+        "additionalProperties": false,
+        "properties": {
+          "arrival_timestamp_ns": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sequence": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "source_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "timestamp_ns": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "voltage_v": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "timestamp_ns",
+          "sequence",
+          "source_id",
+          "voltage_v"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "$id": "https://example.invalid/weachy-mini/calibration/calibration-dataset-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Logical JSON representation; the same scalar/array records map directly to CBOR and one Parquet table per stream.",
+  "properties": {
+    "capture": {
+      "additionalProperties": false,
+      "properties": {
+        "operator_notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "primary_clock_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        "synchronization_state": {
+          "enum": [
+            "synchronized",
+            "partially_synchronized",
+            "unsynchronized"
+          ]
+        },
+        "tool": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        "tool_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "tool_version",
+        "primary_clock_id",
+        "synchronization_state"
+      ],
+      "type": "object"
+    },
+    "clock_alignments": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "from_clock_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "shared_monotonic_clock",
+              "hardware_trigger",
+              "paired_events_median",
+              "manual",
+              "unsynchronized"
+            ]
+          },
+          "offset_ns": {
+            "type": "integer"
+          },
+          "sample_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "synchronized": {
+            "type": "boolean"
+          },
+          "to_clock_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "uncertainty_ns": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_clock_id",
+          "to_clock_id",
+          "offset_ns",
+          "uncertainty_ns",
+          "method",
+          "sample_count",
+          "synchronized"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "clocks": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "clock_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "clock_type": {
+            "enum": [
+              "host_monotonic",
+              "device_monotonic",
+              "camera_monotonic",
+              "sensor_monotonic"
+            ]
+          },
+          "epoch_description": {
+            "type": "string"
+          },
+          "nominal_hz": {
+            "exclusiveMinimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "tick_unit": {
+            "const": "nanosecond"
+          }
+        },
+        "required": [
+          "clock_id",
+          "clock_type",
+          "tick_unit",
+          "epoch_description",
+          "source"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "created_utc": {
+      "format": "date-time",
+      "pattern": "Z$",
+      "type": "string"
+    },
+    "dataset_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "ambient_temperature_c": {
+          "maximum": 200,
+          "minimum": -100,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pressure_kpa": {
+          "maximum": 200,
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "relative_humidity_percent": {
+          "maximum": 100,
+          "minimum": 0,
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "integrity": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "dataset_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "dataset_sha256"
+      ],
+      "type": "object"
+    },
+    "robot": {
+      "additionalProperties": false,
+      "properties": {
+        "firmware_version": {
+          "type": "string"
+        },
+        "hardware_revision": {
+          "type": "string"
+        },
+        "register_configuration": {
+          "additionalProperties": {
+            "type": [
+              "null",
+              "boolean",
+              "integer",
+              "number",
+              "string"
+            ]
+          },
+          "maxProperties": 4096,
+          "type": "object"
+        },
+        "register_configuration_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "robot_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+          "type": "string"
+        },
+        "serial_number": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "robot_id",
+        "hardware_revision",
+        "firmware_version",
+        "register_configuration",
+        "register_configuration_sha256"
+      ],
+      "type": "object"
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "column_manifest_id": {
+          "const": "rma070_calibration_columns_v1"
+        },
+        "column_manifest_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "contract_id": {
+          "const": "rma070_calibration_dataset_v1"
+        },
+        "schema_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "contract_id",
+        "schema_version",
+        "schema_sha256",
+        "column_manifest_id",
+        "column_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "source_files": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "media_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "sha256",
+          "media_type",
+          "size_bytes"
+        ],
+        "type": "object"
+      },
+      "maxItems": 256,
+      "type": "array"
+    },
+    "streams": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "command"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actuator_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "feedforward_torque_nm": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "mode": {
+                      "enum": [
+                        "disabled",
+                        "position",
+                        "velocity",
+                        "torque"
+                      ]
+                    },
+                    "profile_acceleration_rad_s2": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "profile_velocity_rad_s": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "target_position_rad": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "target_velocity_rad_s": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "torque_enabled": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "actuator_id",
+                    "mode",
+                    "torque_enabled"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "joint"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actuator_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "applied_torque_nm": {
+                      "type": "number"
+                    },
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "fault_flags": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "position_rad": {
+                      "type": "number"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "velocity_rad_s": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "actuator_id",
+                    "position_rad",
+                    "velocity_rad_s",
+                    "applied_torque_nm",
+                    "fault_flags"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "current_load"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "actuator_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "current_a": {
+                      "type": "number"
+                    },
+                    "estimated_load_nm": {
+                      "type": "number"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "actuator_id",
+                    "current_a",
+                    "estimated_load_nm"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "voltage"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "source_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "voltage_v": {
+                      "minimum": 0,
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "source_id",
+                    "voltage_v"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "imu"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "acceleration_m_s2": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "angular_velocity_rad_s": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "orientation_xyzw": {
+                      "anyOf": [
+                        {
+                          "items": {
+                            "type": "number"
+                          },
+                          "maxItems": 4,
+                          "minItems": 4,
+                          "type": "array"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sensor_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "sensor_id",
+                    "acceleration_m_s2",
+                    "angular_velocity_rad_s"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples",
+              "coordinate_frame"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "external_pose"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "child_frame_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "confidence": {
+                      "maximum": 1,
+                      "minimum": 0,
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "frame_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "orientation_xyzw": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 4,
+                      "minItems": 4,
+                      "type": "array"
+                    },
+                    "position_m": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "frame_id",
+                    "child_frame_id",
+                    "position_m",
+                    "orientation_xyzw"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples",
+              "coordinate_frame"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "force_torque"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "force_n": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    },
+                    "sensor_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "torque_nm": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "maxItems": 3,
+                      "minItems": 3,
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "sensor_id",
+                    "force_n",
+                    "torque_nm"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples",
+              "coordinate_frame"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "clock_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              "coordinate_frame": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sample_type": {
+                "const": "temperature"
+              },
+              "samples": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "arrival_timestamp_ns": {
+                      "anyOf": [
+                        {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sensor_id": {
+                      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                      "type": "string"
+                    },
+                    "sequence": {
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "temperature_c": {
+                      "minimum": -273.15,
+                      "type": "number"
+                    },
+                    "timestamp_ns": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "timestamp_ns",
+                    "sequence",
+                    "sensor_id",
+                    "temperature_c"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "stream_id": {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "stream_id",
+              "sample_type",
+              "clock_id",
+              "samples"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema",
+    "dataset_id",
+    "created_utc",
+    "robot",
+    "environment",
+    "capture",
+    "clocks",
+    "clock_alignments",
+    "streams",
+    "source_files",
+    "integrity"
+  ],
+  "title": "Reachy Mini calibration dataset v1",
+  "type": "object"
+}

@@ -1,0 +1,12 @@
+{
+  "firmware_version": "fixture-1.0.0",
+  "hardware_revision": "reachy-mini-fixture",
+  "register_configuration": {
+    "baud_rate": 1000000,
+    "operating_mode": "position",
+    "status_return_level": 2
+  },
+  "register_configuration_sha256": "c3965817b86fa61fb2f57261750a1d3e936369899b1cedbe4ee113b631b1272e",
+  "robot_id": "reachy-fixture-001",
+  "serial_number": null
+}

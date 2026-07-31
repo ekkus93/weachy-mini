@@ -1,0 +1,6 @@
+{
+  "ambient_temperature_c": 22.5,
+  "notes": "Synthetic fixture; not physical calibration evidence.",
+  "pressure_kpa": 101.3,
+  "relative_humidity_percent": 45.0
+}
