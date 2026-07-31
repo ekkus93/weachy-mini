@@ -38,6 +38,9 @@ namespace ReachyMini.Rendering
         private ReachyReusableAuthoritativePoseFrame? reusableNewerPose;
         private Vector3[] expectedPositions = Array.Empty<Vector3>();
         private Quaternion[] expectedRotations = Array.Empty<Quaternion>();
+        private ulong expectedSequence;
+        private double expectedSimulationTime;
+        private uint expectedDiscontinuityId;
         private bool hasAppliedPose;
         private string fault = string.Empty;
 
@@ -53,6 +56,38 @@ namespace ReachyMini.Rendering
             reusableOlderPose != null &&
             reusableNewerPose != null;
 
+        public float InvariantPositionToleranceMetres =>
+            invariantPositionToleranceMetres;
+
+        public float InvariantRotationToleranceDegrees =>
+            invariantRotationToleranceDegrees;
+
+        public ReachyAuthoritativeInvariantReport LastInvariantReport
+        {
+            get;
+            private set;
+        } = ReachyAuthoritativeInvariantReport.NotEvaluated;
+
+        public void ConfigureInvariantTolerances(
+            float positionToleranceMetres,
+            float rotationToleranceDegrees)
+        {
+            ValidateInvariantTolerancesOrThrow(
+                positionToleranceMetres,
+                rotationToleranceDegrees);
+            invariantPositionToleranceMetres = positionToleranceMetres;
+            invariantRotationToleranceDegrees = rotationToleranceDegrees;
+            if (hasAppliedPose)
+            {
+                LastInvariantReport = ReachyAuthoritativeInvariantReport.Valid(
+                    expectedSequence,
+                    expectedSimulationTime,
+                    expectedDiscontinuityId,
+                    invariantPositionToleranceMetres,
+                    invariantRotationToleranceDegrees);
+            }
+        }
+
         public void ConfigureBodies(ReachyPresentationBody[] bodies)
         {
             if (bodies == null)
@@ -64,11 +99,14 @@ namespace ReachyMini.Rendering
                 new ReachyPresentationBody[bodies.Length];
             Array.Copy(bodies, copy, bodies.Length);
             ValidateBindingsOrThrow(copy);
+            ValidateInvariantTolerancesOrThrow(
+                invariantPositionToleranceMetres,
+                invariantRotationToleranceDegrees);
             authoritativeBodies = copy;
             expectedPositions = new Vector3[copy.Length];
             expectedRotations = new Quaternion[copy.Length];
             ConfigureReusablePoseBuffers();
-            hasAppliedPose = false;
+            ResetInvariantState();
             fault = string.Empty;
             Status = poseSource == null
                 ? ReachyAuthoritativeRendererStatus.Unbound
@@ -98,7 +136,7 @@ namespace ReachyMini.Rendering
             reusablePoseSource = reusable;
             ConfigureReusablePoseBuffers();
             fault = string.Empty;
-            hasAppliedPose = false;
+            ResetInvariantState();
             Status = ReachyAuthoritativeRendererStatus.WaitingForSnapshots;
             enabled = true;
         }
@@ -165,7 +203,7 @@ namespace ReachyMini.Rendering
             {
                 return false;
             }
-            if (!ValidatePreviousApplication() ||
+            if (!ValidateRenderedPoseInvariant() ||
                 !ValidateAuthoritativeStructure())
             {
                 return false;
@@ -207,7 +245,16 @@ namespace ReachyMini.Rendering
                 expectedRotations[index] = rotation;
             }
 
+            expectedSequence = newer.Sequence;
+            expectedSimulationTime = targetSimulationTime;
+            expectedDiscontinuityId = newer.DiscontinuityId;
             hasAppliedPose = true;
+            LastInvariantReport = ReachyAuthoritativeInvariantReport.Valid(
+                expectedSequence,
+                expectedSimulationTime,
+                expectedDiscontinuityId,
+                invariantPositionToleranceMetres,
+                invariantRotationToleranceDegrees);
             Status = ReachyAuthoritativeRendererStatus.Rendering;
             return true;
         }
@@ -219,6 +266,9 @@ namespace ReachyMini.Rendering
                 try
                 {
                     ValidateBindingsOrThrow(authoritativeBodies);
+                    ValidateInvariantTolerancesOrThrow(
+                        invariantPositionToleranceMetres,
+                        invariantRotationToleranceDegrees);
                     EnsureExpectedStorage();
                     ConfigureReusablePoseBuffers();
                 }
@@ -227,6 +277,16 @@ namespace ReachyMini.Rendering
                     EnterFault(exception.Message);
                 }
             }
+        }
+
+        private void OnEnable()
+        {
+            Application.onBeforeRender += ValidateBeforeRender;
+        }
+
+        private void OnDisable()
+        {
+            Application.onBeforeRender -= ValidateBeforeRender;
         }
 
         private void LateUpdate()
@@ -337,34 +397,143 @@ namespace ReachyMini.Rendering
             return true;
         }
 
-        private bool ValidatePreviousApplication()
+        public bool ValidateRenderedPoseInvariant()
+        {
+            return ValidateRenderedPoseInvariantCore(
+                assertInDevelopmentBuild: false);
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        public bool AssertRenderedPoseInvariant()
+        {
+            return ValidateRenderedPoseInvariantCore(
+                assertInDevelopmentBuild: true);
+        }
+#endif
+
+        private void ValidateBeforeRender()
+        {
+            if (!hasAppliedPose ||
+                Status == ReachyAuthoritativeRendererStatus.Faulted)
+            {
+                return;
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            AssertRenderedPoseInvariant();
+#else
+            ValidateRenderedPoseInvariant();
+#endif
+        }
+
+        private bool ValidateRenderedPoseInvariantCore(
+            bool assertInDevelopmentBuild)
         {
             if (!hasAppliedPose)
             {
                 return true;
             }
 
+            float maximumSeverity = -1.0f;
+            int maximumBodyIndex = -1;
+            Vector3 maximumExpectedPosition = default;
+            Vector3 maximumActualPosition = default;
+            Quaternion maximumExpectedRotation = default;
+            Quaternion maximumActualRotation = default;
+            float maximumPositionDrift = 0.0f;
+            float maximumRotationDrift = 0.0f;
+
             for (int index = 0; index < authoritativeBodies.Length; ++index)
             {
                 Transform bodyTransform = authoritativeBodies[index].transform;
+                Vector3 actualPosition = bodyTransform.position;
+                Quaternion actualRotation = bodyTransform.rotation;
+                Vector3 expectedPosition = expectedPositions[index];
+                Quaternion expectedRotation = expectedRotations[index];
                 float positionDrift = Vector3.Distance(
-                    bodyTransform.position,
-                    expectedPositions[index]);
+                    actualPosition,
+                    expectedPosition);
                 float rotationDrift = Quaternion.Angle(
-                    bodyTransform.rotation,
-                    expectedRotations[index]);
+                    actualRotation,
+                    expectedRotation);
+                float severity = Math.Max(
+                    positionDrift / invariantPositionToleranceMetres,
+                    rotationDrift / invariantRotationToleranceDegrees);
+                if (severity > maximumSeverity)
+                {
+                    maximumSeverity = severity;
+                    maximumBodyIndex = index;
+                    maximumExpectedPosition = expectedPosition;
+                    maximumActualPosition = actualPosition;
+                    maximumExpectedRotation = expectedRotation;
+                    maximumActualRotation = actualRotation;
+                    maximumPositionDrift = positionDrift;
+                    maximumRotationDrift = rotationDrift;
+                }
+
                 if (positionDrift > invariantPositionToleranceMetres ||
                     rotationDrift > invariantRotationToleranceDegrees)
                 {
-                    return EnterFault(
+                    string message =
                         $"Authoritative transform drift detected for " +
                         $"{authoritativeBodies[index].BodyName}: " +
+                        $"sequence={expectedSequence} " +
+                        $"simulation_time={expectedSimulationTime:R}s " +
+                        $"continuity={expectedDiscontinuityId} " +
                         $"position={positionDrift:R}m " +
-                        $"rotation={rotationDrift:R}deg.");
+                        $"position_tolerance={invariantPositionToleranceMetres:R}m " +
+                        $"rotation={rotationDrift:R}deg " +
+                        $"rotation_tolerance={invariantRotationToleranceDegrees:R}deg.";
+                    LastInvariantReport =
+                        ReachyAuthoritativeInvariantReport.Violation(
+                            expectedSequence,
+                            expectedSimulationTime,
+                            expectedDiscontinuityId,
+                            index,
+                            authoritativeBodies[index].BodyName,
+                            expectedPosition,
+                            actualPosition,
+                            expectedRotation,
+                            actualRotation,
+                            positionDrift,
+                            rotationDrift,
+                            invariantPositionToleranceMetres,
+                            invariantRotationToleranceDegrees);
+                    if (assertInDevelopmentBuild)
+                    {
+                        AssertDevelopmentInvariant(message);
+                    }
+                    return EnterFault(message);
                 }
             }
 
+            string maximumBodyName = maximumBodyIndex >= 0
+                ? authoritativeBodies[maximumBodyIndex].BodyName
+                : string.Empty;
+            LastInvariantReport = ReachyAuthoritativeInvariantReport.Valid(
+                expectedSequence,
+                expectedSimulationTime,
+                expectedDiscontinuityId,
+                invariantPositionToleranceMetres,
+                invariantRotationToleranceDegrees,
+                maximumBodyIndex,
+                maximumBodyName,
+                maximumExpectedPosition,
+                maximumActualPosition,
+                maximumExpectedRotation,
+                maximumActualRotation,
+                maximumPositionDrift,
+                maximumRotationDrift);
             return true;
+        }
+
+        private void AssertDevelopmentInvariant(string message)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Assert(
+                false,
+                $"Development authoritative rendering assertion failed: {message}",
+                this);
+#endif
         }
 
         private static float CalculateInterpolationAlpha(
@@ -418,6 +587,37 @@ namespace ReachyMini.Rendering
                         nameof(bodies));
                 }
             }
+        }
+
+        private static void ValidateInvariantTolerancesOrThrow(
+            float positionToleranceMetres,
+            float rotationToleranceDegrees)
+        {
+            if (float.IsNaN(positionToleranceMetres) ||
+                float.IsInfinity(positionToleranceMetres) ||
+                positionToleranceMetres <= 0.0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(positionToleranceMetres),
+                    "The invariant position tolerance must be finite and positive.");
+            }
+            if (float.IsNaN(rotationToleranceDegrees) ||
+                float.IsInfinity(rotationToleranceDegrees) ||
+                rotationToleranceDegrees <= 0.0f)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(rotationToleranceDegrees),
+                    "The invariant rotation tolerance must be finite and positive.");
+            }
+        }
+
+        private void ResetInvariantState()
+        {
+            expectedSequence = 0UL;
+            expectedSimulationTime = 0.0;
+            expectedDiscontinuityId = 0U;
+            hasAppliedPose = false;
+            LastInvariantReport = ReachyAuthoritativeInvariantReport.NotEvaluated;
         }
 
         private static bool ContainsProhibitedWriter(
