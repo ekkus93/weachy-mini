@@ -835,22 +835,53 @@ public:
 
 ## RMA-062 — Implement electrical and controller timing baseline
 
-- [ ] Model command update interval and configurable latency.
-- [ ] Model encoder quantization and target quantization.
-- [ ] Implement bounded position control with saturation.
-- [ ] Add torque-speed limiting and voltage dependence from documented specifications as an explicitly noncalibrated baseline.
-- [ ] Add current-limit and torque-disable behavior.
-- [ ] Verify unit consistency.
+**Status:** Complete (2026-07-30)
+
+- [x] Model command update interval and configurable latency.
+- [x] Model encoder quantization and target quantization.
+- [x] Implement bounded position control with saturation.
+- [x] Add torque-speed limiting and voltage dependence from documented specifications as an explicitly noncalibrated baseline.
+- [x] Add current-limit and torque-disable behavior.
+- [x] Verify unit consistency.
 
 **Tests**
 
-- [ ] zero-error torque;
-- [ ] saturation signs;
-- [ ] voltage scaling;
-- [ ] quantization boundaries;
-- [ ] delayed command application;
-- [ ] torque-disable gravity response;
-- [ ] fault transition behavior.
+- [x] zero-error torque;
+- [x] saturation signs;
+- [x] voltage scaling;
+- [x] quantization boundaries;
+- [x] delayed command application;
+- [x] torque-disable gravity response;
+- [x] fault transition behavior.
+
+**Completion evidence**
+
+- `ElectricalServoModel` is a Unity-independent native C++17
+  implementation of the RMA-061 plug-in contract. It serializes commands
+  at the pinned 100 Hz SDK cadence, applies configurable latency without
+  moving the 500 Hz physics clock, and fails closed on sequence regression,
+  queue overflow, or non-finite data.
+- The source-bound `rma062_electrical_controller_v1` contract maps the
+  custom body XC330-M288-PG proxy, six XL330-M288-T Stewart motors, and two
+  XL330-M077-T antenna motors to distinct noncalibrated role baselines.
+- Position/velocity encoders and targets are quantized from documented
+  Dynamixel units. Position, velocity, and torque modes are bounded by
+  profile limits, a linear torque-speed envelope, voltage scaling, and a
+  current-derived torque ceiling.
+- The model uses the documented 3.7-6.0 V servo domain and does not confuse
+  the robot's 6.8-7.6 V input with an undocumented internal servo rail.
+  Continuous-current ratio, peak-current duration, latency, and controller
+  gains remain explicit engineering estimates rather than calibrated claims.
+- Torque disable returns zero motor torque/current while passive gravity
+  remains active. Voltage faults are transient; over-current,
+  over-temperature, encoder, communication, and model-rejected faults latch.
+- Hosted run `30605184722` passed exact generation, eight schema/failure
+  tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+  and the complete behavioral CTest suite on exact commit
+  `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+- Detailed design and evidence are in
+  `docs/architecture/ELECTRICAL_CONTROLLER_BASELINE.md` and
+  `docs/validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md`.
 
 ## RMA-063 — Implement friction, backlash, and compliance models
 

@@ -2,9 +2,9 @@
 
 **Updated:** 2026-07-30  
 **Branch:** `master`  
-**Current implementation series:** RMA-061 native pluggable servo contract,
-source-bound role registry, explicit parameter-quality semantics, generated
-bindings, and strict sanitizer-backed validation
+**Current implementation series:** RMA-062 source-bound electrical/controller
+timing baseline, quantized sampled commands, bounded torque-speed/current
+behavior, explicit noncalibrated evidence, and strict behavioral validation
 
 ## Repository rules in force
 
@@ -364,15 +364,45 @@ validation-ordering/fault tests, and CTest on exact commit
 `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`. Detailed evidence is in
 [the RMA-061 validation record](validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md).
 
+### RMA-062 — electrical and controller timing baseline
+
+RMA-062 is complete. `ElectricalServoModel` now provides the first concrete
+native implementation of the RMA-061 actuator plug-in boundary. It models
+the pinned 100 Hz command cadence, explicit latency, a fixed command queue,
+monotonic sequencing, encoder and target quantization, optional profile
+bounds, position/velocity/torque control, torque-speed and voltage limits,
+current limiting, torque disable, and typed transient/latching faults.
+
+The source-bound `rma062_electrical_controller_v1` registry preserves the
+exact body, Stewart, and antenna hardware mapping and binds the pinned Reachy
+source/configuration plus documented ROBOTIS motor units and 6 V performance
+points. The model uses the documented 3.7-6.0 V servo domain; the robot-level
+6.8-7.6 V input is not treated as the unidentified internal servo rail.
+Latency, controller gains, continuous-current ratio, and peak-current window
+remain explicit engineering estimates. No value is labeled calibrated.
+
+Run `30605184722` passed byte-exact generation, eight schema/failure-path
+tests, Unity/calibration rejection, GNU 13.3 strict warnings, ASan/UBSan,
+library/test compilation, and behavior coverage for zero error, signed
+saturation, voltage scaling, quantization boundaries, delayed application,
+torque-disable gravity response, command sampling/profile bounds, and fault
+transitions on exact commit
+`699c7b0adcc56263b307b76cc24b4f642dbe5f04`. Detailed evidence is in
+[the RMA-062 validation record](validation/RMA_062_ELECTRICAL_CONTROLLER_BASELINE_VALIDATION_2026-07-30.md).
+
 ## Current validation evidence
 
+- RMA-062 run `30605184722`: exact generated-baseline check, eight
+  schema/failure tests, Unity/calibration rejection, strict GNU 13.3 build,
+  ASan/UBSan, and the complete native behavior suite passed on
+  `699c7b0adcc56263b307b76cc24b4f642dbe5f04`.
+- The three role baselines are now torque-ready manufacturer/engineering
+  estimates, not calibrated models. RMA-063 through RMA-065 retain friction,
+  compliance, shared-power/thermal evolution, and physical identification.
 - RMA-061 run `30601191456`: exact generated-registry check, eight
   schema/failure tests, Unity-independence gate, strict GNU 13.3 build,
   ASan/UBSan, and native CTest all passed on
   `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`.
-- The three committed role sets remain explicit `placeholder` contracts and
-  `IsTorqueModelReady=false`; RMA-062 must add documented noncalibrated
-  electrical/controller values before torque fidelity is enabled.
 - RMA-060 run `30599288952`: generated-profile tests, pinned source/model
   import, the complete 900,000-step desktop schedule, Android ARM64 build and
   AArch64 verification, physical LG-H872 API-26 900,000-step execution,
