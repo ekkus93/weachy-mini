@@ -1,0 +1,178 @@
+name: RMA-073 Calibration Fitting
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma073-calibration-fitting.yml'
+      - 'calibration/fitting/**'
+      - 'calibration/fixtures/keys/rma073-test-ed25519-*.pem'
+      - 'calibration/schemas/calibration-fit-plan-v1.schema.json'
+      - 'calibration/schemas/calibration-profile-manifest-v1.schema.json'
+      - 'scripts/calibration_fitting.py'
+      - 'scripts/fit_calibration_profile.py'
+      - 'scripts/generate_rma073_synthetic_data.py'
+      - 'scripts/verify_calibration_profile.py'
+      - 'scripts/tests/test_calibration_*.py'
+      - 'docs/architecture/CALIBRATION_PARAMETER_FITTING.md'
+      - 'docs/validation/RMA_073_PARAMETER_FITTING_VALIDATION_2026-07-31.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending commit status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma073-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-073 Calibration Fitting",
+              "description": "Fitting, split, signature, and compatibility validation is running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma073-status.json" >/dev/null
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Validate schemas and regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl version
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          import calibration_fitting
+          print(calibration_fitting.schema_descriptor(Path('calibration/schemas')))
+          PY
+      - name: Generate isolated fitting and held-out datasets
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf build/rma073
+          mkdir -p build/rma073
+          python3 scripts/generate_rma073_synthetic_data.py \
+            --output-dir build/rma073 \
+            --summary-output build/rma073/generation-summary.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/rma073/training.json \
+            --summary-output build/rma073/training-validation.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/rma073/heldout.json \
+            --summary-output build/rma073/heldout-validation.json
+      - name: Fit, sign, and verify candidate profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/fit_calibration_profile.py \
+            --plan build/rma073/fit-plan.json \
+            --dataset-root build/rma073 \
+            --private-key calibration/fixtures/keys/rma073-test-ed25519-private.pem \
+            --public-key calibration/fixtures/keys/rma073-test-ed25519-public.pem \
+            --public-key-id rma073-test-key-v1 \
+            --created-utc '2026-07-31T21:03:00Z' \
+            --output build/rma073/profile.json \
+            --verification-output build/rma073/profile-verification.json
+          python3 scripts/verify_calibration_profile.py \
+            --profile build/rma073/profile.json \
+            --public-key calibration/fixtures/keys/rma073-test-ed25519-public.pem \
+            --expected-compatibility calibration/fitting/rma073-compatibility.json \
+            --summary-output build/rma073/independent-verification.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          profile = json.loads(Path('build/rma073/profile.json').read_text())
+          assert profile['calibrated'] is False
+          assert profile['approval_state'] == 'unapproved_fit_candidate'
+          assert profile['heldout_validation']['all_supported_passed'] is True
+          assert profile['heldout_validation']['supported_family_count'] == 7
+          for family, result in profile['parameter_results'].items():
+              assert result['status'] == 'fitted', family
+              assert result['confidence'] != 'not_estimated', family
+              assert result['sensitivity'] is not None, family
+          print(json.dumps({
+              'profile_sha256': profile['integrity']['profile_sha256'],
+              'supported_family_count': 7,
+              'calibrated': False,
+              'approval_state': profile['approval_state'],
+          }, sort_keys=True))
+          PY
+      - name: Record evidence hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd build/rma073
+            sha256sum \
+              fit-plan.json \
+              training.json \
+              heldout.json \
+              profile.json \
+              profile-verification.json \
+              independent-verification.json \
+              generation-summary.json \
+              training-validation.json \
+              heldout-validation.json \
+              synthetic-truth.json \
+              > SHA256SUMS
+          )
+      - name: Upload fitting evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: rma073-calibration-fitting-evidence-${{ github.sha }}
+          path: build/rma073
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish final commit status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma073-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-073 Calibration Fitting",
+              "description": "Fitting and held-out validation passed" if passed else "Fitting or compatibility validation failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma073-status.json" >/dev/null
