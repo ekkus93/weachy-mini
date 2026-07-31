@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weachy-mini.invalid/schemas/unit-calibrated-profile-v1.schema.json",
+  "title": "RMA-074 unit-calibrated profile approval v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_id",
+    "schema_version",
+    "approval_id",
+    "profile_kind",
+    "calibrated",
+    "approval_state",
+    "approval_policy",
+    "created_utc",
+    "unit",
+    "candidate",
+    "compatibility",
+    "datasets",
+    "parameter_results",
+    "heldout_report",
+    "claims",
+    "approver_statement",
+    "integrity",
+    "signature"
+  ],
+  "properties": {
+    "contract_id": {"const": "rma074_unit_calibrated_profile_v1"},
+    "schema_version": {"const": 1},
+    "approval_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "profile_kind": {"const": "unit_calibrated"},
+    "calibrated": {"const": true},
+    "approval_state": {"const": "approved"},
+    "approval_policy": {"const": "rma074_physical_calibration_gate_v1"},
+    "created_utc": {"type": "string", "format": "date-time"},
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hardware_id_sha256"],
+      "properties": {
+        "hardware_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_id", "profile_id", "profile_sha256", "public_key_sha256"],
+      "properties": {
+        "contract_id": {"const": "rma073_calibration_profile_manifest_v1"},
+        "profile_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "profile_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "public_key_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "compatibility": {"type": "object"},
+    "datasets": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dataset_id",
+          "dataset_sha256",
+          "role",
+          "source_kind",
+          "hardware_id_sha256",
+          "capture_run_id",
+          "physical_motion"
+        ],
+        "properties": {
+          "dataset_id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "dataset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "role": {"enum": ["fitting", "heldout"]},
+          "source_kind": {"const": "physical_reachy_mini"},
+          "hardware_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "capture_run_id": {"type": "string", "minLength": 1, "maxLength": 128},
+          "physical_motion": {"const": true},
+          "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "parameter_results": {"type": "object", "minProperties": 1},
+    "heldout_report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_id",
+        "report_id",
+        "created_utc",
+        "hardware_id_sha256",
+        "fitting_dataset_sha256",
+        "heldout_dataset_sha256",
+        "metrics",
+        "report_sha256"
+      ],
+      "properties": {
+        "contract_id": {"const": "rma074_physical_heldout_report_v1"},
+        "report_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "created_utc": {"type": "string", "format": "date-time"},
+        "hardware_id_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "fitting_dataset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "heldout_dataset_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "joint_position",
+            "head_position",
+            "head_orientation",
+            "settling",
+            "overshoot",
+            "current",
+            "free_decay",
+            "contact"
+          ],
+          "properties": {
+            "joint_position": {"$ref": "#/$defs/metric"},
+            "head_position": {"$ref": "#/$defs/metric"},
+            "head_orientation": {"$ref": "#/$defs/metric"},
+            "settling": {"$ref": "#/$defs/metric"},
+            "overshoot": {"$ref": "#/$defs/metric"},
+            "current": {"$ref": "#/$defs/metric"},
+            "free_decay": {"$ref": "#/$defs/metric"},
+            "contact": {"$ref": "#/$defs/metric"}
+          }
+        },
+        "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "notes": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed_metrics", "limited_metrics", "mature_accuracy_claims"],
+      "properties": {
+        "passed_metrics": {"type": "array", "items": {"type": "string"}},
+        "limited_metrics": {"type": "array", "items": {"type": "string"}},
+        "mature_accuracy_claims": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "approver_statement": {"type": "string", "minLength": 1, "maxLength": 4096},
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "approval_sha256"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "approval_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "public_key_id", "public_key_sha256", "signature_base64"],
+      "properties": {
+        "algorithm": {"const": "ed25519"},
+        "public_key_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "public_key_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "signature_base64": {"type": "string", "minLength": 1, "maxLength": 1024}
+      }
+    }
+  },
+  "$defs": {
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "metric",
+        "unit",
+        "value",
+        "threshold",
+        "sample_count",
+        "source_streams",
+        "claim_scope"
+      ],
+      "properties": {
+        "status": {"enum": ["passed", "failed", "unsupported"]},
+        "metric": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "unit": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "value": {"type": ["number", "null"]},
+        "threshold": {"type": ["number", "null"]},
+        "sample_count": {"type": "integer", "minimum": 0},
+        "source_streams": {"type": "array", "maxItems": 16, "items": {"type": "string"}},
+        "claim_scope": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    }
+  }
+}
