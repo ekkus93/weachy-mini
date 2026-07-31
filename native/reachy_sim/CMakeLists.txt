@@ -395,3 +395,5 @@ endif()
 add_subdirectory(feasibility)
 
 include("${CMAKE_CURRENT_LIST_DIR}/electrical_servo_model.cmake")
+
+include("${CMAKE_CURRENT_LIST_DIR}/mechanical_servo_model.cmake")

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma063_mechanical_effects_v1",
+  "source": {
+    "reachy_commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46",
+    "parameter_audit_contract": "rma041_parameter_fidelity_v2",
+    "electrical_contract": "rma062_electrical_controller_v1",
+    "electrical_validated_commit": "699c7b0adcc56263b307b76cc24b4f642dbe5f04"
+  },
+  "unit_contract": {
+    "coulomb_friction_newton_metres": "N*m",
+    "viscous_friction_newton_metre_seconds_per_radian": "N*m*s/rad",
+    "breakaway_torque_newton_metres": "N*m",
+    "stiction_enter_velocity_radians_per_second": "rad/s",
+    "stiction_exit_velocity_radians_per_second": "rad/s",
+    "backlash_half_width_radians": "rad",
+    "compliance_stiffness_newton_metres_per_radian": "N*m/rad",
+    "compliance_damping_newton_metre_seconds_per_radian": "N*m*s/rad",
+    "maximum_elastic_deflection_radians": "rad"
+  },
+  "effect_semantics": {
+    "friction": "Coulomb plus viscous torque opposes measured joint velocity; near zero speed the drive-torque sign is used without allowing friction to reverse the commanded direction.",
+    "stiction": "A stateful enter/exit velocity hysteresis holds zero net torque below breakaway and releases only above breakaway torque or the exit-speed threshold.",
+    "backlash": "A one-dimensional play operator transforms position targets and retains transmitted target across direction reversals until the half-width dead zone is crossed.",
+    "compliance": "A bounded first-order torsional transmission state uses stiffness, damping, and maximum elastic deflection; it is a noncalibrated reduced-order gear/joint model.",
+    "identification": "Each step exposes a deterministic sample and accumulator for future friction, reversal, stiction, backlash, and compliance identification without callbacks from the physics thread.",
+    "disablement": "Each effect has an independent runtime switch; with every effect disabled the wrapped ServoModel result and position target are preserved exactly."
+  },
+  "parameter_sets": [
+    {
+      "id": "body_yaw_xc330_m288_pg_mechanical_estimate",
+      "role": "body_yaw",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma063_body_custom_plastic_gear_role_specific_derivation",
+      "parameters": {
+        "coulomb_friction_newton_metres": {"value": 0.044000000000000004, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_four_percent_of_rma062_proxy_stall_torque"},
+        "viscous_friction_newton_metre_seconds_per_radian": {"value": 0.0010829099220685664, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_one_percent_stall_torque_at_proxy_no_load_speed"},
+        "breakaway_torque_newton_metres": {"value": 0.066, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_one_point_five_times_coulomb_breakaway"},
+        "stiction_enter_velocity_radians_per_second": {"value": 0.011990411961201044, "evidence_class": "engineering_estimate", "evidence_id": "rma063_half_rma062_velocity_quantum_enter_threshold"},
+        "stiction_exit_velocity_radians_per_second": {"value": 0.03597123588360313, "evidence_class": "engineering_estimate", "evidence_id": "rma063_one_point_five_rma062_velocity_quanta_exit_threshold"},
+        "backlash_half_width_radians": {"value": 0.0030679615757712823, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_two_encoder_pulses_custom_plastic_gear_estimate"},
+        "compliance_stiffness_newton_metres_per_radian": {"value": 31.428571428571427, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_proxy_stall_torque_over_0_035_rad_deflection"},
+        "compliance_damping_newton_metre_seconds_per_radian": {"value": 0.6285714285714286, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_twenty_millisecond_torsional_time_constant"},
+        "maximum_elastic_deflection_radians": {"value": 0.035, "evidence_class": "engineering_estimate", "evidence_id": "rma063_body_custom_plastic_gear_deflection_bound"}
+      },
+      "derivation": [
+        "Uses the RMA-062 XC330-M288-PG proxy stall torque and no-load speed only as scaling anchors.",
+        "The body motor has a custom plastic gear, so backlash and compliance are not copied from either XL330 role.",
+        "All values are hypotheses for identification, not measurements or manufacturer specifications."
+      ],
+      "limitations": [
+        "No physical Reachy Mini body-yaw friction, breakaway, backlash, or torsional compliance dataset exists in the repository.",
+        "The custom PG gear train may differ materially from the XC330-M288-T proxy."
+      ]
+    },
+    {
+      "id": "stewart_xl330_m288_mechanical_estimate",
+      "role": "stewart",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma063_stewart_xl330_m288_role_specific_derivation",
+      "parameters": {
+        "coulomb_friction_newton_metres": {"value": 0.024, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_four_percent_of_rma062_stall_torque"},
+        "viscous_friction_newton_metre_seconds_per_radian": {"value": 0.00046581934563481566, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_one_percent_stall_torque_at_no_load_speed"},
+        "breakaway_torque_newton_metres": {"value": 0.036, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_one_point_five_times_coulomb_breakaway"},
+        "stiction_enter_velocity_radians_per_second": {"value": 0.011990411961201044, "evidence_class": "engineering_estimate", "evidence_id": "rma063_half_rma062_velocity_quantum_enter_threshold"},
+        "stiction_exit_velocity_radians_per_second": {"value": 0.03597123588360313, "evidence_class": "engineering_estimate", "evidence_id": "rma063_one_point_five_rma062_velocity_quanta_exit_threshold"},
+        "backlash_half_width_radians": {"value": 0.0015339807878856412, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_one_encoder_pulse_estimate"},
+        "compliance_stiffness_newton_metres_per_radian": {"value": 30.0, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_stall_torque_over_0_02_rad_deflection"},
+        "compliance_damping_newton_metre_seconds_per_radian": {"value": 0.3, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_ten_millisecond_torsional_time_constant"},
+        "maximum_elastic_deflection_radians": {"value": 0.02, "evidence_class": "engineering_estimate", "evidence_id": "rma063_stewart_linkage_drive_deflection_bound"}
+      },
+      "derivation": [
+        "Uses the RMA-062 XL330-M288-T stall torque and no-load speed as role-specific scaling anchors.",
+        "The six Stewart actuators intentionally share one parameter set because they use the same documented motor role.",
+        "The set is distinct from body and antenna values and has independent evidence identifiers."
+      ],
+      "limitations": [
+        "The reduced-order compliance model does not identify rod, horn, bearing, shell, or platform compliance separately.",
+        "Closed-loop Stewart geometry can make joint-space estimates differ from Cartesian head compliance."
+      ]
+    },
+    {
+      "id": "antenna_xl330_m077_mechanical_estimate",
+      "role": "antenna",
+      "overall_evidence_class": "engineering_estimate",
+      "source_evidence_id": "rma063_antenna_xl330_m077_role_specific_derivation",
+      "parameters": {
+        "coulomb_friction_newton_metres": {"value": 0.00684, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_three_percent_of_rma062_stall_torque"},
+        "viscous_friction_newton_metre_seconds_per_radian": {"value": 0.00004774648292756861, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_one_percent_stall_torque_at_no_load_speed"},
+        "breakaway_torque_newton_metres": {"value": 0.01026, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_one_point_five_times_coulomb_breakaway"},
+        "stiction_enter_velocity_radians_per_second": {"value": 0.011990411961201044, "evidence_class": "engineering_estimate", "evidence_id": "rma063_half_rma062_velocity_quantum_enter_threshold"},
+        "stiction_exit_velocity_radians_per_second": {"value": 0.03597123588360313, "evidence_class": "engineering_estimate", "evidence_id": "rma063_one_point_five_rma062_velocity_quanta_exit_threshold"},
+        "backlash_half_width_radians": {"value": 0.0023009711818284618, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_one_point_five_encoder_pulse_estimate"},
+        "compliance_stiffness_newton_metres_per_radian": {"value": 5.7, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_stall_torque_over_0_04_rad_deflection"},
+        "compliance_damping_newton_metre_seconds_per_radian": {"value": 0.08549999999999999, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_fifteen_millisecond_torsional_time_constant"},
+        "maximum_elastic_deflection_radians": {"value": 0.04, "evidence_class": "engineering_estimate", "evidence_id": "rma063_antenna_low_torque_drive_deflection_bound"}
+      },
+      "derivation": [
+        "Uses the RMA-062 XL330-M077-T stall torque and no-load speed as role-specific scaling anchors.",
+        "The lower-torque faster antenna motor receives independent friction, backlash, and compliance values.",
+        "Antenna mechanical hard stops remain outside this task and are owned by RMA-065."
+      ],
+      "limitations": [
+        "The pinned MJCF has no antenna joint ranges and no measured antenna load or cable drag.",
+        "The model is a joint-space estimate and does not represent shell contact or hard-stop impact."
+      ]
+    }
+  ],
+  "actuator_bindings": [
+    {"actuator_name": "yaw_body", "parameter_set_id": "body_yaw_xc330_m288_pg_mechanical_estimate", "role": "body_yaw"},
+    {"actuator_name": "stewart_1", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_2", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_3", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_4", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_5", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "stewart_6", "parameter_set_id": "stewart_xl330_m288_mechanical_estimate", "role": "stewart"},
+    {"actuator_name": "right_antenna", "parameter_set_id": "antenna_xl330_m077_mechanical_estimate", "role": "antenna"},
+    {"actuator_name": "left_antenna", "parameter_set_id": "antenna_xl330_m077_mechanical_estimate", "role": "antenna"}
+  ]
+}
