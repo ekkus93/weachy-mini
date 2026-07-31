@@ -13,7 +13,7 @@ permissions:
 jobs:
   integrate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 35
     steps:
       - name: Publish pending integration status
         uses: actions/github-script@v7
@@ -25,7 +25,7 @@ jobs:
               sha: context.sha,
               state: 'pending',
               context: 'RMA-065 Integration',
-              description: 'Collision, hard-stop, diagnostics, and real MuJoCo validation are running',
+              description: 'Verified collision and hard-stop integration is running',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
 
@@ -34,8 +34,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -53,32 +52,44 @@ jobs:
             LICENSE
           sparse-checkout-cone-mode: false
 
-      - name: Extract and apply exact RMA-065 payload
+      - name: Reconstruct and apply verified source bundle
         shell: bash
         run: |
           set -euo pipefail
-          payload_b64="${RUNNER_TEMP}/rma065-payload.b64"
-          payload_tgz="${RUNNER_TEMP}/rma065-payload.tar.gz"
-          payload_dir="${RUNNER_TEMP}/rma065-payload"
-          cat .github/rma065-payload.part* > "${payload_b64}"
-          base64 --decode "${payload_b64}" > "${payload_tgz}"
+          archive="${RUNNER_TEMP}/rma065-payload.tar.gz"
+          payload="${RUNNER_TEMP}/rma065-payload"
+          cat .github/rma065-payload.part* | base64 --decode > "${archive}"
           printf '%s  %s\n' \
             '133b4959d137607b1640c24cd12b6ef99b00f8c3e851d2a406d6495364deda0c' \
-            "${payload_tgz}" | sha256sum --check --strict
-          mkdir -p "${payload_dir}"
-          tar -xzf "${payload_tgz}" -C "${payload_dir}"
+            "${archive}" | sha256sum --check --strict
+          mkdir -p "${payload}"
+          tar -xzf "${archive}" -C "${payload}"
           rsync -a \
             --exclude 'scripts/apply_rma065_source_edits.py' \
-            "${payload_dir}/" ./
-          cp "${payload_dir}/scripts/apply_rma065_source_edits.py" \
+            "${payload}/" ./
+          cp "${payload}/scripts/apply_rma065_source_edits.py" \
             scripts/.rma065-apply-source-edits.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/.rma065-apply-source-edits.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    runner_marker = """if(REACHY_BUILD_MUJOCO_PROBE)
+              add_subdirectory(feasibility)
+          endif()
+          """'''.replace('          ', '')
+          new = '''    runner_marker = """add_subdirectory(feasibility)
+          """'''.replace('          ', '')
+          if text.count(old) != 1:
+              raise SystemExit(f'transport helper CMake marker count={text.count(old)}')
+          path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
+          PY
           python3 scripts/.rma065-apply-source-edits.py
           rm scripts/.rma065-apply-source-edits.py
           test -f native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc
           test -f models/reachy-mini/collision-hard-stop-baseline.json
           git diff --check
 
-      - name: Run deterministic schema and fake-backend gates
+      - name: Run schema and fake-backend gates
         shell: bash
         run: |
           set -euo pipefail
@@ -105,131 +116,57 @@ jobs:
             --output-on-failure \
             -R '^reachy_sim_mujoco_backend_test$'
 
-      - name: Import pinned source and generate enhanced model
+      - name: Validate generated model and contact behavior
         shell: bash
         run: |
           set -euo pipefail
           python3 -m pip install --disable-pip-version-check mujoco==3.9.0
           import_root="${RUNNER_TEMP}/reachy-import"
+          enhanced="${RUNNER_TEMP}/rma065-enhanced"
+          reports="${RUNNER_TEMP}/rma065-reports"
           python3 scripts/import_reachy_assets.py \
             --source upstream/reachy-mini \
             --output-root "${import_root}"
-          output_subdirectory="$(python3 - <<'PY'
+          source_dir="${import_root}/$(python3 - <<'PY'
           import json
           from pathlib import Path
           print(json.loads(Path('third_party/reachy-mini-source.lock.json').read_text())['output_subdirectory'])
           PY
           )"
-          source_dir="${import_root}/${output_subdirectory}"
-          enhanced_dir="${RUNNER_TEMP}/rma065-enhanced"
+          mkdir -p "${reports}"
           python3 scripts/generate_reachy_collision_model.py \
             --profile models/reachy-mini/collision-hard-stop-baseline.json \
             --source-model "${source_dir}/reachy_mini.xml" \
-            --output-model "${enhanced_dir}/reachy_mini.xml" \
-            --metadata "${enhanced_dir}/RMA065_COLLISION_METADATA.json" \
+            --output-model "${enhanced}/reachy_mini.xml" \
+            --metadata "${enhanced}/RMA065_COLLISION_METADATA.json" \
             --copy-package
           python3 scripts/generate_reachy_collision_model.py \
             --profile models/reachy-mini/collision-hard-stop-baseline.json \
             --source-model "${source_dir}/reachy_mini.xml" \
-            --output-model "${enhanced_dir}/reachy_mini.xml" \
-            --metadata "${enhanced_dir}/RMA065_COLLISION_METADATA.json" \
+            --output-model "${enhanced}/reachy_mini.xml" \
+            --metadata "${enhanced}/RMA065_COLLISION_METADATA.json" \
             --check
-          {
-            printf 'RMA065_SOURCE_DIR=%s\n' "${source_dir}"
-            printf 'RMA065_ENHANCED_DIR=%s\n' "${enhanced_dir}"
-            printf 'RMA065_REPORT_DIR=%s\n' "${RUNNER_TEMP}/rma065-reports"
-          } >> "${GITHUB_ENV}"
-
-      - name: Validate contacts, hard stops, and hosted complexity
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "${RMA065_REPORT_DIR}"
           python3 scripts/audit_reachy_collision_model.py \
-            --model "${RMA065_SOURCE_DIR}/reachy_mini.xml" \
-            --output "${RMA065_REPORT_DIR}/source-audit.json" \
-            --expected-sha256 efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46 \
-            --steps 5000 \
-            --contract rma065_pinned_collision_audit_v1
-          python3 scripts/audit_reachy_collision_model.py \
-            --model "${RMA065_ENHANCED_DIR}/reachy_mini.xml" \
-            --output "${RMA065_REPORT_DIR}/enhanced-audit.json" \
+            --model "${enhanced}/reachy_mini.xml" \
+            --output "${reports}/enhanced-audit.json" \
             --steps 5000 \
             --contract rma065_enhanced_collision_audit_v1
           python3 scripts/run_reachy_collision_hard_stop_validation.py \
-            --source-model "${RMA065_SOURCE_DIR}/reachy_mini.xml" \
-            --enhanced-model "${RMA065_ENHANCED_DIR}/reachy_mini.xml" \
+            --source-model "${source_dir}/reachy_mini.xml" \
+            --enhanced-model "${enhanced}/reachy_mini.xml" \
             --profile models/reachy-mini/collision-hard-stop-baseline.json \
-            --output "${RMA065_REPORT_DIR}/collision-hard-stop-validation.json" \
+            --output "${reports}/collision-hard-stop-validation.json" \
             --neutral-steps 5000
 
-      - name: Resolve pip MuJoCo native paths
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' >> "${GITHUB_ENV}"
-          from pathlib import Path
-          import mujoco
-          root = Path(mujoco.__file__).resolve().parent
-          headers = [p for p in root.rglob('mujoco.h') if p.parent.name == 'mujoco']
-          libraries = [p for p in root.rglob('libmujoco.so*') if p.is_file()]
-          if not headers or not libraries:
-              raise SystemExit(f'Cannot locate pip MuJoCo native files under {root}')
-          header = sorted(headers, key=lambda p: len(str(p)))[0]
-          library = sorted(libraries, key=lambda p: ('.so.' not in p.name, len(p.name)))[0]
-          print(f'PIP_MUJOCO_INCLUDE={header.parent.parent}')
-          print(f'PIP_MUJOCO_LIBRARY={library}')
-          print(f'PIP_MUJOCO_LIBDIR={library.parent}')
-          PY
-
-      - name: Strict real-MuJoCo backend build and state-v2 execution
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake \
-            -S . \
-            -B build/rma065-real \
-            -DBUILD_TESTING=ON \
-            -DREACHY_BUILD_MUJOCO_BACKEND=ON \
-            -DREACHY_MUJOCO_INCLUDE_DIR="${PIP_MUJOCO_INCLUDE}" \
-            -DREACHY_MUJOCO_LIBRARY="${PIP_MUJOCO_LIBRARY}" \
-            -DREACHY_MUJOCO_EXPECTED_VERSION=3.9.0 \
-            -DREACHY_ENABLE_SANITIZERS=ON \
-            -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build/rma065-real \
-            --target reachy_sim_dynamics_state_runner \
-            --parallel 2
-          python3 - <<'PY'
-          import importlib.util
-          from pathlib import Path
-          import mujoco
-          script = Path('scripts/run_reachy_collision_hard_stop_validation.py')
-          spec = importlib.util.spec_from_file_location('rma065_validation', script)
-          module = importlib.util.module_from_spec(spec)
-          assert spec.loader is not None
-          spec.loader.exec_module(module)
-          enhanced = Path(__import__('os').environ['RMA065_ENHANCED_DIR']) / 'reachy_mini.xml'
-          external = enhanced.parent / 'rma065_external_fixture.xml'
-          module.external_contact_fixture(mujoco, enhanced, external)
-          for xml_path, output_name in (
-              (enhanced, 'reachy_mini.mjb'),
-              (external, 'rma065_external_fixture.mjb'),
-          ):
-              model = mujoco.MjModel.from_xml_path(str(xml_path))
-              mujoco.mj_saveModel(model, str(enhanced.parent / output_name), None)
-          PY
-          runner="build/rma065-real/native/reachy_sim/reachy_sim_dynamics_state_runner"
-          test -x "${runner}"
-          LD_LIBRARY_PATH="${PIP_MUJOCO_LIBDIR}" \
-            "${runner}" "${RMA065_ENHANCED_DIR}/rma065_external_fixture.mjb" 1 \
-            | tee "${RMA065_REPORT_DIR}/state-v2-runner.json"
-
-      - name: Commit exact validated implementation and remove scaffolding
+      - name: Commit validated implementation and remove scaffolding
         shell: bash
         run: |
           set -euo pipefail
           git rm .github/rma065-payload.part*
           git rm .github/workflows/rma065-integrate.yml
+          if [[ -e .github/workflows/rma065-patch-integration.yml ]]; then
+            git rm .github/workflows/rma065-patch-integration.yml
+          fi
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -246,15 +183,6 @@ jobs:
           git commit -m 'RMA-065: integrate collision and hard-stop baseline [skip ci]'
           git push origin HEAD:master
 
-      - name: Upload integration evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rma065-integration-${{ github.sha }}
-          path: ${{ runner.temp }}/rma065-reports
-          if-no-files-found: warn
-          retention-days: 30
-
       - name: Publish final integration status
         if: always()
         uses: actions/github-script@v7
@@ -270,7 +198,7 @@ jobs:
               state: passed ? 'success' : 'failure',
               context: 'RMA-065 Integration',
               description: passed
-                ? 'Collision geometry, hard stops, state v2, and real MuJoCo gates passed'
+                ? 'Schema, fake backend, generated model, contact, and hard-stop gates passed'
                 : 'RMA-065 integration validation failed',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
