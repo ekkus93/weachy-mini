@@ -1,4 +1,5 @@
 name: RMA-070 and RMA-071 Integration
+# Trigger validated payload integration.
 
 on:
   push:
