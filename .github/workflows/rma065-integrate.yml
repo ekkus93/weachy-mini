@@ -80,6 +80,20 @@ jobs:
           path.write_text(text.replace(old, new), encoding='utf-8', newline='\n')
           PY
           python3 scripts/.rma065-apply-source-edits.py
+          python3 - <<'PYDYNAMICS'
+          from pathlib import Path
+          path = Path('native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc')
+          text = path.read_text(encoding='utf-8')
+          old = 'static double rma065_custom_numeric(\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'rma065_custom_numeric declaration count={text.count(old)}')
+          text = text.replace(old, '#ifndef REACHY_FAKE_MUJOCO\n' + old, 1)
+          marker = '\nstatic uint32_t rma065_hard_stop_count('
+          if text.count(marker) != 1:
+              raise SystemExit(f'rma065 custom numeric end marker count={text.count(marker)}')
+          text = text.replace(marker, '\n#endif\n' + marker, 1)
+          path.write_text(text, encoding='utf-8', newline='\n')
+          PYDYNAMICS
           rm scripts/.rma065-apply-source-edits.py
           test -f native/reachy_sim/src/reachy_sim_backend_mujoco/state_payload/dynamics_v2.inc
           test -f models/reachy-mini/collision-hard-stop-baseline.json
