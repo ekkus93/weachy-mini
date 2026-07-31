@@ -104,7 +104,7 @@ jobs:
             'ddb2f75cdbaec18ff4f98682c6376ee485d16c4d17b5146285ec9a38a124434a' \
             '.github/rma065-fixed-v4.part02.01' | sha256sum --check --strict
           printf '%s  %s\n' \
-            '50bb9f97b9515b12f3d126da1d11a88621e9ac5371715b489af06da5069ac845' \
+            '9a32472e500d126efe6809cb50c36ed0376dc303943cb67265d44ddf68764c74' \
             '.github/rma065-fixed-v4.part02.02' | sha256sum --check --strict
           printf '%s  %s\n' \
             'a462eebd918e5fc365ec1b319edb1d3184092d2d09269631e8852eb0ed0c471e' \
