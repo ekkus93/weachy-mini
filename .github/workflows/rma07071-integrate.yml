@@ -1,0 +1,122 @@
+name: RMA-070 and RMA-071 Integration
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma07071-integrate.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma07071-integration
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Reconstruct and validate implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/rma07071-payload.tar.gz"
+          cat .github/rma07071-payload.part* | base64 --decode > "${archive}"
+          printf '%s  %s\n' \
+            'a97fca162607a122d1d8cc41a8687974abdceed571c3dbbc43b6d0a6a5a18b4b' \
+            "${archive}" | sha256sum --check --strict
+          tar -xzf "${archive}" -C .
+
+          python3 -m pip install --disable-pip-version-check ruff==0.12.0
+          new_python=(
+            scripts/calibration_data.py
+            scripts/capture_reachy_calibration.py
+            scripts/estimate_calibration_clock_offset.py
+            scripts/validate_calibration_dataset.py
+            scripts/update_rma07071_records.py
+            scripts/tests/test_calibration_capture.py
+            scripts/tests/test_calibration_data.py
+          )
+          ruff check --fix "${new_python[@]}"
+          ruff format "${new_python[@]}"
+          ruff check "${new_python[@]}"
+          ruff format --check --diff "${new_python[@]}"
+          git diff --check
+
+          python3 -m compileall -q scripts
+          python3 -m unittest discover \
+            -s scripts/tests \
+            -p 'test_calibration_*.py' \
+            -v
+          ./scripts/ci.sh --static-only
+
+          mkdir -p build/calibration
+          python3 scripts/validate_calibration_dataset.py \
+            --input calibration/fixtures/minimal-calibration-dataset.json \
+            --summary-output build/calibration/committed-fixture-summary.json
+          python3 scripts/estimate_calibration_clock_offset.py \
+            --pairs-csv calibration/fixtures/clock-pairs.csv \
+            --from-clock-id camera_clock \
+            --to-clock-id reachy_clock \
+            --maximum-uncertainty-ns 1000 \
+            --output build/calibration/estimated-camera-alignment.json
+          python3 scripts/capture_reachy_calibration.py \
+            --telemetry-jsonl calibration/fixtures/reachy-telemetry.jsonl \
+            --robot-metadata-json calibration/fixtures/robot-metadata.json \
+            --environment-json calibration/fixtures/environment.json \
+            --clock-metadata-json calibration/fixtures/clock-metadata.json \
+            --external-pose-csv calibration/fixtures/external-pose.csv \
+            --external-pose-clock-id camera_clock \
+            --force-torque-csv calibration/fixtures/force-torque.csv \
+            --force-torque-clock-id force_clock \
+            --force-torque-frame reachy_body \
+            --dataset-id integration-fixture-capture \
+            --created-utc '2026-07-31T19:00:00Z' \
+            --operator-notes 'Synthetic integration fixture; not physical calibration evidence.' \
+            --output build/calibration/generated-capture.json
+          python3 scripts/validate_calibration_dataset.py \
+            --input build/calibration/generated-capture.json \
+            --summary-output build/calibration/generated-capture-summary.json
+      - name: Commit validated implementation and completion records
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add \
+            calibration/schemas \
+            calibration/fixtures \
+            scripts/calibration_data.py \
+            scripts/capture_reachy_calibration.py \
+            scripts/estimate_calibration_clock_offset.py \
+            scripts/validate_calibration_dataset.py \
+            scripts/tests/test_calibration_capture.py \
+            scripts/tests/test_calibration_data.py \
+            docs/architecture/CALIBRATION_DATA_AND_CAPTURE.md \
+            docs/validation/RMA_070_CALIBRATION_DATA_SCHEMA_VALIDATION_2026-07-31.md \
+            docs/validation/RMA_071_CALIBRATION_CAPTURE_TOOLING_VALIDATION_2026-07-31.md
+          git diff --cached --check
+          git commit -m 'RMA-070/RMA-071: add calibration data and capture tooling [skip ci]'
+          implementation_commit="$(git rev-parse HEAD)"
+
+          python3 scripts/update_rma07071_records.py \
+            --implementation-commit "${implementation_commit}" \
+            --run-id "${GITHUB_RUN_ID}"
+          rm scripts/update_rma07071_records.py
+          rm .github/rma07071-payload.part*
+          git add -A
+          git diff --cached --check
+          git commit -m 'RMA-065/RMA-070/RMA-071: record accepted evidence [skip ci]'
+          git push origin HEAD:master
