@@ -125,21 +125,11 @@ jobs:
 
           path = Path(os.environ['RUNNER_TEMP']) / 'derive.sh'
           text = path.read_text(encoding='utf-8')
-          old = (
-              "          radius_matches = re.findall(\n"
-              "              r'\\.set\\(\"size\",\\s*\"([0-9.eE+\\-]+)\"\\)',\n"
-              "              helper,\n"
-              "          )\n"
-          )
-          new = (
-              "          radius_matches = re.findall(\n"
-              "              r'(?:\"size\"\\s*:\\s*|\\.set\\(\"size\",\\s*)\"([0-9.eE+\\-]+)\"',\n"
-              "              helper,\n"
-              "          )\n"
-          )
+          old = r'''r'\.set\("size",\s*"([0-9.eE+\-]+)"\)' '''.strip()
+          new = r'''r'(?:"size"\s*:\s*|\.set\("size",\s*)"([0-9.eE+\-]+)"' '''.strip()
           if text.count(old) != 1:
               raise SystemExit(
-                  f'derived-radius parser marker count={text.count(old)}'
+                  f'derived-radius regex literal count={text.count(old)}'
               )
           path.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
           PY
