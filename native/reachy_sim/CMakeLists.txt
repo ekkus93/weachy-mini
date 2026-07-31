@@ -102,6 +102,30 @@ endfunction()
 
 reachy_configure_sim_library(reachy_sim STATIC)
 
+
+add_library(reachy_servo_model STATIC)
+target_sources(
+    reachy_servo_model
+    PRIVATE
+        src/reachy_servo_model.cpp
+        src/reachy_servo_parameters.generated.hpp
+    PUBLIC
+        FILE_SET public_headers
+        TYPE HEADERS
+        BASE_DIRS include
+        FILES
+  include/reachy_servo_model.hpp
+)
+target_include_directories(
+    reachy_servo_model
+    PRIVATE
+        src
+)
+target_compile_features(reachy_servo_model PUBLIC cxx_std_17)
+set_target_properties(reachy_servo_model PROPERTIES CXX_EXTENSIONS OFF)
+reachy_enable_strict_warnings(reachy_servo_model)
+reachy_enable_sanitizers(reachy_servo_model)
+
 if(REACHY_BUILD_MUJOCO_BACKEND)
     reachy_configure_sim_library(reachy_sim_shared SHARED)
     target_compile_definitions(
@@ -120,6 +144,32 @@ if(REACHY_BUILD_MUJOCO_BACKEND)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(
+        reachy_servo_model_test
+        tests/reachy_servo_model_test.cpp
+    )
+    target_link_libraries(
+        reachy_servo_model_test
+        PRIVATE
+  reachy_servo_model
+    )
+    target_compile_features(
+        reachy_servo_model_test
+        PRIVATE
+  cxx_std_17
+    )
+    set_target_properties(
+        reachy_servo_model_test
+        PROPERTIES
+  CXX_EXTENSIONS OFF
+    )
+    reachy_enable_strict_warnings(reachy_servo_model_test)
+    reachy_enable_sanitizers(reachy_servo_model_test)
+    add_test(
+        NAME reachy_servo_model_test
+        COMMAND reachy_servo_model_test
+    )
+
     add_executable(
         reachy_sim_version_test
         tests/reachy_sim_version_test.c
