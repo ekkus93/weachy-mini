@@ -1,4 +1,5 @@
 name: RMA-070 and RMA-071 Transport Diagnostic
+# Trigger per-member checksum reporting.
 
 on:
   push:
