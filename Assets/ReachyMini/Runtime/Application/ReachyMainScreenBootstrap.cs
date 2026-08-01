@@ -23,7 +23,7 @@ namespace ReachyMini.AppState
         public static bool TryInstall(out string fault)
         {
             ReachyPresentationRoot? root =
-                UnityEngine.Object.FindFirstObjectByType<ReachyPresentationRoot>();
+                UnityEngine.Object.FindAnyObjectByType<ReachyPresentationRoot>();
             Camera? camera = Camera.main;
             if (root == null)
             {
