@@ -3,7 +3,7 @@
 using System;
 using UnityEngine;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public interface IReachyApplicationCompositionProvider
     {
