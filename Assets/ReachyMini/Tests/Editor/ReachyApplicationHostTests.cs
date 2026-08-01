@@ -25,13 +25,14 @@ namespace ReachyMini.Tests
                     "Reachy application startup failed: " +
                     "Reachy application startup requires an explicit composition provider.");
 
-                root.SendMessage("Start", SendMessageOptions.RequireReceiver);
+                behaviour.StartApplication();
 
                 Assert.That(behaviour.Host, Is.Null);
                 Assert.That(
                     behaviour.Fault,
                     Is.EqualTo(
                         "Reachy application startup requires an explicit composition provider."));
+                Assert.Throws<InvalidOperationException>(behaviour.StartApplication);
             }
             finally
             {
@@ -53,7 +54,7 @@ namespace ReachyMini.Tests
                     root.AddComponent<ReachyApplicationHostBehaviour>();
                 behaviour.ConfigureCompositionProvider(provider);
 
-                root.SendMessage("Start", SendMessageOptions.RequireReceiver);
+                behaviour.StartApplication();
 
                 Assert.That(behaviour.Host, Is.Not.Null);
                 Assert.That(behaviour.Health, Is.Not.Null);
@@ -64,6 +65,10 @@ namespace ReachyMini.Tests
                 Assert.That(events.FindAll(value =>
                     value.StartsWith("initialize:", StringComparison.Ordinal)).Count,
                     Is.EqualTo(8));
+
+                behaviour.ShutdownApplication();
+                behaviour.ShutdownApplication();
+                Assert.That(behaviour.Host, Is.Null);
             }
             finally
             {
