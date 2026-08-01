@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public sealed class ReachyApplicationHost : IDisposable
     {
