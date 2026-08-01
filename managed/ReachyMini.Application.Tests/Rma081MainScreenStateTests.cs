@@ -109,17 +109,21 @@ namespace ReachyMini.Application.Tests
         private static void SnapshotsRejectAmbiguousPanels()
         {
             Throws<ArgumentException>(
-                () => new ReachyMainScreenSnapshot(
-                    ReachyInteractionState.Idle,
-                    "Ready.",
-                    "Fixed front / three-quarter",
-                    false,
-                    "Not configured",
-                    ReachyProviderLocation.Unavailable,
-                    false,
-                    true,
-                    true,
-                    1UL),
+                () =>
+                {
+                    ReachyMainScreenSnapshot snapshot = new ReachyMainScreenSnapshot(
+                        ReachyInteractionState.Idle,
+                        "Ready.",
+                        "Fixed front / three-quarter",
+                        false,
+                        "Not configured",
+                        ReachyProviderLocation.Unavailable,
+                        false,
+                        true,
+                        true,
+                        1UL);
+                    GC.KeepAlive(snapshot);
+                },
                 "ambiguous panels");
         }
 
