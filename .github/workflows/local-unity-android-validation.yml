@@ -24,6 +24,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: local-unity-android-validation
@@ -40,6 +41,29 @@ jobs:
     timeout-minutes: 120
 
     steps:
+      - name: Publish pending commit status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/local-unity-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "Local Unity Android Validation",
+              "description": "Unity, Android build, and device acceptance are running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/local-unity-status.json" >/dev/null
+
       - name: Check out repository
         uses: actions/checkout@v4
         with:
@@ -244,3 +268,29 @@ jobs:
           path: Builds/Android/weachy-mini-device-arm64-api26.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish final commit status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/local-unity-status.json"
+          import json, os
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "Local Unity Android Validation",
+              "description": "Unity and Android device validation passed" if passed else "Unity or Android device validation failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/local-unity-status.json" >/dev/null
