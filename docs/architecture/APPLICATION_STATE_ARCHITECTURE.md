@@ -39,7 +39,8 @@ before any service is constructed. It rejects:
 Construction follows a deterministic topological order. A factory receives an
 `IReachyServiceResolver` restricted to the dependencies declared by that
 registration. Requesting an undeclared or not-yet-constructed dependency is a
-startup fault, not a service-locator fallback.
+startup fault, not a service-locator fallback. A factory result that violates
+its registration is disposed before startup fails.
 
 ## Lifecycle
 
@@ -84,14 +85,18 @@ itself. No state is relabeled as ready to keep the application moving.
 ## Unity ownership
 
 The graph, contracts, host, and health model live under
-`Assets/ReachyMini/Runtime/Core` and contain no `UnityEngine` dependency. They
-are compiled by both Unity and the existing .NET shared-core project.
+`Assets/ReachyMini/Runtime/Core` in namespace `ReachyMini.AppState` and contain
+no `UnityEngine` dependency. The namespace deliberately avoids shadowing
+`UnityEngine.Application`. The shared code is compiled by both Unity and the
+existing .NET shared-core project.
 
 `ReachyApplicationHostBehaviour` is the narrow Unity lifecycle bridge. It
-requires an explicit `IReachyApplicationCompositionProvider`, starts the host,
-exposes health, and disposes the host from `OnDestroy`. A missing or null
-provider produces a visible fault; there is no default or placeholder
-composition.
+requires an explicit `IReachyApplicationCompositionProvider`, exposes health
+and retained startup diagnostics, delegates Unity `Start` and `OnDestroy` to
+explicit `StartApplication` and `ShutdownApplication` methods, and has no
+default or placeholder composition. The explicit methods make the same
+lifecycle path deterministic in edit-mode tests without attempting to fake
+Unity callbacks through `SendMessage`.
 
 RMA-081 will supply the first production composition and UI service while
 preserving these boundaries.
