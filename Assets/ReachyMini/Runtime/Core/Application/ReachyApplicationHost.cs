@@ -144,9 +144,25 @@ namespace ReachyMini.Application
                     registration.Factory(resolver) ??
                     throw new InvalidOperationException(
                         $"Factory for '{registration.ServiceId}' returned null.");
-                ReachyApplicationComposition.ValidateServiceContract(
-                    registration,
-                    service);
+                try
+                {
+                    ReachyApplicationComposition.ValidateServiceContract(
+                        registration,
+                        service);
+                }
+                catch (Exception contractException)
+                {
+                    string disposalFailure = DisposeRejectedService(service);
+                    string message =
+                        $"Factory result for '{registration.ServiceId}' was rejected: " +
+                        contractException.Message;
+                    if (!string.IsNullOrEmpty(disposalFailure))
+                    {
+                        message = $"{message} Rejected-service disposal failed: {disposalFailure}";
+                    }
+                    throw new InvalidOperationException(message, contractException);
+                }
+
                 service.HealthChanged += OnServiceHealthChanged;
                 services.Add(registration.Kind, service);
                 constructionOrder.Add(service);
@@ -274,6 +290,20 @@ namespace ReachyMini.Application
             return string.Join(" | ", failures);
         }
 
+        private static string DisposeRejectedService(
+            IReachyApplicationService service)
+        {
+            try
+            {
+                service.Dispose();
+                return string.Empty;
+            }
+            catch (Exception exception)
+            {
+                return $"{service.ServiceId}: {exception.Message}";
+            }
+        }
+
         private void PublishLifecycle(
             ReachyApplicationState state,
             string message)
@@ -319,14 +349,14 @@ namespace ReachyMini.Application
 
         private sealed class ConstructionResolver : IReachyServiceResolver
         {
-            private readonly IReadOnlyDictionary<
+            private readonly Dictionary<
                 ReachyServiceKind,
                 IReachyApplicationService> services;
             private readonly HashSet<ReachyServiceKind> allowed;
             private readonly string ownerServiceId;
 
             public ConstructionResolver(
-                IReadOnlyDictionary<ReachyServiceKind, IReachyApplicationService> services,
+                Dictionary<ReachyServiceKind, IReachyApplicationService> services,
                 IReadOnlyList<ReachyServiceKind> dependencies,
                 string ownerServiceId)
             {
