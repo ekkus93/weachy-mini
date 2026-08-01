@@ -1,0 +1,149 @@
+name: RMA-081 Main Screen
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma081-main-screen.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyMainScreenTests.cs'
+      - 'managed/ReachyMini.Application.Tests/Rma081MainScreenStateTests.cs'
+      - 'docs/architecture/MAIN_SCREEN_APPLICATION_SHELL.md'
+      - 'docs/validation/RMA_081_MAIN_SCREEN_VALIDATION_2026-07-31.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma081-main-screen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Main-screen state and fixed-camera contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma081-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-081 Main Screen",
+              "description": "Main-screen contract is running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma081-status.json" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile shared state and run managed contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj \
+            --configuration Release \
+            --no-restore
+      - name: Verify fixed-camera and control surface contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          state = Path('Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs').read_text(encoding='utf-8')
+          screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
+          bootstrap = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs').read_text(encoding='utf-8')
+          composition = Path('Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs').read_text(encoding='utf-8')
+
+          enum_match = re.search(r'enum ReachyInteractionState\s*\{([^}]*)\}', state, re.S)
+          if enum_match is None:
+              raise SystemExit('ReachyInteractionState enum is missing.')
+          actual_states = re.findall(r'^\s*([A-Za-z]+)\s*=\s*\d+', enum_match.group(1), re.M)
+          expected_states = [
+              'Idle', 'Listening', 'Transcribing', 'Thinking',
+              'Speaking', 'Interrupted', 'Unavailable', 'Error',
+          ]
+          if actual_states != expected_states:
+              raise SystemExit(f'Unexpected interaction states: {actual_states}')
+
+          required_controls = [
+              'RequestMicrophone',
+              'RequestCameraSelection',
+              'ToggleSettings',
+              'ToggleDiagnostics',
+          ]
+          for control in required_controls:
+              if f'void {control}(' not in screen:
+                  raise SystemExit(f'Missing main-screen control: {control}')
+
+          forbidden_navigation = [
+              'Input.GetAxis',
+              'Input.GetMouseButton',
+              'Input.touchCount',
+              'RotateAround(',
+              'transform.Translate(',
+              'presentationCamera.transform.position =',
+              'presentationCamera.transform.rotation =',
+          ]
+          for token in forbidden_navigation:
+              if token in screen or token in bootstrap:
+                  raise SystemExit(f'Forbidden camera-navigation path: {token}')
+
+          if 'AcceptsUserNavigation' not in bootstrap or 'fixed_front_three_quarter' not in bootstrap:
+              raise SystemExit('Bootstrap does not enforce the fixed non-navigable camera contract.')
+          for kind in [
+              'Simulation', 'Camera', 'Audio', 'Provider',
+              'Perception', 'Behavior', 'Persistence', 'UserInterface',
+          ]:
+              if f'ReachyServiceKind.{kind}' not in composition:
+                  raise SystemExit(f'Production composition is missing {kind}.')
+          print('RMA-081 fixed-camera and control-surface contract passed.')
+          PY
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma081-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-081 Main Screen",
+              "description": "Main-screen contract passed" if passed else "Main-screen contract failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma081-status.json" >/dev/null
