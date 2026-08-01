@@ -2,7 +2,7 @@
 
 using System;
 using System.Collections.Generic;
-using ReachyMini.Application;
+using ReachyMini.AppState;
 
 namespace ReachyMini.Application.Tests
 {
