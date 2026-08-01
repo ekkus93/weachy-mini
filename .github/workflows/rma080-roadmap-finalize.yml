@@ -5,15 +5,39 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma080-roadmap-finalize.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
+  statuses: write
 
 jobs:
   finalize:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma080-roadmap-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-080 Roadmap Finalizer",
+              "description": "Recording RMA-080 roadmap completion",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma080-roadmap-status.json" >/dev/null
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -76,3 +100,26 @@ jobs:
           fi
           git commit -m 'RMA-080: record roadmap completion'
           git push origin HEAD:master
+      - name: Publish success status
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma080-roadmap-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "success",
+              "context": "RMA-080 Roadmap Finalizer",
+              "description": "RMA-080 roadmap completion recorded",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma080-roadmap-status.json" >/dev/null
