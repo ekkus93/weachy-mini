@@ -1,0 +1,52 @@
+name: RMA-080 Application State Architecture
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma080-application-state.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/**'
+      - 'Assets/ReachyMini/Runtime/Application/**'
+      - 'managed/ReachyMini.Application.Tests/**'
+      - 'managed/ReachyMini.Core/**'
+      - 'docs/architecture/APPLICATION_STATE_ARCHITECTURE.md'
+      - 'docs/validation/RMA_080_APPLICATION_STATE_ARCHITECTURE_VALIDATION_2026-07-31.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma080-application-state-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  managed-contract:
+    name: Managed service graph and lifecycle contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Reject Unity dependencies in shared application core
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -R --line-number --fixed-strings 'UnityEngine' \
+              Assets/ReachyMini/Runtime/Core/Application; then
+            printf '%s\n' 'Shared application core must not reference UnityEngine.' >&2
+            exit 1
+          fi
+      - name: Compile shared core and run RMA-080 contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore \
+            managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj \
+            --configuration Release \
+            --no-restore
