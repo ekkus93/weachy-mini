@@ -209,24 +209,22 @@ namespace ReachyMini.Application
         }
 
         private static ReachyServiceRegistration[] TopologicalOrder(
-            IReadOnlyDictionary<ReachyServiceKind, ReachyServiceRegistration> byKind)
+            Dictionary<ReachyServiceKind, ReachyServiceRegistration> byKind)
         {
             var states = new Dictionary<ReachyServiceKind, int>();
             var ordered = new List<ReachyServiceRegistration>(byKind.Count);
-            var stack = new List<ReachyServiceKind>();
             for (int index = 0; index < RequiredKinds.Length; ++index)
             {
-                Visit(RequiredKinds[index], byKind, states, ordered, stack);
+                Visit(RequiredKinds[index], byKind, states, ordered);
             }
             return ordered.ToArray();
         }
 
         private static void Visit(
             ReachyServiceKind kind,
-            IReadOnlyDictionary<ReachyServiceKind, ReachyServiceRegistration> byKind,
-            IDictionary<ReachyServiceKind, int> states,
-            ICollection<ReachyServiceRegistration> ordered,
-            IList<ReachyServiceKind> stack)
+            Dictionary<ReachyServiceKind, ReachyServiceRegistration> byKind,
+            Dictionary<ReachyServiceKind, int> states,
+            List<ReachyServiceRegistration> ordered)
         {
             if (states.TryGetValue(kind, out int state))
             {
@@ -243,7 +241,6 @@ namespace ReachyMini.Application
             }
 
             states[kind] = 1;
-            stack.Add(kind);
             ReachyServiceRegistration registration = byKind[kind];
             for (int index = 0; index < registration.Dependencies.Count; ++index)
             {
@@ -251,10 +248,8 @@ namespace ReachyMini.Application
                     registration.Dependencies[index],
                     byKind,
                     states,
-                    ordered,
-                    stack);
+                    ordered);
             }
-            stack.RemoveAt(stack.Count - 1);
             states[kind] = 2;
             ordered.Add(registration);
         }
