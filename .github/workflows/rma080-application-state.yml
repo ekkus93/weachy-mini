@@ -12,11 +12,10 @@ on:
       - 'docs/architecture/APPLICATION_STATE_ARCHITECTURE.md'
       - 'docs/validation/RMA_080_APPLICATION_STATE_ARCHITECTURE_VALIDATION_2026-07-31.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
-      - 'scripts/finalize_rma080_todo.py'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   statuses: write
 
 concurrency:
@@ -52,8 +51,6 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data-binary "@${RUNNER_TEMP}/rma080-status.json" >/dev/null
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -76,19 +73,6 @@ jobs:
             --project managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj \
             --configuration Release \
             --no-restore
-      - name: Record RMA-080 completion in authoritative TODO
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/finalize_rma080_todo.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
-          if ! git diff --cached --quiet; then
-            git commit -m 'RMA-080: record roadmap completion'
-            git push origin HEAD:master
-          fi
       - name: Publish final status
         if: always()
         shell: bash
