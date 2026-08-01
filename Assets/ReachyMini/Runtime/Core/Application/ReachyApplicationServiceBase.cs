@@ -2,7 +2,7 @@
 
 using System;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public abstract class ReachyApplicationServiceBase : IReachyApplicationService
     {
