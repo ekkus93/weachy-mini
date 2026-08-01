@@ -14,10 +14,11 @@ on:
       - 'docs/architecture/MAIN_SCREEN_APPLICATION_SHELL.md'
       - 'docs/validation/RMA_081_MAIN_SCREEN_VALIDATION_2026-07-31.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - 'scripts/finalize_rma081_todo.py'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
@@ -53,6 +54,8 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data-binary "@${RUNNER_TEMP}/rma081-status.json" >/dev/null
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -122,6 +125,18 @@ jobs:
                   raise SystemExit(f'Production composition is missing {kind}.')
           print('RMA-081 fixed-camera and control-surface contract passed.')
           PY
+      - name: Record RMA-081 completion in authoritative TODO
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/finalize_rma081_todo.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'RMA-081: record roadmap completion'
+            git push origin HEAD:master
+          fi
       - name: Publish final status
         if: always()
         shell: bash
