@@ -17,6 +17,7 @@ namespace ReachyMini.AppState
         private MonoBehaviour? compositionProvider;
 
         private ReachyApplicationHost? host;
+        private bool startupEntered;
 
         public ReachyApplicationHost? Host => host;
 
@@ -26,17 +27,24 @@ namespace ReachyMini.AppState
 
         public void ConfigureCompositionProvider(MonoBehaviour provider)
         {
-            if (host != null)
+            if (startupEntered)
             {
                 throw new InvalidOperationException(
-                    "The composition provider cannot change after startup.");
+                    "The composition provider cannot change after startup begins.");
             }
             compositionProvider = provider ??
                 throw new ArgumentNullException(nameof(provider));
         }
 
-        private void Start()
+        public void StartApplication()
         {
+            if (startupEntered)
+            {
+                throw new InvalidOperationException(
+                    "The Reachy application host cannot be started more than once.");
+            }
+            startupEntered = true;
+
             if (compositionProvider is not IReachyApplicationCompositionProvider provider)
             {
                 EnterFault(
@@ -56,11 +64,12 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
+                ShutdownApplication();
                 EnterFault(exception.Message);
             }
         }
 
-        private void OnDestroy()
+        public void ShutdownApplication()
         {
             ReachyApplicationHost? activeHost = host;
             host = null;
@@ -80,6 +89,16 @@ namespace ReachyMini.AppState
                     $"Reachy application disposal failed: {exception.Message}",
                     this);
             }
+        }
+
+        private void Start()
+        {
+            StartApplication();
+        }
+
+        private void OnDestroy()
+        {
+            ShutdownApplication();
         }
 
         private void OnHealthChanged(
