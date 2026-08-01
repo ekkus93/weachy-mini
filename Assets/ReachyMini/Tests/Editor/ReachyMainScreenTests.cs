@@ -39,37 +39,43 @@ namespace ReachyMini.Tests
                 ReachyMainScreen[] screens =
                     rootObject.GetComponentsInChildren<ReachyMainScreen>(true);
                 Assert.That(screens, Has.Length.EqualTo(1));
-                ReachyApplicationHostBehaviour host = rootObject
+                ReachyApplicationHostBehaviour? discoveredHost = rootObject
                     .GetComponentInChildren<ReachyApplicationHostBehaviour>(true);
-                ReachyProductionApplicationCompositionProvider provider = rootObject
+                ReachyProductionApplicationCompositionProvider? provider = rootObject
                     .GetComponentInChildren<
                         ReachyProductionApplicationCompositionProvider>(true);
-                Assert.That(host, Is.Not.Null);
+                Assert.That(discoveredHost, Is.Not.Null);
                 Assert.That(provider, Is.Not.Null);
+                ReachyApplicationHostBehaviour host = discoveredHost!;
 
                 host.StartApplication();
 
                 Assert.That(host.Host, Is.Not.Null);
-                Assert.That(host.Health, Is.Not.Null);
+                ReachyApplicationHealthSnapshot? discoveredHealth = host.Health;
+                Assert.That(discoveredHealth, Is.Not.Null);
+                ReachyApplicationHealthSnapshot health = discoveredHealth!;
                 Assert.That(
-                    host.Health!.State,
+                    health.State,
                     Is.EqualTo(ReachyApplicationState.Degraded));
-                Assert.That(host.Health.Services, Has.Count.EqualTo(8));
-                Assert.That(screens[0].Snapshot, Is.Not.Null);
+                Assert.That(health.Services, Has.Count.EqualTo(8));
+                ReachyMainScreen screen = screens[0];
+                ReachyMainScreenSnapshot? discoveredSnapshot = screen.Snapshot;
+                Assert.That(discoveredSnapshot, Is.Not.Null);
+                ReachyMainScreenSnapshot snapshot = discoveredSnapshot!;
                 Assert.That(
-                    screens[0].Snapshot!.InteractionState,
+                    snapshot.InteractionState,
                     Is.EqualTo(ReachyInteractionState.Idle));
                 Assert.That(
-                    screens[0].Snapshot.ActiveCamera,
+                    snapshot.ActiveCamera,
                     Is.EqualTo("Fixed front / three-quarter"));
                 Assert.That(
-                    screens[0].Snapshot.ProviderLocation,
+                    snapshot.ProviderLocation,
                     Is.EqualTo(ReachyProviderLocation.Unavailable));
-                Assert.That(screens[0].Snapshot.MicrophoneAvailable, Is.False);
-                Assert.That(
-                    camera.GetComponent<ReachyPresentationCamera>()
-                        .AcceptsUserNavigation,
-                    Is.False);
+                Assert.That(snapshot.MicrophoneAvailable, Is.False);
+                ReachyPresentationCamera? cameraMetadata =
+                    camera.GetComponent<ReachyPresentationCamera>();
+                Assert.That(cameraMetadata, Is.Not.Null);
+                Assert.That(cameraMetadata!.AcceptsUserNavigation, Is.False);
 
                 host.ShutdownApplication();
             }
@@ -104,32 +110,43 @@ namespace ReachyMini.Tests
                     ReachyMainScreenBootstrap.TryInstall(root, camera, out string fault),
                     Is.True,
                     fault);
-                ReachyApplicationHostBehaviour host = rootObject
+                ReachyApplicationHostBehaviour? discoveredHost = rootObject
                     .GetComponentInChildren<ReachyApplicationHostBehaviour>(true);
-                ReachyMainScreen screen = rootObject
+                ReachyMainScreen? discoveredScreen = rootObject
                     .GetComponentInChildren<ReachyMainScreen>(true);
+                Assert.That(discoveredHost, Is.Not.Null);
+                Assert.That(discoveredScreen, Is.Not.Null);
+                ReachyApplicationHostBehaviour host = discoveredHost!;
+                ReachyMainScreen screen = discoveredScreen!;
                 host.StartApplication();
 
                 screen.RequestMicrophone();
+                ReachyMainScreenSnapshot? discoveredSnapshot = screen.Snapshot;
+                Assert.That(discoveredSnapshot, Is.Not.Null);
+                ReachyMainScreenSnapshot snapshot = discoveredSnapshot!;
                 Assert.That(
-                    screen.Snapshot!.InteractionState,
+                    snapshot.InteractionState,
                     Is.EqualTo(ReachyInteractionState.Unavailable));
-                StringAssert.Contains("Microphone unavailable", screen.Snapshot.Detail);
+                StringAssert.Contains("Microphone unavailable", snapshot.Detail);
 
                 screen.RequestCameraSelection();
+                snapshot = screen.Snapshot!;
                 StringAssert.Contains(
                     "Camera selection unavailable",
-                    screen.Snapshot.Detail);
-                Assert.That(screen.Snapshot.ActiveCamera, Does.StartWith("Fixed"));
+                    snapshot.Detail);
+                Assert.That(snapshot.ActiveCamera, Does.StartWith("Fixed"));
 
                 screen.ToggleSettings();
-                Assert.That(screen.Snapshot.SettingsVisible, Is.True);
-                Assert.That(screen.Snapshot.DiagnosticsVisible, Is.False);
+                snapshot = screen.Snapshot!;
+                Assert.That(snapshot.SettingsVisible, Is.True);
+                Assert.That(snapshot.DiagnosticsVisible, Is.False);
                 screen.ToggleDiagnostics();
-                Assert.That(screen.Snapshot.SettingsVisible, Is.False);
-                Assert.That(screen.Snapshot.DiagnosticsVisible, Is.True);
+                snapshot = screen.Snapshot!;
+                Assert.That(snapshot.SettingsVisible, Is.False);
+                Assert.That(snapshot.DiagnosticsVisible, Is.True);
                 screen.ToggleDiagnostics();
-                Assert.That(screen.Snapshot.DiagnosticsVisible, Is.False);
+                snapshot = screen.Snapshot!;
+                Assert.That(snapshot.DiagnosticsVisible, Is.False);
 
                 Assert.That(camera.transform.position, Is.EqualTo(initialPosition));
                 Assert.That(camera.transform.rotation, Is.EqualTo(initialRotation));
