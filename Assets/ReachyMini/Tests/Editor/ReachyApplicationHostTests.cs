@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using ReachyMini.Application;
+using ReachyMini.AppState;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
