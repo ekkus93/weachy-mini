@@ -80,6 +80,63 @@ def add_resolution_operators() -> None:
     )
 
 
+def preserve_camera_selection_actionability() -> None:
+    path = Path(
+        "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs"
+    )
+    text = path.read_text(encoding="utf-8")
+    old = """            if (camera.Permission == ReachyCameraPermissionState.Unsupported ||
+                camera.Permission == ReachyCameraPermissionState.Faulted)
+            {
+                store.ReportUnavailableAction(
+                    "Camera discovery",
+                    camera.Message);
+                return;
+            }
+
+            (requestCameraAccess ?? throw new InvalidOperationException(
+                "The camera access operation is not bound."))();
+            camera = RequireCameraCapabilities();
+            store.SetInteraction(
+                camera.Permission == ReachyCameraPermissionState.Faulted
+                    ? ReachyInteractionState.Error
+                    : ReachyInteractionState.Unavailable,
+                camera.Message);
+"""
+    new = """            if (camera.Permission == ReachyCameraPermissionState.Unsupported ||
+                camera.Permission == ReachyCameraPermissionState.Faulted)
+            {
+                store.ReportUnavailableAction(
+                    "Camera selection",
+                    camera.Message);
+                return;
+            }
+
+            (requestCameraAccess ?? throw new InvalidOperationException(
+                "The camera access operation is not bound."))();
+            camera = RequireCameraCapabilities();
+            if (camera.Permission == ReachyCameraPermissionState.Unsupported ||
+                camera.Permission == ReachyCameraPermissionState.Faulted)
+            {
+                store.ReportUnavailableAction(
+                    "Camera selection",
+                    camera.Message);
+                return;
+            }
+            store.SetInteraction(
+                ReachyInteractionState.Unavailable,
+                camera.Message);
+"""
+    if new in text:
+        return
+    if text.count(old) != 1:
+        raise RuntimeError(
+            "The camera selection diagnostic anchor is not unique."
+        )
+    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
 integration.replace_once = scoped_replace_once
 integration.main()
 add_resolution_operators()
+preserve_camera_selection_actionability()
