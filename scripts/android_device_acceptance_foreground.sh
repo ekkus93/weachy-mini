@@ -38,15 +38,64 @@ focused_window()
         | awk '/mCurrentFocus=|mFocusedApp=/{print; exit}'
 }
 
-case "${ACTION}" in
-    prepare)
-        "${ADB[@]}" wait-for-device
+power_state()
+{
+    "${ADB[@]}" shell dumpsys power 2>/dev/null \
+        | tr -d '\r' \
+        | awk '/mWakefulness=|Display Power: state=/{print}'
+}
+
+keyguard_state()
+{
+    "${ADB[@]}" shell dumpsys activity activities 2>/dev/null \
+        | tr -d '\r' \
+        | awk '
+            /KeyguardController:/ { in_keyguard = 1; next }
+            in_keyguard && /mKeyguardShowing=/ {
+                sub(/^[[:space:]]+/, "")
+                print
+                exit
+            }
+        '
+}
+
+device_is_awake()
+{
+    local state
+    state="$(power_state || true)"
+    [[ "${state}" == *"mWakefulness=Awake"* || \
+        "${state}" == *"Display Power: state=ON"* ]]
+}
+
+keyguard_is_showing()
+{
+    local state
+    state="$(keyguard_state || true)"
+    [[ "${state}" == *"mKeyguardShowing=true"* ]]
+}
+
+prepare_device()
+{
+    "${ADB[@]}" wait-for-device
+    "${ADB[@]}" shell svc power stayon true >/dev/null 2>&1 || true
+    dismiss_immersive_confirmation
+
+    local attempt
+    for attempt in 1 2 3; do
         "${ADB[@]}" shell input keyevent 224 >/dev/null 2>&1 || true
         "${ADB[@]}" shell wm dismiss-keyguard >/dev/null 2>&1 || true
         "${ADB[@]}" shell input keyevent 82 >/dev/null 2>&1 || true
         collapse_status_bar
-        dismiss_immersive_confirmation
-        "${ADB[@]}" shell svc power stayon true >/dev/null 2>&1 || true
+        sleep 1
+        if device_is_awake && ! keyguard_is_showing; then
+            return
+        fi
+    done
+}
+
+case "${ACTION}" in
+    prepare)
+        prepare_device
         ;;
     wait-focus)
         deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
@@ -59,13 +108,20 @@ case "${ACTION}" in
                 sleep 1
                 continue
             fi
-            if [[ "${focus}" == *"${PACKAGE_NAME}"* ]]; then
+            if [[ "${focus}" == *"${PACKAGE_NAME}"* ]] && \
+                device_is_awake && ! keyguard_is_showing; then
                 printf '%s\n' "${focus}"
                 exit 0
             fi
             if (( $(date +%s) >= deadline )); then
-                printf 'Timed out waiting for %s to own the focused window. Last focus: %s\n' \
-                    "${PACKAGE_NAME}" "${focus}" >&2
+                printf 'Timed out waiting for %s to own an awake, unlocked focused window.\n' \
+                    "${PACKAGE_NAME}" >&2
+                printf 'Last focus: %s\n' "${focus}" >&2
+                printf 'Power state: %s\n' "$(power_state || true)" >&2
+                printf 'Keyguard state: %s\n' "$(keyguard_state || true)" >&2
+                printf '%s\n' \
+                    'If Android reports mKeyguardShowing=true, manually unlock the physical device and rerun the job.' \
+                    >&2
                 exit 1
             fi
             sleep 1
