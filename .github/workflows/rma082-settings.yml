@@ -16,11 +16,10 @@ on:
       - 'docs/architecture/SETTINGS_ARCHITECTURE.md'
       - 'docs/validation/RMA_082_SETTINGS_VALIDATION_2026-08-03.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
-      - 'scripts/finalize_rma082_todo.py'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   statuses: write
 
 concurrency:
@@ -56,8 +55,6 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data-binary "@${RUNNER_TEMP}/rma082-status.json" >/dev/null
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -161,18 +158,6 @@ jobs:
 
           print('RMA-082 settings contract passed.')
           PY
-      - name: Record accepted RMA-082 roadmap status
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/finalize_rma082_todo.py
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
-          if ! git diff --cached --quiet; then
-            git commit -m 'RMA-082: record roadmap completion'
-            git push origin HEAD:master
-          fi
       - name: Publish final status
         if: always()
         shell: bash
