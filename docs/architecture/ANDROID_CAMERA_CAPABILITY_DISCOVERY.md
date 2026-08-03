@@ -82,6 +82,10 @@ The main screen exposes permission state, front/rear counts, availability,
 orientation, largest analysis size, and intrinsics source. Camera preview remains
 an actionable RMA-091 unavailable state.
 
+The integrated production shell constructs this discovery component alongside
+the fixed presentation camera and feeds the same immutable capability snapshot to
+application health, diagnostics, the bottom camera control, and Camera settings.
+
 ## Validation
 
 RMA-090 validation consists of:
