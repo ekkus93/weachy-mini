@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 concurrency:
   group: rma090-apply-integration
@@ -21,6 +22,28 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma090-integration-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-090 Integration",
+              "description": "Camera integration patch is running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma090-integration-status.json" >/dev/null
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -49,3 +72,28 @@ jobs:
           fi
           git commit -m 'RMA-090: integrate camera capability discovery'
           git push origin HEAD:master
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma090-integration-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-090 Integration",
+              "description": "Camera integration patch passed" if passed else "Camera integration patch failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma090-integration-status.json" >/dev/null
