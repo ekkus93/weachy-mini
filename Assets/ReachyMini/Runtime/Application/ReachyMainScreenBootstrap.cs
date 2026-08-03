@@ -89,9 +89,9 @@ namespace ReachyMini.AppState
                 ReachyMainScreen screen =
                     shellObject.AddComponent<ReachyMainScreen>();
                 screen.ConfigurePresentationCamera(camera);
-                ReachyProductionApplicationCompositionProvider provider =
+                ReachySettingsApplicationCompositionProvider provider =
                     shellObject.AddComponent<
-                        ReachyProductionApplicationCompositionProvider>();
+                        ReachySettingsApplicationCompositionProvider>();
                 provider.Configure(runtime, camera, screen);
                 ReachyApplicationHostBehaviour host =
                     shellObject.AddComponent<ReachyApplicationHostBehaviour>();
