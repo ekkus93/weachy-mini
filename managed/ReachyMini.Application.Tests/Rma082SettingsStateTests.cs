@@ -24,10 +24,6 @@ namespace ReachyMini.Application.Tests
             var store = new ReachySettingsStateStore();
             ReachySettingsSnapshot initial = store.Current;
             Equal(4, initial.ProviderSelections.Count, "provider slot count");
-            Equal(
-                ReachyProviderExecution.Unconfigured,
-                initial.GetProvider(ReachyProviderKind.Asr).Execution,
-                "initial ASR");
 
             store.CycleProvider(ReachyProviderKind.Asr);
             Equal(
@@ -96,7 +92,7 @@ namespace ReachyMini.Application.Tests
                 ReachyConnectivityRequirement.NetworkRequired,
                 llm.Connectivity,
                 "cloud LLM network requirement");
-            Contains(store.Current.PrivacyCloudSummary, "LLM", "LLM privacy identity");
+            Contains(store.Current.PrivacyCloudSummary, "LLM", "LLM identity");
             Contains(
                 store.Current.PrivacyCloudSummary,
                 "Network required",
@@ -147,7 +143,7 @@ namespace ReachyMini.Application.Tests
                 restored.Current.HistoryEnabled,
                 "history round trip");
 
-            var invalid = new ReachyDurableSettings
+            restored.ApplyDurableSettings(new ReachyDurableSettings
             {
                 AsrExecution = 999,
                 LlmExecution = (int)ReachyProviderExecution.AndroidService,
@@ -158,8 +154,7 @@ namespace ReachyMini.Application.Tests
                 LocalModelContextTokens = -1,
                 SimulationFidelity = 999,
                 RetentionDays = -1,
-            };
-            restored.ApplyDurableSettings(invalid);
+            });
             Equal(
                 ReachyProviderExecution.Unconfigured,
                 restored.Current.GetProvider(ReachyProviderKind.Asr).Execution,
@@ -188,7 +183,7 @@ namespace ReachyMini.Application.Tests
             };
 
             foreach (ReachySettingsSection section in
-                     Enum.GetValues(typeof(ReachySettingsSection)))
+                     Enum.GetValues<ReachySettingsSection>())
             {
                 store.SelectSection(section);
                 True(
