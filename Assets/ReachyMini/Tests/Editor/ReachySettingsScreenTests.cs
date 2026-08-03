@@ -45,7 +45,8 @@ namespace ReachyMini.Tests
                 screen.ToggleSettings();
                 Assert.That(screen.Snapshot!.SettingsVisible, Is.True);
                 foreach (ReachySettingsSection section in
-                         Enum.GetValues<ReachySettingsSection>())
+                         (ReachySettingsSection[])Enum.GetValues(
+                             typeof(ReachySettingsSection)))
                 {
                     screen.SelectSettingsSection(section);
                     Assert.That(
