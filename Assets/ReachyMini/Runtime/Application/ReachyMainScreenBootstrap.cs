@@ -91,6 +91,9 @@ namespace ReachyMini.AppState
                 screen.ConfigurePresentationCamera(camera);
                 ReachyAndroidCameraDiscovery cameraDiscovery =
                     shellObject.AddComponent<ReachyAndroidCameraDiscovery>();
+                ReachyCameraDiscoveryEvidence cameraEvidence =
+                    shellObject.AddComponent<ReachyCameraDiscoveryEvidence>();
+                cameraEvidence.Configure(cameraDiscovery);
                 ReachySettingsApplicationCompositionProvider provider =
                     shellObject.AddComponent<
                         ReachySettingsApplicationCompositionProvider>();
