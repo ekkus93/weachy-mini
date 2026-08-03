@@ -167,7 +167,7 @@ namespace ReachyMini.AppState
                 camera.Permission == ReachyCameraPermissionState.Faulted)
             {
                 store.ReportUnavailableAction(
-                    "Camera discovery",
+                    "Camera selection",
                     camera.Message);
                 return;
             }
@@ -175,10 +175,16 @@ namespace ReachyMini.AppState
             (requestCameraAccess ?? throw new InvalidOperationException(
                 "The camera access operation is not bound."))();
             camera = RequireCameraCapabilities();
+            if (camera.Permission == ReachyCameraPermissionState.Unsupported ||
+                camera.Permission == ReachyCameraPermissionState.Faulted)
+            {
+                store.ReportUnavailableAction(
+                    "Camera selection",
+                    camera.Message);
+                return;
+            }
             store.SetInteraction(
-                camera.Permission == ReachyCameraPermissionState.Faulted
-                    ? ReachyInteractionState.Error
-                    : ReachyInteractionState.Unavailable,
+                ReachyInteractionState.Unavailable,
                 camera.Message);
         }
 
