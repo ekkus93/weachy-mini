@@ -1,0 +1,185 @@
+name: RMA-082 Settings
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma082-settings.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyMainScreenTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachySettingsScreenTests.cs'
+      - 'managed/ReachyMini.Application.Tests/Rma082SettingsStateTests.cs'
+      - 'docs/architecture/SETTINGS_ARCHITECTURE.md'
+      - 'docs/validation/RMA_082_SETTINGS_VALIDATION_2026-08-03.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma082-settings-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Settings state, persistence, and truthfulness contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma082-status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-082 Settings",
+              "description": "Settings contract is running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma082-status.json" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Compile shared settings and run managed contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj \
+            --configuration Release \
+            --no-restore
+      - name: Verify complete settings surface and network truthfulness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          state = Path('Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs').read_text(encoding='utf-8')
+          screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
+          persistence = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8')
+          composition = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs').read_text(encoding='utf-8')
+
+          section_match = re.search(r'enum ReachySettingsSection\s*\{([^}]*)\}', state, re.S)
+          if section_match is None:
+              raise SystemExit('ReachySettingsSection is missing.')
+          actual_sections = re.findall(r'^\s*([A-Za-z]+)\s*=\s*\d+', section_match.group(1), re.M)
+          expected_sections = [
+              'Providers', 'Camera', 'Speech', 'LocalModel',
+              'Simulation', 'Privacy', 'Licenses',
+          ]
+          if actual_sections != expected_sections:
+              raise SystemExit(f'Unexpected settings sections: {actual_sections}')
+
+          for kind in ['Asr', 'Tts', 'Llm', 'Vlm']:
+              if f'ReachyProviderKind.{kind}' not in state or f'ReachyProviderKind.{kind}' not in screen:
+                  raise SystemExit(f'Missing independent provider surface for {kind}.')
+
+          required_actions = [
+              'CyclePreferredCamera',
+              'RequestCameraPreview',
+              'RequestCameraCalibration',
+              'RequestReprojectionDiagnostics',
+              'CycleSpeechLanguage',
+              'CycleSpeechVoice',
+              'RequestLocalModelInstall',
+              'RequestLocalModelImport',
+              'RequestLocalModelSelect',
+              'RequestLocalModelDelete',
+              'CycleLocalModelMemoryBudget',
+              'CycleLocalModelContextLength',
+              'CycleSimulationFidelity',
+              'RequestSimulationReset',
+              'ToggleHistory',
+              'CycleRetentionDays',
+          ]
+          for action in required_actions:
+              if f'void {action}(' not in screen:
+                  raise SystemExit(f'Missing settings action {action}.')
+
+          if 'Network-backed provider selections must be labeled network required.' not in state:
+              raise SystemExit('Network-backed provider invariant is missing.')
+          if 'ReachyProviderExecution.AndroidService' not in state or 'ReachyConnectivityRequirement.NetworkRequired' not in state:
+              raise SystemExit('Android-service network requirement is missing.')
+          if 'never labeled offline' not in state:
+              raise SystemExit('Android-service offline-truthfulness explanation is missing.')
+          if 'privacyCloudSummary' not in state or 'SendsDataOffDevice' not in state:
+              raise SystemExit('Cloud-bound privacy indicator is missing.')
+
+          for token in [
+              'SettingsFileName',
+              'schemaVersion',
+              'QuarantineInvalidFile',
+              'CaptureDurableSettings',
+              'ApplyDurableSettings',
+          ]:
+              if token not in persistence and token not in state:
+                  raise SystemExit(f'Missing durable settings contract: {token}')
+
+          for kind in [
+              'Simulation', 'Camera', 'Audio', 'Provider',
+              'Perception', 'Behavior', 'Persistence', 'UserInterface',
+          ]:
+              if f'ReachyServiceKind.{kind}' not in composition:
+                  raise SystemExit(f'Settings composition is missing {kind}.')
+
+          forbidden_navigation = [
+              'Input.GetAxis',
+              'Input.GetMouseButton',
+              'Input.touchCount',
+              'RotateAround(',
+              'transform.Translate(',
+              'presentationCamera.transform.position =',
+              'presentationCamera.transform.rotation =',
+          ]
+          for token in forbidden_navigation:
+              if token in screen:
+                  raise SystemExit(f'Forbidden camera-navigation path: {token}')
+
+          print('RMA-082 settings contract passed.')
+          PY
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma082-status.json"
+          import json, os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-082 Settings",
+              "description": "Settings contract passed" if passed else "Settings contract failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma082-status.json" >/dev/null
