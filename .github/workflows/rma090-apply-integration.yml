@@ -64,10 +64,9 @@ jobs:
             Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs \
             Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs \
             Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs \
-            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraDiscoveryBridge.java \
-            .github/workflows/local-unity-android-validation.yml
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraDiscoveryBridge.java
           if git diff --cached --quiet; then
-            printf '%s\n' 'RMA-090 integration was already applied.'
+            printf '%s\n' 'RMA-090 source integration was already applied.'
             exit 0
           fi
           git commit -m 'RMA-090: integrate camera capability discovery'
