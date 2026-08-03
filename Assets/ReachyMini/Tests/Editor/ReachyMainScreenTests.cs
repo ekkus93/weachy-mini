@@ -54,22 +54,33 @@ namespace ReachyMini.Tests
                 host.StartApplication();
 
                 Assert.That(host.Host, Is.Not.Null);
-                Assert.That(host.Health, Is.Not.Null);
+                ReachyApplicationHealthSnapshot? health = host.Health;
+                Assert.That(health, Is.Not.Null);
+                if (health == null)
+                {
+                    throw new AssertionException("Application health was not published.");
+                }
                 Assert.That(
-                    host.Health!.State,
+                    health.State,
                     Is.EqualTo(ReachyApplicationState.Degraded));
-                Assert.That(host.Health.Services, Has.Count.EqualTo(8));
-                Assert.That(screens[0].Snapshot, Is.Not.Null);
+                Assert.That(health.Services, Has.Count.EqualTo(8));
+
+                ReachyMainScreenSnapshot? snapshot = screens[0].Snapshot;
+                Assert.That(snapshot, Is.Not.Null);
+                if (snapshot == null)
+                {
+                    throw new AssertionException("Main-screen state was not published.");
+                }
                 Assert.That(
-                    screens[0].Snapshot!.InteractionState,
+                    snapshot.InteractionState,
                     Is.EqualTo(ReachyInteractionState.Idle));
                 Assert.That(
-                    screens[0].Snapshot.ActiveCamera,
+                    snapshot.ActiveCamera,
                     Is.EqualTo("Fixed front / three-quarter"));
                 Assert.That(
-                    screens[0].Snapshot.ProviderLocation,
+                    snapshot.ProviderLocation,
                     Is.EqualTo(ReachyProviderLocation.Unavailable));
-                Assert.That(screens[0].Snapshot.MicrophoneAvailable, Is.False);
+                Assert.That(snapshot.MicrophoneAvailable, Is.False);
                 Assert.That(screens[0].SettingsSnapshot, Is.Not.Null);
                 Assert.That(
                     camera.GetComponent<ReachyPresentationCamera>()
