@@ -44,5 +44,42 @@ def scoped_replace_once(path: str, old: str, new: str) -> None:
     original_replace_once(path, old, new)
 
 
+def add_resolution_operators() -> None:
+    path = Path(
+        "Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs"
+    )
+    text = path.read_text(encoding="utf-8")
+    operators = """        public static bool operator ==(
+            ReachyCameraResolution left,
+            ReachyCameraResolution right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(
+            ReachyCameraResolution left,
+            ReachyCameraResolution right)
+        {
+            return !left.Equals(right);
+        }
+
+"""
+    if operators in text:
+        return
+    anchor = """        public override int GetHashCode()
+        {
+            return HashCode.Combine(Width, Height);
+        }
+
+"""
+    if text.count(anchor) != 1:
+        raise RuntimeError("Resolution equality operator anchor is not unique.")
+    path.write_text(
+        text.replace(anchor, anchor + operators, 1),
+        encoding="utf-8",
+    )
+
+
 integration.replace_once = scoped_replace_once
 integration.main()
+add_resolution_operators()
