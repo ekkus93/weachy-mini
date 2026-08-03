@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the RMA-090 integration patch with scoped duplicate-anchor handling."""
+"""Run the RMA-090 integration patch with scoped anchor handling."""
 
 from __future__ import annotations
 
@@ -11,7 +11,20 @@ import apply_rma090_integration as integration
 original_replace_once = integration.replace_once
 
 
+def preserve_csharp_newline_literals(value: str) -> str:
+    return (
+        value.replace('"CAMERA\nFIXED VIEW"', '"CAMERA\\nFIXED VIEW"')
+        .replace('"CAMERA\nACCESS"', '"CAMERA\\nACCESS"')
+        .replace(
+            'camera.Message + "\n" + current.ReprojectionStatus',
+            'camera.Message + "\\n" + current.ReprojectionStatus',
+        )
+    )
+
+
 def scoped_replace_once(path: str, old: str, new: str) -> None:
+    old = preserve_csharp_newline_literals(old)
+    new = preserve_csharp_newline_literals(new)
     if (
         path.endswith("ReachySettingsApplicationCompositionProvider.cs")
         and old.startswith("        private void OnSettingsChanged(")
