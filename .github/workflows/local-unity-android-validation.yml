@@ -226,6 +226,23 @@ jobs:
           set -euo pipefail
           test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
+      - name: Install and run RMA-090 camera discovery acceptance
+        id: camera_discovery_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA090_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma090-camera-device-report
+        run: bash scripts/run_rma090_camera_discovery_acceptance_android.sh
+
+      - name: Upload RMA-090 camera discovery evidence
+        if: ${{ always() && steps.camera_discovery_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma090-camera-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma090-camera-device-report
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Install and run RMA-022 lifecycle acceptance
         id: lifecycle_acceptance
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
