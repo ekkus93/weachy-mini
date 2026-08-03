@@ -32,6 +32,9 @@ namespace ReachyMini.AppState
         private ReachyMainScreenSnapshot? snapshot;
         private ReachySettingsStateStore? settingsStore;
         private ReachySettingsSnapshot? settingsSnapshot;
+        private ReachyCameraCapabilityStateStore? cameraCapabilityStore;
+        private ReachyCameraCapabilitySnapshot? cameraCapabilitySnapshot;
+        private Action? requestCameraAccess;
         private Func<string>? diagnosticsProvider;
         private Func<ReachySettingsResetOutcome>? resetSimulation;
         private GUIStyle? titleStyle;
@@ -49,6 +52,9 @@ namespace ReachyMini.AppState
         public ReachyMainScreenSnapshot? Snapshot => snapshot;
 
         public ReachySettingsSnapshot? SettingsSnapshot => settingsSnapshot;
+
+        public ReachyCameraCapabilitySnapshot? CameraCapabilitySnapshot =>
+            cameraCapabilitySnapshot;
 
         public Camera? PresentationCamera => presentationCamera;
 
@@ -81,6 +87,25 @@ namespace ReachyMini.AppState
             Func<string> currentDiagnostics,
             Func<ReachySettingsResetOutcome> resetSimulationOperation)
         {
+            ReachyCameraCapabilityStateStore unavailableCamera =
+                CreateUnsupportedCameraCapabilities();
+            Bind(
+                store,
+                durableSettings,
+                currentDiagnostics,
+                resetSimulationOperation,
+                unavailableCamera,
+                () => { });
+        }
+
+        public void Bind(
+            ReachyMainScreenStateStore store,
+            ReachySettingsStateStore durableSettings,
+            Func<string> currentDiagnostics,
+            Func<ReachySettingsResetOutcome> resetSimulationOperation,
+            ReachyCameraCapabilityStateStore cameraCapabilities,
+            Action requestCameraAccessOperation)
+        {
             if (stateStore != null)
             {
                 throw new InvalidOperationException(
@@ -95,14 +120,20 @@ namespace ReachyMini.AppState
             stateStore = store ?? throw new ArgumentNullException(nameof(store));
             settingsStore = durableSettings ??
                 throw new ArgumentNullException(nameof(durableSettings));
+            cameraCapabilityStore = cameraCapabilities ??
+                throw new ArgumentNullException(nameof(cameraCapabilities));
+            requestCameraAccess = requestCameraAccessOperation ??
+                throw new ArgumentNullException(nameof(requestCameraAccessOperation));
             diagnosticsProvider = currentDiagnostics ??
                 throw new ArgumentNullException(nameof(currentDiagnostics));
             resetSimulation = resetSimulationOperation ??
                 throw new ArgumentNullException(nameof(resetSimulationOperation));
             snapshot = stateStore.Current;
             settingsSnapshot = settingsStore.Current;
+            cameraCapabilitySnapshot = cameraCapabilityStore.Current;
             stateStore.Changed += OnStateChanged;
             settingsStore.Changed += OnSettingsChanged;
+            cameraCapabilityStore.Changed += OnCameraCapabilitiesChanged;
         }
 
         public void RequestMicrophone()
@@ -123,16 +154,37 @@ namespace ReachyMini.AppState
         public void RequestCameraSelection()
         {
             ReachyMainScreenStateStore store = RequireStore();
-            if (!store.Current.CameraSelectionAvailable)
+            ReachyCameraCapabilitySnapshot camera =
+                RequireCameraCapabilities();
+            if (store.Current.CameraSelectionAvailable)
             {
-                store.ReportUnavailableAction(
-                    "Camera selection",
-                    "the CameraX bridge begins in RMA-090; the fixed robot view remains active");
+                RequireSettings().SelectSection(ReachySettingsSection.Camera);
+                store.ShowSettings(
+                    "Android camera capabilities are available. Frame acquisition remains disabled until RMA-091.");
                 return;
             }
+            if (camera.Permission == ReachyCameraPermissionState.Unsupported ||
+                camera.Permission == ReachyCameraPermissionState.Faulted)
+            {
+                store.ReportUnavailableAction(
+                    "Camera discovery",
+                    camera.Message);
+                return;
+            }
+
+            (requestCameraAccess ?? throw new InvalidOperationException(
+                "The camera access operation is not bound."))();
+            camera = RequireCameraCapabilities();
             store.SetInteraction(
-                store.Current.InteractionState,
-                "Camera selector opened.");
+                camera.Permission == ReachyCameraPermissionState.Faulted
+                    ? ReachyInteractionState.Error
+                    : ReachyInteractionState.Unavailable,
+                camera.Message);
+        }
+
+        public void RequestCameraAccess()
+        {
+            RequestCameraSelection();
         }
 
         public void ToggleSettings()
@@ -181,7 +233,7 @@ namespace ReachyMini.AppState
         {
             RequireSettings().ReportUnavailableAction(
                 "Camera preview",
-                "CameraX preview begins in RMA-091");
+                "RMA-090 discovers capabilities only; CameraX preview and ImageAnalysis begin in RMA-091");
         }
 
         public void RequestCameraCalibration()
@@ -281,8 +333,14 @@ namespace ReachyMini.AppState
             {
                 settingsStore.Changed -= OnSettingsChanged;
             }
+            if (cameraCapabilityStore != null)
+            {
+                cameraCapabilityStore.Changed -= OnCameraCapabilitiesChanged;
+            }
             stateStore = null;
             settingsStore = null;
+            cameraCapabilityStore = null;
+            requestCameraAccess = null;
             diagnosticsProvider = null;
             resetSimulation = null;
         }
@@ -301,6 +359,13 @@ namespace ReachyMini.AppState
             settingsSnapshot = eventArgs.Snapshot;
         }
 
+        private void OnCameraCapabilitiesChanged(
+            object? sender,
+            ReachyCameraCapabilityChangedEventArgs eventArgs)
+        {
+            cameraCapabilitySnapshot = eventArgs.Snapshot;
+        }
+
         private ReachyMainScreenStateStore RequireStore()
         {
             return stateStore ?? throw new InvalidOperationException(
@@ -311,6 +376,54 @@ namespace ReachyMini.AppState
         {
             return settingsStore ?? throw new InvalidOperationException(
                 "The main screen is not bound to settings state.");
+        }
+
+        private ReachyCameraCapabilitySnapshot RequireCameraCapabilities()
+        {
+            return cameraCapabilitySnapshot ?? throw new InvalidOperationException(
+                "The main screen is not bound to camera capability state.");
+        }
+
+        private static ReachyCameraCapabilityStateStore
+            CreateUnsupportedCameraCapabilities()
+        {
+            var store = new ReachyCameraCapabilityStateStore();
+            store.MarkUnsupported(
+                "Android camera discovery is not bound in the legacy application shell.");
+            return store;
+        }
+
+        private string BuildPreferredCameraCapabilityLabel(
+            ReachyCameraFacing preferredFacing)
+        {
+            ReachyCameraCapabilitySnapshot cameraState =
+                RequireCameraCapabilities();
+            ReachyDeviceCameraFacing desired = preferredFacing switch
+            {
+                ReachyCameraFacing.Front => ReachyDeviceCameraFacing.Front,
+                ReachyCameraFacing.Rear => ReachyDeviceCameraFacing.Rear,
+                _ => ReachyDeviceCameraFacing.Unknown,
+            };
+            for (int index = 0; index < cameraState.Cameras.Count; ++index)
+            {
+                ReachyCameraCapability camera = cameraState.Cameras[index];
+                if (desired != ReachyDeviceCameraFacing.Unknown &&
+                    camera.Facing != desired)
+                {
+                    continue;
+                }
+                string resolution = camera.AnalysisResolutions.Count == 0
+                    ? "no YUV analysis sizes"
+                    : camera.AnalysisResolutions[0].ToString();
+                string intrinsics = camera.Intrinsics.Available
+                    ? "platform intrinsics"
+                    : "calibration fallback required";
+                return
+                    $"ID {camera.CameraId} · {camera.Facing} · " +
+                    $"orientation {camera.SensorOrientationDegrees}° · " +
+                    $"{camera.Availability} · max {resolution} · {intrinsics}";
+            }
+            return "No discovered camera matches the stored preference.";
         }
 
         private void OnGUI()
@@ -416,8 +529,8 @@ namespace ReachyMini.AppState
 
             buttonX += buttonWidth + gap;
             string cameraLabel = current.CameraSelectionAvailable
-                ? "CAMERA"
-                : "CAMERA\nFIXED VIEW";
+                ? "DEVICE CAMERA"
+                : "CAMERA\nACCESS";
             if (GUI.Button(
                     new Rect(buttonX, buttonY, buttonWidth, buttonHeight),
                     cameraLabel,
@@ -601,14 +714,42 @@ namespace ReachyMini.AppState
             Rect area,
             ReachySettingsSnapshot current)
         {
+            ReachyCameraCapabilitySnapshot camera =
+                RequireCameraCapabilities();
             GUI.Label(
-                new Rect(area.x, area.y, area.width, 54f),
-                "The robot presentation camera remains fixed. These controls " +
-                "store the preferred Android device camera and expose future CameraX actions.",
+                new Rect(area.x, area.y, area.width, 48f),
+                "The robot presentation camera remains fixed. RMA-090 requests " +
+                "Android permission only from these camera controls and discovers capabilities without opening a camera device.",
                 panelBodyStyle!);
-            float y = area.y + 66f;
+            float y = area.y + 54f;
+            string accessLabel = camera.Permission switch
+            {
+                ReachyCameraPermissionState.PermanentlyDenied =>
+                    "OPEN ANDROID APP SETTINGS",
+                ReachyCameraPermissionState.Granted =>
+                    "REFRESH CAMERA CAPABILITIES",
+                ReachyCameraPermissionState.Requesting =>
+                    "PERMISSION REQUEST IN PROGRESS",
+                ReachyCameraPermissionState.Unsupported =>
+                    "CAMERA DISCOVERY UNSUPPORTED",
+                _ => "REQUEST CAMERA ACCESS",
+            };
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 58f),
+                    new Rect(area.x, y, area.width, 48f),
+                    accessLabel,
+                    smallButtonStyle!))
+            {
+                RequestCameraAccess();
+            }
+            y += 56f;
+            GUI.Label(
+                new Rect(area.x, y, area.width, 42f),
+                $"PERMISSION  {camera.Permission} · FRONT {camera.FrontCameraCount} · " +
+                $"REAR {camera.RearCameraCount} · AVAILABLE {camera.AvailableCameraCount}",
+                warningStyle!);
+            y += 48f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 48f),
                     "PREFERRED DEVICE CAMERA  " +
                     ReachySettingsStateStore.GetCameraFacingLabel(
                         current.PreferredCameraFacing),
@@ -616,33 +757,39 @@ namespace ReachyMini.AppState
             {
                 CyclePreferredCamera();
             }
-            y += 68f;
+            y += 56f;
+            GUI.Label(
+                new Rect(area.x, y, area.width, 48f),
+                BuildPreferredCameraCapabilityLabel(
+                    current.PreferredCameraFacing),
+                panelBodyStyle!);
+            y += 54f;
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 54f),
-                    "PREVIEW — UNAVAILABLE",
+                    new Rect(area.x, y, area.width, 44f),
+                    "PREVIEW / IMAGE ANALYSIS — RMA-091",
                     smallButtonStyle!))
             {
                 RequestCameraPreview();
             }
-            y += 64f;
+            y += 52f;
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 54f),
+                    new Rect(area.x, y, area.width, 44f),
                     $"CALIBRATION  {current.CameraCalibrationProfile}",
                     smallButtonStyle!))
             {
                 RequestCameraCalibration();
             }
-            y += 64f;
+            y += 52f;
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 54f),
+                    new Rect(area.x, y, area.width, 44f),
                     "REPROJECTION DIAGNOSTICS — UNAVAILABLE",
                     smallButtonStyle!))
             {
                 RequestReprojectionDiagnostics();
             }
             GUI.Label(
-                new Rect(area.x, y + 62f, area.width, 70f),
-                current.ReprojectionStatus,
+                new Rect(area.x, y + 48f, area.width, 62f),
+                camera.Message + "\n" + current.ReprojectionStatus,
                 warningStyle!);
         }
 

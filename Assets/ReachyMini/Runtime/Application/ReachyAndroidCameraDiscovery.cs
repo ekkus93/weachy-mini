@@ -238,7 +238,7 @@ namespace ReachyMini.AppState
         private void OnPermissionDenied()
         {
             IReachyDeviceCameraPlatform currentPlatform = RequirePlatform();
-            int requestCount = ReadHistory(RequestCountKey);
+            int requestCount = state.Current.PermissionRequestCount;
             bool permanent =
                 requestCount > 1 &&
                 !currentPlatform.ShouldShowCameraPermissionRationale();
@@ -410,9 +410,23 @@ namespace ReachyMini.AppState
             object? sender,
             ReachyCameraCapabilityChangedEventArgs eventArgs)
         {
+            ReachyCameraCapabilitySnapshot snapshot = eventArgs.Snapshot;
             Debug.Log(
                 "RMA090_CAMERA_CAPABILITIES " +
-                eventArgs.Snapshot.Summary);
+                snapshot.Summary);
+            for (int index = 0; index < snapshot.Cameras.Count; ++index)
+            {
+                ReachyCameraCapability camera = snapshot.Cameras[index];
+                string largestResolution = camera.AnalysisResolutions.Count == 0
+                    ? "none"
+                    : camera.AnalysisResolutions[0].ToString();
+                Debug.Log(
+                    $"RMA090_CAMERA id={camera.CameraId} facing={camera.Facing} " +
+                    $"orientation={camera.SensorOrientationDegrees} " +
+                    $"availability={camera.Availability} " +
+                    $"resolutions={camera.AnalysisResolutions.Count} " +
+                    $"top={largestResolution} intrinsics={camera.Intrinsics.Source}");
+            }
         }
     }
 

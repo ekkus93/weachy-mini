@@ -89,10 +89,12 @@ namespace ReachyMini.AppState
                 ReachyMainScreen screen =
                     shellObject.AddComponent<ReachyMainScreen>();
                 screen.ConfigurePresentationCamera(camera);
+                ReachyAndroidCameraDiscovery cameraDiscovery =
+                    shellObject.AddComponent<ReachyAndroidCameraDiscovery>();
                 ReachySettingsApplicationCompositionProvider provider =
                     shellObject.AddComponent<
                         ReachySettingsApplicationCompositionProvider>();
-                provider.Configure(runtime, camera, screen);
+                provider.Configure(runtime, camera, screen, cameraDiscovery);
                 ReachyApplicationHostBehaviour host =
                     shellObject.AddComponent<ReachyApplicationHostBehaviour>();
                 host.ConfigureCompositionProvider(provider);

@@ -41,12 +41,16 @@ namespace ReachyMini.AppState
         [SerializeField]
         private ReachyMainScreen? mainScreen;
 
+        [SerializeField]
+        private ReachyAndroidCameraDiscovery? cameraDiscovery;
+
         private bool compositionCreated;
 
         public void Configure(
             ReachyProductionAuthoritativeRuntime runtime,
             Camera camera,
-            ReachyMainScreen screen)
+            ReachyMainScreen screen,
+            ReachyAndroidCameraDiscovery discovery)
         {
             if (compositionCreated)
             {
@@ -56,6 +60,8 @@ namespace ReachyMini.AppState
             productionRuntime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             presentationCamera = camera ?? throw new ArgumentNullException(nameof(camera));
             mainScreen = screen ?? throw new ArgumentNullException(nameof(screen));
+            cameraDiscovery = discovery ??
+                throw new ArgumentNullException(nameof(discovery));
         }
 
         public ReachyApplicationComposition CreateApplicationComposition()
@@ -76,6 +82,9 @@ namespace ReachyMini.AppState
             ReachyMainScreen screen = mainScreen ??
                 throw new InvalidOperationException(
                     "The settings application requires the main screen.");
+            ReachyAndroidCameraDiscovery discovery = cameraDiscovery ??
+                throw new InvalidOperationException(
+                    "The settings application requires Android camera discovery.");
 
             return ReachyApplicationComposition.CreateComplete(
                 new[]
@@ -93,7 +102,9 @@ namespace ReachyMini.AppState
                         ReachyServiceCriticality.Optional,
                         Array.Empty<ReachyServiceKind>(),
                         resolver =>
-                            new ReachyFixedCameraApplicationService(camera)),
+                            new ReachyDiscoveredCameraApplicationService(
+                                camera,
+                                discovery)),
                     new ReachyServiceRegistration(
                         "speech-audio",
                         ReachyServiceKind.Audio,
@@ -184,7 +195,8 @@ namespace ReachyMini.AppState
                             resolver.GetRequired<IReachyBehaviorService>(
                                 ReachyServiceKind.Behavior),
                             resolver.GetRequired<ReachySettingsPersistenceApplicationService>(
-                                ReachyServiceKind.Persistence))),
+                                ReachyServiceKind.Persistence),
+                            discovery)),
                 });
         }
     }
@@ -307,6 +319,7 @@ namespace ReachyMini.AppState
         private readonly ReachyProductionAuthoritativeRuntime runtime;
         private readonly IReachyApplicationService[] dependencies;
         private readonly ReachySettingsPersistenceApplicationService persistence;
+        private readonly ReachyAndroidCameraDiscovery cameraDiscovery;
         private readonly ReachyMainScreenStateStore stateStore =
             new ReachyMainScreenStateStore();
 
@@ -319,7 +332,8 @@ namespace ReachyMini.AppState
             IReachyProviderService provider,
             IReachyPerceptionService perception,
             IReachyBehaviorService behavior,
-            ReachySettingsPersistenceApplicationService persistence)
+            ReachySettingsPersistenceApplicationService persistence,
+            ReachyAndroidCameraDiscovery cameraDiscovery)
             : base(
                 "main-screen",
                 ReachyServiceKind.UserInterface,
@@ -329,6 +343,8 @@ namespace ReachyMini.AppState
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             this.persistence = persistence ??
                 throw new ArgumentNullException(nameof(persistence));
+            this.cameraDiscovery = cameraDiscovery ??
+                throw new ArgumentNullException(nameof(cameraDiscovery));
             dependencies = new IReachyApplicationService[]
             {
                 simulation ?? throw new ArgumentNullException(nameof(simulation)),
@@ -348,6 +364,7 @@ namespace ReachyMini.AppState
                 dependencies[index].HealthChanged += OnDependencyHealthChanged;
             }
             persistence.Settings.Changed += OnSettingsChanged;
+            cameraDiscovery.State.Changed += OnCameraCapabilitiesChanged;
 
             UpdateMainScreenCapabilities();
             persistence.Settings.SetSimulationDiagnostics(
@@ -359,17 +376,27 @@ namespace ReachyMini.AppState
                 stateStore,
                 persistence.Settings,
                 BuildDiagnostics,
-                ResetSimulation);
+                ResetSimulation,
+                cameraDiscovery.State,
+                cameraDiscovery.RequestAccessOrRefresh);
             SetReady("Main screen and durable settings are bound to application state.");
         }
 
         protected override void OnDispose()
         {
             persistence.Settings.Changed -= OnSettingsChanged;
+            cameraDiscovery.State.Changed -= OnCameraCapabilitiesChanged;
             for (int index = 0; index < dependencies.Length; ++index)
             {
                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
             }
+        }
+
+        private void OnCameraCapabilitiesChanged(
+            object? sender,
+            ReachyCameraCapabilityChangedEventArgs eventArgs)
+        {
+            UpdateMainScreenCapabilities();
         }
 
         private void OnSettingsChanged(
@@ -410,7 +437,7 @@ namespace ReachyMini.AppState
 
             stateStore.SetCapabilities(
                 "Fixed front / three-quarter",
-                false,
+                cameraDiscovery.State.Current.SelectionAvailable,
                 configured == 0
                     ? "Not configured"
                     : $"{configured}/4 preferences",
@@ -447,11 +474,12 @@ namespace ReachyMini.AppState
 
         private string BuildDiagnostics()
         {
-            var lines = new List<string>(dependencies.Length + 3)
+            var lines = new List<string>(dependencies.Length + 4)
             {
                 "Application shell: active",
                 $"Settings file: {persistence.PersistencePath}",
                 $"Settings status: {persistence.Settings.Current.StatusMessage}",
+                $"Camera discovery: {cameraDiscovery.State.Current.Summary}",
             };
             if (!string.IsNullOrEmpty(persistence.LastPersistenceFault))
             {
