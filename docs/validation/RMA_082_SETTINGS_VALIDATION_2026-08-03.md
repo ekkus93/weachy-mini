@@ -1,7 +1,7 @@
 # RMA-082 Settings Validation
 
 **Date:** 2026-08-03  
-**Status:** In progress — implementation and hosted contracts pass; Unity and installed-device validation are blocked by runner licensing
+**Status:** Complete
 
 ## Scope
 
@@ -17,7 +17,8 @@ sections:
 - licenses and attribution.
 
 The implementation preserves the fixed front/three-quarter Reachy presentation
-camera and does not claim that later runtime integrations are installed.
+camera and does not claim that later CameraX, speech, model-package, cloud,
+perception, or behavior runtimes are installed.
 
 ## Implemented contracts
 
@@ -30,21 +31,31 @@ can enter application state.
 
 The settings surface displays execution class, connectivity requirement, and
 actual availability separately. A stored preference therefore cannot be
-mistaken for an operational provider.
+mistaken for an operational provider. The derived privacy summary identifies
+every selected provider that may send data off device.
 
 ### Visible unavailable actions
 
 Camera preview, camera calibration, reprojection diagnostics, and local-model
 install/import/select/delete controls remain enabled as explanatory entry
-points. Invoking them changes the settings status to an explicit unavailable
-message naming the missing implementation milestone.
+points. Invoking them changes settings status to an explicit unavailable
+message naming the missing implementation milestone. No action silently claims
+success.
 
 ### Durable state
 
 The schema-versioned settings file is stored under
-`Application.persistentDataPath`. Tests cover preference round-trip,
-unsupported-value sanitization, atomic replacement, malformed-file quarantine,
-safe-default recovery, and degraded health reporting.
+`Application.persistentDataPath`. The persistence service provides:
+
+- durable preference capture and restoration;
+- unsupported-value sanitization;
+- temporary and backup replacement;
+- malformed-file quarantine;
+- safe-default recovery;
+- visible degraded health with retained diagnostics.
+
+Transient runtime availability is recomputed at startup and is not persisted as
+a false capability claim.
 
 ### Fixed-camera preservation
 
@@ -55,8 +66,8 @@ afterward.
 
 ## Hosted contract validation
 
-Workflow run `30847149038`, job `91798117294`, passed on source commit
-`fb267f9a459e48e5acd33aa9022f73b399f65479`.
+Workflow run `30851077541`, job `91810969892`, passed on exact commit
+`96c7113eccca7eec4afc8fb5d346a56e0782126f`.
 
 The hosted gate proved:
 
@@ -74,57 +85,60 @@ The hosted gate proved:
 
 Commit status `RMA-082 Settings` completed successfully.
 
-## Unity and Android validation blocker
+## Unity license recovery and compiler findings
 
-The source head was submitted to the permanent self-hosted Unity/Android gate in
-workflow run `30847148996` on runner `kawa`.
+The first RMA-082 attempts were blocked before project compilation because the
+self-hosted `kawa` runner had no active Unity Editor entitlement. After Unity
+Hub was signed in, the rerun resolved active unlimited Unity Personal ULF and
+assigned entitlements and loaded the project successfully.
 
-Attempts:
+That first licensed compile then exposed two source-level test compatibility
+issues rather than a production-runtime defect:
 
-1. Job `91798116924` was canceled by workflow concurrency during generated
-   presentation preparation and did not evaluate source.
-2. Job `91798553550` checked out exact commit
-   `fb267f9a459e48e5acd33aa9022f73b399f65479`, resolved Unity 6000.5.2f1 and the
-   Android toolchain, imported the Reachy assets, and then stopped before project
-   compilation with Unity exit status 198.
-3. Job `91799008188` repeated the exact-head attempt and stopped at the same
-   pre-compilation boundary.
+1. Three nullable dereference diagnostics in `ReachyMainScreenTests.cs` were
+   treated as errors. The tests now retain explicitly checked health and screen
+   snapshots before dereferencing them.
+2. Unity's target framework does not provide generic
+   `Enum.GetValues<TEnum>()`. The settings test now uses the compatible typed
+   cast from `Enum.GetValues(typeof(ReachySettingsSection))`.
 
-Both completed attempts reported:
+No analyzer suppression or reduced warning policy was introduced.
 
-- Unity Licensing Client access token unavailable;
-- no matching Editor entitlement;
-- `com.unity.editor.headless` not found;
-- `No valid Unity Editor license found. Please activate your license.`
+## Unity and installed Android validation
 
-This is a runner-account licensing failure, not a compile, test, APK, or device
-acceptance result. No Unity test count, APK result, or installed-device claim is
-made for RMA-082.
+Permanent workflow run `30851077505`, job `91811041976`, passed on exact commit
+`96c7113eccca7eec4afc8fb5d346a56e0782126f`.
 
-Unity's supported license management requires a signed-in Unity Hub account for
-Personal or named-user licensing. No Unity credentials, serial, offline license
-file, or service-account credentials are stored in this repository, and the
-gate was not weakened to bypass licensing.
+The run passed every gated stage:
 
-## Required completion run
-
-After Unity Hub is signed in and a valid license is visible on `kawa`, rerun the
-permanent `Local Unity Android Validation` workflow on the then-current exact
-`master` SHA. RMA-082 completion requires all of the following on that same SHA:
-
-- generated presentation import with no first-party compiler warnings;
-- all Unity edit-mode tests, including the RMA-082 settings tests;
-- the Unity play-mode suite;
-- ARM64 API-26 IL2CPP APK build and verification;
-- installed LG-phone RMA-022 lifecycle acceptance;
+- Unity 6000.5.2f1 license and Android toolchain resolution;
+- deterministic Reachy asset import and generated presentation construction;
+- production Android MuJoCo runtime staging;
+- the complete Unity edit-mode and play-mode suites, including RMA-082 settings,
+  fixed-camera, persistence round-trip, corrupt-file quarantine, and
+  network-truthfulness tests;
+- ARM64 API-26 IL2CPP APK build;
+- APK architecture and packaging verification;
+- installed LG-phone RMA-022 native lifecycle and pause/resume acceptance;
 - installed LG-phone authoritative-rendering acceptance;
-- uploaded test, lifecycle, rendering, and APK artifacts;
-- successful `RMA-082 Settings` and `Local Unity Android Validation` commit
-  statuses.
+- Unity-test, lifecycle, rendering, and APK artifact uploads;
+- final `Local Unity Android Validation` success status.
+
+Artifacts:
+
+- Unity tests: artifact `8870723146`, ZIP digest
+  `9504e5a38e398b50825937edace31f1f828884d9194952d9b8d8eaba17078cba`;
+- lifecycle report: artifact `8870793704`, ZIP digest
+  `b240d3ade0b869408ecf59afdbb5a1e1ed3bac16cdd1d06d75d5f758a9d97c1e`;
+- authoritative-rendering report: artifact `8870807294`, ZIP digest
+  `0f3cd2964d250a64046e2284dbfcea6d4eebec0214e3331c3e541e7e3a333b98`;
+- device APK: artifact `8870889900`, ZIP digest
+  `3ac9693c0a5bd30a24d48dc25e13455ea375f77bd8eeb3705b0db4819bb2d413`.
 
 ## Acceptance decision
 
-RMA-082 is not yet accepted. Its implementation and hosted contracts are in
-place, but the mandatory Unity, Android build, and installed-device gates have
-not run because `kawa` has no active Unity license. The authoritative TODO must
-remain in progress until exact-head device validation succeeds.
+RMA-082 is accepted. Every settings domain is implemented, unavailable
+capabilities remain visible and actionable, network-backed Android-service and
+cloud selections cannot be represented as offline, durable settings failure is
+visible, and the exact implementation passed hosted, Unity, ARM64 APK, and
+installed-device validation.
