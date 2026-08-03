@@ -17,7 +17,7 @@ namespace ReachyMini.AppState
             Camera presentationCamera,
             ReachyAndroidCameraDiscovery discovery)
             : base(
-                "camera-capability-discovery",
+                "fixed-presentation-camera",
                 ReachyServiceKind.Camera,
                 ReachyServiceCriticality.Optional)
         {
