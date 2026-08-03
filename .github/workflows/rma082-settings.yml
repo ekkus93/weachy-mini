@@ -16,10 +16,11 @@ on:
       - 'docs/architecture/SETTINGS_ARCHITECTURE.md'
       - 'docs/validation/RMA_082_SETTINGS_VALIDATION_2026-08-03.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - 'scripts/update_rma082_todo_blocked.py'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
@@ -55,6 +56,8 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             --data-binary "@${RUNNER_TEMP}/rma082-status.json" >/dev/null
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -158,6 +161,18 @@ jobs:
 
           print('RMA-082 settings contract passed.')
           PY
+      - name: Record RMA-082 implementation and blocker in authoritative TODO
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/update_rma082_todo_blocked.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          if ! git diff --cached --quiet; then
+            git commit -m 'RMA-082: record Unity license blocker'
+            git push origin HEAD:master
+          fi
       - name: Publish final status
         if: always()
         shell: bash
