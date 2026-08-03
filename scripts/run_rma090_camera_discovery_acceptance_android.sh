@@ -5,11 +5,16 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 ADB_BIN="${ADB_BIN:-adb}"
 APK_PATH="${UNITY_DEVICE_APK_PATH:-${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk}"
 REPORT_DIR="${RMA090_CAMERA_REPORT_DIR:-${ROOT_DIR}/build/rma090-camera-device-report}"
+FOREGROUND_HELPER="${ROOT_DIR}/scripts/android_device_acceptance_foreground.sh"
 PACKAGE_NAME="com.ekkus.weachymini"
 TIMEOUT_SECONDS="${RMA090_CAMERA_TIMEOUT_SECONDS:-45}"
 
 if [[ ! -s "${APK_PATH}" ]]; then
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2
+    exit 1
+fi
+if [[ ! -s "${FOREGROUND_HELPER}" ]]; then
+    printf 'Android foreground helper is missing: %s\n' "${FOREGROUND_HELPER}" >&2
     exit 1
 fi
 command -v "${ADB_BIN}" >/dev/null
@@ -50,6 +55,8 @@ capture_diagnostics()
     "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt"
     "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt"
     "${ADB[@]}" shell dumpsys window windows > "${REPORT_DIR}/window.txt"
+    "${ADB[@]}" shell dumpsys window policy > "${REPORT_DIR}/window-policy.txt"
+    "${ADB[@]}" shell dumpsys power > "${REPORT_DIR}/power.txt"
     "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt"
     "${ADB[@]}" exec-out screencap -p > "${REPORT_DIR}/device-screen.png"
 }
@@ -64,6 +71,8 @@ cleanup()
     set +e
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
     "${ADB[@]}" shell pm revoke "${PACKAGE_NAME}" android.permission.CAMERA
+    ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
+        restore "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 10
     exit "${exit_code}"
 }
 trap cleanup EXIT
@@ -94,11 +103,17 @@ launch_application()
 {
     local suffix="$1"
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
+    ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
+        prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20 \
+        > "${REPORT_DIR}/prepare-${suffix}.txt"
     "${ADB[@]}" shell am start -W \
         -n "${LAUNCH_COMPONENT}" \
         -a android.intent.action.MAIN \
         -c android.intent.category.LAUNCHER \
         > "${REPORT_DIR}/launch-${suffix}.txt"
+    ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
+        wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20 \
+        > "${REPORT_DIR}/focus-${suffix}.txt"
 }
 
 {
