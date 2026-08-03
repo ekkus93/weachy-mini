@@ -154,29 +154,38 @@ namespace ReachyMini.Camera.Tests
         private static void InvalidCameraContractsFailClosed()
         {
             Throws<ArgumentOutOfRangeException>(
-                () => new ReachyCameraResolution(0, 720),
+                () =>
+                {
+                    _ = new ReachyCameraResolution(0, 720);
+                },
                 "zero-width resolution");
             Throws<ArgumentOutOfRangeException>(
-                () => new ReachyCameraIntrinsics(
-                    ReachyCameraIntrinsicsSource.AndroidCalibration,
-                    0f,
-                    500f,
-                    320f,
-                    240f,
-                    0f,
-                    "fallback"),
+                () =>
+                {
+                    _ = new ReachyCameraIntrinsics(
+                        ReachyCameraIntrinsicsSource.AndroidCalibration,
+                        0f,
+                        500f,
+                        320f,
+                        240f,
+                        0f,
+                        "fallback");
+                },
                 "invalid focal length");
             Throws<ArgumentOutOfRangeException>(
-                () => new ReachyCameraCapability(
-                    "bad-orientation",
-                    ReachyDeviceCameraFacing.Rear,
-                    45,
-                    "limited",
-                    ReachyCameraAvailabilityState.Unknown,
-                    Array.Empty<ReachyCameraResolution>(),
-                    ReachyCameraIntrinsics.CreateUnavailable("fallback"),
-                    0,
-                    0),
+                () =>
+                {
+                    _ = new ReachyCameraCapability(
+                        "bad-orientation",
+                        ReachyDeviceCameraFacing.Rear,
+                        45,
+                        "limited",
+                        ReachyCameraAvailabilityState.Unknown,
+                        Array.Empty<ReachyCameraResolution>(),
+                        ReachyCameraIntrinsics.CreateUnavailable("fallback"),
+                        0,
+                        0);
+                },
                 "invalid orientation");
 
             ReachyCameraCapability camera = new ReachyCameraCapability(
@@ -190,12 +199,15 @@ namespace ReachyMini.Camera.Tests
                 0,
                 0);
             Throws<ArgumentException>(
-                () => new ReachyCameraCapabilitySnapshot(
-                    ReachyCameraPermissionState.Granted,
-                    "duplicate inventory",
-                    1,
-                    new[] { camera, camera },
-                    1UL),
+                () =>
+                {
+                    _ = new ReachyCameraCapabilitySnapshot(
+                        ReachyCameraPermissionState.Granted,
+                        "duplicate inventory",
+                        1,
+                        new[] { camera, camera },
+                        1UL);
+                },
                 "duplicate camera identifier");
         }
 
