@@ -85,6 +85,20 @@ namespace ReachyMini.AppState
             return HashCode.Combine(Width, Height);
         }
 
+        public static bool operator ==(
+            ReachyCameraResolution left,
+            ReachyCameraResolution right)
+        {
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(
+            ReachyCameraResolution left,
+            ReachyCameraResolution right)
+        {
+            return !left.Equals(right);
+        }
+
         public override string ToString()
         {
             return $"{Width}x{Height}";
