@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/rma090-apply-integration.yml'
       - 'scripts/apply_rma090_integration.py'
+      - 'scripts/apply_rma090_integration_v2.py'
   workflow_dispatch:
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/apply_rma090_integration.py
+          python3 scripts/apply_rma090_integration_v2.py
           git diff --check
       - name: Commit integrated application boundary
         shell: bash
