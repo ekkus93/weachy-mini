@@ -1,0 +1,50 @@
+name: RMA-090 Apply Integration
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma090-apply-integration.yml'
+      - 'scripts/apply_rma090_integration.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma090-apply-integration
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply deterministic integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_rma090_integration.py
+          git diff --check
+      - name: Commit integrated application boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs \
+            Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs \
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraDiscoveryBridge.java \
+            .github/workflows/local-unity-android-validation.yml
+          if git diff --cached --quiet; then
+            printf '%s\n' 'RMA-090 integration was already applied.'
+            exit 0
+          fi
+          git commit -m 'RMA-090: integrate camera capability discovery'
+          git push origin HEAD:master
