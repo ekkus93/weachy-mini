@@ -38,6 +38,11 @@ The first denial is never classified as permanent solely because an OEM returns
 no rationale. Permanent denial requires a later request and a false rationale
 result.
 
+Every failed camera-control action retains the user-facing action name and the
+platform reason. For example, unsupported editor discovery is reported as
+`Camera selection unavailable` together with the Android-only explanation rather
+than replacing the action diagnosis with a raw platform message.
+
 ## Android bridge
 
 The Java library uses Camera2 metadata because CameraX does not expose every
