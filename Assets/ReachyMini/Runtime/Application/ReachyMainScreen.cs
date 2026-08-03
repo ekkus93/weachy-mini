@@ -13,23 +13,42 @@ namespace ReachyMini.AppState
         private const float TopCardWidth = 430f;
         private const float TopCardHeight = 190f;
         private const float BottomBarHeight = 118f;
+        private const float SettingsNavigationWidth = 180f;
+        private static readonly ReachySettingsSection[] SettingsSections =
+        {
+            ReachySettingsSection.Providers,
+            ReachySettingsSection.Camera,
+            ReachySettingsSection.Speech,
+            ReachySettingsSection.LocalModel,
+            ReachySettingsSection.Simulation,
+            ReachySettingsSection.Privacy,
+            ReachySettingsSection.Licenses,
+        };
 
         [SerializeField]
         private Camera? presentationCamera;
 
         private ReachyMainScreenStateStore? stateStore;
         private ReachyMainScreenSnapshot? snapshot;
+        private ReachySettingsStateStore? settingsStore;
+        private ReachySettingsSnapshot? settingsSnapshot;
         private Func<string>? diagnosticsProvider;
+        private Func<ReachySettingsResetOutcome>? resetSimulation;
         private GUIStyle? titleStyle;
         private GUIStyle? stateStyle;
         private GUIStyle? detailStyle;
         private GUIStyle? indicatorStyle;
         private GUIStyle? buttonStyle;
+        private GUIStyle? smallButtonStyle;
         private GUIStyle? panelStyle;
         private GUIStyle? panelTitleStyle;
         private GUIStyle? panelBodyStyle;
+        private GUIStyle? sectionStyle;
+        private GUIStyle? warningStyle;
 
         public ReachyMainScreenSnapshot? Snapshot => snapshot;
+
+        public ReachySettingsSnapshot? SettingsSnapshot => settingsSnapshot;
 
         public Camera? PresentationCamera => presentationCamera;
 
@@ -47,6 +66,21 @@ namespace ReachyMini.AppState
             ReachyMainScreenStateStore store,
             Func<string> currentDiagnostics)
         {
+            Bind(
+                store,
+                new ReachySettingsStateStore(),
+                currentDiagnostics,
+                () => new ReachySettingsResetOutcome(
+                    false,
+                    "The legacy composition does not expose simulation reset."));
+        }
+
+        public void Bind(
+            ReachyMainScreenStateStore store,
+            ReachySettingsStateStore durableSettings,
+            Func<string> currentDiagnostics,
+            Func<ReachySettingsResetOutcome> resetSimulationOperation)
+        {
             if (stateStore != null)
             {
                 throw new InvalidOperationException(
@@ -59,10 +93,16 @@ namespace ReachyMini.AppState
             }
 
             stateStore = store ?? throw new ArgumentNullException(nameof(store));
+            settingsStore = durableSettings ??
+                throw new ArgumentNullException(nameof(durableSettings));
             diagnosticsProvider = currentDiagnostics ??
                 throw new ArgumentNullException(nameof(currentDiagnostics));
+            resetSimulation = resetSimulationOperation ??
+                throw new ArgumentNullException(nameof(resetSimulationOperation));
             snapshot = stateStore.Current;
+            settingsSnapshot = settingsStore.Current;
             stateStore.Changed += OnStateChanged;
+            settingsStore.Changed += OnSettingsChanged;
         }
 
         public void RequestMicrophone()
@@ -105,7 +145,7 @@ namespace ReachyMini.AppState
             else
             {
                 store.ShowSettings(
-                    "Settings shell opened. Provider and device settings are implemented in RMA-082.");
+                    "Settings opened. Unavailable capabilities remain labeled and actionable.");
             }
         }
 
@@ -122,14 +162,129 @@ namespace ReachyMini.AppState
             }
         }
 
+        public void SelectSettingsSection(ReachySettingsSection section)
+        {
+            RequireSettings().SelectSection(section);
+        }
+
+        public void CycleProvider(ReachyProviderKind kind)
+        {
+            RequireSettings().CycleProvider(kind);
+        }
+
+        public void CyclePreferredCamera()
+        {
+            RequireSettings().CyclePreferredCameraFacing();
+        }
+
+        public void RequestCameraPreview()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Camera preview",
+                "CameraX preview begins in RMA-091");
+        }
+
+        public void RequestCameraCalibration()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Camera calibration",
+                "device-camera calibration begins after CameraX capability discovery");
+        }
+
+        public void RequestReprojectionDiagnostics()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Reprojection diagnostics",
+                "calibrated device-camera frames are not available yet");
+        }
+
+        public void CycleSpeechLanguage()
+        {
+            RequireSettings().CycleSpeechLanguage();
+        }
+
+        public void CycleSpeechVoice()
+        {
+            RequireSettings().CycleSpeechVoice();
+        }
+
+        public void RequestLocalModelInstall()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Local-model install",
+                "the model package installer is not implemented yet");
+        }
+
+        public void RequestLocalModelImport()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Local-model import",
+                "the Android document import bridge is not implemented yet");
+        }
+
+        public void RequestLocalModelSelect()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Local-model selection",
+                "no compatible local model is installed");
+        }
+
+        public void RequestLocalModelDelete()
+        {
+            RequireSettings().ReportUnavailableAction(
+                "Local-model delete",
+                "there is no installed local model to delete");
+        }
+
+        public void CycleLocalModelMemoryBudget()
+        {
+            RequireSettings().CycleLocalModelMemoryBudget();
+        }
+
+        public void CycleLocalModelContextLength()
+        {
+            RequireSettings().CycleLocalModelContextLength();
+        }
+
+        public void CycleSimulationFidelity()
+        {
+            RequireSettings().CycleSimulationFidelity();
+        }
+
+        public void RequestSimulationReset()
+        {
+            ReachySettingsResetOutcome outcome =
+                (resetSimulation ?? throw new InvalidOperationException(
+                    "The simulation reset operation is not bound."))();
+            RequireSettings().ReportSimulationReset(
+                outcome.Succeeded,
+                outcome.Detail);
+        }
+
+        public void ToggleHistory()
+        {
+            RequireSettings().ToggleHistory();
+        }
+
+        public void CycleRetentionDays()
+        {
+            RequireSettings().CycleRetentionDays();
+        }
+
         private void OnDestroy()
         {
             if (stateStore != null)
             {
                 stateStore.Changed -= OnStateChanged;
             }
+            if (settingsStore != null)
+            {
+                settingsStore.Changed -= OnSettingsChanged;
+            }
             stateStore = null;
+            settingsStore = null;
             diagnosticsProvider = null;
+            resetSimulation = null;
         }
 
         private void OnStateChanged(
@@ -139,10 +294,23 @@ namespace ReachyMini.AppState
             snapshot = eventArgs.Snapshot;
         }
 
+        private void OnSettingsChanged(
+            object? sender,
+            ReachySettingsChangedEventArgs eventArgs)
+        {
+            settingsSnapshot = eventArgs.Snapshot;
+        }
+
         private ReachyMainScreenStateStore RequireStore()
         {
             return stateStore ?? throw new InvalidOperationException(
                 "The main screen is not bound to application state.");
+        }
+
+        private ReachySettingsStateStore RequireSettings()
+        {
+            return settingsStore ?? throw new InvalidOperationException(
+                "The main screen is not bound to settings state.");
         }
 
         private void OnGUI()
@@ -159,7 +327,10 @@ namespace ReachyMini.AppState
             {
                 safeArea = new Rect(0f, 0f, Screen.width, Screen.height);
             }
-            float scale = Mathf.Clamp(safeArea.width / ReferenceWidth, 0.72f, 1.35f);
+            float scale = Mathf.Clamp(
+                safeArea.width / ReferenceWidth,
+                0.72f,
+                1.35f);
             Matrix4x4 previousMatrix = GUI.matrix;
             GUI.matrix = Matrix4x4.TRS(
                 new Vector3(safeArea.x, safeArea.y, 0f),
@@ -278,24 +449,366 @@ namespace ReachyMini.AppState
 
         private void DrawSettingsPanel(float width, float height)
         {
-            Rect panel = CenterPanel(width, height);
+            ReachySettingsSnapshot? current = settingsSnapshot;
+            if (current == null)
+            {
+                return;
+            }
+
+            Rect panel = CenterSettingsPanel(width, height);
             GUI.Box(panel, GUIContent.none, panelStyle!);
             GUI.Label(
-                new Rect(panel.x + 28f, panel.y + 24f, panel.width - 56f, 40f),
+                new Rect(panel.x + 24f, panel.y + 18f, panel.width - 48f, 38f),
                 "Settings",
                 panelTitleStyle!);
+
+            Rect navigation = new Rect(
+                panel.x + 22f,
+                panel.y + 68f,
+                SettingsNavigationWidth,
+                panel.height - 138f);
+            DrawSettingsNavigation(navigation, current.ActiveSection);
+
+            Rect content = new Rect(
+                navigation.xMax + 20f,
+                navigation.y,
+                panel.xMax - navigation.xMax - 42f,
+                navigation.height);
+            DrawSettingsContent(content, current);
+
             GUI.Label(
-                new Rect(panel.x + 28f, panel.y + 78f, panel.width - 56f, 150f),
-                "The settings entry point is active. RMA-082 adds provider, " +
-                "camera, speech, local-model, simulation, privacy, and license settings. " +
-                "No placeholder selection is treated as configured.",
-                panelBodyStyle!);
+                new Rect(
+                    panel.x + 24f,
+                    panel.yMax - 62f,
+                    panel.width - 160f,
+                    44f),
+                current.StatusMessage,
+                warningStyle!);
             if (GUI.Button(
-                    new Rect(panel.x + 28f, panel.yMax - 78f, panel.width - 56f, 50f),
+                    new Rect(panel.xMax - 124f, panel.yMax - 62f, 100f, 42f),
                     "CLOSE",
-                    buttonStyle!))
+                    smallButtonStyle!))
             {
                 ToggleSettings();
+            }
+        }
+
+        private void DrawSettingsNavigation(
+            Rect area,
+            ReachySettingsSection active)
+        {
+            float y = area.y;
+            for (int index = 0; index < SettingsSections.Length; ++index)
+            {
+                ReachySettingsSection section = SettingsSections[index];
+                string label = ReachySettingsStateStore.GetSectionLabel(section);
+                if (section == active)
+                {
+                    label = "• " + label;
+                }
+                if (GUI.Button(
+                        new Rect(area.x, y, area.width, 48f),
+                        label,
+                        smallButtonStyle!))
+                {
+                    SelectSettingsSection(section);
+                }
+                y += 54f;
+            }
+        }
+
+        private void DrawSettingsContent(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 32f),
+                ReachySettingsStateStore.GetSectionLabel(current.ActiveSection),
+                sectionStyle!);
+            Rect body = new Rect(
+                area.x,
+                area.y + 42f,
+                area.width,
+                area.height - 42f);
+            switch (current.ActiveSection)
+            {
+                case ReachySettingsSection.Providers:
+                    DrawProviderSettings(body, current);
+                    break;
+                case ReachySettingsSection.Camera:
+                    DrawCameraSettings(body, current);
+                    break;
+                case ReachySettingsSection.Speech:
+                    DrawSpeechSettings(body, current);
+                    break;
+                case ReachySettingsSection.LocalModel:
+                    DrawLocalModelSettings(body, current);
+                    break;
+                case ReachySettingsSection.Simulation:
+                    DrawSimulationSettings(body, current);
+                    break;
+                case ReachySettingsSection.Privacy:
+                    DrawPrivacySettings(body, current);
+                    break;
+                case ReachySettingsSection.Licenses:
+                    DrawLicenseSettings(body);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(
+                        nameof(current.ActiveSection),
+                        current.ActiveSection,
+                        null);
+            }
+        }
+
+        private void DrawProviderSettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 54f),
+                "ASR, TTS, LLM, and VLM are selected independently. " +
+                "A stored preference does not mean the runtime is installed.",
+                panelBodyStyle!);
+            float y = area.y + 62f;
+            foreach (ReachyProviderKind kind in new[]
+                     {
+                         ReachyProviderKind.Asr,
+                         ReachyProviderKind.Tts,
+                         ReachyProviderKind.Llm,
+                         ReachyProviderKind.Vlm,
+                     })
+            {
+                ReachyProviderSelection provider = current.GetProvider(kind);
+                string label =
+                    $"{ReachySettingsStateStore.GetProviderKindLabel(kind)}  " +
+                    $"{provider.DisplayName}\n" +
+                    $"{ReachySettingsStateStore.GetExecutionLabel(provider.Execution)} · " +
+                    $"{ReachySettingsStateStore.GetConnectivityLabel(provider.Connectivity)} · " +
+                    (provider.Available ? "Available" : "Unavailable");
+                if (GUI.Button(
+                        new Rect(area.x, y, area.width, 72f),
+                        label,
+                        smallButtonStyle!))
+                {
+                    CycleProvider(kind);
+                }
+                y += 80f;
+            }
+        }
+
+        private void DrawCameraSettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 54f),
+                "The robot presentation camera remains fixed. These controls " +
+                "store the preferred Android device camera and expose future CameraX actions.",
+                panelBodyStyle!);
+            float y = area.y + 66f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 58f),
+                    "PREFERRED DEVICE CAMERA  " +
+                    ReachySettingsStateStore.GetCameraFacingLabel(
+                        current.PreferredCameraFacing),
+                    smallButtonStyle!))
+            {
+                CyclePreferredCamera();
+            }
+            y += 68f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 54f),
+                    "PREVIEW — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestCameraPreview();
+            }
+            y += 64f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 54f),
+                    $"CALIBRATION  {current.CameraCalibrationProfile}",
+                    smallButtonStyle!))
+            {
+                RequestCameraCalibration();
+            }
+            y += 64f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 54f),
+                    "REPROJECTION DIAGNOSTICS — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestReprojectionDiagnostics();
+            }
+            GUI.Label(
+                new Rect(area.x, y + 62f, area.width, 70f),
+                current.ReprojectionStatus,
+                warningStyle!);
+        }
+
+        private void DrawSpeechSettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 54f),
+                "Speech preferences are durable. Availability and network " +
+                "requirements are derived from the selected ASR/TTS and voice configuration.",
+                panelBodyStyle!);
+            float y = area.y + 66f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 60f),
+                    $"LANGUAGE  {current.SpeechLanguage}",
+                    smallButtonStyle!))
+            {
+                CycleSpeechLanguage();
+            }
+            y += 70f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 60f),
+                    $"VOICE  {current.SpeechVoice}",
+                    smallButtonStyle!))
+            {
+                CycleSpeechVoice();
+            }
+            GUI.Label(
+                new Rect(area.x, y + 76f, area.width, 100f),
+                current.SpeechNetworkStatus,
+                warningStyle!);
+        }
+
+        private void DrawLocalModelSettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 58f),
+                $"INSTALLED  {current.LocalModelCount}\nACTIVE  {current.ActiveLocalModel}",
+                panelBodyStyle!);
+            float half = (area.width - 12f) * 0.5f;
+            float y = area.y + 72f;
+            if (GUI.Button(
+                    new Rect(area.x, y, half, 52f),
+                    "INSTALL — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestLocalModelInstall();
+            }
+            if (GUI.Button(
+                    new Rect(area.x + half + 12f, y, half, 52f),
+                    "IMPORT — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestLocalModelImport();
+            }
+            y += 62f;
+            if (GUI.Button(
+                    new Rect(area.x, y, half, 52f),
+                    "SELECT — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestLocalModelSelect();
+            }
+            if (GUI.Button(
+                    new Rect(area.x + half + 12f, y, half, 52f),
+                    "DELETE — UNAVAILABLE",
+                    smallButtonStyle!))
+            {
+                RequestLocalModelDelete();
+            }
+            y += 72f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 56f),
+                    $"MEMORY BUDGET  {current.LocalModelMemoryBudgetMb} MB",
+                    smallButtonStyle!))
+            {
+                CycleLocalModelMemoryBudget();
+            }
+            y += 66f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 56f),
+                    $"CONTEXT  {current.LocalModelContextTokens} TOKENS",
+                    smallButtonStyle!))
+            {
+                CycleLocalModelContextLength();
+            }
+        }
+
+        private void DrawSimulationSettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            if (GUI.Button(
+                    new Rect(area.x, area.y, area.width, 58f),
+                    "FIDELITY  " +
+                    ReachySettingsStateStore.GetSimulationFidelityLabel(
+                        current.SimulationFidelity),
+                    smallButtonStyle!))
+            {
+                CycleSimulationFidelity();
+            }
+            GUI.Label(
+                new Rect(area.x, area.y + 70f, area.width, 30f),
+                $"CALIBRATION PROFILE  {current.SimulationCalibrationProfile}",
+                panelBodyStyle!);
+            if (GUI.Button(
+                    new Rect(area.x, area.y + 112f, area.width, 54f),
+                    "RESET TO NEUTRAL",
+                    smallButtonStyle!))
+            {
+                RequestSimulationReset();
+            }
+            GUI.Label(
+                new Rect(area.x, area.y + 182f, area.width, 160f),
+                current.SimulationDiagnostics,
+                warningStyle!);
+        }
+
+        private void DrawPrivacySettings(
+            Rect area,
+            ReachySettingsSnapshot current)
+        {
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 130f),
+                current.PrivacyCloudSummary,
+                warningStyle!);
+            float y = area.y + 142f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 58f),
+                    current.HistoryEnabled
+                        ? "HISTORY  ENABLED"
+                        : "HISTORY  DISABLED",
+                    smallButtonStyle!))
+            {
+                ToggleHistory();
+            }
+            y += 68f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 58f),
+                    current.RetentionDays == 0
+                        ? "RETENTION  SESSION ONLY"
+                        : $"RETENTION  {current.RetentionDays} DAYS",
+                    smallButtonStyle!))
+            {
+                CycleRetentionDays();
+            }
+        }
+
+        private void DrawLicenseSettings(Rect area)
+        {
+            ReachyLicenseNotice[] notices =
+                ReachySettingsStateStore.GetLicenseNotices();
+            float y = area.y;
+            for (int index = 0; index < notices.Length; ++index)
+            {
+                ReachyLicenseNotice notice = notices[index];
+                GUI.Label(
+                    new Rect(area.x, y, area.width, 72f),
+                    $"{notice.Component}\n" +
+                    $"{notice.Attribution}\n" +
+                    $"{notice.LicenseReference}",
+                    panelBodyStyle!);
+                y += 80f;
             }
         }
 
@@ -320,6 +833,17 @@ namespace ReachyMini.AppState
             {
                 ToggleDiagnostics();
             }
+        }
+
+        private static Rect CenterSettingsPanel(float width, float height)
+        {
+            float panelWidth = Mathf.Min(960f, width - EdgePadding * 2f);
+            float panelHeight = Mathf.Min(650f, height - EdgePadding * 2f);
+            return new Rect(
+                (width - panelWidth) * 0.5f,
+                Mathf.Max(EdgePadding, (height - panelHeight) * 0.5f),
+                panelWidth,
+                panelHeight);
         }
 
         private static Rect CenterPanel(float width, float height)
@@ -375,6 +899,10 @@ namespace ReachyMini.AppState
                 wordWrap = true,
                 padding = new RectOffset(10, 10, 8, 8),
             };
+            smallButtonStyle = new GUIStyle(buttonStyle)
+            {
+                fontSize = 13,
+            };
             panelStyle = new GUIStyle(GUI.skin.box)
             {
                 normal =
@@ -394,20 +922,40 @@ namespace ReachyMini.AppState
             };
             panelBodyStyle = new GUIStyle(baseLabel)
             {
-                fontSize = 16,
+                fontSize = 15,
                 normal = { textColor = new Color(0.9f, 0.92f, 0.96f, 1f) },
+            };
+            sectionStyle = new GUIStyle(baseLabel)
+            {
+                fontSize = 21,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = Color.white },
+            };
+            warningStyle = new GUIStyle(baseLabel)
+            {
+                fontSize = 14,
+                normal = { textColor = new Color(1f, 0.8f, 0.48f, 1f) },
             };
         }
 
         private static Texture2D CreatePanelTexture()
         {
-            Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
+            Texture2D texture = new Texture2D(
+                1,
+                1,
+                TextureFormat.RGBA32,
+                false)
             {
                 name = "ReachyMainScreenPanel",
                 hideFlags = HideFlags.HideAndDontSave,
             };
-            texture.SetPixel(0, 0, new Color(0.035f, 0.045f, 0.062f, 0.94f));
-            texture.Apply(updateMipmaps: false, makeNoLongerReadable: true);
+            texture.SetPixel(
+                0,
+                0,
+                new Color(0.035f, 0.045f, 0.062f, 0.96f));
+            texture.Apply(
+                updateMipmaps: false,
+                makeNoLongerReadable: true);
             return texture;
         }
     }
