@@ -176,7 +176,7 @@ namespace ReachyMini.Tests
         }
 
         private sealed class OwnershipDiscoveryPlatform :
-            IReachyAndroidCameraPlatform
+            IReachyDeviceCameraPlatform
         {
             public bool IsSupported => true;
 
@@ -184,7 +184,25 @@ namespace ReachyMini.Tests
 
             public string Availability { get; set; } = "available";
 
-            public string Snapshot()
+            public bool HasCameraPermission()
+            {
+                return true;
+            }
+
+            public bool ShouldShowCameraPermissionRationale()
+            {
+                return false;
+            }
+
+            public void RequestCameraPermission(
+                Action granted,
+                Action denied)
+            {
+                _ = denied;
+                granted();
+            }
+
+            public string DiscoverCameraCapabilitiesJson()
             {
                 if (OmitOwnedCamera)
                 {
