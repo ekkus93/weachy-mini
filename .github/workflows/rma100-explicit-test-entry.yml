@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Make RMA-100 test entry explicit
+      - name: Harden and run RMA-100 hosted contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -28,15 +28,15 @@ jobs:
 
           program_path = Path('managed/ReachyMini.Camera.Tests/Program.cs')
           program = program_path.read_text(encoding='utf-8')
-          anchor = '            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");'
-          replacement = (
+          program_anchor = '            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");'
+          program_replacement = (
               '            Rma100CameraCalibrationContracts.Run();\n'
               '            Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");'
           )
-          if anchor not in program:
+          if program_anchor not in program:
               raise SystemExit('Program.cs entry-point anchor was not found.')
           program_path.write_text(
-              program.replace(anchor, replacement, 1),
+              program.replace(program_anchor, program_replacement, 1),
               encoding='utf-8',
           )
 
@@ -47,11 +47,49 @@ jobs:
           if compiler_using not in contracts:
               raise SystemExit('Module-initializer using directive was not found.')
           contracts = contracts.replace(compiler_using, '', 1)
-          marker = '        [ModuleInitializer]\n        internal static void Run()'
-          if marker not in contracts:
+          module_marker = '        [ModuleInitializer]\n        internal static void Run()'
+          if module_marker not in contracts:
               raise SystemExit('RMA-100 module-initializer anchor was not found.')
           contracts_path.write_text(
-              contracts.replace(marker, '        internal static void Run()', 1),
+              contracts.replace(
+                  module_marker,
+                  '        internal static void Run()',
+                  1,
+              ),
+              encoding='utf-8',
+          )
+
+          core_path = Path(
+              'Assets/ReachyMini/Runtime/Core/Application/'
+              'ReachyCameraReprojectionCalibration.cs')
+          core = core_path.read_text(encoding='utf-8')
+          assignment_anchor = (
+              '            NeutralReachyFromPhoneRotation = '
+              'neutralReachyFromPhoneRotation;\n'
+              '        }'
+          )
+          assignment_replacement = (
+              '            NeutralReachyFromPhoneRotation = '
+              'neutralReachyFromPhoneRotation;\n'
+              '            ReprojectionMode = '
+              'ReachyCameraReprojectionMode.RotationOnly;\n'
+              '        }'
+          )
+          if assignment_anchor not in core:
+              raise SystemExit('Reprojection-mode constructor anchor was not found.')
+          core = core.replace(assignment_anchor, assignment_replacement, 1)
+          property_anchor = (
+              '        public ReachyCameraReprojectionMode ReprojectionMode =>\n'
+              '            ReachyCameraReprojectionMode.RotationOnly;'
+          )
+          if property_anchor not in core:
+              raise SystemExit('Reprojection-mode property anchor was not found.')
+          core_path.write_text(
+              core.replace(
+                  property_anchor,
+                  '        public ReachyCameraReprojectionMode ReprojectionMode { get; }',
+                  1,
+              ),
               encoding='utf-8',
           )
           PY
@@ -64,7 +102,8 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
+            Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs \
             managed/ReachyMini.Camera.Tests/Program.cs \
             managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs
-          git commit -m 'RMA-100: make hosted calibration tests explicit'
+          git commit -m 'RMA-100: harden hosted calibration contracts'
           git push origin HEAD:master
