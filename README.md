@@ -1,5 +1,7 @@
 # Weachy Mini
 
+[![CI](https://github.com/ekkus93/weachy-mini/actions/workflows/ci.yml/badge.svg)](https://github.com/ekkus93/weachy-mini/actions/workflows/ci.yml)
+
 Weachy Mini is a free, noncommercial Android application that will run a virtual Reachy Mini robot in Unity. MuJoCo will be the authoritative dynamics engine; Unity will render the robot, provide the Android user interface, and integrate camera, speech, and AI providers.
 
 The project is at the **foundation/scaffold stage**. It is not yet a working robot simulator.
