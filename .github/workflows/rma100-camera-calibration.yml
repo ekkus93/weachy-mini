@@ -1,0 +1,268 @@
+name: RMA-100 Camera Calibration Contract
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma100-camera-calibration.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraCalibrationUnityAdapter.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraReprojectionCalibrationTests.cs'
+      - 'managed/ReachyMini.Camera.Tests/Program.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs'
+      - 'docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md'
+      - 'docs/validation/RMA_100_CAMERA_CALIBRATION_VALIDATION_2026-08-04.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma100-camera-calibration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Coordinate, calibration, and persistence contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma100-status.json"
+          import json
+          import os
+
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-100 Camera Calibration",
+              "description": "Coordinate and calibration contracts are running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma100-status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run managed camera calibration contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify RMA-100 integration and truthfulness policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          core = Path(
+              'Assets/ReachyMini/Runtime/Core/Application/'
+              'ReachyCameraReprojectionCalibration.cs'
+          ).read_text(encoding='utf-8')
+          persistence = Path(
+              'Assets/ReachyMini/Runtime/Application/'
+              'ReachyCameraCalibrationPersistence.cs'
+          ).read_text(encoding='utf-8')
+          settings = Path(
+              'Assets/ReachyMini/Runtime/Application/'
+              'ReachySettingsPersistence.cs'
+          ).read_text(encoding='utf-8')
+          adapter = Path(
+              'Assets/ReachyMini/Runtime/Rendering/'
+              'ReachyCameraCalibrationUnityAdapter.cs'
+          ).read_text(encoding='utf-8')
+          managed_program = Path(
+              'managed/ReachyMini.Camera.Tests/Program.cs'
+          ).read_text(encoding='utf-8')
+          managed_contracts = Path(
+              'managed/ReachyMini.Camera.Tests/'
+              'Rma100CameraCalibrationContracts.cs'
+          ).read_text(encoding='utf-8')
+          unity_tests = Path(
+              'Assets/ReachyMini/Tests/Editor/'
+              'ReachyCameraReprojectionCalibrationTests.cs'
+          ).read_text(encoding='utf-8')
+          coordinate_doc = Path(
+              'docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md'
+          ).read_text(encoding='utf-8')
+
+          required_core = [
+              'ReachyCameraCoordinateContract',
+              'AndroidPixelAxes',
+              'PhoneOpticalAxes',
+              'ReachyOpticalAxes',
+              'UnityWorldFromMujocoWorld',
+              'OpticalFromMujocoCamera',
+              'ReachyCameraImageNormalization',
+              'NormalizedFromSourcePixels',
+              'ReachyCameraIntrinsicMatrix',
+              'ReachyCameraCalibrationProfile',
+              'ReachyCameraCalibrationSelectionStatus',
+              'ExactCalibrated',
+              'ExactUncalibratedEstimate',
+              'CameraMismatch',
+              'ImageSizeMismatch',
+              'ModelMismatch',
+              'BuildNeutralHomography',
+              'ReachyCameraReprojectionMode.RotationOnly',
+          ]
+          for token in required_core:
+              if token not in core:
+                  raise SystemExit(
+                      f'Missing RMA-100 core contract token: {token}')
+
+          required_persistence = [
+              'reachy-camera-calibration-v1.json',
+              'SchemaVersion = 1',
+              'QuarantineInvalidFile',
+              'no calibration was silently substituted',
+              'ReachyCameraCalibrationPersistenceStore',
+          ]
+          for token in required_persistence:
+              if token not in persistence:
+                  raise SystemExit(
+                      f'Missing RMA-100 persistence behavior: {token}')
+
+          required_settings = [
+              'ReachyCameraCalibrationPersistenceStore',
+              'CameraCalibrations',
+              'CalibrationPersistencePath',
+              'PublishCombinedHealth',
+          ]
+          for token in required_settings:
+              if token not in settings:
+                  raise SystemExit(
+                      f'Calibration persistence is not owned by settings: {token}')
+
+          required_adapter = [
+              'ReachyCoordinateConverter.ToUnityRotation',
+              'ToCoreRotation',
+              'ToUnityMatrix',
+              'ReachyCameraCoordinateContract',
+          ]
+          for token in required_adapter:
+              if token not in adapter:
+                  raise SystemExit(
+                      f'Missing Unity coordinate adapter behavior: {token}')
+
+          if 'Rma100CameraCalibrationContracts.Run();' not in managed_program:
+              raise SystemExit(
+                  'The hosted test entry point does not explicitly run RMA-100.')
+          if 'ModuleInitializer' in managed_contracts:
+              raise SystemExit(
+                  'RMA-100 hosted tests must not rely on an implicit module initializer.')
+
+          required_managed_tests = [
+              'CoordinateBasesRemainExplicit',
+              'ImageNormalizationMatchesRma092Order',
+              'MirroringIsNotPhysicalOrientation',
+              'PositiveOpticalYawMovesTheViewRight',
+              'SelectionRequiresAnExactProfile',
+              'InvalidCalibrationFailsClosed',
+          ]
+          for token in required_managed_tests:
+              if token not in managed_contracts:
+                  raise SystemExit(
+                      f'Missing hosted calibration test: {token}')
+
+          required_unity_tests = [
+              'MujocoUnityBasisMatchesProductionCoordinateConverter',
+              'UnityQuaternionConversionMatchesCoreRotation',
+              'UnityMatrixConversionPreservesHomographyElements',
+          ]
+          for token in required_unity_tests:
+              if token not in unity_tests:
+                  raise SystemExit(
+                      f'Missing Unity calibration test: {token}')
+
+          required_documentation = [
+              'Android image pixels',
+              'Phone optical frame',
+              'Reachy optical frame',
+              'Unity world frame',
+              'MuJoCo world frame',
+              'H = K_reachy',
+              'Mirroring is never represented as a physical rotation',
+              'rotation-only',
+          ]
+          for token in required_documentation:
+              if token not in coordinate_doc:
+                  raise SystemExit(
+                      f'Missing coordinate-system documentation: {token}')
+
+          forbidden_paths = [
+              Path('.github/workflows/rma100-apply-implementation.yml'),
+              Path('.github/workflows/rma100-explicit-test-entry.yml'),
+              Path('.github/rma100-payload'),
+          ]
+          for path in forbidden_paths:
+              if path.exists():
+                  raise SystemExit(
+                      f'Temporary RMA-100 staging artifact remains: {path}')
+
+          print('RMA-100 camera calibration static contract passed.')
+          PY
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma100-status.json"
+          import json
+          import os
+
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-100 Camera Calibration",
+              "description": (
+                  "Coordinate and calibration contracts passed"
+                  if passed
+                  else "Coordinate and calibration contracts failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma100-status.json" >/dev/null
