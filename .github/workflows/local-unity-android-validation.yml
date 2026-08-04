@@ -17,7 +17,7 @@ on:
         default: true
         type: boolean
       install_physical_device:
-        description: Install and run lifecycle and authoritative-rendering acceptance
+        description: Install and run camera, lifecycle, and rendering acceptance
         required: true
         default: true
         type: boolean
@@ -240,6 +240,23 @@ jobs:
         with:
           name: rma090-camera-device-report-${{ github.sha }}
           path: ${{ runner.temp }}/rma090-camera-device-report
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Install and run RMA-091 camera acquisition acceptance
+        id: camera_acquisition_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA091_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma091-camera-device-report
+        run: bash scripts/run_rma091_camera_acquisition_acceptance_android.sh
+
+      - name: Upload RMA-091 camera acquisition evidence
+        if: ${{ always() && steps.camera_acquisition_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma091-camera-device-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma091-camera-device-report
           if-no-files-found: error
           retention-days: 30
 
