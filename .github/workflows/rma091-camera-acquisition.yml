@@ -13,6 +13,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureEvidence.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
       - 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
@@ -20,6 +21,7 @@ on:
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
+      - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
       - 'third_party/inventory.json'
       - 'third_party/THIRD_PARTY_NOTICES.md'
       - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
@@ -35,6 +37,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureEvidence.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
       - 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
@@ -42,6 +45,7 @@ on:
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
+      - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
       - 'third_party/inventory.json'
       - 'third_party/THIRD_PARTY_NOTICES.md'
       - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
@@ -88,9 +92,11 @@ jobs:
           unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs').read_text(encoding='utf-8')
           texture_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs').read_text(encoding='utf-8')
           lease_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs').read_text(encoding='utf-8')
+          texture_evidence = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureEvidence.cs').read_text(encoding='utf-8')
           reference = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs').read_text(encoding='utf-8')
           bootstrap = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs').read_text(encoding='utf-8')
           shader = (root / 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader').read_text(encoding='utf-8')
+          acceptance_script = (root / 'scripts/run_rma092_camera_texture_acceptance_android.sh').read_text(encoding='utf-8')
           java_dir = root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera'
           java = (java_dir / 'ReachyCameraFrameBridge.java').read_text(encoding='utf-8')
           texture_java = (java_dir / 'ReachyCameraTextureFrameBridge.java').read_text(encoding='utf-8')
@@ -239,8 +245,38 @@ jobs:
               if token not in texture_tests:
                   raise SystemExit(f'Missing RMA-092 reference test: {token}')
 
-          if 'ReachyAndroidCameraAcquisition' not in bootstrap or 'ReachyAndroidCameraTextureBridge' not in bootstrap or 'yield return null' not in bootstrap:
-              raise SystemExit('Camera acquisition and texture bridge are not installed after the application shell.')
+          for token in [
+              'ReachyCameraTextureEvidence',
+              'GetOrCreateTextureBridge(acquisition)',
+              'InstallAcceptanceEvidenceIfRequested(',
+              'yield return null',
+          ]:
+              if token not in bootstrap:
+                  raise SystemExit(f'Missing camera texture bootstrap behavior: {token}')
+
+          for token in [
+              'reachy_rma092_acceptance',
+              'rma092-rear.png',
+              'rma092-rear-rotated.png',
+              'rma092-front.png',
+              'ReadPixels',
+              'timestampCorrespondence',
+              'mirrorContractValid',
+              'capturesNonUniform',
+          ]:
+              if token not in texture_evidence:
+                  raise SystemExit(f'Missing acceptance-only RMA-092 evidence behavior: {token}')
+          for token in [
+              '--ez reachy_rma092_acceptance true',
+              'rear_capture_written',
+              'rotated_capture_written',
+              'front_capture_written',
+              'timestamp_correspondence',
+              'stale_frame_count',
+              'SHA256SUMS',
+          ]:
+              if token not in acceptance_script:
+                  raise SystemExit(f'Missing physical RMA-092 acceptance behavior: {token}')
 
           for token in [
               'RapidStartStopAndFrontRearSwitchUseDistinctSessions',
