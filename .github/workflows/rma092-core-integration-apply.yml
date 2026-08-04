@@ -1,0 +1,64 @@
+name: RMA-092 Core Integration Apply
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma092-core-integration-apply.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: rma092-core-integration-apply
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply bounded RMA-092 integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact integration patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_rma092_core_integration.py
+          git diff --check
+          bash -n scripts/*.sh
+          changed="$(git diff --name-only | sort)"
+          expected="$(cat <<'EOF'
+Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java
+Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs
+Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs
+Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs
+Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs
+Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs
+EOF
+)"
+          if [[ "${changed}" != "${expected}" ]]; then
+            printf 'Unexpected changed paths:\n%s\n' "${changed}" >&2
+            exit 1
+          fi
+
+      - name: Commit integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java \
+            Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs \
+            Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs
+          git commit -m 'RMA-092: integrate CameraX YUV texture leases'
+          git push origin HEAD:master
