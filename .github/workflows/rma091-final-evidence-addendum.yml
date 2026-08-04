@@ -1,0 +1,123 @@
+name: RMA-091 Final Evidence Addendum
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma091-final-evidence-addendum.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: rma091-final-evidence-addendum
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply bounded RMA-091 roadmap update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-091 Evidence Addendum Apply",
+              "description": "Applying bounded RMA-091 roadmap evidence update",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact RMA-091 block replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/apply_rma091_final_evidence_addendum.py
+          git diff --check
+          changed="$(git diff --name-only)"
+          if [[ "${changed}" != 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md' ]]; then
+            printf 'Unexpected changed paths:\n%s\n' "${changed}" >&2
+            exit 1
+          fi
+          grep -F '**Status:** Complete (2026-08-04)' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md >/dev/null
+          grep -F 'RMA_091_CAMERA_ACQUISITION_VALIDATION_2026-08-04.md' \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md >/dev/null
+
+      - name: Commit roadmap update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git commit -m 'docs: complete RMA-091 evidence addendum'
+          git push origin HEAD:master
+
+      - name: Publish success status
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "success",
+              "context": "RMA-091 Evidence Addendum Apply",
+              "description": "RMA-091 roadmap evidence update committed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
+
+      - name: Publish failure status
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "failure",
+              "context": "RMA-091 Evidence Addendum Apply",
+              "description": "RMA-091 roadmap evidence update failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
