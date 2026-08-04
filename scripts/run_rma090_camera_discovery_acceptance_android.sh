@@ -72,6 +72,14 @@ capture_diagnostics()
     "${ADB[@]}" shell \
         "run-as '${PACKAGE_NAME}' sh -c 'pwd; find . -maxdepth 4 -type f -print' 2>&1" \
         > "${REPORT_DIR}/internal-files.txt"
+    "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" \
+        cat "${REMOTE_RESULT_PATH}" \
+        > "${REPORT_DIR}/camera-state-device.json" \
+        2> "${REPORT_DIR}/camera-state-device-error.txt" || true
+    "${ADB[@]}" shell \
+        "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+        > "${REPORT_DIR}/camera-state-shell.json" \
+        2> "${REPORT_DIR}/camera-state-shell-error.txt" || true
     "${ADB[@]}" exec-out screencap -p > "${REPORT_DIR}/device-screen.png"
 }
 
@@ -95,8 +103,8 @@ read_device_report()
 {
     local report_json
     report_json="$(
-        "${ADB[@]}" shell \
-            "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+        "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" \
+            cat "${REMOTE_RESULT_PATH}" 2>/dev/null \
             | tr -d '\r' \
             || true
     )"
@@ -107,7 +115,8 @@ read_device_report()
 
     report_json="$(
         "${ADB[@]}" shell \
-            "run-as '${PACKAGE_NAME}' cat 'files/${RESULT_FILE_NAME}' 2>/dev/null" \
+            "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+            2>/dev/null \
             | tr -d '\r' \
             || true
     )"
@@ -116,10 +125,9 @@ read_device_report()
 
 remove_device_report()
 {
+    "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" \
+        rm -f "${REMOTE_RESULT_PATH}" >/dev/null 2>&1 || true
     "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" >/dev/null 2>&1 || true
-    "${ADB[@]}" shell \
-        "run-as '${PACKAGE_NAME}' rm -f 'files/${RESULT_FILE_NAME}' 2>/dev/null" \
-        >/dev/null 2>&1 || true
 }
 
 read_json_field()
