@@ -9,6 +9,8 @@ namespace ReachyMini.AppState
     internal sealed class ReachyAndroidUiThreadCameraAcquisitionPlatform :
         IReachyDeviceCameraAcquisitionPlatform
     {
+        private const int MaximumAnalysisWidth = 1280;
+        private const int MaximumAnalysisHeight = 720;
 #if UNITY_ANDROID && !UNITY_EDITOR
         private const string BridgeClassName =
             "com.ekkus93.weachy.camera.ReachyCameraFrameBridge";
@@ -37,6 +39,11 @@ namespace ReachyMini.AppState
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             ThrowIfDisposed();
+            SelectAnalysisTarget(
+                width,
+                height,
+                out int targetWidth,
+                out int targetHeight);
             return InvokeOnAndroidUiThread(
                 "start",
                 activity =>
@@ -47,8 +54,8 @@ namespace ReachyMini.AppState
                         activity,
                         sessionId,
                         cameraId,
-                        width,
-                        height);
+                        targetWidth,
+                        targetHeight);
                 });
 #else
             throw Unsupported();
@@ -142,6 +149,31 @@ namespace ReachyMini.AppState
                     exception.Message);
             }
 #endif
+        }
+
+        internal static void SelectAnalysisTarget(
+            int requestedWidth,
+            int requestedHeight,
+            out int targetWidth,
+            out int targetHeight)
+        {
+            if (requestedWidth <= 0 || requestedHeight <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(requestedWidth),
+                    "Camera analysis dimensions must be positive.");
+            }
+
+            if (requestedWidth <= MaximumAnalysisWidth &&
+                requestedHeight <= MaximumAnalysisHeight)
+            {
+                targetWidth = requestedWidth;
+                targetHeight = requestedHeight;
+                return;
+            }
+
+            targetWidth = MaximumAnalysisWidth;
+            targetHeight = MaximumAnalysisHeight;
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
