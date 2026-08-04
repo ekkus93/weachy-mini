@@ -1,0 +1,205 @@
+name: RMA-091 CameraX Acquisition
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma091-camera-acquisition.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
+      - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
+      - 'managed/ReachyMini.Camera.Tests/**'
+      - 'third_party/inventory.json'
+      - 'third_party/THIRD_PARTY_NOTICES.md'
+      - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma091-camera-acquisition.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
+      - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
+      - 'managed/ReachyMini.Camera.Tests/**'
+      - 'third_party/inventory.json'
+      - 'third_party/THIRD_PARTY_NOTICES.md'
+      - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma091-camera-acquisition-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Lifecycle, metadata, and backpressure contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run managed camera contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+      - name: Verify CameraX acquisition policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          core = Path(
+              'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
+          ).read_text(encoding='utf-8')
+          unity = Path(
+              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+          ).read_text(encoding='utf-8')
+          bootstrap = Path(
+              'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+          ).read_text(encoding='utf-8')
+          java = Path(
+              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/'
+              'com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java'
+          ).read_text(encoding='utf-8')
+          gradle = Path(
+              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle'
+          ).read_text(encoding='utf-8')
+          tests = Path(
+              'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
+          ).read_text(encoding='utf-8')
+          inventory = json.loads(
+              Path('third_party/inventory.json').read_text(encoding='utf-8')
+          )
+
+          required_gradle = [
+              "cameraxVersion = '1.6.1'",
+              'androidx.camera:camera-core',
+              'androidx.camera:camera-camera2',
+              'androidx.camera:camera-lifecycle',
+          ]
+          for token in required_gradle:
+              if token not in gradle:
+                  raise SystemExit(f'Missing pinned CameraX dependency: {token}')
+
+          required_java = [
+              'ProcessCameraProvider',
+              'Preview.Builder',
+              'ImageAnalysis.Builder',
+              'bindToLifecycle',
+              'ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST',
+              'ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888',
+              'Camera2CameraInfo.from(cameraInfo).getCameraId()',
+              'getTimestamp()',
+              'getRotationDegrees()',
+              'getCropRect()',
+              'SENSOR_ORIENTATION',
+              'LENS_INTRINSIC_CALIBRATION',
+              'uncalibrated_pinhole_estimate',
+              'cpuPixelCopyPerformed',
+              'imagePlanesAccessed',
+              'private_discard_surface_until_rma092',
+              'LifecycleRegistry',
+              'shutdownNow()',
+          ]
+          for token in required_java:
+              if token not in java:
+                  raise SystemExit(f'Missing CameraX acquisition behavior: {token}')
+          if 'getPlanes(' in java:
+              raise SystemExit('RMA-091 must not access image planes or copy pixels.')
+          if 'OUTPUT_IMAGE_FORMAT_RGBA_8888' in java:
+              raise SystemExit('RMA-091 must retain YUV without implicit RGBA CPU conversion.')
+          if java.count('imageProxy.close();') != 1:
+              raise SystemExit('ImageProxy must have one explicit close site.')
+          analyzer = re.search(
+              r'private static void analyzeFrame\(.*?\n    \}',
+              java,
+              re.S,
+          )
+          if analyzer is None:
+              raise SystemExit('CameraX analyzer implementation is missing.')
+          analyzer_body = analyzer.group(0)
+          if 'finally {' not in analyzer_body or 'imageProxy.close();' not in analyzer_body:
+              raise SystemExit('ImageProxy close must be in the analyzer finally block.')
+          if '++generation' not in java or 'expectedGeneration != generation' not in java:
+              raise SystemExit('Async CameraX callbacks are not session-invalidated.')
+
+          required_core = [
+              'ReachyCameraAcquisitionState',
+              'ReachyCameraFrameMetadata',
+              'TimestampNanoseconds',
+              'SensorOrientationDegrees',
+              'RotationDegrees',
+              'ReachyCameraFrameCrop',
+              'ReachyCameraPixelFormat',
+              'ReachyCameraFrameIntrinsics',
+              'StaleFrameCount',
+              'PublishFrame',
+          ]
+          for token in required_core:
+              if token not in core:
+                  raise SystemExit(f'Missing managed frame contract: {token}')
+
+          required_unity = [
+              'PollIntervalSeconds = 0.05f',
+              'StartPreferred',
+              'StopPlatformForSwitch',
+              'OnApplicationPause',
+              'MarkPermissionRevoked',
+              'camera_frame_contract_failed',
+              'ReachyCameraFrameMetadata',
+          ]
+          for token in required_unity:
+              if token not in unity:
+                  raise SystemExit(f'Missing Unity acquisition behavior: {token}')
+          if 'AndroidJavaProxy' in unity:
+              raise SystemExit('Analyzer-thread callbacks must not enter Unity through AndroidJavaProxy.')
+          if 'GetRawTextureData' in unity or 'LoadRawTextureData' in unity:
+              raise SystemExit('RMA-091 must not introduce a Unity CPU pixel-copy path.')
+          if 'ReachyAndroidCameraAcquisition' not in bootstrap or 'yield return null' not in bootstrap:
+              raise SystemExit('CameraX acquisition is not installed after the application shell.')
+
+          required_tests = [
+              'RapidStartStopAndFrontRearSwitchUseDistinctSessions',
+              'PauseResumeAndPermissionRevocationRemainVisible',
+              'DuplicatePollAndStaleMetadataDoNotReplaceLatestFrame',
+              'UnavailableCameraFailsClosedWithoutStartingPlatform',
+          ]
+          for token in required_tests:
+              if token not in tests:
+                  raise SystemExit(f'Missing RMA-091 lifecycle test: {token}')
+
+          camerax = next(
+              (entry for entry in inventory['entries']
+               if entry.get('id') == 'androidx-camerax'),
+              None,
+          )
+          if camerax is None:
+              raise SystemExit('CameraX is absent from the third-party inventory.')
+          if '1.6.1' not in str(camerax.get('source_revision')):
+              raise SystemExit('CameraX inventory revision is not pinned to 1.6.1.')
+          if camerax.get('status') != 'packaged_dependency':
+              raise SystemExit('CameraX inventory does not identify a packaged dependency.')
+
+          print('RMA-091 CameraX acquisition static contract passed.')
+          PY
