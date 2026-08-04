@@ -281,12 +281,17 @@ namespace ReachyMini.AppState
                 capabilities,
                 state.Current.CameraId);
             if (selected == null ||
-                selected.Availability != ReachyCameraAvailabilityState.Available)
+                !CanRemainBoundToSelectedCamera(selected.Availability))
             {
+                string selectedCameraId = state.Current.CameraId;
+                ReachyCameraAvailabilityState selectedAvailability =
+                    selected?.Availability ??
+                    ReachyCameraAvailabilityState.Unknown;
                 desiredActive = false;
                 RequirePlatform().Stop();
                 state.MarkUnavailable(
-                    $"Selected camera '{state.Current.CameraId}' became unavailable.");
+                    $"Selected camera '{selectedCameraId}' can no longer remain bound " +
+                    $"because discovery reports {selectedAvailability}.");
             }
         }
 
@@ -520,6 +525,14 @@ namespace ReachyMini.AppState
                 }
             }
             return null;
+        }
+
+        private static bool CanRemainBoundToSelectedCamera(
+            ReachyCameraAvailabilityState availability)
+        {
+            return availability == ReachyCameraAvailabilityState.Available ||
+                availability ==
+                    ReachyCameraAvailabilityState.InUseOrUnavailable;
         }
 
         private static ReachyDeviceCameraFacing ParseFacing(string value)
