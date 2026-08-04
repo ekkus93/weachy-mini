@@ -245,7 +245,8 @@ if [[ "${#compile_runners[@]}" -ne 1 || "${#state_runners[@]}" -ne 1 ]]; then
 fi
 compile_runner="${compile_runners[0]}"
 state_runner="${state_runners[0]}"
-export LD_LIBRARY_PATH="$(dirname "${mujoco_library}")${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+mujoco_library_directory="$(dirname "${mujoco_library}")"
+export LD_LIBRARY_PATH="${mujoco_library_directory}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 "${compile_runner}" \
     "${enhanced_root}/reachy_mini.xml" \
     "${state_dir}/neutral.mjb" \
