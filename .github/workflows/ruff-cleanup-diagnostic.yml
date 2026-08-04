@@ -29,7 +29,7 @@ jobs:
           payload="$(jq -n \
             --arg state "pending" \
             --arg context "Ruff Cleanup Diagnostic" \
-            --arg description "Applying reviewed Ruff repairs" \
+            --arg description "Applying final reviewed Ruff repairs" \
             --arg target_url "$STATUS_URL" \
             '{state: $state, context: $context, description: $description, target_url: $target_url}')"
           curl --fail-with-body --silent --show-error \
