@@ -28,23 +28,25 @@ jobs:
 
           program_path = Path('managed/ReachyMini.Camera.Tests/Program.cs')
           program = program_path.read_text(encoding='utf-8')
-          old = '''            InvalidFrameContractsFailClosed();
-            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");'''
-          new = '''            InvalidFrameContractsFailClosed();
-            Rma100CameraCalibrationContracts.Run();
-            Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");'''
-          if old not in program:
+          anchor = '            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");'
+          replacement = (
+              '            Rma100CameraCalibrationContracts.Run();\n'
+              '            Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");'
+          )
+          if anchor not in program:
               raise SystemExit('Program.cs entry-point anchor was not found.')
-          program_path.write_text(program.replace(old, new, 1), encoding='utf-8')
+          program_path.write_text(
+              program.replace(anchor, replacement, 1),
+              encoding='utf-8',
+          )
 
           contracts_path = Path(
               'managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs')
           contracts = contracts_path.read_text(encoding='utf-8')
-          contracts = contracts.replace(
-              'using System.Runtime.CompilerServices;\n',
-              '',
-              1,
-          )
+          compiler_using = 'using System.Runtime.CompilerServices;\n'
+          if compiler_using not in contracts:
+              raise SystemExit('Module-initializer using directive was not found.')
+          contracts = contracts.replace(compiler_using, '', 1)
           marker = '        [ModuleInitializer]\n        internal static void Run()'
           if marker not in contracts:
               raise SystemExit('RMA-100 module-initializer anchor was not found.')
