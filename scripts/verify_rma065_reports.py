@@ -31,7 +31,7 @@ def _object(value: Any, label: str) -> dict[str, Any]:
 
 
 def _finite_number(value: Any, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise Rma065ReportError(f"{label} must be numeric")
     result = float(value)
     if not math.isfinite(result):

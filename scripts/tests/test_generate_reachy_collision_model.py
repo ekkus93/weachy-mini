@@ -27,8 +27,19 @@ def fixture_xml() -> bytes:
     arms = ["dc15_a01_horn_dummy"] + [f"dc15_a01_horn_dummy_{i}" for i in range(2, 9)]
     rods = ["stewart_link_rod"] + [f"stewart_link_rod_{i}" for i in range(2, 7)]
     body_xml = [
-        '<body name="body_foot_3dprint"><geom name="visual_base" type="sphere" size="0.01" contype="0" conaffinity="0"/></body>',
-        '<body name="body_down_3dprint"><joint name="yaw_body" type="hinge" range="-2.8 2.8"/><geom name="source_shell" type="sphere" size="0.02" class="collision"/></body>',
+        (
+            '<body name="body_foot_3dprint">'
+            '<geom name="visual_base" type="sphere" size="0.01" '
+            'contype="0" conaffinity="0"/>'
+            "</body>"
+        ),
+        (
+            '<body name="body_down_3dprint">'
+            '<joint name="yaw_body" type="hinge" range="-2.8 2.8"/>'
+            '<geom name="source_shell" type="sphere" size="0.02" '
+            'class="collision"/>'
+            "</body>"
+        ),
     ]
     for index in range(6):
         arm = arms[index]
@@ -63,7 +74,9 @@ def fixture_xml() -> bytes:
     )
     return (
         '<?xml version="1.0"?><mujoco model="fixture"><compiler angle="radian" autolimits="true"/>'
-        '<default><default class="collision"><geom contype="1" conaffinity="1"/></default></default>'
+        '<default><default class="collision">'
+        '<geom contype="1" conaffinity="1"/>'
+        "</default></default>"
         f"<worldbody>{''.join(body_xml)}</worldbody><actuator>{actuator_xml}</actuator></mujoco>\n"
     ).encode()
 

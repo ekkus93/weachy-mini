@@ -96,7 +96,9 @@ def _base_dataset(dataset_id: str, created_utc: str, split: str) -> dict[str, An
             "tool_version": "1.0.0",
             "primary_clock_id": "reachy_clock",
             "synchronization_state": "synchronized",
-            "operator_notes": "Deterministic synthetic data for fitting infrastructure validation only.",
+            "operator_notes": (
+                "Deterministic synthetic data for fitting infrastructure validation only."
+            ),
         },
         "clocks": [
             {
@@ -228,7 +230,11 @@ def _build_dataset(split: str) -> dict[str, Any]:
 
     # Shared supply voltage sag.
     window = WINDOWS["voltage"]
-    for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):
+    voltage_sequence_start = voltage_sequence + 1
+    for voltage_sequence, (index, timestamp) in enumerate(
+        enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)),
+        start=voltage_sequence_start,
+    ):
         current = 0.15 + 1.3 * ((index % 25) / 24.0)
         voltage = (
             TRUTH["open_circuit_voltage_v"]
@@ -236,7 +242,6 @@ def _build_dataset(split: str) -> dict[str, Any]:
             + _noise(index, phase, 2e-5)
         )
         current_sequence += 1
-        voltage_sequence += 1
         current_samples.append(
             _current(timestamp, current_sequence, current, 0.02 + 0.01 * current)
         )
@@ -267,7 +272,11 @@ def _build_dataset(split: str) -> dict[str, Any]:
     window = WINDOWS["thermal"]
     temperature = 22.5
     previous_timestamp: int | None = None
-    for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):
+    temperature_sequence_start = temperature_sequence + 1
+    for temperature_sequence, (index, timestamp) in enumerate(
+        enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)),
+        start=temperature_sequence_start,
+    ):
         current = (
             0.25 + (1.2 if (index // 50) % 2 == 0 else 0.35) + 0.1 * math.sin(index * 0.07 + phase)
         )
@@ -279,7 +288,6 @@ def _build_dataset(split: str) -> dict[str, Any]:
             temperature += derivative * dt
         previous_timestamp = timestamp
         current_sequence += 1
-        temperature_sequence += 1
         current_samples.append(_current(timestamp, current_sequence, current, 0.01 * current))
         temperature_samples.append(
             {

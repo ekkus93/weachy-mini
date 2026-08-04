@@ -72,7 +72,7 @@ def _load_calibration_data() -> Any:
         path = Path(__file__).with_name("calibration_data.py")
         spec = importlib.util.spec_from_file_location("calibration_data", path)
         if spec is None or spec.loader is None:
-            raise RuntimeError("cannot load sibling calibration_data.py")
+            raise RuntimeError("cannot load sibling calibration_data.py") from None
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
@@ -572,7 +572,7 @@ def _jackknife_sensitivity(
 ) -> float:
     if len(features) < max(8, len(baseline) + 3):
         return 1.0
-    indexes = sorted(set(round(i * (len(features) - 1) / 15) for i in range(16)))
+    indexes = sorted({round(i * (len(features) - 1) / 15) for i in range(16)})
     maximum = 0.0
     for omitted in indexes:
         reduced_features = [row for index, row in enumerate(features) if index != omitted]
@@ -1089,8 +1089,7 @@ def _run_openssl(arguments: list[str], *, input_bytes: bytes | None = None) -> b
         completed = subprocess.run(
             ["openssl", *arguments],
             input=input_bytes,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             check=False,
         )
     except FileNotFoundError as exc:

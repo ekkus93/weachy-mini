@@ -100,7 +100,7 @@ def validate_scalar(value: Any, label: str) -> None:
         return
     if (
         isinstance(numeric, bool)
-        or not isinstance(numeric, (int, float))
+        or not isinstance(numeric, int | float)
         or not math.isfinite(float(numeric))
     ):
         raise ContractError(f"{label}.value must be finite or null")

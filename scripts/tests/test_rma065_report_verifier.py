@@ -10,7 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from verify_rma065_reports import Rma065ReportError, verify_reports
+# The scripts directory must be inserted before importing this standalone verifier.
+from verify_rma065_reports import Rma065ReportError, verify_reports  # noqa: E402
 
 
 class Rma065ReportVerifierTests(unittest.TestCase):

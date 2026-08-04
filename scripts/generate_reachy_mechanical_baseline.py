@@ -69,7 +69,7 @@ def validate_scalar(value: Any, label: str, *, positive: bool) -> float:
         raise ContractError(f"{label} may not claim calibration in RMA-063")
     nonempty(value["evidence_id"], f"{label}.evidence_id")
     numeric = value["value"]
-    if isinstance(numeric, bool) or not isinstance(numeric, (int, float)):
+    if isinstance(numeric, bool) or not isinstance(numeric, int | float):
         raise ContractError(f"{label}.value must be numeric")
     numeric = float(numeric)
     if not math.isfinite(numeric):
@@ -201,7 +201,8 @@ def validate_contract(data: dict[str, Any]) -> None:
         fingerprint = tuple(numeric[field] for field in FIELDS)
         if fingerprint in fingerprints:
             raise ContractError(
-                f"cross-role mechanical parameter copy detected between {fingerprints[fingerprint]} and {identifier}"
+                "cross-role mechanical parameter copy detected between "
+                f"{fingerprints[fingerprint]} and {identifier}"
             )
         fingerprints[fingerprint] = identifier
         set_by_id[identifier] = entry

@@ -56,7 +56,7 @@ def write_json(path: Path, value: Any) -> None:
 
 
 def _finite_number(value: Any, path: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise PreflightError(f"{path} must be numeric")
     number = float(value)
     if not math.isfinite(number):

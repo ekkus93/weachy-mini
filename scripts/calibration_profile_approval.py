@@ -155,7 +155,7 @@ def _require_int(
 
 
 def _require_number(value: Any, path: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise _error(path, "must be numeric")
     number = float(value)
     if not math.isfinite(number):

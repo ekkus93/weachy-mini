@@ -61,7 +61,7 @@ def validate_scalar(value: dict, name: str) -> None:
     if not value.get("evidence_id"):
         fail(f"{name}: missing evidence")
     number = value.get("value")
-    if not isinstance(number, (int, float)) or not math.isfinite(number) or number <= 0:
+    if not isinstance(number, int | float) or not math.isfinite(number) or number <= 0:
         fail(f"{name}: value must be finite and positive")
 
 
@@ -150,7 +150,8 @@ def validate(profile: dict, electrical: dict) -> None:
     )
     if not (largest_peak < current_limit < aggregate_peak):
         fail(
-            "shared current budget must exceed one servo peak and remain below aggregate peak demand"
+            "shared current budget must exceed one servo peak "
+            "and remain below aggregate peak demand"
         )
 
     expected_resistance = {
@@ -171,7 +172,11 @@ def cpp_string(value: str) -> str:
 
 
 def scalar(value: dict) -> str:
-    return f"PowerThermalScalar{{{value['value']!r}, {EVIDENCE[value['evidence_class']]}, {cpp_string(value['evidence_id'])}}}"
+    return (
+        f"PowerThermalScalar{{{value['value']!r}, "
+        f"{EVIDENCE[value['evidence_class']]}, "
+        f"{cpp_string(value['evidence_id'])}}}"
+    )
 
 
 def render(profile: dict) -> str:
@@ -210,11 +215,17 @@ def render(profile: dict) -> str:
     lines += [
         "}};",
         "",
-        "inline constexpr std::array<ServoActuatorBinding, kReachyPowerThermalActuatorCount> kPowerThermalBindings{{",
+        (
+            "inline constexpr std::array<ServoActuatorBinding, "
+            "kReachyPowerThermalActuatorCount> kPowerThermalBindings{{"
+        ),
     ]
     for binding in profile["actuator_bindings"]:
         lines.append(
-            f"    ServoActuatorBinding{{{cpp_string(binding['actuator_name'])}, {cpp_string(binding['baseline_id'])}, {ROLES[binding['role']]}}},"
+            "    ServoActuatorBinding{"
+            f"{cpp_string(binding['actuator_name'])}, "
+            f"{cpp_string(binding['baseline_id'])}, "
+            f"{ROLES[binding['role']]}}},"
         )
     lines += ["}};", "", "}  // namespace reachy::servo::generated", "", "#endif", ""]
     return "\n".join(lines)

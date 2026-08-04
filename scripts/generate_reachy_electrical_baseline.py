@@ -104,7 +104,7 @@ def nonempty(value: Any, label: str) -> str:
 
 
 def finite_number(value: Any, label: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise ContractError(f"{label} must be numeric")
     numeric = float(value)
     if not math.isfinite(numeric):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import json
@@ -1093,10 +1094,8 @@ def execute_schedule(
             adapter.emergency_stop(reason)
         finally:
             if started and not ended:
-                try:
+                with contextlib.suppress(BaseException):
                     adapter.end_run("aborted")
-                except BaseException:
-                    pass
         if isinstance(exc, ExperimentExecutionError):
             raise
         raise ExperimentExecutionError(reason) from exc
