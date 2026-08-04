@@ -22,6 +22,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import base64
           from pathlib import Path
 
           path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
@@ -30,55 +31,8 @@ jobs:
           end_marker = '\n## RMA-101 — Compute relative rotation from MuJoCo state\n'
           start = text.index(start_marker)
           end = text.index(end_marker, start)
-          replacement = '''## RMA-100 — Define coordinate systems and calibration
-
-**Status:** Complete (2026-08-04)
-
-- [x] Document Android sensor, camera image, Unity, MuJoCo, and virtual Reachy camera axes.
-- [x] Define neutral relationship between phone camera forward direction and Reachy neutral camera direction.
-- [x] Define front-camera mirror handling separately from physical camera orientation.
-- [x] Define phone and virtual Reachy intrinsic matrices.
-- [x] Add camera calibration persistence and versioning.
-
-**Completion evidence**
-
-- `docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md` is the normative
-  coordinate contract for RMA-101 through RMA-104. It fixes column-vector
-  composition; Android source and RMA-092 normalized pixel spaces; phone and
-  Reachy optical frames; Unity and MuJoCo frames; proper basis conversions; and
-  the rotation-only homography operands.
-- `ReachyCameraReprojectionCalibration.cs` provides finite/invertible 3x3 math,
-  normalized proper rotations, crop-then-rotation-then-mirror image
-  normalization, complete phone and virtual-Reachy projection matrices,
-  explicit provenance, versioned profiles, exact fail-closed selection, and
-  neutral homography construction.
-- Front-camera preview mirroring is retained as a pixel-space reflection and is
-  never inserted into physical orientation. Uncalibrated estimates remain
-  explicitly labeled and are never reported as calibrated.
-- `ReachyCameraCalibrationPersistenceStore` uses the independent versioned file
-  `reachy-camera-calibration-v1.json`, atomic replacement with backup, and
-  quarantine of invalid or unsupported data without installing a silent
-  default. `ReachySettingsPersistenceApplicationService` owns the calibration
-  boundary and reports settings and calibration health together.
-- Permanent hosted run `30959984801`, job `92161575744`, passed the managed
-  RMA-090/RMA-091/RMA-100 contracts and the static integration/truthfulness gate
-  on exact implementation SHA `e809e98522585dd207de1f0bef831a1fcdd7c462`.
-- Self-hosted run `30959984789`, job `92161627492`, passed generated presentation,
-  MuJoCo staging, Unity tests, ARM64/API-26 APK build and verification, RMA-090,
-  RMA-091, RMA-092, RMA-022 lifecycle, authoritative rendering, all evidence
-  uploads, APK upload, and final status publication on the same exact SHA.
-- The uploaded Unity result artifact `8912623164` has digest
-  `sha256:7ec9253df8f7a09c109f58349e5cbbce826932e7e28703116f05bce2fa598a6e`
-  and records 102/102 edit-mode tests passing, including matrix/quaternion
-  direction preservation, versioned calibration round-trip, unsupported-schema
-  quarantine without silent calibration, and settings-service ownership.
-- Detailed evidence is recorded in
-  `docs/validation/RMA_100_CAMERA_CALIBRATION_VALIDATION_2026-08-04.md`.
-'''
-          path.write_text(
-              text[:start] + replacement + text[end:],
-              encoding='utf-8',
-          )
+          replacement = base64.b64decode('IyMgUk1BLTEwMCDigJQgRGVmaW5lIGNvb3JkaW5hdGUgc3lzdGVtcyBhbmQgY2FsaWJyYXRpb24KCioqU3RhdHVzOioqIENvbXBsZXRlICgyMDI2LTA4LTA0KQoKLSBbeF0gRG9jdW1lbnQgQW5kcm9pZCBzZW5zb3IsIGNhbWVyYSBpbWFnZSwgVW5pdHksIE11Sm9DbywgYW5kIHZpcnR1YWwgUmVhY2h5IGNhbWVyYSBheGVzLgotIFt4XSBEZWZpbmUgbmV1dHJhbCByZWxhdGlvbnNoaXAgYmV0d2VlbiBwaG9uZSBjYW1lcmEgZm9yd2FyZCBkaXJlY3Rpb24gYW5kIFJlYWNoeSBuZXV0cmFsIGNhbWVyYSBkaXJlY3Rpb24uCi0gW3hdIERlZmluZSBmcm9udC1jYW1lcmEgbWlycm9yIGhhbmRsaW5nIHNlcGFyYXRlbHkgZnJvbSBwaHlzaWNhbCBjYW1lcmEgb3JpZW50YXRpb24uCi0gW3hdIERlZmluZSBwaG9uZSBhbmQgdmlydHVhbCBSZWFjaHkgaW50cmluc2ljIG1hdHJpY2VzLgotIFt4XSBBZGQgY2FtZXJhIGNhbGlicmF0aW9uIHBlcnNpc3RlbmNlIGFuZCB2ZXJzaW9uaW5nLgoKKipDb21wbGV0aW9uIGV2aWRlbmNlKioKCi0gYGRvY3MvYXJjaGl0ZWN0dXJlL0NBTUVSQV9SRVBST0pFQ1RJT05fQ09PUkRJTkFURV9TWVNURU1TLm1kYCBpcyB0aGUgbm9ybWF0aXZlCiAgY29vcmRpbmF0ZSBjb250cmFjdCBmb3IgUk1BLTEwMSB0aHJvdWdoIFJNQS0xMDQuIEl0IGZpeGVzIGNvbHVtbi12ZWN0b3IKICBjb21wb3NpdGlvbjsgQW5kcm9pZCBzb3VyY2UgYW5kIFJNQS0wOTIgbm9ybWFsaXplZCBwaXhlbCBzcGFjZXM7IHBob25lIGFuZAogIFJlYWNoeSBvcHRpY2FsIGZyYW1lczsgVW5pdHkgYW5kIE11Sm9DbyBmcmFtZXM7IHByb3BlciBiYXNpcyBjb252ZXJzaW9uczsgYW5kCiAgdGhlIHJvdGF0aW9uLW9ubHkgaG9tb2dyYXBoeSBvcGVyYW5kcy4KLSBgUmVhY2h5Q2FtZXJhUmVwcm9qZWN0aW9uQ2FsaWJyYXRpb24uY3NgIHByb3ZpZGVzIGZpbml0ZS9pbnZlcnRpYmxlIDN4MyBtYXRoLAogIG5vcm1hbGl6ZWQgcHJvcGVyIHJvdGF0aW9ucywgY3JvcC10aGVuLXJvdGF0aW9uLXRoZW4tbWlycm9yIGltYWdlCiAgbm9ybWFsaXphdGlvbiwgY29tcGxldGUgcGhvbmUgYW5kIHZpcnR1YWwtUmVhY2h5IHByb2plY3Rpb24gbWF0cmljZXMsCiAgZXhwbGljaXQgcHJvdmVuYW5jZSwgdmVyc2lvbmVkIHByb2ZpbGVzLCBleGFjdCBmYWlsLWNsb3NlZCBzZWxlY3Rpb24sIGFuZAogIG5ldXRyYWwgaG9tb2dyYXBoeSBjb25zdHJ1Y3Rpb24uCi0gRnJvbnQtY2FtZXJhIHByZXZpZXcgbWlycm9yaW5nIGlzIHJldGFpbmVkIGFzIGEgcGl4ZWwtc3BhY2UgcmVmbGVjdGlvbiBhbmQgaXMKICBuZXZlciBpbnNlcnRlZCBpbnRvIHBoeXNpY2FsIG9yaWVudGF0aW9uLiBVbmNhbGlicmF0ZWQgZXN0aW1hdGVzIHJlbWFpbgogIGV4cGxpY2l0bHkgbGFiZWxlZCBhbmQgYXJlIG5ldmVyIHJlcG9ydGVkIGFzIGNhbGlicmF0ZWQuCi0gYFJlYWNoeUNhbWVyYUNhbGlicmF0aW9uUGVyc2lzdGVuY2VTdG9yZWAgdXNlcyB0aGUgaW5kZXBlbmRlbnQgdmVyc2lvbmVkIGZpbGUKICBgcmVhY2h5LWNhbWVyYS1jYWxpYnJhdGlvbi12MS5qc29uYCwgYXRvbWljIHJlcGxhY2VtZW50IHdpdGggYmFja3VwLCBhbmQKICBxdWFyYW50aW5lIG9mIGludmFsaWQgb3IgdW5zdXBwb3J0ZWQgZGF0YSB3aXRob3V0IGluc3RhbGxpbmcgYSBzaWxlbnQKICBkZWZhdWx0LiBgUmVhY2h5U2V0dGluZ3NQZXJzaXN0ZW5jZUFwcGxpY2F0aW9uU2VydmljZWAgb3ducyB0aGUgY2FsaWJyYXRpb24KICBib3VuZGFyeSBhbmQgcmVwb3J0cyBzZXR0aW5ncyBhbmQgY2FsaWJyYXRpb24gaGVhbHRoIHRvZ2V0aGVyLgotIFBlcm1hbmVudCBob3N0ZWQgcnVuIGAzMDk1OTk4NDgwMWAsIGpvYiBgOTIxNjE1NzU3NDRgLCBwYXNzZWQgdGhlIG1hbmFnZWQKICBSTUEtMDkwL1JNQS0wOTEvUk1BLTEwMCBjb250cmFjdHMgYW5kIHRoZSBzdGF0aWMgaW50ZWdyYXRpb24vdHJ1dGhmdWxuZXNzIGdhdGUKICBvbiBleGFjdCBpbXBsZW1lbnRhdGlvbiBTSEEgYGU4MDllOTg1MjI1ODVkZDIwN2RlMWYwYmVmODMxYTFmY2RkN2M0NjJgLgotIFNlbGYtaG9zdGVkIHJ1biBgMzA5NTk5ODQ3ODlgLCBqb2IgYDkyMTYxNjI3NDkyYCwgcGFzc2VkIGdlbmVyYXRlZCBwcmVzZW50YXRpb24sCiAgTXVKb0NvIHN0YWdpbmcsIFVuaXR5IHRlc3RzLCBBUk02NC9BUEktMjYgQVBLIGJ1aWxkIGFuZCB2ZXJpZmljYXRpb24sIFJNQS0wOTAsCiAgUk1BLTA5MSwgUk1BLTA5MiwgUk1BLTAyMiBsaWZlY3ljbGUsIGF1dGhvcml0YXRpdmUgcmVuZGVyaW5nLCBhbGwgZXZpZGVuY2UKICB1cGxvYWRzLCBBUEsgdXBsb2FkLCBhbmQgZmluYWwgc3RhdHVzIHB1YmxpY2F0aW9uIG9uIHRoZSBzYW1lIGV4YWN0IFNIQS4KLSBUaGUgdXBsb2FkZWQgVW5pdHkgcmVzdWx0IGFydGlmYWN0IGA4OTEyNjIzMTY0YCBoYXMgZGlnZXN0CiAgYHNoYTI1Njo3ZWM5MjUzZGY4ZjdhMDljMTA5ZjU4MzQ5ZTVjYmJjZTgyNjkzMmU3ZTI4NzAzMTE2ZjA1YmNlMmZhNTk4YTZlYAogIGFuZCByZWNvcmRzIDEwMi8xMDIgZWRpdC1tb2RlIHRlc3RzIHBhc3NpbmcsIGluY2x1ZGluZyBtYXRyaXgvcXVhdGVybmlvbgogIGRpcmVjdGlvbiBwcmVzZXJ2YXRpb24sIHZlcnNpb25lZCBjYWxpYnJhdGlvbiByb3VuZC10cmlwLCB1bnN1cHBvcnRlZC1zY2hlbWEKICBxdWFyYW50aW5lIHdpdGhvdXQgc2lsZW50IGNhbGlicmF0aW9uLCBhbmQgc2V0dGluZ3Mtc2VydmljZSBvd25lcnNoaXAuCi0gRGV0YWlsZWQgZXZpZGVuY2UgaXMgcmVjb3JkZWQgaW4KICBgZG9jcy92YWxpZGF0aW9uL1JNQV8xMDBfQ0FNRVJBX0NBTElCUkFUSU9OX1ZBTElEQVRJT05fMjAyNi0wOC0wNC5tZGAuCg==').decode('utf-8')
+          path.write_text(text[:start] + replacement + text[end:], encoding='utf-8')
           PY
           rm --force .github/workflows/rma100-finalize-roadmap.yml
           git diff --check
