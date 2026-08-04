@@ -13,9 +13,19 @@ namespace ReachyMini.AppState
         public const string AcquisitionObjectName =
             "ReachyAndroidCameraAcquisition";
 
+        private const int AndroidScreenOrientationUnspecified = -1;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ConfigureAndroidOrientationBeforeSceneLoad()
+        {
+            ConfigureAndroidAutoRotation();
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InstallAfterSceneLoad()
         {
+            ConfigureAndroidAutoRotation();
+
             if (UnityEngine.Object.FindAnyObjectByType<
                     ReachyCameraAcquisitionInstaller>() != null)
             {
@@ -55,6 +65,68 @@ namespace ReachyMini.AppState
                     : exception.Message;
                 return false;
             }
+        }
+
+        private static void ConfigureAndroidAutoRotation()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            Screen.autorotateToPortrait = true;
+            Screen.autorotateToPortraitUpsideDown = true;
+            Screen.autorotateToLandscapeLeft = true;
+            Screen.autorotateToLandscapeRight = true;
+            Screen.orientation = ScreenOrientation.AutoRotation;
+
+            try
+            {
+                using var unityPlayer = new AndroidJavaClass(
+                    "com.unity3d.player.UnityPlayer");
+                using AndroidJavaObject activity =
+                    unityPlayer.GetStatic<AndroidJavaObject>(
+                        "currentActivity");
+                if (activity == null)
+                {
+                    throw new InvalidOperationException(
+                        "UnityPlayer.currentActivity is unavailable.");
+                }
+
+                activity.Call(
+                    "runOnUiThread",
+                    new AndroidJavaRunnable(
+                        () =>
+                        {
+                            try
+                            {
+                                using var currentUnityPlayer =
+                                    new AndroidJavaClass(
+                                        "com.unity3d.player.UnityPlayer");
+                                using AndroidJavaObject currentActivity =
+                                    currentUnityPlayer.GetStatic<
+                                        AndroidJavaObject>(
+                                        "currentActivity");
+                                if (currentActivity == null)
+                                {
+                                    throw new InvalidOperationException(
+                                        "UnityPlayer.currentActivity is unavailable.");
+                                }
+                                currentActivity.Call(
+                                    "setRequestedOrientation",
+                                    AndroidScreenOrientationUnspecified);
+                            }
+                            catch (Exception exception)
+                            {
+                                Debug.LogError(
+                                    "Android auto-rotation request failed on the UI thread: " +
+                                    exception.Message);
+                            }
+                        }));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "Android auto-rotation setup failed: " +
+                    exception.Message);
+            }
+#endif
         }
 
         private static ReachyAndroidCameraAcquisition GetOrCreateAcquisition(
