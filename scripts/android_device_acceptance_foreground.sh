@@ -111,8 +111,7 @@ prepare_device()
     "${ADB[@]}" shell svc power stayon true >/dev/null 2>&1 || true
     dismiss_immersive_confirmation
 
-    local attempt
-    for attempt in 1 2 3; do
+    for _ in 1 2 3; do
         "${ADB[@]}" shell input keyevent 224 >/dev/null 2>&1 || true
         "${ADB[@]}" shell wm dismiss-keyguard >/dev/null 2>&1 || true
         "${ADB[@]}" shell input keyevent 82 >/dev/null 2>&1 || true
