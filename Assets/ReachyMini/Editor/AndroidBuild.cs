@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Xml;
 using UnityEditor;
 using UnityEditor.Android;
 using UnityEditor.Build;
@@ -249,6 +250,148 @@ namespace ReachyMini.Editor
                     throw new FileNotFoundException(
                         "The production Unity Android runtime was not staged.",
                         path);
+                }
+            }
+        }
+    }
+
+    public sealed class AndroidAutoRotationManifestProcessor :
+        IPostGenerateGradleAndroidProject
+    {
+        private const string AndroidNamespace =
+            "http://schemas.android.com/apk/res/android";
+        private const string RequiredOrientation = "unspecified";
+
+        private static readonly string[] UnityActivityClassNames =
+        {
+            "com.unity3d.player.UnityPlayerGameActivity",
+            "com.unity3d.player.UnityPlayerActivity",
+        };
+
+        public int callbackOrder => 1000;
+
+        public void OnPostGenerateGradleAndroidProject(string basePath)
+        {
+            if (string.IsNullOrWhiteSpace(basePath) ||
+                !Directory.Exists(basePath))
+            {
+                throw new DirectoryNotFoundException(
+                    $"Unity generated no Android Gradle project at {basePath}.");
+            }
+
+            string[] manifestPaths = Directory.GetFiles(
+                basePath,
+                "AndroidManifest.xml",
+                SearchOption.AllDirectories);
+            bool foundUnityActivity = false;
+
+            foreach (string manifestPath in manifestPaths)
+            {
+                var document = new XmlDocument
+                {
+                    PreserveWhitespace = true,
+                };
+                document.Load(manifestPath);
+                XmlNodeList activityNodes = document.SelectNodes(
+                    "/manifest/application/activity");
+                if (activityNodes == null)
+                {
+                    continue;
+                }
+
+                bool changed = false;
+                foreach (XmlNode node in activityNodes)
+                {
+                    if (!(node is XmlElement activity))
+                    {
+                        continue;
+                    }
+
+                    string activityName = activity.GetAttribute(
+                        "name",
+                        AndroidNamespace);
+                    if (!UnityActivityClassNames.Contains(
+                            activityName,
+                            StringComparer.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    foundUnityActivity = true;
+                    if (!string.Equals(
+                            activity.GetAttribute(
+                                "screenOrientation",
+                                AndroidNamespace),
+                            RequiredOrientation,
+                            StringComparison.Ordinal))
+                    {
+                        activity.SetAttribute(
+                            "screenOrientation",
+                            AndroidNamespace,
+                            RequiredOrientation);
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    document.Save(manifestPath);
+                }
+            }
+
+            if (!foundUnityActivity)
+            {
+                throw new InvalidOperationException(
+                    "The generated Android manifests contain no Unity player activity. " +
+                    "The build cannot prove that device rotation remains available.");
+            }
+
+            ValidateGeneratedManifests(manifestPaths);
+        }
+
+        private static void ValidateGeneratedManifests(
+            string[] manifestPaths)
+        {
+            foreach (string manifestPath in manifestPaths)
+            {
+                var document = new XmlDocument();
+                document.Load(manifestPath);
+                XmlNodeList activityNodes = document.SelectNodes(
+                    "/manifest/application/activity");
+                if (activityNodes == null)
+                {
+                    continue;
+                }
+
+                foreach (XmlNode node in activityNodes)
+                {
+                    if (!(node is XmlElement activity))
+                    {
+                        continue;
+                    }
+
+                    string activityName = activity.GetAttribute(
+                        "name",
+                        AndroidNamespace);
+                    if (!UnityActivityClassNames.Contains(
+                            activityName,
+                            StringComparer.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    string orientation = activity.GetAttribute(
+                        "screenOrientation",
+                        AndroidNamespace);
+                    if (!string.Equals(
+                            orientation,
+                            RequiredOrientation,
+                            StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException(
+                            $"Generated Unity activity {activityName} in {manifestPath} " +
+                            $"retains fixed orientation '{orientation}'.");
+                    }
                 }
             }
         }
