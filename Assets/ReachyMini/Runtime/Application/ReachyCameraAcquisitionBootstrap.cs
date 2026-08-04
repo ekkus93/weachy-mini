@@ -56,10 +56,12 @@ namespace ReachyMini.AppState
             {
                 ReachyAndroidCameraAcquisition acquisition =
                     GetOrCreateAcquisition(discovery);
+                ReachyAndroidCameraTextureBridge textureBridge =
+                    GetOrCreateTextureBridge(acquisition);
                 InstallAcceptanceEvidenceIfRequested(
                     discovery,
-                    acquisition);
-                _ = GetOrCreateTextureBridge(acquisition);
+                    acquisition,
+                    textureBridge);
                 fault = string.Empty;
                 return true;
             }
@@ -204,32 +206,44 @@ namespace ReachyMini.AppState
 
         private static void InstallAcceptanceEvidenceIfRequested(
             ReachyAndroidCameraDiscovery discovery,
-            ReachyAndroidCameraAcquisition acquisition)
+            ReachyAndroidCameraAcquisition acquisition,
+            ReachyAndroidCameraTextureBridge textureBridge)
         {
-            if (!ReachyCameraAcquisitionEvidence
+            if (ReachyCameraAcquisitionEvidence
                     .IsAcceptanceRequestedFromLaunchIntent())
             {
-                return;
+                ReachyCameraAcquisitionEvidence? evidence =
+                    discovery.GetComponent<ReachyCameraAcquisitionEvidence>();
+                if (evidence == null)
+                {
+                    evidence = discovery.gameObject.AddComponent<
+                        ReachyCameraAcquisitionEvidence>();
+                }
+                evidence.Configure(acquisition, discovery);
+
+                ReachyCameraAcquisitionAcceptanceRetry? retry =
+                    discovery.GetComponent<
+                        ReachyCameraAcquisitionAcceptanceRetry>();
+                if (retry == null)
+                {
+                    retry = discovery.gameObject.AddComponent<
+                        ReachyCameraAcquisitionAcceptanceRetry>();
+                }
+                retry.Configure(acquisition, discovery);
             }
 
-            ReachyCameraAcquisitionEvidence? evidence =
-                discovery.GetComponent<ReachyCameraAcquisitionEvidence>();
-            if (evidence == null)
+            if (ReachyCameraTextureEvidence
+                    .IsAcceptanceRequestedFromLaunchIntent())
             {
-                evidence = discovery.gameObject.AddComponent<
-                    ReachyCameraAcquisitionEvidence>();
+                ReachyCameraTextureEvidence? textureEvidence =
+                    acquisition.GetComponent<ReachyCameraTextureEvidence>();
+                if (textureEvidence == null)
+                {
+                    textureEvidence = acquisition.gameObject.AddComponent<
+                        ReachyCameraTextureEvidence>();
+                }
+                textureEvidence.Configure(acquisition, textureBridge);
             }
-            evidence.Configure(acquisition, discovery);
-
-            ReachyCameraAcquisitionAcceptanceRetry? retry =
-                discovery.GetComponent<
-                    ReachyCameraAcquisitionAcceptanceRetry>();
-            if (retry == null)
-            {
-                retry = discovery.gameObject.AddComponent<
-                    ReachyCameraAcquisitionAcceptanceRetry>();
-            }
-            retry.Configure(acquisition, discovery);
         }
     }
 
