@@ -21,13 +21,15 @@ bridge.
   - job `92078267747`
   - runner: `kawa`
   - conclusion: success
-- Current master after ShellCheck-only follow-up:
+- ShellCheck-hardened camera implementation baseline:
   `76e809355771cfcd5edc5ca13107c6a02fb4af22`
 
-The commits after the validated implementation SHA change only
-`scripts/android_device_acceptance_foreground.sh` and
-`scripts/run_rma065_hosted_gate.sh`. They do not modify the CameraX, Unity
-camera-acquisition, Android build-orientation, or RMA-091 acceptance code.
+Between the exact physical implementation SHA and the ShellCheck-hardened
+baseline, only `scripts/android_device_acceptance_foreground.sh` and
+`scripts/run_rma065_hosted_gate.sh` changed. The later evidence-addendum commits
+modify documentation and a bounded helper that was removed after use. None of
+those commits modify CameraX, Unity camera acquisition, Android build
+orientation, or RMA-091 acceptance behavior.
 
 Two final device-specific hardening defects were repaired before acceptance:
 
@@ -169,6 +171,19 @@ All artifacts below belong to workflow run `30934825724` and exact commit
   - digest `sha256:f449e4f81f152b870ab10c7247c848f339f9cee53991a5fe7e70e14661f47b0c`
 - Verified ARM64/API-26 APK: artifact `8902921211`
   - digest `sha256:05f2f535a4e1ed7ca8a59e2c519e0892b0cfedd8a8c828cfa3323a2cd642220d`
+
+## Roadmap completion and cleanup
+
+- Validation record added in commit
+  `7a148c5a8c5711a84c93de960291632257b32b11`.
+- The authoritative RMA-091 TODO block was marked complete in commit
+  `1fcba6781e814bae6efdf17149866f907c96e98a` after the validation file already
+  existed at its permanent path.
+- The one-time bounded apply workflow and helper were removed in commits
+  `198d2cd9cd78d272975d56b5c52b1be28faadce4` and
+  `05b582591c65d106bb0ffa11eb049e3043855cc0`.
+- The net repository change from the ShellCheck-hardened baseline is limited to
+  this permanent validation record and the authoritative TODO completion.
 
 ## Boundary retained for RMA-092
 
