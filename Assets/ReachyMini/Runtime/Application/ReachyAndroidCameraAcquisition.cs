@@ -280,18 +280,21 @@ namespace ReachyMini.AppState
             ReachyCameraCapability? selected = FindCamera(
                 capabilities,
                 state.Current.CameraId);
-            if (selected == null ||
-                !CanRemainBoundToSelectedCamera(selected.Availability))
+            if (selected == null)
+            {
+                // Some API-26 camera services temporarily omit an application-owned
+                // camera from getCameraIdList(). CameraX remains authoritative for
+                // the health of an already-bound session.
+                return;
+            }
+            if (!CanRemainBoundToSelectedCamera(selected.Availability))
             {
                 string selectedCameraId = state.Current.CameraId;
-                ReachyCameraAvailabilityState selectedAvailability =
-                    selected?.Availability ??
-                    ReachyCameraAvailabilityState.Unknown;
                 desiredActive = false;
                 RequirePlatform().Stop();
                 state.MarkUnavailable(
                     $"Selected camera '{selectedCameraId}' can no longer remain bound " +
-                    $"because discovery reports {selectedAvailability}.");
+                    $"because discovery reports {selected.Availability}.");
             }
         }
 
