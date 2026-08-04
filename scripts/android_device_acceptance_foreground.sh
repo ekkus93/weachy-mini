@@ -35,7 +35,19 @@ focused_window()
 {
     "${ADB[@]}" shell dumpsys window windows 2>/dev/null \
         | tr -d '\r' \
-        | awk '/mCurrentFocus=|mFocusedApp=/{print; exit}'
+        | awk '
+            /mCurrentFocus=/ { current = $0 }
+            /mFocusedApp=/ { focused_app = $0 }
+            END {
+                if (current != "" && current !~ /mCurrentFocus=null/) {
+                    print current
+                } else if (focused_app != "") {
+                    print focused_app
+                } else if (current != "") {
+                    print current
+                }
+            }
+        '
 }
 
 power_state()
@@ -53,8 +65,21 @@ keyguard_state()
             /KeyguardController:/ { in_keyguard = 1; next }
             in_keyguard && /mKeyguardShowing=/ {
                 sub(/^[[:space:]]+/, "")
-                print
+                showing = $0
+                next
+            }
+            in_keyguard && /mOccluded=/ {
+                sub(/^[[:space:]]+/, "")
+                occluded = $0
                 exit
+            }
+            END {
+                if (showing != "") {
+                    print showing
+                }
+                if (occluded != "") {
+                    print occluded
+                }
             }
         '
 }
@@ -67,11 +92,17 @@ device_is_awake()
         "${state}" == *"Display Power: state=ON"* ]]
 }
 
-keyguard_is_showing()
+keyguard_blocks_focused_app()
 {
     local state
     state="$(keyguard_state || true)"
-    [[ "${state}" == *"mKeyguardShowing=true"* ]]
+    if [[ "${state}" != *"mKeyguardShowing=true"* ]]; then
+        return 1
+    fi
+    if [[ "${state}" == *"mOccluded=true"* ]]; then
+        return 1
+    fi
+    return 0
 }
 
 prepare_device()
@@ -87,7 +118,7 @@ prepare_device()
         "${ADB[@]}" shell input keyevent 82 >/dev/null 2>&1 || true
         collapse_status_bar
         sleep 1
-        if device_is_awake && ! keyguard_is_showing; then
+        if device_is_awake && ! keyguard_blocks_focused_app; then
             return
         fi
     done
@@ -109,18 +140,18 @@ case "${ACTION}" in
                 continue
             fi
             if [[ "${focus}" == *"${PACKAGE_NAME}"* ]] && \
-                device_is_awake && ! keyguard_is_showing; then
+                device_is_awake && ! keyguard_blocks_focused_app; then
                 printf '%s\n' "${focus}"
                 exit 0
             fi
             if (( $(date +%s) >= deadline )); then
-                printf 'Timed out waiting for %s to own an awake, unlocked focused window.\n' \
+                printf 'Timed out waiting for %s to own an awake focused window that is not blocked by keyguard.\n' \
                     "${PACKAGE_NAME}" >&2
                 printf 'Last focus: %s\n' "${focus}" >&2
                 printf 'Power state: %s\n' "$(power_state || true)" >&2
                 printf 'Keyguard state: %s\n' "$(keyguard_state || true)" >&2
                 printf '%s\n' \
-                    'If Android reports mKeyguardShowing=true, manually unlock the physical device and rerun the job.' \
+                    'A showing but occluded keyguard is accepted; an unoccluded keyguard must be manually unlocked before rerunning the job.' \
                     >&2
                 exit 1
             fi
