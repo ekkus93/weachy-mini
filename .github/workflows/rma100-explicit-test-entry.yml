@@ -1,0 +1,68 @@
+name: RMA-100 Explicit Test Entry
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma100-explicit-test-entry.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Make RMA-100 test entry explicit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          program_path = Path('managed/ReachyMini.Camera.Tests/Program.cs')
+          program = program_path.read_text(encoding='utf-8')
+          old = '''            InvalidFrameContractsFailClosed();
+            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");'''
+          new = '''            InvalidFrameContractsFailClosed();
+            Rma100CameraCalibrationContracts.Run();
+            Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");'''
+          if old not in program:
+              raise SystemExit('Program.cs entry-point anchor was not found.')
+          program_path.write_text(program.replace(old, new, 1), encoding='utf-8')
+
+          contracts_path = Path(
+              'managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs')
+          contracts = contracts_path.read_text(encoding='utf-8')
+          contracts = contracts.replace(
+              'using System.Runtime.CompilerServices;\n',
+              '',
+              1,
+          )
+          marker = '        [ModuleInitializer]\n        internal static void Run()'
+          if marker not in contracts:
+              raise SystemExit('RMA-100 module-initializer anchor was not found.')
+          contracts_path.write_text(
+              contracts.replace(marker, '        internal static void Run()', 1),
+              encoding='utf-8',
+          )
+          PY
+          git diff --check
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            managed/ReachyMini.Camera.Tests/Program.cs \
+            managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs
+          git commit -m 'RMA-100: make hosted calibration tests explicit'
+          git push origin HEAD:master
