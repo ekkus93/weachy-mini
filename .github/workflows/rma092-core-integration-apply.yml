@@ -21,6 +21,29 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-092 Core Integration Apply",
+              "description": "Applying bounded CameraX texture integration",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -30,6 +53,15 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/apply_rma092_core_integration.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs')
+          text = path.read_text(encoding='utf-8')
+          old = 'DestroyObject('
+          if old not in text:
+              raise SystemExit('Expected Unity object-destruction helper was not found.')
+          path.write_text(text.replace(old, 'DestroyUnityObject('), encoding='utf-8')
+          PY
           git diff --check
           bash -n scripts/*.sh
           changed="$(git diff --name-only | sort)"
@@ -62,3 +94,51 @@ EOF
             Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs
           git commit -m 'RMA-092: integrate CameraX YUV texture leases'
           git push origin HEAD:master
+
+      - name: Publish success status
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "success",
+              "context": "RMA-092 Core Integration Apply",
+              "description": "CameraX texture integration committed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
+
+      - name: Publish failure status
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json, os
+          print(json.dumps({
+              "state": "failure",
+              "context": "RMA-092 Core Integration Apply",
+              "description": "CameraX texture integration apply failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
