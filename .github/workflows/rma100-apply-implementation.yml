@@ -25,6 +25,7 @@ jobs:
           base64 --decode "${RUNNER_TEMP}/payload.b64" > "${RUNNER_TEMP}/payload.tar.gz"
           printf '%s  %s\n' '1002e7f99e3e5e6ceb1c6fd4e8fac9c4213430d1f18577c7d74025f36bf95ae5' "${RUNNER_TEMP}/payload.tar.gz" | sha256sum --check --strict
           tar --extract --gzip --file "${RUNNER_TEMP}/payload.tar.gz" --directory "${GITHUB_WORKSPACE}"
+          rm --force .github/workflows/rma100-camera-calibration.yml
           rm --force .github/workflows/rma100-apply-implementation.yml
           rm --recursive --force .github/rma100-payload
           git diff --check
