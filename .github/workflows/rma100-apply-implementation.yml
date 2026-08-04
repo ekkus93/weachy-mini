@@ -1,5 +1,6 @@
 name: RMA-100 Apply Implementation
 
+# Payload complete; this revision triggers the bounded atomic apply.
 on:
   push:
     branches: [master]
