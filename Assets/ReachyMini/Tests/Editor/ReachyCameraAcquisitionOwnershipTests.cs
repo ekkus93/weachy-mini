@@ -11,16 +11,16 @@ namespace ReachyMini.Tests
     public sealed class ReachyCameraAcquisitionOwnershipTests
     {
         [Test]
-        public void OwnedCameraOmissionDoesNotStopActiveSession()
+        public void OwnedOmissionAndBusySignalKeepSessionButDisconnectStopsFailClosed()
         {
-            GameObject gameObject = new GameObject("Rma091OwnedOmission");
+            GameObject gameObject =
+                new GameObject("Rma091CameraOwnership");
             try
             {
                 ReachyAndroidCameraDiscovery discovery =
                     gameObject.AddComponent<ReachyAndroidCameraDiscovery>();
                 var discoveryPlatform = new OwnershipDiscoveryPlatform();
                 discovery.ConfigurePlatformForTests(discoveryPlatform);
-                discovery.RefreshNowForTests();
 
                 ReachyAndroidCameraAcquisition acquisition =
                     gameObject.AddComponent<ReachyAndroidCameraAcquisition>();
@@ -28,18 +28,34 @@ namespace ReachyMini.Tests
                 acquisition.ConfigurePlatformForTests(
                     discovery,
                     acquisitionPlatform);
+
                 acquisition.StartPreferred(ReachyCameraFacing.Rear);
                 ulong sessionId = acquisition.State.Current.SessionId;
                 acquisitionPlatform.SnapshotJson = RunningSnapshot(
-                    sessionId,
-                    "rear-0",
-                    1UL,
-                    100L);
+                    checked((long)sessionId));
                 acquisition.RefreshNow();
+                Assert.That(
+                    acquisition.State.Current.State,
+                    Is.EqualTo(ReachyCameraAcquisitionState.Running));
 
-                discoveryPlatform.OmitOwnedCamera = true;
-                discovery.RefreshNowForTests();
+                discoveryPlatform.OmitCamera = true;
+                discovery.RefreshPermissionAndCapabilities();
 
+                Assert.That(acquisitionPlatform.StopCount, Is.EqualTo(0));
+                Assert.That(acquisition.DesiredActive, Is.True);
+                Assert.That(
+                    acquisition.State.Current.SessionId,
+                    Is.EqualTo(sessionId));
+                Assert.That(
+                    acquisition.State.Current.CameraId,
+                    Is.EqualTo("rear-0"));
+
+                discoveryPlatform.OmitCamera = false;
+                discoveryPlatform.Availability =
+                    "in_use_or_unavailable";
+                discovery.RefreshPermissionAndCapabilities();
+
+                Assert.That(acquisitionPlatform.StopCount, Is.EqualTo(0));
                 Assert.That(acquisition.DesiredActive, Is.True);
                 Assert.That(
                     acquisition.State.Current.State,
@@ -47,91 +63,18 @@ namespace ReachyMini.Tests
                 Assert.That(
                     acquisition.State.Current.SessionId,
                     Is.EqualTo(sessionId));
-                Assert.That(acquisitionPlatform.StopCount, Is.Zero);
-            }
-            finally
-            {
-                Object.DestroyImmediate(gameObject);
-            }
-        }
-
-        [Test]
-        public void BusyAvailabilityDoesNotStopSelfOwnedSession()
-        {
-            GameObject gameObject = new GameObject("Rma091OwnedBusy");
-            try
-            {
-                ReachyAndroidCameraDiscovery discovery =
-                    gameObject.AddComponent<ReachyAndroidCameraDiscovery>();
-                var discoveryPlatform = new OwnershipDiscoveryPlatform();
-                discovery.ConfigurePlatformForTests(discoveryPlatform);
-                discovery.RefreshNowForTests();
-
-                ReachyAndroidCameraAcquisition acquisition =
-                    gameObject.AddComponent<ReachyAndroidCameraAcquisition>();
-                var acquisitionPlatform = new OwnershipAcquisitionPlatform();
-                acquisition.ConfigurePlatformForTests(
-                    discovery,
-                    acquisitionPlatform);
-                acquisition.StartPreferred(ReachyCameraFacing.Rear);
-                ulong sessionId = acquisition.State.Current.SessionId;
-                acquisitionPlatform.SnapshotJson = RunningSnapshot(
-                    sessionId,
-                    "rear-0",
-                    1UL,
-                    100L);
-                acquisition.RefreshNow();
-
-                discoveryPlatform.Availability = "busy";
-                discovery.RefreshNowForTests();
-
-                Assert.That(acquisition.DesiredActive, Is.True);
-                Assert.That(
-                    acquisition.State.Current.State,
-                    Is.EqualTo(ReachyCameraAcquisitionState.Running));
-                Assert.That(acquisitionPlatform.StopCount, Is.Zero);
-            }
-            finally
-            {
-                Object.DestroyImmediate(gameObject);
-            }
-        }
-
-        [Test]
-        public void DisconnectedAvailabilityStopsFailClosed()
-        {
-            GameObject gameObject = new GameObject("Rma091Disconnected");
-            try
-            {
-                ReachyAndroidCameraDiscovery discovery =
-                    gameObject.AddComponent<ReachyAndroidCameraDiscovery>();
-                var discoveryPlatform = new OwnershipDiscoveryPlatform();
-                discovery.ConfigurePlatformForTests(discoveryPlatform);
-                discovery.RefreshNowForTests();
-
-                ReachyAndroidCameraAcquisition acquisition =
-                    gameObject.AddComponent<ReachyAndroidCameraAcquisition>();
-                var acquisitionPlatform = new OwnershipAcquisitionPlatform();
-                acquisition.ConfigurePlatformForTests(
-                    discovery,
-                    acquisitionPlatform);
-                acquisition.StartPreferred(ReachyCameraFacing.Rear);
-                ulong sessionId = acquisition.State.Current.SessionId;
-                acquisitionPlatform.SnapshotJson = RunningSnapshot(
-                    sessionId,
-                    "rear-0",
-                    1UL,
-                    100L);
-                acquisition.RefreshNow();
 
                 discoveryPlatform.Availability = "disconnected";
-                discovery.RefreshNowForTests();
+                discovery.RefreshPermissionAndCapabilities();
 
+                Assert.That(acquisitionPlatform.StopCount, Is.EqualTo(1));
                 Assert.That(acquisition.DesiredActive, Is.False);
                 Assert.That(
                     acquisition.State.Current.State,
                     Is.EqualTo(ReachyCameraAcquisitionState.Unavailable));
-                Assert.That(acquisitionPlatform.StopCount, Is.EqualTo(1));
+                StringAssert.Contains(
+                    "Disconnected",
+                    acquisition.State.Current.Message);
             }
             finally
             {
@@ -139,33 +82,28 @@ namespace ReachyMini.Tests
             }
         }
 
-        private static string RunningSnapshot(
-            ulong sessionId,
-            string cameraId,
-            ulong sequence,
-            long timestamp)
+        private static string RunningSnapshot(long sessionId)
         {
             return
-                "{\"status\":\"ok\",\"state\":\"Running\"," +
-                "\"errorCode\":\"\",\"message\":\"running\"," +
-                "\"sessionId\":" + sessionId +
-                ",\"cameraId\":\"" + cameraId +
-                "\",\"facing\":\"rear\"," +
+                "{\"status\":\"ok\",\"state\":\"Running\",\"errorCode\":\"\"," +
+                "\"message\":\"frame texture ready\",\"sessionId\":" + sessionId +
+                ",\"cameraId\":\"rear-0\",\"facing\":\"rear\"," +
                 "\"analysisBackpressure\":\"keep_only_latest\"," +
                 "\"previewSink\":\"analysis_yuv_gpu_texture_bridge\"," +
                 "\"cpuPixelCopyPerformed\":true,\"latestFrame\":{" +
                 "\"sessionId\":" + sessionId +
-                ",\"sequence\":" + sequence +
-                ",\"timestampNanoseconds\":" + timestamp +
-                ",\"cameraId\":\"" + cameraId +
-                "\",\"facing\":\"rear\"," +
-                "\"sensorOrientationDegrees\":90," +
-                "\"rotationDegrees\":90,\"width\":1280,\"height\":720," +
-                "\"pixelFormat\":\"YUV_420_888\"," +
+                ",\"sequence\":1,\"timestampNanoseconds\":1000000," +
+                "\"cameraId\":\"rear-0\",\"facing\":\"rear\"," +
+                "\"sensorOrientationDegrees\":90,\"rotationDegrees\":0," +
+                "\"width\":1280,\"height\":720," +
                 "\"crop\":{\"left\":0,\"top\":0,\"right\":1280,\"bottom\":720}," +
-                "\"intrinsics\":{\"available\":true,\"fx\":900.0," +
-                "\"fy\":900.0,\"cx\":640.0,\"cy\":360.0," +
-                "\"skew\":0.0,\"source\":\"platform_intrinsics\"}," +
+                "\"pixelFormat\":\"YUV_420_888\"," +
+                "\"intrinsics\":{\"source\":\"android_calibration\"," +
+                "\"fx\":900.0,\"fy\":900.0,\"cx\":640.0,\"cy\":360.0," +
+                "\"skew\":0.0,\"coordinateSpace\":\"active_sensor_array\"," +
+                "\"activeArrayLeft\":0,\"activeArrayTop\":0," +
+                "\"activeArrayRight\":4032,\"activeArrayBottom\":3024," +
+                "\"provenance\":\"Camera2 calibration\"}," +
                 "\"imagePlanesAccessed\":true," +
                 "\"cpuPixelCopyPerformed\":true," +
                 "\"textureFramePublished\":true," +
@@ -180,7 +118,7 @@ namespace ReachyMini.Tests
         {
             public bool IsSupported => true;
 
-            public bool OmitOwnedCamera { get; set; }
+            public bool OmitCamera { get; set; }
 
             public string Availability { get; set; } = "available";
 
@@ -194,9 +132,7 @@ namespace ReachyMini.Tests
                 return false;
             }
 
-            public void RequestCameraPermission(
-                Action granted,
-                Action denied)
+            public void RequestCameraPermission(Action granted, Action denied)
             {
                 _ = denied;
                 granted();
@@ -204,11 +140,10 @@ namespace ReachyMini.Tests
 
             public string DiscoverCameraCapabilitiesJson()
             {
-                if (OmitOwnedCamera)
+                if (OmitCamera)
                 {
                     return
-                        "{\"status\":\"ok\",\"permission\":\"granted\"," +
-                        "\"errorCode\":\"\"," +
+                        "{\"status\":\"ok\",\"errorCode\":\"\"," +
                         "\"message\":\"owned camera omitted by API-26 service\"," +
                         "\"cameras\":[]}";
                 }
