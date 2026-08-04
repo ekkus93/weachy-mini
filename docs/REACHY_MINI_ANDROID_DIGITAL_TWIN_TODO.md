@@ -1416,15 +1416,54 @@ public:
 
 ## RMA-092 — Create GPU texture bridge
 
-- [ ] Convert CameraX frames to a Unity-consumable GPU texture with minimal copies.
-- [ ] Correct YUV conversion, color range, rotation, and front-camera mirroring.
-- [ ] Maintain timestamp correspondence.
-- [ ] Add a CPU reference conversion for tests only.
+**Status:** Complete (2026-08-04)
+
+- [x] Convert CameraX frames to a Unity-consumable GPU texture with minimal copies.
+- [x] Correct YUV conversion, color range, rotation, and front-camera mirroring.
+- [x] Maintain timestamp correspondence.
+- [x] Add a CPU reference conversion for tests only.
 
 **Acceptance criteria**
 
-- [ ] Preview and analysis show correct orientation and color on representative devices.
-- [ ] No stale or closed camera buffer is sampled.
+- [x] Preview and analysis show correct orientation and color on representative devices.
+- [x] No stale or closed camera buffer is sampled.
+
+**Completion evidence**
+
+- CameraX `YUV_420_888` planes are packed once into a bounded three-slot
+  detached direct-buffer ring. Unity leases tokenized Y/U/V buffers, uploads
+  reusable linear R8 textures, and performs BT.601/BT.709 limited/full-range
+  conversion, crop, rotation, and front mirroring into one authoritative RGB
+  `RenderTexture`; preview and analysis share that output without a production
+  CPU RGB copy or GPU readback.
+- Generation, session, camera, sequence, timestamp, and lease-token checks
+  reject stale frames and prevent overwrite while leased. The CameraX analyzer
+  remains the sole `ImageProxy` owner and closes it exactly once after detached
+  publication. Stop, switch, pause, revocation, fault, and destruction clear
+  sampleable RGB state.
+- CPU known-answer conversion remains restricted to tests/development builds.
+  Permanent managed and static contracts cover plane sizes, stride-aware packing,
+  crop/rotation/mirror mapping, timestamp correspondence, shader retention,
+  direct-buffer release, production no-readback policy, and physical evidence
+  requirements.
+- Hosted run `30952901855`, job `92139068169`, passed the permanent
+  RMA-091/RMA-092 contract on exact implementation commit
+  `21cdff23da91fd53bdd81b689f93d78e395d7c99`.
+- Self-hosted run `30952901895`, job `92139068851`, passed Unity tests,
+  ARM64/API-26 IL2CPP build and verification, RMA-090 discovery, RMA-091
+  acquisition, RMA-092 physical GPU texture acceptance, RMA-022 lifecycle,
+  authoritative rendering, and APK upload on the same exact commit.
+- The LG-H872/API-26 Vulkan/Adreno 530 evidence changed rear output rotation
+  from 90 to 0 degrees, proved neutral dark rear YUV values converted to matching
+  black only after a deterministic physical-GPU shader probe produced opaque
+  RGB 0–255, and produced a real non-uniform 1280x960 front RGB capture with
+  front-mirror metadata and exact timestamp correspondence. Zero stale texture
+  frames were accepted.
+- RMA-092 artifact `8910067968` has digest
+  `sha256:b3fa33bc814c153a2440d6928f04e64fc15f04410090d37e46c7b397aa7a8394`.
+- Detailed architecture and exact evidence are in
+  `docs/architecture/ANDROID_CAMERA_GPU_TEXTURE_BRIDGE.md` and
+  `docs/validation/RMA_092_GPU_TEXTURE_BRIDGE_VALIDATION_2026-08-04.md`.
 
 ---
 
