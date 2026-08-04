@@ -36,21 +36,19 @@ namespace ReachyMini.AppState
                 return false;
             }
 
-            ReachyAndroidCameraAcquisition? existing =
+            ReachyAndroidCameraAcquisition? acquisition =
                 discovery.GetComponent<ReachyAndroidCameraAcquisition>();
-            if (existing != null)
-            {
-                existing.Configure(discovery);
-                fault = string.Empty;
-                return true;
-            }
-
             try
             {
-                ReachyAndroidCameraAcquisition acquisition =
-                    discovery.gameObject.AddComponent<
+                if (acquisition == null)
+                {
+                    acquisition = discovery.gameObject.AddComponent<
                         ReachyAndroidCameraAcquisition>();
+                }
                 acquisition.Configure(discovery);
+                InstallAcceptanceEvidenceIfRequested(
+                    discovery,
+                    acquisition);
                 fault = string.Empty;
                 return true;
             }
@@ -61,6 +59,26 @@ namespace ReachyMini.AppState
                     : exception.Message;
                 return false;
             }
+        }
+
+        private static void InstallAcceptanceEvidenceIfRequested(
+            ReachyAndroidCameraDiscovery discovery,
+            ReachyAndroidCameraAcquisition acquisition)
+        {
+            if (!ReachyCameraAcquisitionEvidence
+                    .IsAcceptanceRequestedFromLaunchIntent())
+            {
+                return;
+            }
+
+            ReachyCameraAcquisitionEvidence? evidence =
+                discovery.GetComponent<ReachyCameraAcquisitionEvidence>();
+            if (evidence == null)
+            {
+                evidence = discovery.gameObject.AddComponent<
+                    ReachyCameraAcquisitionEvidence>();
+            }
+            evidence.Configure(acquisition, discovery);
         }
     }
 
