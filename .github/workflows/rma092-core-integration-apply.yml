@@ -1,159 +1,49 @@
-name: RMA-092 Core Integration Apply
+name: RMA-092 Remove Obsolete Integration Scaffolding
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
     paths:
-      - '.github/workflows/rma092-core-integration-apply.yml'
-  workflow_dispatch:
+      - .github/workflows/rma092-core-integration-apply.yml
 
 permissions:
   contents: write
-  statuses: write
-
-concurrency:
-  group: rma092-core-integration-apply
-  cancel-in-progress: false
 
 jobs:
-  apply:
-    name: Apply bounded RMA-092 integration
+  cleanup:
+    name: Remove completed RMA-092 integration scaffolding
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Publish pending status
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
-          import json, os
-          print(json.dumps({
-              "state": "pending",
-              "context": "RMA-092 Core Integration Apply",
-              "description": "Applying bounded CameraX texture integration",
-              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-          }))
-          PY
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Apply exact integration patch
+      - name: Remove obsolete apply workflow and patch script
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/apply_rma092_core_integration.py
-          python3 - <<'PY'
-          from pathlib import Path
-
-          texture_path = Path(
-              'Assets/ReachyMini/Runtime/Application/'
-              'ReachyAndroidCameraTextureBridge.cs'
-          )
-          text = texture_path.read_text(encoding='utf-8')
-          old = 'DestroyObject('
-          if old not in text:
-              raise SystemExit(
-                  'Expected Unity object-destruction helper was not found.'
-              )
-          texture_path.write_text(
-              text.replace(old, 'DestroyUnityObject('),
-              encoding='utf-8',
-          )
-
-          expected = {
-              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java',
-              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs',
-              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs',
-              'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs',
-              'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs',
-              'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs',
-          }
-          import subprocess
-          changed = set(
-              subprocess.check_output(
-                  ['git', 'diff', '--name-only'],
-                  text=True,
-              ).splitlines()
-          )
-          if changed != expected:
-              raise SystemExit(
-                  f'Unexpected changed paths: {sorted(changed)!r}'
-              )
-          PY
+          test -f .github/workflows/rma092-core-integration-apply.yml
+          test -f scripts/apply_rma092_core_integration.py
+          rm -- \
+            .github/workflows/rma092-core-integration-apply.yml \
+            scripts/apply_rma092_core_integration.py
           git diff --check
-          bash -n scripts/*.sh
 
-      - name: Commit integration
+      - name: Commit bounded cleanup
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java \
-            Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs \
-            Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs \
-            Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs \
-            Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs \
-            Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs
-          git commit -m 'RMA-092: integrate CameraX YUV texture leases'
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            .github/workflows/rma092-core-integration-apply.yml \
+            scripts/apply_rma092_core_integration.py
+          changed="$(git diff --cached --name-only)"
+          expected="$(printf '%s\n' \
+            .github/workflows/rma092-core-integration-apply.yml \
+            scripts/apply_rma092_core_integration.py)"
+          test "${changed}" = "${expected}"
+          git commit -m "RMA-092: remove obsolete integration scaffolding"
           git push origin HEAD:master
-
-      - name: Publish success status
-        if: success()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
-          import json, os
-          print(json.dumps({
-              "state": "success",
-              "context": "RMA-092 Core Integration Apply",
-              "description": "CameraX texture integration committed",
-              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-          }))
-          PY
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
-
-      - name: Publish failure status
-        if: failure()
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
-          import json, os
-          print(json.dumps({
-              "state": "failure",
-              "context": "RMA-092 Core Integration Apply",
-              "description": "CameraX texture integration apply failed",
-              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-          }))
-          PY
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header 'Accept: application/vnd.github+json' \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
