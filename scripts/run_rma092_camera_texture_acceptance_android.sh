@@ -159,7 +159,9 @@ remove_remote_evidence()
         "${REMOTE_FILES_DIR}/${ROTATED_TEXTURE_FILE}.tmp" \
         "${REMOTE_FILES_DIR}/${FRONT_TEXTURE_FILE}" \
         "${REMOTE_FILES_DIR}/${FRONT_TEXTURE_FILE}.tmp" \
-        "${REMOTE_FILES_DIR}"/${STAGE_MARKER_GLOB} \
+        >/dev/null 2>&1 || true
+    "${ADB[@]}" shell \
+        "find '${REMOTE_FILES_DIR}' -maxdepth 1 -type f -name '${STAGE_MARKER_GLOB}' -delete" \
         >/dev/null 2>&1 || true
 }
 
