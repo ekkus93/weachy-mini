@@ -77,6 +77,19 @@ authoritative-rendering acceptance, then uploaded the verified APK.
 - Verified device APK: artifact `8879219465`
   - digest `sha256:82676328c8cd538825758b311fd47c637c447a2ba0819093b65d70a2ab21ba67`
 
+## Repository cleanup
+
+Cleanup commit `fbacef76f83a6cc9c73542c28bd289f9e1039801` marked the
+roadmap item complete, added this permanent validation record, and removed all
+RMA-090 integration-only machinery:
+
+- `.github/workflows/rma090-apply-integration.yml`;
+- `scripts/apply_rma090_integration.py`;
+- `scripts/apply_rma090_integration_v2.py`.
+
+Only the permanent hosted RMA-090 gate and the permanent self-hosted Unity/
+Android validation workflow remain responsible for ongoing regression coverage.
+
 ## Boundary retained for RMA-091
 
 RMA-090 discovers capabilities only. `ReachyDiscoveredCameraApplicationService`
