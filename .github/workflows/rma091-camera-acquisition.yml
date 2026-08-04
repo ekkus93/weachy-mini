@@ -9,8 +9,15 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
+      - 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
       - 'third_party/inventory.json'
@@ -24,8 +31,15 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
+      - 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
       - 'third_party/inventory.json'
@@ -43,7 +57,7 @@ concurrency:
 
 jobs:
   contract:
-    name: Lifecycle, metadata, and backpressure contract
+    name: Lifecycle, metadata, ownership, and backpressure contract
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -60,7 +74,7 @@ jobs:
             --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
             --configuration Release \
             --no-restore
-      - name: Verify CameraX acquisition policy
+      - name: Verify CameraX acquisition and texture ownership policy
         shell: bash
         run: |
           set -euo pipefail
@@ -69,40 +83,32 @@ jobs:
           import json
           import re
 
-          core = Path(
-              'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
-          ).read_text(encoding='utf-8')
-          unity = Path(
-              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
-          ).read_text(encoding='utf-8')
-          bootstrap = Path(
-              'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
-          ).read_text(encoding='utf-8')
-          java = Path(
-              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/'
-              'com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java'
-          ).read_text(encoding='utf-8')
-          gradle = Path(
-              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle'
-          ).read_text(encoding='utf-8')
-          tests = Path(
-              'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
-          ).read_text(encoding='utf-8')
-          inventory = json.loads(
-              Path('third_party/inventory.json').read_text(encoding='utf-8')
-          )
+          root = Path('.')
+          core = (root / 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs').read_text(encoding='utf-8')
+          unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs').read_text(encoding='utf-8')
+          texture_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs').read_text(encoding='utf-8')
+          lease_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs').read_text(encoding='utf-8')
+          reference = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs').read_text(encoding='utf-8')
+          bootstrap = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs').read_text(encoding='utf-8')
+          shader = (root / 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader').read_text(encoding='utf-8')
+          java_dir = root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera'
+          java = (java_dir / 'ReachyCameraFrameBridge.java').read_text(encoding='utf-8')
+          texture_java = (java_dir / 'ReachyCameraTextureFrameBridge.java').read_text(encoding='utf-8')
+          gradle = (root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle').read_text(encoding='utf-8')
+          tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs').read_text(encoding='utf-8')
+          texture_tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs').read_text(encoding='utf-8')
+          inventory = json.loads((root / 'third_party/inventory.json').read_text(encoding='utf-8'))
 
-          required_gradle = [
+          for token in [
               "cameraxVersion = '1.6.1'",
               'androidx.camera:camera-core',
               'androidx.camera:camera-camera2',
               'androidx.camera:camera-lifecycle',
-          ]
-          for token in required_gradle:
+          ]:
               if token not in gradle:
                   raise SystemExit(f'Missing pinned CameraX dependency: {token}')
 
-          required_java = [
+          for token in [
               'ProcessCameraProvider',
               'Preview.Builder',
               'ImageAnalysis.Builder',
@@ -116,35 +122,50 @@ jobs:
               'SENSOR_ORIENTATION',
               'LENS_INTRINSIC_CALIBRATION',
               'uncalibrated_pinhole_estimate',
-              'cpuPixelCopyPerformed',
-              'imagePlanesAccessed',
-              'private_discard_surface_until_rma092',
+              'analysis_yuv_gpu_texture_bridge',
+              'ReachyCameraTextureFrameBridge.publish(',
               'LifecycleRegistry',
               'shutdownNow()',
-          ]
-          for token in required_java:
+          ]:
               if token not in java:
                   raise SystemExit(f'Missing CameraX acquisition behavior: {token}')
           if 'getPlanes(' in java:
-              raise SystemExit('RMA-091 must not access image planes or copy pixels.')
-          if 'OUTPUT_IMAGE_FORMAT_RGBA_8888' in java:
-              raise SystemExit('RMA-091 must retain YUV without implicit RGBA CPU conversion.')
+              raise SystemExit('The lifecycle analyzer must delegate plane access to the detached texture bridge.')
+          if 'OUTPUT_IMAGE_FORMAT_RGBA_8888' in java or 'OUTPUT_IMAGE_FORMAT_RGBA_8888' in texture_java:
+              raise SystemExit('CameraX must retain YUV without implicit RGBA conversion.')
           if java.count('imageProxy.close();') != 1:
               raise SystemExit('ImageProxy must have one explicit close site.')
-          analyzer = re.search(
-              r'private static void analyzeFrame\(.*?\n    \}',
-              java,
-              re.S,
-          )
+          if 'imageProxy.close();' in texture_java:
+              raise SystemExit('The detached texture bridge must never own or close ImageProxy.')
+          analyzer = re.search(r'private static void analyzeFrame\(.*?\n    \}', java, re.S)
           if analyzer is None:
               raise SystemExit('CameraX analyzer implementation is missing.')
           analyzer_body = analyzer.group(0)
           if 'finally {' not in analyzer_body or 'imageProxy.close();' not in analyzer_body:
-              raise SystemExit('ImageProxy close must be in the analyzer finally block.')
+              raise SystemExit('ImageProxy close must remain in the analyzer finally block.')
           if '++generation' not in java or 'expectedGeneration != generation' not in java:
               raise SystemExit('Async CameraX callbacks are not session-invalidated.')
 
-          required_core = [
+          for token in [
+              'private static final int SLOT_COUNT = 3',
+              'ByteBuffer.allocateDirect',
+              'imageProxy.getPlanes()',
+              'plane.getRowStride()',
+              'plane.getPixelStride()',
+              'state == LEASED',
+              'acquireLatest(',
+              'releasedFrameCount',
+              'imageProxyRetained',
+              'planeBufferRetained',
+          ]:
+              if token not in texture_java:
+                  raise SystemExit(f'Missing detached texture ownership behavior: {token}')
+          if texture_java.count('imageProxy.getPlanes()') != 1:
+              raise SystemExit('Texture plane access must have one explicit site.')
+          if 'imageProxyRetained", false' not in texture_java or 'planeBufferRetained", false' not in texture_java:
+              raise SystemExit('Texture diagnostics must state that CameraX-owned buffers are not retained.')
+
+          for token in [
               'ReachyCameraAcquisitionState',
               'ReachyCameraFrameMetadata',
               'TimestampNanoseconds',
@@ -155,43 +176,83 @@ jobs:
               'ReachyCameraFrameIntrinsics',
               'StaleFrameCount',
               'PublishFrame',
-          ]
-          for token in required_core:
+          ]:
               if token not in core:
                   raise SystemExit(f'Missing managed frame contract: {token}')
 
-          required_unity = [
+          for token in [
               'PollIntervalSeconds = 0.05f',
               'StartPreferred',
               'StopPlatformForSwitch',
               'OnApplicationPause',
               'MarkPermissionRevoked',
               'camera_frame_contract_failed',
+              'AcquireLatestTextureFrame',
               'ReachyCameraFrameMetadata',
-          ]
-          for token in required_unity:
+          ]:
               if token not in unity:
                   raise SystemExit(f'Missing Unity acquisition behavior: {token}')
           if 'AndroidJavaProxy' in unity:
               raise SystemExit('Analyzer-thread callbacks must not enter Unity through AndroidJavaProxy.')
-          if 'GetRawTextureData' in unity or 'LoadRawTextureData' in unity:
-              raise SystemExit('RMA-091 must not introduce a Unity CPU pixel-copy path.')
-          if 'ReachyAndroidCameraAcquisition' not in bootstrap or 'yield return null' not in bootstrap:
-              raise SystemExit('CameraX acquisition is not installed after the application shell.')
 
-          required_tests = [
+          for token in [
+              'LoadRawTextureData(source, length)',
+              'TextureFormat.R8',
+              'Graphics.Blit',
+              'descriptor.TimestampNanoseconds',
+              'FrameMatchesActiveSession',
+              'lease.Dispose',
+              'ReachyCameraTextureBridgeState.Ready',
+          ]:
+              if token not in texture_unity:
+                  raise SystemExit(f'Missing Unity GPU texture behavior: {token}')
+          if 'GetRawTextureData' in texture_unity or 'ReadPixels' in texture_unity:
+              raise SystemExit('Production texture upload must not perform Unity CPU readback.')
+          for token in [
+              'AndroidJNI.GetDirectBufferAddress',
+              'lease?.Call("close")',
+              'AtomicBoolean',
+          ]:
+              target = lease_unity if token != 'AtomicBoolean' else texture_java
+              if token not in target:
+                  raise SystemExit(f'Missing direct-buffer lease behavior: {token}')
+
+          for token in [
+              'Hidden/ReachyMini/CameraYuv420ToRgb',
+              '_RotationQuarterTurns',
+              '_MirrorX',
+              '_ColorStandard',
+              '_ColorRange',
+              '1.5748',
+              '1.402',
+          ]:
+              if token not in shader:
+                  raise SystemExit(f'Missing YUV shader behavior: {token}')
+          if '#if UNITY_INCLUDE_TESTS || DEVELOPMENT_BUILD' not in reference:
+              raise SystemExit('CPU reference converter must remain test/development-only.')
+          for token in [
+              'OutputMappingAppliesRotationAndFrontMirror',
+              'Bt601LimitedReferenceConvertsBlackWhiteAndRed',
+              'Bt709LimitedReferenceConvertsRed',
+              'PackedReferenceConversionRejectsPlaneLengthDrift',
+          ]:
+              if token not in texture_tests:
+                  raise SystemExit(f'Missing RMA-092 reference test: {token}')
+
+          if 'ReachyAndroidCameraAcquisition' not in bootstrap or 'ReachyAndroidCameraTextureBridge' not in bootstrap or 'yield return null' not in bootstrap:
+              raise SystemExit('Camera acquisition and texture bridge are not installed after the application shell.')
+
+          for token in [
               'RapidStartStopAndFrontRearSwitchUseDistinctSessions',
               'PauseResumeAndPermissionRevocationRemainVisible',
               'DuplicatePollAndStaleMetadataDoNotReplaceLatestFrame',
               'UnavailableCameraFailsClosedWithoutStartingPlatform',
-          ]
-          for token in required_tests:
+          ]:
               if token not in tests:
                   raise SystemExit(f'Missing RMA-091 lifecycle test: {token}')
 
           camerax = next(
-              (entry for entry in inventory['entries']
-               if entry.get('id') == 'androidx-camerax'),
+              (entry for entry in inventory['entries'] if entry.get('id') == 'androidx-camerax'),
               None,
           )
           if camerax is None:
@@ -201,5 +262,5 @@ jobs:
           if camerax.get('status') != 'packaged_dependency':
               raise SystemExit('CameraX inventory does not identify a packaged dependency.')
 
-          print('RMA-091 CameraX acquisition static contract passed.')
+          print('RMA-091 ownership and RMA-092 texture boundary static contract passed.')
           PY
