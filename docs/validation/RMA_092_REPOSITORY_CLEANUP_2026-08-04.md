@@ -19,7 +19,7 @@ manual path capable of attempting to reapply obsolete source transformations to
 `master`. Its companion Python patch script was likewise no longer part of the
 runtime, test, or permanent validation design.
 
-## CI issue that exposed the cleanup gap
+## CI issues that exposed cleanup gaps
 
 Repository CI run `30954096616` on commit
 `7b7f9d0a99704d1941568d47b538451871806971` failed Ruff lint because the obsolete
@@ -35,10 +35,24 @@ formatting unused patch machinery. The permanent RMA-092 contracts remain in:
 - the production Java, JNI, Unity, and shader sources;
 - the RMA-092 architecture and validation documents.
 
+A subsequent clean-tree run, `30954321572`, passed Ruff but exposed ShellCheck
+`SC2086` in the permanent Android acceptance script. The script had intentionally
+left the stage-marker wildcard unquoted so the remote Android shell could expand
+it. That was both lint-hostile and dependent on implicit `adb shell` argument
+behavior.
+
+Commit `35043928cdafd6c291ebf3e260003c7e2c1e62e8` replaced the wildcard argument with
+an explicit remote `find -name ... -delete` command. The bounded repair passed
+`bash -n` and ShellCheck before it was committed, and its temporary one-shot
+workflow removed itself in the same commit. The physical acceptance semantics
+remain fail-closed: stale stage markers are still deleted before each run, but
+local glob expansion is no longer involved.
+
 ## Validation boundary
 
 The validated implementation remains commit
 `21cdff23da91fd53bdd81b689f93d78e395d7c99`, with hosted run `30952901855` and
-self-hosted run `30952901895`. This cleanup note is committed through the normal
+self-hosted run `30952901895`. This cleanup record is committed through the normal
 user-authorized repository path so permanent hosted and self-hosted workflows
-validate the final clean repository tree.
+validate the final clean repository tree, including removal of apply-only
+scaffolding and the ShellCheck-safe remote marker cleanup.
