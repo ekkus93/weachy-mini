@@ -110,10 +110,11 @@ def main() -> None:
         'window["end_ns"] + 1, DT_NS)):'
     )
     voltage_header_new = (
+        "    voltage_sequence_start = voltage_sequence + 1\n"
         "    for voltage_sequence, (index, timestamp) in enumerate(\n"
         '        enumerate(range(window["start_ns"], '
         'window["end_ns"] + 1, DT_NS)),\n'
-        "        start=voltage_sequence + 1,\n"
+        "        start=voltage_sequence_start,\n"
         "    ):"
     )
     voltage_context_old = (
@@ -136,10 +137,11 @@ def main() -> None:
         'window["end_ns"] + 1, DT_NS)):'
     )
     thermal_header_new = (
+        "    temperature_sequence_start = temperature_sequence + 1\n"
         "    for temperature_sequence, (index, timestamp) in enumerate(\n"
         '        enumerate(range(window["start_ns"], '
         'window["end_ns"] + 1, DT_NS)),\n'
-        "        start=temperature_sequence + 1,\n"
+        "        start=temperature_sequence_start,\n"
         "    ):"
     )
     thermal_context_old = (
