@@ -18,7 +18,8 @@ namespace ReachyMini.Camera.Tests
             FrameMetadataIsImmutableAndMonotonic();
             CameraSwitchCreatesANewSession();
             InvalidFrameContractsFailClosed();
-            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");
+            Rma100CameraCalibrationContracts.Run();
+            Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");
             return 0;
         }
 

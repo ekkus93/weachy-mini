@@ -1,14 +1,12 @@
 #nullable enable
 
 using System;
-using System.Runtime.CompilerServices;
 using ReachyMini.AppState;
 
 namespace ReachyMini.Camera.Tests
 {
     internal static class Rma100CameraCalibrationContracts
     {
-        [ModuleInitializer]
         internal static void Run()
         {
             CoordinateBasesRemainExplicit();

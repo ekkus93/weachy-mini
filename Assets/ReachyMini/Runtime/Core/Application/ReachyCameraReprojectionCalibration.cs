@@ -960,6 +960,7 @@ namespace ReachyMini.AppState
             ModelCompatibility = modelCompatibility;
             CreatedUtc = createdUtc;
             NeutralReachyFromPhoneRotation = neutralReachyFromPhoneRotation;
+            ReprojectionMode = ReachyCameraReprojectionMode.RotationOnly;
         }
 
         public int ProfileSchemaVersion { get; }
@@ -988,8 +989,7 @@ namespace ReachyMini.AppState
 
         public ReachyQuaternionD NeutralReachyFromPhoneRotation { get; }
 
-        public ReachyCameraReprojectionMode ReprojectionMode =>
-            ReachyCameraReprojectionMode.RotationOnly;
+        public ReachyCameraReprojectionMode ReprojectionMode { get; }
 
         public bool IsCalibrated =>
             Provenance != ReachyCameraCalibrationProvenance.UncalibratedEstimate;
