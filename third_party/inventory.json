@@ -79,11 +79,11 @@
       "owner": "Android Open Source Project / Google",
       "license": "Apache-2.0",
       "source_url": "https://developer.android.com/jetpack/androidx/releases/camera",
-      "source_revision": null,
-      "status": "planned",
-      "modification_status": "not_imported",
+      "source_revision": "1.6.1 (camera-core, camera-camera2, camera-lifecycle)",
+      "status": "packaged_dependency",
+      "modification_status": "unmodified",
       "redistribution_status": "allowed_with_notice",
-      "required_notice": "Pin modules and versions during CameraX implementation."
+      "required_notice": "Retain the Apache License 2.0 notice for packaged AndroidX CameraX modules."
     },
     {
       "id": "mobile-cv-provider",
