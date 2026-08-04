@@ -1,0 +1,89 @@
+name: RMA-100 Finalize Roadmap
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma100-finalize-roadmap.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record RMA-100 completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          text = path.read_text(encoding='utf-8')
+          start_marker = '## RMA-100 — Define coordinate systems and calibration\n'
+          end_marker = '\n## RMA-101 — Compute relative rotation from MuJoCo state\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+          replacement = '''## RMA-100 — Define coordinate systems and calibration
+
+**Status:** Complete (2026-08-04)
+
+- [x] Document Android sensor, camera image, Unity, MuJoCo, and virtual Reachy camera axes.
+- [x] Define neutral relationship between phone camera forward direction and Reachy neutral camera direction.
+- [x] Define front-camera mirror handling separately from physical camera orientation.
+- [x] Define phone and virtual Reachy intrinsic matrices.
+- [x] Add camera calibration persistence and versioning.
+
+**Completion evidence**
+
+- `docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md` is the normative
+  coordinate contract for RMA-101 through RMA-104. It fixes column-vector
+  composition; Android source and RMA-092 normalized pixel spaces; phone and
+  Reachy optical frames; Unity and MuJoCo frames; proper basis conversions; and
+  the rotation-only homography operands.
+- `ReachyCameraReprojectionCalibration.cs` provides finite/invertible 3x3 math,
+  normalized proper rotations, crop-then-rotation-then-mirror image
+  normalization, complete phone and virtual-Reachy projection matrices,
+  explicit provenance, versioned profiles, exact fail-closed selection, and
+  neutral homography construction.
+- Front-camera preview mirroring is retained as a pixel-space reflection and is
+  never inserted into physical orientation. Uncalibrated estimates remain
+  explicitly labeled and are never reported as calibrated.
+- `ReachyCameraCalibrationPersistenceStore` uses the independent versioned file
+  `reachy-camera-calibration-v1.json`, atomic replacement with backup, and
+  quarantine of invalid or unsupported data without installing a silent
+  default. `ReachySettingsPersistenceApplicationService` owns the calibration
+  boundary and reports settings and calibration health together.
+- Permanent hosted run `30959984801`, job `92161575744`, passed the managed
+  RMA-090/RMA-091/RMA-100 contracts and the static integration/truthfulness gate
+  on exact implementation SHA `e809e98522585dd207de1f0bef831a1fcdd7c462`.
+- Self-hosted run `30959984789`, job `92161627492`, passed generated presentation,
+  MuJoCo staging, Unity tests, ARM64/API-26 APK build and verification, RMA-090,
+  RMA-091, RMA-092, RMA-022 lifecycle, authoritative rendering, all evidence
+  uploads, APK upload, and final status publication on the same exact SHA.
+- The uploaded Unity result artifact `8912623164` has digest
+  `sha256:7ec9253df8f7a09c109f58349e5cbbce826932e7e28703116f05bce2fa598a6e`
+  and records 102/102 edit-mode tests passing, including matrix/quaternion
+  direction preservation, versioned calibration round-trip, unsupported-schema
+  quarantine without silent calibration, and settings-service ownership.
+- Detailed evidence is recorded in
+  `docs/validation/RMA_100_CAMERA_CALIBRATION_VALIDATION_2026-08-04.md`.
+'''
+          path.write_text(
+              text[:start] + replacement + text[end:],
+              encoding='utf-8',
+          )
+          PY
+          rm --force .github/workflows/rma100-finalize-roadmap.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'RMA-100: record roadmap completion evidence'
+          git push origin HEAD:master
