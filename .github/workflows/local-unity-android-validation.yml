@@ -154,8 +154,6 @@ jobs:
           if [[ ! -d "${android_player_dir}" ]]; then
             printf 'Unity Android Build Support is missing: %s\n' \
               "${android_player_dir}" >&2
-            printf 'Install Android Build Support for Unity %s through Unity Hub.\n' \
-              "${project_version}" >&2
             exit 1
           fi
 
@@ -257,6 +255,23 @@ jobs:
         with:
           name: rma091-camera-device-report-${{ github.sha }}
           path: ${{ runner.temp }}/rma091-camera-device-report
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Install and run RMA-092 camera texture acceptance
+        id: camera_texture_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA092_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma092-camera-texture-report
+        run: bash scripts/run_rma092_camera_texture_acceptance_android.sh
+
+      - name: Upload RMA-092 camera texture evidence
+        if: ${{ always() && steps.camera_texture_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma092-camera-texture-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma092-camera-texture-report
           if-no-files-found: error
           retention-days: 30
 
