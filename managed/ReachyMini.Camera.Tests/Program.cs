@@ -14,7 +14,11 @@ namespace ReachyMini.Camera.Tests
             DiscoveryPublishesImmutableCapabilities();
             AvailabilityAndCalibrationRemainIndependent();
             InvalidCameraContractsFailClosed();
-            Console.WriteLine("RMA-090 camera capability tests passed.");
+            AcquisitionLifecycleRemainsExplicit();
+            FrameMetadataIsImmutableAndMonotonic();
+            CameraSwitchCreatesANewSession();
+            InvalidFrameContractsFailClosed();
+            Console.WriteLine("RMA-090/RMA-091 camera contracts passed.");
             return 0;
         }
 
@@ -209,6 +213,262 @@ namespace ReachyMini.Camera.Tests
                         1UL);
                 },
                 "duplicate camera identifier");
+        }
+
+        private static void AcquisitionLifecycleRemainsExplicit()
+        {
+            var store = new ReachyCameraAcquisitionStateStore();
+            Equal(
+                ReachyCameraAcquisitionState.Stopped,
+                store.Current.State,
+                "initial acquisition state");
+            False(store.Current.IsActive, "initial acquisition activity");
+
+            store.BeginStart(
+                11UL,
+                ReachyDeviceCameraFacing.Rear,
+                "rear-0",
+                "binding CameraX");
+            Equal(
+                ReachyCameraAcquisitionState.Starting,
+                store.Current.State,
+                "starting state");
+            True(store.Current.IsActive, "starting activity");
+            store.MarkRunning("preview and analysis bound");
+            Equal(
+                ReachyCameraAcquisitionState.Running,
+                store.Current.State,
+                "running state");
+            store.MarkPaused("application paused");
+            Equal(
+                ReachyCameraAcquisitionState.Paused,
+                store.Current.State,
+                "paused state");
+            store.MarkRunning("application resumed");
+            store.BeginStop("explicit stop");
+            Equal(
+                ReachyCameraAcquisitionState.Stopping,
+                store.Current.State,
+                "stopping state");
+            store.MarkStopped("all CameraX use cases unbound");
+            Equal(
+                ReachyCameraAcquisitionState.Stopped,
+                store.Current.State,
+                "stopped state");
+            Equal(0UL, store.Current.SessionId, "stopped session cleared");
+            Equal(string.Empty, store.Current.CameraId, "stopped camera cleared");
+
+            store.BeginStart(
+                12UL,
+                ReachyDeviceCameraFacing.Front,
+                "front-1",
+                "rapid restart");
+            store.MarkRunning("rapid restart bound");
+            store.MarkPermissionRevoked("permission revoked while active");
+            Equal(
+                ReachyCameraAcquisitionState.PermissionRevoked,
+                store.Current.State,
+                "permission-revoked state");
+            False(store.Current.IsActive, "revocation stops acquisition");
+        }
+
+        private static void FrameMetadataIsImmutableAndMonotonic()
+        {
+            var store = new ReachyCameraAcquisitionStateStore();
+            store.BeginStart(
+                21UL,
+                ReachyDeviceCameraFacing.Rear,
+                "0",
+                "start");
+            store.MarkRunning("running");
+
+            ReachyCameraFrameMetadata first = CreateFrame(
+                sessionId: 21UL,
+                sequence: 1UL,
+                timestampNanoseconds: 1_000_000L,
+                cameraId: "0",
+                facing: ReachyDeviceCameraFacing.Rear,
+                source: ReachyCameraFrameIntrinsicsSource.AndroidCalibration);
+            True(store.PublishFrame(first), "first frame accepted");
+            Equal(1UL, store.Current.AcceptedFrameCount, "first accepted count");
+            Equal(first, store.Current.LatestFrame, "first latest frame");
+            True(store.Current.LatestFrame!.Intrinsics.IsCalibrated, "calibrated frame");
+            Contains(
+                store.Current.LatestFrame.Summary,
+                "format=Yuv420888",
+                "frame summary format");
+
+            False(store.PublishFrame(first), "duplicate poll ignored");
+            Equal(0UL, store.Current.StaleFrameCount, "duplicate poll is not stale");
+
+            ReachyCameraFrameMetadata second = CreateFrame(
+                sessionId: 21UL,
+                sequence: 2UL,
+                timestampNanoseconds: 2_000_000L,
+                cameraId: "0",
+                facing: ReachyDeviceCameraFacing.Rear,
+                source: ReachyCameraFrameIntrinsicsSource.UncalibratedPinholeEstimate);
+            True(store.PublishFrame(second), "second frame accepted");
+            Equal(2UL, store.Current.AcceptedFrameCount, "second accepted count");
+            False(
+                store.Current.LatestFrame!.Intrinsics.IsCalibrated,
+                "fallback intrinsics remain explicit");
+
+            ReachyCameraFrameMetadata stale = CreateFrame(
+                sessionId: 21UL,
+                sequence: 1UL,
+                timestampNanoseconds: 3_000_000L,
+                cameraId: "0",
+                facing: ReachyDeviceCameraFacing.Rear,
+                source: ReachyCameraFrameIntrinsicsSource.AndroidCalibration);
+            False(store.PublishFrame(stale), "stale frame rejected");
+            Equal(1UL, store.Current.StaleFrameCount, "stale count");
+            Equal(2UL, store.Current.LatestFrame!.Sequence, "latest frame retained");
+        }
+
+        private static void CameraSwitchCreatesANewSession()
+        {
+            var store = new ReachyCameraAcquisitionStateStore();
+            store.BeginStart(
+                31UL,
+                ReachyDeviceCameraFacing.Rear,
+                "rear",
+                "rear start");
+            store.MarkRunning("rear running");
+            store.PublishFrame(
+                CreateFrame(
+                    31UL,
+                    1UL,
+                    1_000L,
+                    "rear",
+                    ReachyDeviceCameraFacing.Rear,
+                    ReachyCameraFrameIntrinsicsSource.AndroidCalibration));
+            store.BeginStop("switch teardown");
+            store.MarkStopped("rear unbound");
+            store.BeginStart(
+                32UL,
+                ReachyDeviceCameraFacing.Front,
+                "front",
+                "front start");
+            store.MarkRunning("front running");
+
+            Equal(32UL, store.Current.SessionId, "front session");
+            Equal("front", store.Current.CameraId, "front camera");
+            Equal(0UL, store.Current.AcceptedFrameCount, "new session frame count");
+            Equal(null, store.Current.LatestFrame, "new session latest frame");
+            Throws<InvalidOperationException>(
+                () =>
+                {
+                    store.PublishFrame(
+                        CreateFrame(
+                            31UL,
+                            2UL,
+                            2_000L,
+                            "rear",
+                            ReachyDeviceCameraFacing.Rear,
+                            ReachyCameraFrameIntrinsicsSource.AndroidCalibration));
+                },
+                "old-session frame after switch");
+        }
+
+        private static void InvalidFrameContractsFailClosed()
+        {
+            ReachyCameraFrameIntrinsics intrinsics =
+                new ReachyCameraFrameIntrinsics(
+                    ReachyCameraFrameIntrinsicsSource.AndroidCalibration,
+                    500f,
+                    500f,
+                    320f,
+                    240f,
+                    0f,
+                    "Camera2 LENS_INTRINSIC_CALIBRATION");
+            Throws<ArgumentOutOfRangeException>(
+                () =>
+                {
+                    _ = new ReachyCameraFrameCrop(0, 0, 0, 480);
+                },
+                "empty crop");
+            Throws<ArgumentOutOfRangeException>(
+                () =>
+                {
+                    _ = new ReachyCameraFrameMetadata(
+                        1UL,
+                        1UL,
+                        1L,
+                        "0",
+                        ReachyDeviceCameraFacing.Rear,
+                        45,
+                        0,
+                        640,
+                        480,
+                        new ReachyCameraFrameCrop(0, 0, 640, 480),
+                        ReachyCameraPixelFormat.Yuv420888,
+                        intrinsics);
+                },
+                "invalid frame sensor orientation");
+            Throws<ArgumentOutOfRangeException>(
+                () =>
+                {
+                    _ = new ReachyCameraFrameMetadata(
+                        1UL,
+                        1UL,
+                        1L,
+                        "0",
+                        ReachyDeviceCameraFacing.Rear,
+                        90,
+                        0,
+                        640,
+                        480,
+                        new ReachyCameraFrameCrop(0, 0, 641, 480),
+                        ReachyCameraPixelFormat.Yuv420888,
+                        intrinsics);
+                },
+                "crop outside buffer");
+            Throws<ArgumentOutOfRangeException>(
+                () =>
+                {
+                    _ = new ReachyCameraFrameIntrinsics(
+                        ReachyCameraFrameIntrinsicsSource.AndroidCalibration,
+                        float.NaN,
+                        500f,
+                        320f,
+                        240f,
+                        0f,
+                        "bad intrinsics");
+                },
+                "non-finite frame intrinsics");
+        }
+
+        private static ReachyCameraFrameMetadata CreateFrame(
+            ulong sessionId,
+            ulong sequence,
+            long timestampNanoseconds,
+            string cameraId,
+            ReachyDeviceCameraFacing facing,
+            ReachyCameraFrameIntrinsicsSource source)
+        {
+            return new ReachyCameraFrameMetadata(
+                sessionId,
+                sequence,
+                timestampNanoseconds,
+                cameraId,
+                facing,
+                90,
+                0,
+                640,
+                480,
+                new ReachyCameraFrameCrop(0, 0, 640, 480),
+                ReachyCameraPixelFormat.Yuv420888,
+                new ReachyCameraFrameIntrinsics(
+                    source,
+                    500f,
+                    500f,
+                    320f,
+                    240f,
+                    0f,
+                    source == ReachyCameraFrameIntrinsicsSource.AndroidCalibration
+                        ? "Camera2 LENS_INTRINSIC_CALIBRATION"
+                        : "uncalibrated active-array pinhole estimate"));
         }
 
         private static void Contains(string value, string expected, string label)
