@@ -22,6 +22,8 @@ namespace ReachyMini.AppState
             "rma092-front.png";
 
         private const int StableFramesBeforeCapture = 3;
+        private const int MinimumCaptureChannelRange = 4;
+        private const int CaptureRetryFrameInterval = 5;
         private const float PublishIntervalSeconds = 0.25f;
 
         private ReachyAndroidCameraAcquisition? acquisition;
@@ -35,6 +37,7 @@ namespace ReachyMini.AppState
         private int observedFrameCount;
         private int metadataMatchCount;
         private int captureCount;
+        private int rejectedCaptureCount;
         private bool descriptorMonotonic = true;
         private bool timestampCorrespondence = true;
         private bool outputDimensionsValid = true;
@@ -263,33 +266,36 @@ namespace ReachyMini.AppState
                     metadata.RotationDegrees == frame.RotationDegrees;
             }
 
-            if (sessionReadyFrameCount < StableFramesBeforeCapture)
+            if (sessionReadyFrameCount < StableFramesBeforeCapture ||
+                (sessionReadyFrameCount - StableFramesBeforeCapture) %
+                    CaptureRetryFrameInterval != 0)
             {
                 return false;
             }
 
             if (frame.LensFacing == ReachyDeviceCameraFacing.Rear)
             {
-                if (!rearCaptureWritten)
+                if (!rearCaptureWritten &&
+                    TryCapture(output, RearCaptureFileName))
                 {
-                    Capture(output, RearCaptureFileName);
                     rearCaptureWritten = true;
                     rearRotationDegrees = frame.RotationDegrees;
                     return true;
                 }
-                if (!rotatedCaptureWritten &&
-                    frame.RotationDegrees != rearRotationDegrees)
+                if (rearCaptureWritten &&
+                    !rotatedCaptureWritten &&
+                    frame.RotationDegrees != rearRotationDegrees &&
+                    TryCapture(output, RotatedCaptureFileName))
                 {
-                    Capture(output, RotatedCaptureFileName);
                     rotatedCaptureWritten = true;
                     rotatedRotationDegrees = frame.RotationDegrees;
                     return true;
                 }
             }
             else if (frame.LensFacing == ReachyDeviceCameraFacing.Front &&
-                !frontCaptureWritten)
+                !frontCaptureWritten &&
+                TryCapture(output, FrontCaptureFileName))
             {
-                Capture(output, FrontCaptureFileName);
                 frontCaptureWritten = true;
                 frontRotationDegrees = frame.RotationDegrees;
                 return true;
@@ -298,7 +304,7 @@ namespace ReachyMini.AppState
             return false;
         }
 
-        private void Capture(RenderTexture source, string fileName)
+        private bool TryCapture(RenderTexture source, string fileName)
         {
             RenderTexture? previous = RenderTexture.active;
             Texture2D? readback = null;
@@ -349,8 +355,13 @@ namespace ReachyMini.AppState
 
                 lastCaptureMinimumChannel = minimum;
                 lastCaptureMaximumChannel = maximum;
-                capturesNonUniform &= maximum - minimum >= 4;
-                capturesOpaque &= opaque;
+                bool nonUniform =
+                    maximum - minimum >= MinimumCaptureChannelRange;
+                if (!nonUniform || !opaque)
+                {
+                    rejectedCaptureCount = checked(rejectedCaptureCount + 1);
+                    return false;
+                }
 
                 byte[] png = readback.EncodeToPNG();
                 if (png == null || png.Length == 0)
@@ -369,7 +380,10 @@ namespace ReachyMini.AppState
                     File.Delete(destination);
                 }
                 File.Move(temporary, destination);
+                capturesNonUniform &= nonUniform;
+                capturesOpaque &= opaque;
                 captureCount = checked(captureCount + 1);
+                return true;
             }
             finally
             {
@@ -410,6 +424,7 @@ namespace ReachyMini.AppState
                     observed_frame_count = observedFrameCount,
                     metadata_match_count = metadataMatchCount,
                     capture_count = captureCount,
+                    rejected_capture_count = rejectedCaptureCount,
                     descriptor_monotonic = descriptorMonotonic,
                     timestamp_correspondence = timestampCorrespondence,
                     output_dimensions_valid = outputDimensionsValid,
@@ -505,6 +520,7 @@ namespace ReachyMini.AppState
             public int observed_frame_count;
             public int metadata_match_count;
             public int capture_count;
+            public int rejected_capture_count;
             public bool descriptor_monotonic;
             public bool timestamp_correspondence;
             public bool output_dimensions_valid;
