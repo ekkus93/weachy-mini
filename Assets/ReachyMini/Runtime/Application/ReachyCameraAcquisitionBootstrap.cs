@@ -119,6 +119,16 @@ namespace ReachyMini.AppState
                     ReachyCameraAcquisitionEvidence>();
             }
             evidence.Configure(acquisition, discovery);
+
+            ReachyCameraAcquisitionAcceptanceRetry? retry =
+                discovery.GetComponent<
+                    ReachyCameraAcquisitionAcceptanceRetry>();
+            if (retry == null)
+            {
+                retry = discovery.gameObject.AddComponent<
+                    ReachyCameraAcquisitionAcceptanceRetry>();
+            }
+            retry.Configure(acquisition, discovery);
         }
     }
 
