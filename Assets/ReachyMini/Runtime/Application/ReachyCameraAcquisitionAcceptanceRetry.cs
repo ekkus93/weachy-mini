@@ -14,7 +14,6 @@ namespace ReachyMini.AppState
         private ReachyAndroidCameraAcquisition? acquisition;
         private ReachyAndroidCameraDiscovery? discovery;
         private float nextRetryTime;
-        private string activeCommandId = string.Empty;
 
         public void Configure(
             ReachyAndroidCameraAcquisition cameraAcquisition,
@@ -47,7 +46,6 @@ namespace ReachyMini.AppState
                     "start",
                     StringComparison.Ordinal))
             {
-                activeCommandId = string.Empty;
                 return;
             }
 
@@ -63,7 +61,6 @@ namespace ReachyMini.AppState
                 return;
             }
 
-            activeCommandId = command.id;
             acquisition.StartPreferred(facing);
         }
 
