@@ -4,8 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import numpy as np
-import copy
 import json
 import math
 import tempfile
@@ -13,6 +11,8 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 
 class CollisionValidationError(RuntimeError):
@@ -85,10 +85,7 @@ def contact_metrics(mujoco: Any, model: Any, data: Any) -> dict[str, Any]:
         "maximum_normal_force_newtons": maximum_normal_force,
         "maximum_tangent_force_newtons": maximum_tangent_force,
         "maximum_impulse_newton_seconds": maximum_impulse,
-        "pairs": [
-            {"geom_ids": list(pair), **record}
-            for pair, record in sorted(pairs.items())
-        ],
+        "pairs": [{"geom_ids": list(pair), **record} for pair, record in sorted(pairs.items())],
     }
 
 
@@ -108,15 +105,9 @@ def run_steps(mujoco: Any, model: Any, steps: int) -> dict[str, Any]:
         metrics = contact_metrics(mujoco, model, data)
         observed_contact = observed_contact or metrics["contact_count"] > 0
         maximum_contact_count = max(maximum_contact_count, metrics["contact_count"])
-        maximum_penetration = max(
-            maximum_penetration, metrics["maximum_penetration_metres"]
-        )
-        maximum_normal_force = max(
-            maximum_normal_force, metrics["maximum_normal_force_newtons"]
-        )
-        maximum_impulse = max(
-            maximum_impulse, metrics["maximum_impulse_newton_seconds"]
-        )
+        maximum_penetration = max(maximum_penetration, metrics["maximum_penetration_metres"])
+        maximum_normal_force = max(maximum_normal_force, metrics["maximum_normal_force_newtons"])
+        maximum_impulse = max(maximum_impulse, metrics["maximum_impulse_newton_seconds"])
     if not all(math.isfinite(float(value)) for value in data.qpos):
         raise CollisionValidationError("simulation produced non-finite qpos")
     if not all(math.isfinite(float(value)) for value in data.qvel):
@@ -147,9 +138,7 @@ def local_from_world(data: Any, body_id: int, point: list[float]) -> list[float]
     rotation = [float(value) for value in data.xmat[body_id]]
     delta = [point[index] - position[index] for index in range(3)]
     return [
-        rotation[index] * delta[0]
-        + rotation[3 + index] * delta[1]
-        + rotation[6 + index] * delta[2]
+        rotation[index] * delta[0] + rotation[3 + index] * delta[1] + rotation[6 + index] * delta[2]
         for index in range(3)
     ]
 
@@ -201,25 +190,17 @@ def internal_contact_fixture(
         if "penetration" in (node.get("name") or "").lower()
     ]
     if len(penetration_nodes) != 1:
-        raise CollisionValidationError(
-            "generated model must expose exactly one penetration limit"
-        )
+        raise CollisionValidationError("generated model must expose exactly one penetration limit")
     penetration_data = penetration_nodes[0].get("data")
     if penetration_data is None:
-        raise CollisionValidationError(
-            "generated model penetration limit has no data"
-        )
+        raise CollisionValidationError("generated model penetration limit has no data")
     penetration_parts = penetration_data.split()
     if len(penetration_parts) != 1:
-        raise CollisionValidationError(
-            "generated model penetration limit must contain one value"
-        )
+        raise CollisionValidationError("generated model penetration limit must contain one value")
     try:
         maximum_penetration = float(penetration_parts[0])
     except ValueError as exc:
-        raise CollisionValidationError(
-            "generated model penetration limit is not numeric"
-        ) from exc
+        raise CollisionValidationError("generated model penetration limit is not numeric") from exc
     if not (0.0 < maximum_penetration < float("inf")):
         raise CollisionValidationError(
             "generated model penetration limit must be finite and positive"
@@ -231,18 +212,10 @@ def internal_contact_fixture(
         0.0 < target_penetration < maximum_penetration
         and 0.0 < centre_separation < 2.0 * probe_radius
     ):
-        raise CollisionValidationError(
-            "derived internal fixture penetration is invalid"
-        )
+        raise CollisionValidationError("derived internal fixture penetration is invalid")
     direction = [centre_separation, 0.0, 0.0]
-    arm_point = [
-        arm_origin[index] - 0.5 * direction[index]
-        for index in range(3)
-    ]
-    shell_point = [
-        arm_origin[index] + 0.5 * direction[index]
-        for index in range(3)
-    ]
+    arm_point = [arm_origin[index] - 0.5 * direction[index] for index in range(3)]
+    shell_point = [arm_origin[index] + 0.5 * direction[index] for index in range(3)]
     arm_local = local_from_world(data, arm_id, arm_point)
 
     tree = ET.parse(model_path)
@@ -250,11 +223,7 @@ def internal_contact_fixture(
     for geom in root.findall(".//geom"):
         geom.set("contype", "0")
         geom.set("conaffinity", "0")
-    bodies = {
-        body.get("name"): body
-        for body in root.findall(".//body")
-        if body.get("name")
-    }
+    bodies = {body.get("name"): body for body in root.findall(".//body") if body.get("name")}
     worldbody = root.find("worldbody")
     if worldbody is None:
         raise CollisionValidationError("model has no worldbody")
@@ -297,9 +266,7 @@ def external_contact_fixture(
         body_id,
     )
     if not body_name:
-        raise CollisionValidationError(
-            "rma065_head_shell parent body has no name"
-        )
+        raise CollisionValidationError("rma065_head_shell parent body has no name")
     centre = [float(value) for value in data.geom_xpos[geom_id]]
 
     tree = ET.parse(model_path)
@@ -314,25 +281,17 @@ def external_contact_fixture(
         if "penetration" in (node.get("name") or "").lower()
     ]
     if len(penetration_nodes) != 1:
-        raise CollisionValidationError(
-            "generated model must expose exactly one penetration limit"
-        )
+        raise CollisionValidationError("generated model must expose exactly one penetration limit")
     penetration_data = penetration_nodes[0].get("data")
     if penetration_data is None:
-        raise CollisionValidationError(
-            "generated model penetration limit has no data"
-        )
+        raise CollisionValidationError("generated model penetration limit has no data")
     penetration_parts = penetration_data.split()
     if len(penetration_parts) != 1:
-        raise CollisionValidationError(
-            "generated model penetration limit must contain one value"
-        )
+        raise CollisionValidationError("generated model penetration limit must contain one value")
     try:
         maximum_penetration = float(penetration_parts[0])
     except ValueError as exc:
-        raise CollisionValidationError(
-            "generated model penetration limit is not numeric"
-        ) from exc
+        raise CollisionValidationError("generated model penetration limit is not numeric") from exc
     if not (0.0 < maximum_penetration < float("inf")):
         raise CollisionValidationError(
             "generated model penetration limit must be finite and positive"
@@ -345,30 +304,16 @@ def external_contact_fixture(
         0.0 < target_penetration < maximum_penetration
         and 0.0 < centre_separation < 2.0 * probe_radius
     ):
-        raise CollisionValidationError(
-            "derived external fixture penetration is invalid"
-        )
+        raise CollisionValidationError("derived external fixture penetration is invalid")
     direction = [centre_separation, 0.0, 0.0]
-    shell_point = [
-        centre[index] - 0.5 * direction[index]
-        for index in range(3)
-    ]
-    external_point = [
-        centre[index] + 0.5 * direction[index]
-        for index in range(3)
-    ]
+    shell_point = [centre[index] - 0.5 * direction[index] for index in range(3)]
+    external_point = [centre[index] + 0.5 * direction[index] for index in range(3)]
     shell_local = local_from_world(data, body_id, shell_point)
 
-    bodies = {
-        body.get("name"): body
-        for body in root.findall(".//body")
-        if body.get("name")
-    }
+    bodies = {body.get("name"): body for body in root.findall(".//body") if body.get("name")}
     shell_body = bodies.get(body_name)
     if shell_body is None:
-        raise CollisionValidationError(
-            f"rma065_head_shell parent body is missing: {body_name}"
-        )
+        raise CollisionValidationError(f"rma065_head_shell parent body is missing: {body_name}")
     worldbody = root.find("worldbody")
     if worldbody is None:
         raise CollisionValidationError("model has no worldbody")
@@ -408,14 +353,11 @@ def hard_stop_trial(mujoco: Any, model: Any, joint_name: str) -> dict[str, Any]:
         maximum_position = max(maximum_position, float(data.qpos[qpos_address]))
         for row in range(int(data.nefc)):
             if (
-                int(data.efc_type[row])
-                == int(mujoco.mjtConstraint.mjCNSTR_LIMIT_JOINT)
+                int(data.efc_type[row]) == int(mujoco.mjtConstraint.mjCNSTR_LIMIT_JOINT)
                 and int(data.efc_id[row]) == joint_id
             ):
                 observed_limit_constraint = True
-                maximum_limit_force = max(
-                    maximum_limit_force, abs(float(data.efc_force[row]))
-                )
+                maximum_limit_force = max(maximum_limit_force, abs(float(data.efc_force[row])))
     if warning_count(data) != 0:
         raise CollisionValidationError(f"hard-stop trial for {joint_name} produced warnings")
     tolerance = 1.0e-6
@@ -424,9 +366,7 @@ def hard_stop_trial(mujoco: Any, model: Any, joint_name: str) -> dict[str, Any]:
             f"{joint_name} passed its hard stop: {maximum_position} > {upper}"
         )
     if not observed_limit_constraint:
-        raise CollisionValidationError(
-            f"{joint_name} trial did not produce a hard-stop constraint"
-        )
+        raise CollisionValidationError(f"{joint_name} trial did not produce a hard-stop constraint")
     return {
         "joint": joint_name,
         "lower_limit": lower,
@@ -446,13 +386,10 @@ def validate_model_inventory(mujoco: Any, model: Any, profile: dict[str, Any]) -
     collision_bodies = {
         int(model.geom_bodyid[geom_id])
         for geom_id in range(int(model.ngeom))
-        if int(model.geom_contype[geom_id]) != 0
-        or int(model.geom_conaffinity[geom_id]) != 0
+        if int(model.geom_contype[geom_id]) != 0 or int(model.geom_conaffinity[geom_id]) != 0
     }
     limited_joints = [
-        joint_id
-        for joint_id in range(int(model.njnt))
-        if bool(model.jnt_limited[joint_id])
+        joint_id for joint_id in range(int(model.njnt)) if bool(model.jnt_limited[joint_id])
     ]
     if len(generated_geom_ids) != len(profile["shapes"]):
         raise CollisionValidationError("generated collision geom count mismatch")
@@ -465,12 +402,8 @@ def validate_model_inventory(mujoco: Any, model: Any, profile: dict[str, Any]) -
             f"enhanced model has {len(limited_joints)} limited joints, expected 9"
         )
     for stop in profile["hard_stops"]:
-        joint_id = object_id(
-            mujoco, model, mujoco.mjtObj.mjOBJ_JOINT, stop["joint"]
-        )
-        actuator_id = object_id(
-            mujoco, model, mujoco.mjtObj.mjOBJ_ACTUATOR, stop["actuator"]
-        )
+        joint_id = object_id(mujoco, model, mujoco.mjtObj.mjOBJ_JOINT, stop["joint"])
+        actuator_id = object_id(mujoco, model, mujoco.mjtObj.mjOBJ_ACTUATOR, stop["actuator"])
         hard_lower = float(model.jnt_range[joint_id][0])
         hard_upper = float(model.jnt_range[joint_id][1])
         soft_lower = float(model.actuator_ctrlrange[actuator_id][0])
@@ -509,21 +442,15 @@ def main() -> int:
     inventory = validate_model_inventory(mujoco, enhanced_model, profile)
     source_neutral = run_steps(mujoco, source_model, args.neutral_steps)
     enhanced_neutral = run_steps(mujoco, enhanced_model, args.neutral_steps)
-    maximum_penetration = float(
-        profile["contact_parameters"]["maximum_penetration_metres"]
-    )
+    maximum_penetration = float(profile["contact_parameters"]["maximum_penetration_metres"])
     if enhanced_neutral["warning_count"] != 0:
         raise CollisionValidationError("enhanced neutral run produced warnings")
     if enhanced_neutral["maximum_penetration_metres"] > maximum_penetration:
         raise CollisionValidationError("enhanced neutral penetration exceeds profile")
     overhead = (
-        enhanced_neutral["p95_step_microseconds"]
-        / source_neutral["p95_step_microseconds"]
-        - 1.0
+        enhanced_neutral["p95_step_microseconds"] / source_neutral["p95_step_microseconds"] - 1.0
     )
-    hosted_budget = float(
-        profile["android_budget"]["maximum_p95_step_overhead_ratio"]
-    )
+    hosted_budget = float(profile["android_budget"]["maximum_p95_step_overhead_ratio"])
     if overhead > hosted_budget:
         raise CollisionValidationError(
             f"hosted p95 collision overhead {overhead:.6f} exceeds {hosted_budget:.6f}"
@@ -533,9 +460,7 @@ def main() -> int:
         temp = Path(temp_text)
         assets = (args.enhanced_model.parent / "assets").resolve()
         if not assets.is_dir():
-            raise SystemExit(
-                f"enhanced model asset directory is missing: {assets}"
-            )
+            raise SystemExit(f"enhanced model asset directory is missing: {assets}")
         (temp / "assets").symlink_to(
             assets,
             target_is_directory=True,
@@ -560,9 +485,7 @@ def main() -> int:
         if result["warning_count"] != 0:
             raise CollisionValidationError(f"{label} fixture produced warnings")
         if result["maximum_penetration_metres"] > maximum_penetration:
-            raise CollisionValidationError(
-                f"{label} fixture penetration exceeds the profile"
-            )
+            raise CollisionValidationError(f"{label} fixture penetration exceeds the profile")
         if result["maximum_normal_force_newtons"] <= 0.0:
             raise CollisionValidationError(f"{label} fixture exposed no contact force")
         if result["maximum_impulse_newton_seconds"] <= 0.0:

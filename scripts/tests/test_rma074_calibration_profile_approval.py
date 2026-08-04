@@ -166,9 +166,7 @@ class CalibrationProfileApprovalTests(unittest.TestCase):
             "metrics": metrics,
             "notes": "Unit-test evidence only; not a physical calibration record.",
         }
-        report["report_sha256"] = hashlib.sha256(
-            approval.canonical_json_bytes(report)
-        ).hexdigest()
+        report["report_sha256"] = hashlib.sha256(approval.canonical_json_bytes(report)).hexdigest()
         return report
 
     def create(self, **overrides):
@@ -241,9 +239,7 @@ class CalibrationProfileApprovalTests(unittest.TestCase):
     def test_fitting_and_heldout_must_be_separate_runs(self) -> None:
         evidence = copy.deepcopy(self.dataset_evidence)
         evidence[1]["capture_run_id"] = evidence[0]["capture_run_id"]
-        with self.assertRaisesRegex(
-            approval.ApprovalValidationError, "separate physical runs"
-        ):
+        with self.assertRaisesRegex(approval.ApprovalValidationError, "separate physical runs"):
             self.create(dataset_evidence=evidence)
 
     def test_core_metric_must_pass(self) -> None:
@@ -255,9 +251,7 @@ class CalibrationProfileApprovalTests(unittest.TestCase):
         heldout["report_sha256"] = hashlib.sha256(
             approval.canonical_json_bytes(heldout)
         ).hexdigest()
-        with self.assertRaisesRegex(
-            approval.ApprovalValidationError, "core calibration metric"
-        ):
+        with self.assertRaisesRegex(approval.ApprovalValidationError, "core calibration metric"):
             self.create(heldout_report=heldout)
 
     def test_fixture_approval_key_is_blocked(self) -> None:
@@ -272,12 +266,8 @@ class CalibrationProfileApprovalTests(unittest.TestCase):
     def test_content_tampering_fails_closed(self) -> None:
         document = self.create()
         tampered = copy.deepcopy(document)
-        tampered["parameter_results"]["friction"]["values"][
-            "coulomb_friction_nm"
-        ] = 0.5
-        with self.assertRaisesRegex(
-            approval.ApprovalValidationError, "does not match content"
-        ):
+        tampered["parameter_results"]["friction"]["values"]["coulomb_friction_nm"] = 0.5
+        with self.assertRaisesRegex(approval.ApprovalValidationError, "does not match content"):
             approval.verify_approval(
                 tampered,
                 public_key_path=self.public_key,

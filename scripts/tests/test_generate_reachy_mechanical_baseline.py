@@ -36,7 +36,9 @@ class MechanicalBaselineContractTests(unittest.TestCase):
 
     def test_missing_evidence_is_rejected(self) -> None:
         altered = copy.deepcopy(self.data)
-        altered["parameter_sets"][0]["parameters"]["coulomb_friction_newton_metres"]["evidence_id"] = ""
+        altered["parameter_sets"][0]["parameters"]["coulomb_friction_newton_metres"][
+            "evidence_id"
+        ] = ""
         with self.assertRaisesRegex(module.ContractError, "non-empty string"):
             module.validate_contract(altered)
 

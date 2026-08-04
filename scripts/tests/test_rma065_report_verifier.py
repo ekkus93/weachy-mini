@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
-
-import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -21,9 +20,7 @@ class Rma065ReportVerifierTests(unittest.TestCase):
         self.audit_path = root / "audit.json"
         self.validation_path = root / "validation.json"
         self.profile_path = root / "profile.json"
-        self.profile = {
-            "contact_parameters": {"maximum_penetration_metres": 0.008}
-        }
+        self.profile = {"contact_parameters": {"maximum_penetration_metres": 0.008}}
         neutral = {
             "steps": 5000,
             "warning_count": 0,

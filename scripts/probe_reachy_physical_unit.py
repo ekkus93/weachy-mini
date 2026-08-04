@@ -8,14 +8,13 @@ import hashlib
 import json
 import math
 import os
-import socket
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -97,9 +96,11 @@ def _request_json(candidate: Candidate, path: str, timeout_seconds: float) -> An
     try:
         with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
             if response.status != 200:
-                raise PreflightError(f"{candidate.label} returned HTTP {response.status} for {path}")
+                raise PreflightError(
+                    f"{candidate.label} returned HTTP {response.status} for {path}"
+                )
             raw = response.read(MAX_RESPONSE_BYTES + 1)
-    except (urllib.error.URLError, TimeoutError, socket.timeout, OSError) as exc:
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
         raise PreflightError(f"{candidate.label} is unreachable at {path}: {exc}") from exc
     if len(raw) > MAX_RESPONSE_BYTES:
         raise PreflightError(f"{candidate.label} response exceeds {MAX_RESPONSE_BYTES} bytes")
@@ -159,9 +160,7 @@ def validate_daemon_status(status: Any) -> dict[str, Any]:
         "daemon_version": version,
         "backend_control_mode": backend.get("motor_control_mode"),
         "backend_ready": True,
-        "backend_control_loop_stats_present": isinstance(
-            backend.get("control_loop_stats"), dict
-        ),
+        "backend_control_loop_stats_present": isinstance(backend.get("control_loop_stats"), dict),
     }
 
 
@@ -180,9 +179,7 @@ def validate_full_state(state: Any) -> dict[str, Any]:
     if not isinstance(state, dict):
         raise PreflightError("full state must be an object")
     head_joints = _finite_vector(state.get("head_joints"), 7, "state.head_joints")
-    antennas = _finite_vector(
-        state.get("antennas_position"), 2, "state.antennas_position"
-    )
+    antennas = _finite_vector(state.get("antennas_position"), 2, "state.antennas_position")
     body_yaw = _finite_number(state.get("body_yaw"), "state.body_yaw")
     pose = _finite_pose(state.get("head_pose"), "state.head_pose")
     control_mode = state.get("control_mode")
@@ -230,9 +227,7 @@ def probe_candidate(
     observation_seconds: float,
     sample_hz: float,
 ) -> dict[str, Any]:
-    status = validate_daemon_status(
-        _request_json(candidate, "/api/daemon/status", timeout_seconds)
-    )
+    status = validate_daemon_status(_request_json(candidate, "/api/daemon/status", timeout_seconds))
     hardware_id_sha256 = validate_hardware_id(
         _request_json(candidate, "/api/daemon/hardware-id", timeout_seconds)
     )
@@ -263,9 +258,7 @@ def probe_candidate(
             remaining = deadline - time.monotonic()
             if remaining > 0:
                 time.sleep(remaining)
-        samples.append(
-            validate_full_state(_request_json(candidate, state_path, timeout_seconds))
-        )
+        samples.append(validate_full_state(_request_json(candidate, state_path, timeout_seconds)))
     control_modes = sorted({sample["control_mode"] for sample in samples})
     joint_ranges = []
     for joint_index in range(7):
@@ -344,18 +337,16 @@ def build_report(
             continue
         report = {
             "contract_id": CONTRACT_ID,
-            "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "created_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             "result": "physical_unit_ready",
             "attempts": attempts,
             "physical_unit": result,
         }
-        report["report_sha256"] = hashlib.sha256(
-            canonical_json_bytes(report)
-        ).hexdigest()
+        report["report_sha256"] = hashlib.sha256(canonical_json_bytes(report)).hexdigest()
         return report, True
     report = {
         "contract_id": CONTRACT_ID,
-        "created_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "created_utc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "result": "physical_unit_unavailable",
         "attempts": attempts,
         "physical_unit": None,
@@ -370,9 +361,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--timeout-seconds", type=float, default=DEFAULT_TIMEOUT_SECONDS)
-    parser.add_argument(
-        "--observation-seconds", type=float, default=DEFAULT_OBSERVATION_SECONDS
-    )
+    parser.add_argument("--observation-seconds", type=float, default=DEFAULT_OBSERVATION_SECONDS)
     parser.add_argument("--sample-hz", type=float, default=DEFAULT_SAMPLE_HZ)
     return parser.parse_args()
 

@@ -244,14 +244,9 @@ def enum_name(value: str) -> str:
 def scalar_cpp(value: dict[str, Any]) -> str:
     numeric = value["value"]
     rendered = (
-        "std::nullopt"
-        if numeric is None
-        else f"std::optional<double>{{{float(numeric):.17g}}}"
+        "std::nullopt" if numeric is None else f"std::optional<double>{{{float(numeric):.17g}}}"
     )
-    return (
-        f'QualifiedScalar{{{rendered}, {enum_name(value["quality"])}, '
-        f'"{value["evidence_id"]}"}}'
-    )
+    return f'QualifiedScalar{{{rendered}, {enum_name(value["quality"])}, "{value["evidence_id"]}"}}'
 
 
 def mask_cpp(names: list[str]) -> str:
@@ -289,8 +284,8 @@ def generate(data: dict[str, Any]) -> str:
             [
                 "    {",
                 f'        "{entry["id"]}",',
-                f'        {enum_name(entry["role"])},',
-                f'        {enum_name(entry["overall_quality"])},',
+                f"        {enum_name(entry['role'])},",
+                f"        {enum_name(entry['overall_quality'])},",
                 f'        "{entry["source_actuator_class"]}",',
                 f'        "{entry["source_evidence_id"]}",',
             ]

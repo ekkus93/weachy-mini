@@ -39,7 +39,7 @@ def fixture_xml() -> bytes:
                 '<body name="xl_330" pos="-0.085 0 0">'
                 '<joint name="passive_7" type="ball"/>'
                 '<geom name="source_head" type="sphere" size="0.02" class="collision"/>'
-                '</body>'
+                "</body>"
             )
         else:
             endpoint = f'<site name="closing_{index + 1}_1" pos="0.085 0 0"/>'
@@ -47,7 +47,7 @@ def fixture_xml() -> bytes:
             f'<body name="{arm}"><joint name="{joint}" type="hinge" range="-1 1"/>'
             f'<body name="{rod}" pos="0.04 0 0.007">'
             f'<joint name="passive_{index + 1}" type="ball"/>'
-            f'{endpoint}</body></body>'
+            f"{endpoint}</body></body>"
         )
     body_xml.append(
         '<body name="dc15_a01_horn_dummy_7"><joint name="right_antenna" type="hinge"/></body>'
@@ -55,15 +55,16 @@ def fixture_xml() -> bytes:
     body_xml.append(
         '<body name="dc15_a01_horn_dummy_8"><joint name="left_antenna" type="hinge"/></body>'
     )
-    actuators = ["yaw_body"] + [f"stewart_{i}" for i in range(1, 7)] + ["right_antenna", "left_antenna"]
+    actuators = (
+        ["yaw_body"] + [f"stewart_{i}" for i in range(1, 7)] + ["right_antenna", "left_antenna"]
+    )
     actuator_xml = "".join(
-        f'<position name="{name}" joint="{name}" kp="1" inheritrange="1"/>'
-        for name in actuators
+        f'<position name="{name}" joint="{name}" kp="1" inheritrange="1"/>' for name in actuators
     )
     return (
         '<?xml version="1.0"?><mujoco model="fixture"><compiler angle="radian" autolimits="true"/>'
         '<default><default class="collision"><geom contype="1" conaffinity="1"/></default></default>'
-        f'<worldbody>{"".join(body_xml)}</worldbody><actuator>{actuator_xml}</actuator></mujoco>\n'
+        f"<worldbody>{''.join(body_xml)}</worldbody><actuator>{actuator_xml}</actuator></mujoco>\n"
     ).encode()
 
 
@@ -73,7 +74,9 @@ class CollisionGeneratorTests(unittest.TestCase):
         self.fixture = fixture_xml()
         self.profile["source"]["model_sha256"] = hashlib.sha256(self.fixture).hexdigest()
 
-    def write_case(self, directory: Path, profile: dict | None = None, fixture: bytes | None = None) -> tuple[Path, Path]:
+    def write_case(
+        self, directory: Path, profile: dict | None = None, fixture: bytes | None = None
+    ) -> tuple[Path, Path]:
         source = directory / "source.xml"
         profile_path = directory / "profile.json"
         source.write_bytes(self.fixture if fixture is None else fixture)
@@ -91,9 +94,16 @@ class CollisionGeneratorTests(unittest.TestCase):
             metadata = temp / "metadata.json"
             result = generator.generate(profile, source, output, metadata, check=False)
             root = ET.parse(output).getroot()
-            generated = [geom for geom in root.findall(".//geom") if (geom.get("name") or "").startswith("rma065_")]
+            generated = [
+                geom
+                for geom in root.findall(".//geom")
+                if (geom.get("name") or "").startswith("rma065_")
+            ]
             self.assertEqual(len(generated), len(self.profile["shapes"]))
-            self.assertEqual({geom.get("name") for geom in generated}, {shape["name"] for shape in self.profile["shapes"]})
+            self.assertEqual(
+                {geom.get("name") for geom in generated},
+                {shape["name"] for shape in self.profile["shapes"]},
+            )
             source_shell = root.find(".//geom[@name='source_shell']")
             self.assertIsNotNone(source_shell)
             assert source_shell is not None
@@ -102,11 +112,15 @@ class CollisionGeneratorTests(unittest.TestCase):
             right = root.find(".//joint[@name='right_antenna']")
             self.assertIsNotNone(right)
             assert right is not None
-            self.assertEqual([float(value) for value in right.get("range", "").split()], [-3.12, 3.12])
+            self.assertEqual(
+                [float(value) for value in right.get("range", "").split()], [-3.12, 3.12]
+            )
             actuator = root.find(".//position[@name='right_antenna']")
             self.assertIsNotNone(actuator)
             assert actuator is not None
-            self.assertEqual([float(value) for value in actuator.get("ctrlrange", "").split()], [-3.05, 3.05])
+            self.assertEqual(
+                [float(value) for value in actuator.get("ctrlrange", "").split()], [-3.05, 3.05]
+            )
             self.assertIsNone(actuator.get("inheritrange"))
             arm = root.find(".//geom[@name='rma065_arm_1']")
             rod = root.find(".//geom[@name='rma065_rod_1']")
@@ -161,12 +175,17 @@ class CollisionGeneratorTests(unittest.TestCase):
     def test_missing_required_body_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_text:
             temp = Path(temp_text)
-            source, profile = self.write_case(temp, fixture=self.fixture.replace(b'name="stewart_link_rod_6"', b'name="missing_rod"'))
+            source, profile = self.write_case(
+                temp,
+                fixture=self.fixture.replace(b'name="stewart_link_rod_6"', b'name="missing_rod"'),
+            )
             updated = json.loads(profile.read_text())
             updated["source"]["model_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
             profile.write_text(json.dumps(updated), encoding="utf-8")
             with self.assertRaises(generator.CollisionProfileError):
-                generator.generate(profile, source, temp / "out.xml", temp / "meta.json", check=False)
+                generator.generate(
+                    profile, source, temp / "out.xml", temp / "meta.json", check=False
+                )
 
     def test_source_hash_mismatch_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_text:
@@ -174,7 +193,9 @@ class CollisionGeneratorTests(unittest.TestCase):
             source, profile = self.write_case(temp)
             source.write_bytes(source.read_bytes() + b"<!-- drift -->")
             with self.assertRaises(generator.CollisionProfileError):
-                generator.generate(profile, source, temp / "out.xml", temp / "meta.json", check=False)
+                generator.generate(
+                    profile, source, temp / "out.xml", temp / "meta.json", check=False
+                )
 
     def test_soft_limit_must_be_inside_hard_limit(self) -> None:
         profile = copy.deepcopy(self.profile)
@@ -258,9 +279,9 @@ if __name__ == "__main__":
 
 class CollisionFixtureAssetRegressionTests(unittest.TestCase):
     def test_contact_fixture_workspace_links_model_assets(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             '(args.enhanced_model.parent / "assets").resolve()',
             source,
@@ -273,32 +294,31 @@ class CollisionFixtureAssetRegressionTests(unittest.TestCase):
 
 class CollisionInternalFixtureRegressionTests(unittest.TestCase):
     def test_internal_shell_probe_is_world_attached(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('worldbody = root.find("worldbody")', source)
         self.assertIn(
-            '"rma065_fixture_internal_shell",\n'
-            '        shell_point,\n'
-            '        1,\n'
-            '        6,',
+            '"rma065_fixture_internal_shell",\n        shell_point,\n        1,\n        6,',
             source,
         )
         function = source[
-            source.index("def internal_contact_fixture"):
-            source.index("\ndef external_contact_fixture")
+            source.index("def internal_contact_fixture") : source.index(
+                "\ndef external_contact_fixture"
+            )
         ]
         self.assertNotIn("shell_id = object_id(", function)
 
 
 class CollisionInternalFixtureIsolationRegressionTests(unittest.TestCase):
     def test_internal_fixture_disables_preexisting_collision_geoms(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         function = source[
-            source.index("def internal_contact_fixture"):
-            source.index("\ndef external_contact_fixture")
+            source.index("def internal_contact_fixture") : source.index(
+                "\ndef external_contact_fixture"
+            )
         ]
         self.assertIn(
             'for geom in root.findall(".//geom"):',
@@ -310,9 +330,9 @@ class CollisionInternalFixtureIsolationRegressionTests(unittest.TestCase):
 
 class CollisionInternalPenetrationRegressionTests(unittest.TestCase):
     def test_fixture_penetration_is_derived_below_model_limit(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             "target_penetration = maximum_penetration / 16.0",
             source,
@@ -326,9 +346,9 @@ class CollisionInternalPenetrationRegressionTests(unittest.TestCase):
 
 class CollisionPenetrationParsingRegressionTests(unittest.TestCase):
     def test_penetration_limit_is_parsed_locally_and_strictly(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             "penetration_parts = penetration_data.split()",
             source,
@@ -345,19 +365,20 @@ class CollisionPenetrationParsingRegressionTests(unittest.TestCase):
 
 class CollisionExternalFixtureRegressionTests(unittest.TestCase):
     def test_external_fixture_uses_isolated_controlled_probe_pair(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         function = source[
-            source.index("def external_contact_fixture"):
-            source.index("\ndef ", source.index("def external_contact_fixture") + 1)
+            source.index("def external_contact_fixture") : source.index(
+                "\ndef ", source.index("def external_contact_fixture") + 1
+            )
         ]
         self.assertIn(
             '"rma065_fixture_external_shell"',
             function,
         )
         self.assertIn(
-            'target_penetration = maximum_penetration / 16.0',
+            "target_penetration = maximum_penetration / 16.0",
             function,
         )
         self.assertIn(
@@ -369,9 +390,9 @@ class CollisionExternalFixtureRegressionTests(unittest.TestCase):
 
 class CollisionValidationReportStatusTests(unittest.TestCase):
     def test_success_status_is_emitted_with_validation_contract(self):
-        source = Path(
-            "scripts/run_reachy_collision_hard_stop_validation.py"
-        ).read_text(encoding="utf-8")
+        source = Path("scripts/run_reachy_collision_hard_stop_validation.py").read_text(
+            encoding="utf-8"
+        )
         report_start = source.index("    report = {")
         report_end = source.index("    args.output.parent", report_start)
         report_source = source[report_start:report_end]

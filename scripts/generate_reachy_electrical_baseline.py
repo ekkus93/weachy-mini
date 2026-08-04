@@ -170,7 +170,9 @@ def validate_contract(data: dict[str, Any]) -> None:
     if units["controller_parameters"] != CONTROLLER_UNITS:
         raise ContractError("controller parameter units differ from the SI contract")
     conversions = units["conversions"]
-    exact_keys(conversions, {"encoder_position", "velocity", "no_load_speed"}, "unit_contract.conversions")
+    exact_keys(
+        conversions, {"encoder_position", "velocity", "no_load_speed"}, "unit_contract.conversions"
+    )
     for key, value in conversions.items():
         nonempty(value, f"unit_contract.conversions.{key}")
 
@@ -247,7 +249,10 @@ def validate_contract(data: dict[str, Any]) -> None:
             raise ContractError(f"{label}.overall_quality must remain noncalibrated")
         nonempty(entry["source_actuator_class"], f"{label}.source_actuator_class")
         nonempty(entry["source_evidence_id"], f"{label}.source_evidence_id")
-        if not isinstance(entry["upstream_position_pid_raw_p"], int) or entry["upstream_position_pid_raw_p"] <= 0:
+        if (
+            not isinstance(entry["upstream_position_pid_raw_p"], int)
+            or entry["upstream_position_pid_raw_p"] <= 0
+        ):
             raise ContractError(f"{label}.upstream_position_pid_raw_p must be positive")
         limitations = entry["limitations"]
         if not isinstance(limitations, list) or not limitations:
@@ -264,10 +269,7 @@ def validate_contract(data: dict[str, Any]) -> None:
                 f"{label}.servo_parameters.{field}",
                 allow_zero=field == "command_latency_seconds",
             )
-        if not (
-            values["continuous_current_limit_amperes"]
-            <= values["peak_current_limit_amperes"]
-        ):
+        if not (values["continuous_current_limit_amperes"] <= values["peak_current_limit_amperes"]):
             raise ContractError(f"{label} continuous current exceeds peak current")
         if not (
             values["minimum_voltage_volts"]
@@ -339,11 +341,11 @@ def validate_contract(data: dict[str, Any]) -> None:
             raise ContractError(f"{label} target velocity conversion is inconsistent")
         reference_voltage = controller_values["performance_reference_voltage_volts"]
         if not (
-            values["minimum_voltage_volts"]
-            <= reference_voltage
-            <= values["maximum_voltage_volts"]
+            values["minimum_voltage_volts"] <= reference_voltage <= values["maximum_voltage_volts"]
         ):
-            raise ContractError(f"{label} performance reference voltage is outside the accepted range")
+            raise ContractError(
+                f"{label} performance reference voltage is outside the accepted range"
+            )
         by_id[identifier] = entry
     if roles != ROLES:
         raise ContractError(f"baseline roles must be {ROLES}, found {roles}")
@@ -402,9 +404,7 @@ def mask_cpp(names: list[str]) -> str:
         "communication": "ServoFaultFlag::Communication",
         "model_rejected": "ServoFaultFlag::ModelRejected",
     }
-    return " |\n                    ".join(
-        f"ToMask({enum_values[name]})" for name in names
-    )
+    return " |\n                    ".join(f"ToMask({enum_values[name]})" for name in names)
 
 
 def generate(data: dict[str, Any]) -> str:

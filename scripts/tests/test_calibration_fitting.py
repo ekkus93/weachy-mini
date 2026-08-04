@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import copy
 import importlib.util
-import json
 import subprocess
 import sys
 import tempfile
@@ -76,11 +75,17 @@ class CalibrationFittingTests(unittest.TestCase):
         profile, _ = self.fit()
         values = profile["parameter_results"]
         self.assertAlmostEqual(values["friction"]["values"]["coulomb_friction_nm"], 0.04, places=4)
-        self.assertAlmostEqual(values["backlash"]["values"]["backlash_half_width_rad"], 0.003, places=4)
+        self.assertAlmostEqual(
+            values["backlash"]["values"]["backlash_half_width_rad"], 0.003, places=4
+        )
         self.assertAlmostEqual(values["latency"]["values"]["command_latency_s"], 0.03, places=6)
-        self.assertAlmostEqual(values["controller"]["values"]["position_gain_nm_per_rad"], 2.4, places=3)
+        self.assertAlmostEqual(
+            values["controller"]["values"]["position_gain_nm_per_rad"], 2.4, places=3
+        )
         self.assertAlmostEqual(values["voltage"]["values"]["source_impedance_ohm"], 0.12, places=4)
-        self.assertAlmostEqual(values["compliance"]["values"]["compliance_stiffness_nm_per_rad"], 30.0, places=2)
+        self.assertAlmostEqual(
+            values["compliance"]["values"]["compliance_stiffness_nm_per_rad"], 30.0, places=2
+        )
         self.assertAlmostEqual(values["thermal"]["values"]["heating_c_per_a2_s"], 0.08, places=4)
 
     def test_heldout_data_is_not_used_during_fitting(self) -> None:
@@ -105,7 +110,9 @@ class CalibrationFittingTests(unittest.TestCase):
         changed = copy.deepcopy(self.plan)
         changed["datasets"][0]["dataset_sha256"] = "0" * 64
         changed = calibration_fitting.finalize_fit_plan(changed)
-        with self.assertRaisesRegex(calibration_fitting.FittingValidationError, "does not match loaded dataset"):
+        with self.assertRaisesRegex(
+            calibration_fitting.FittingValidationError, "does not match loaded dataset"
+        ):
             calibration_fitting.load_datasets(changed, self.root)
 
     def test_path_traversal_is_rejected(self) -> None:
@@ -137,13 +144,16 @@ class CalibrationFittingTests(unittest.TestCase):
         profile, verification = self.fit()
         self.assertEqual(verification["status"], "ok")
         self.assertEqual(
-            profile["integrity"]["profile_sha256"], calibration_fitting.compute_profile_sha256(profile)
+            profile["integrity"]["profile_sha256"],
+            calibration_fitting.compute_profile_sha256(profile),
         )
 
     def test_profile_content_tampering_is_detected(self) -> None:
         profile, _ = self.fit()
         profile["parameter_results"]["friction"]["values"]["coulomb_friction_nm"] += 0.01
-        with self.assertRaisesRegex(calibration_fitting.FittingValidationError, "does not match canonical"):
+        with self.assertRaisesRegex(
+            calibration_fitting.FittingValidationError, "does not match canonical"
+        ):
             calibration_fitting.verify_profile(profile, public_key_path=self.public_key)
 
     def test_wrong_public_key_is_rejected(self) -> None:

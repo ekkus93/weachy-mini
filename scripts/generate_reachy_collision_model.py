@@ -8,7 +8,6 @@ import hashlib
 import json
 import math
 import shutil
-import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -115,12 +114,17 @@ def validate_profile(profile: dict[str, Any]) -> None:
     shell = masks["shell"]
     moving = masks["moving"]
     external = masks["external"]
-    if not ((shell["contype"] & moving["conaffinity"]) or (moving["contype"] & shell["conaffinity"])):
+    if not (
+        (shell["contype"] & moving["conaffinity"]) or (moving["contype"] & shell["conaffinity"])
+    ):
         raise CollisionProfileError("shell and moving masks must collide")
     if (moving["contype"] & moving["conaffinity"]) != 0:
         raise CollisionProfileError("moving primitives must not collide with one another")
     for role in (shell, moving):
-        if not ((role["contype"] & external["conaffinity"]) or (external["contype"] & role["conaffinity"])):
+        if not (
+            (role["contype"] & external["conaffinity"])
+            or (external["contype"] & role["conaffinity"])
+        ):
             raise CollisionProfileError("external mask must collide with every robot role")
 
     contacts = profile.get("contact_parameters")
@@ -197,7 +201,9 @@ def validate_profile(profile: dict[str, Any]) -> None:
         segment_child = shape.get("segment_child_body")
         segment_site = shape.get("segment_site")
         if segment_child is not None and (not isinstance(segment_child, str) or not segment_child):
-            raise CollisionProfileError(f"shapes[{index}].segment_child_body must be a nonempty string")
+            raise CollisionProfileError(
+                f"shapes[{index}].segment_child_body must be a nonempty string"
+            )
         if segment_site is not None and (not isinstance(segment_site, str) or not segment_site):
             raise CollisionProfileError(f"shapes[{index}].segment_site must be a nonempty string")
         for field in ("segment_start_inset_metres", "segment_end_inset_metres"):
@@ -206,7 +212,9 @@ def validate_profile(profile: dict[str, Any]) -> None:
         size = shape.get("size")
         if not isinstance(size, list) or not size:
             raise CollisionProfileError(f"shapes[{index}].size is required")
-        if any(require_number(value, f"shapes[{index}].size", positive=True) <= 0 for value in size):
+        if any(
+            require_number(value, f"shapes[{index}].size", positive=True) <= 0 for value in size
+        ):
             raise CollisionProfileError(f"shapes[{index}].size must be positive")
         if shape_type == "capsule":
             endpoint_fields = sum(
@@ -264,7 +272,9 @@ def validate_profile(profile: dict[str, Any]) -> None:
         source_kind = stop.get("range_source")
         if source_kind not in {"pinned_source", "engineering_estimate"}:
             raise CollisionProfileError(f"hard_stops[{index}].range_source is invalid")
-        margin = require_number(stop.get("margin_radians"), f"hard_stops[{index}].margin_radians", positive=True)
+        margin = require_number(
+            stop.get("margin_radians"), f"hard_stops[{index}].margin_radians", positive=True
+        )
         if source_kind == "pinned_source":
             inset = require_number(
                 stop.get("soft_limit_inset_radians"),
@@ -274,10 +284,16 @@ def validate_profile(profile: dict[str, Any]) -> None:
             if inset <= margin:
                 raise CollisionProfileError("soft limit inset must exceed the hard-stop margin")
         else:
-            hard_range = require_vector(stop.get("hard_range_radians"), 2, f"hard_stops[{index}].hard_range_radians")
-            soft_range = require_vector(stop.get("soft_range_radians"), 2, f"hard_stops[{index}].soft_range_radians")
+            hard_range = require_vector(
+                stop.get("hard_range_radians"), 2, f"hard_stops[{index}].hard_range_radians"
+            )
+            soft_range = require_vector(
+                stop.get("soft_range_radians"), 2, f"hard_stops[{index}].soft_range_radians"
+            )
             if not hard_range[0] < soft_range[0] < soft_range[1] < hard_range[1]:
-                raise CollisionProfileError("soft antenna range must lie strictly inside the hard range")
+                raise CollisionProfileError(
+                    "soft antenna range must lie strictly inside the hard range"
+                )
             if not isinstance(stop.get("evidence_id"), str) or not stop["evidence_id"]:
                 raise CollisionProfileError("estimated hard stop requires evidence")
         joint_names.add(joint)
@@ -300,7 +316,11 @@ def validate_profile(profile: dict[str, Any]) -> None:
     budget = profile.get("android_budget")
     if not isinstance(budget, dict) or budget.get("physical_device_required") is not True:
         raise CollisionProfileError("android budget must require a physical device")
-    require_number(budget.get("minimum_realtime_factor"), "android_budget.minimum_realtime_factor", positive=True)
+    require_number(
+        budget.get("minimum_realtime_factor"),
+        "android_budget.minimum_realtime_factor",
+        positive=True,
+    )
     overhead = require_number(
         budget.get("maximum_p95_step_overhead_ratio"),
         "android_budget.maximum_p95_step_overhead_ratio",
@@ -361,9 +381,7 @@ def resolve_segment_fromto(shape: dict[str, Any], body: ET.Element) -> list[floa
         endpoint_element = direct_children[0]
         endpoint_label = f"body {child_name}"
     elif isinstance(site_name, str) and site_name:
-        direct_sites = [
-            site for site in body.findall("site") if site.get("name") == site_name
-        ]
+        direct_sites = [site for site in body.findall("site") if site.get("name") == site_name]
         if len(direct_sites) != 1:
             raise CollisionProfileError(
                 f"shape {shape['name']} expected one direct site {site_name}, "
@@ -473,9 +491,7 @@ def transform_tree(profile: dict[str, Any], source_path: Path) -> ET.ElementTree
             )
         pair = tuple(sorted((body1, body2)))
         if pair in existing_excludes:
-            raise CollisionProfileError(
-                f"source already excludes collision pair {pair}"
-            )
+            raise CollisionProfileError(f"source already excludes collision pair {pair}")
         ET.SubElement(contact, "exclude", {"body1": body1, "body2": body2})
         existing_excludes.add(pair)
 
@@ -530,12 +546,8 @@ def transform_tree(profile: dict[str, Any], source_path: Path) -> ET.ElementTree
         "rma065_contact_overload_impulse_newton_seconds": contacts[
             "contact_overload_impulse_newton_seconds"
         ],
-        "rma065_hard_stop_overload_newton_metres": contacts[
-            "hard_stop_overload_newton_metres"
-        ],
-        "rma065_maximum_penetration_metres": contacts[
-            "maximum_penetration_metres"
-        ],
+        "rma065_hard_stop_overload_newton_metres": contacts["hard_stop_overload_newton_metres"],
+        "rma065_maximum_penetration_metres": contacts["maximum_penetration_metres"],
     }
     for name, value in numeric_values.items():
         add_numeric(custom, name, float(value))
@@ -544,7 +556,7 @@ def transform_tree(profile: dict[str, Any], source_path: Path) -> ET.ElementTree
             "RMA-065 values are engineering estimates, not calibrated physical measurements."
         )
     )
-    setattr(tree, "rma065_hard_stop_records", hard_stop_records)
+    tree.rma065_hard_stop_records = hard_stop_records
     return tree
 
 
@@ -583,13 +595,11 @@ def generate(
         "fidelity_classification": profile["fidelity"]["classification"],
         "added_collision_geoms": [shape["name"] for shape in profile["shapes"]],
         "collision_excludes": profile["collision_excludes"],
-        "hard_stops": getattr(tree, "rma065_hard_stop_records"),
+        "hard_stops": tree.rma065_hard_stop_records,
         "contact_parameters": profile["contact_parameters"],
         "android_budget": profile["android_budget"],
     }
-    metadata_bytes = (
-        json.dumps(metadata, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
+    metadata_bytes = (json.dumps(metadata, indent=2, sort_keys=True) + "\n").encode("utf-8")
     if check:
         if not output_path.is_file() or output_path.read_bytes() != output_bytes:
             raise CollisionProfileError(f"generated model is stale: {output_path}")
@@ -642,10 +652,7 @@ def main() -> int:
     except (CollisionProfileError, OSError, ET.ParseError, ValueError) as exc:
         print(f"RMA-065 collision model generation failed: {exc}", file=__import__("sys").stderr)
         return 1
-    print(
-        "RMA-065 collision model is current: "
-        f"{metadata['generated_model_sha256']}"
-    )
+    print(f"RMA-065 collision model is current: {metadata['generated_model_sha256']}")
     return 0
 
 

@@ -64,10 +64,13 @@ def verify_reports(
         raise Rma065ReportError(f"audit neutral state is non-finite: {neutral_audit}")
     if neutral_audit.get("maximum_contact_count") != 0:
         raise Rma065ReportError(f"audit neutral run produced contacts: {neutral_audit}")
-    if _finite_number(
-        neutral_audit.get("maximum_penetration_metres"),
-        "audit.neutral_audit.maximum_penetration_metres",
-    ) != 0.0:
+    if (
+        _finite_number(
+            neutral_audit.get("maximum_penetration_metres"),
+            "audit.neutral_audit.maximum_penetration_metres",
+        )
+        != 0.0
+    ):
         raise Rma065ReportError(f"audit neutral run produced penetration: {neutral_audit}")
 
     inventory = _object(audit.get("compiled_inventory"), "audit.compiled_inventory")
@@ -79,9 +82,7 @@ def verify_reports(
         raise Rma065ReportError(f"hard-stop inventory mismatch: {inventory}")
 
     if validation.get("contract") != "rma065_collision_hard_stop_validation_v1":
-        raise Rma065ReportError(
-            f"unexpected validation contract: {validation.get('contract')!r}"
-        )
+        raise Rma065ReportError(f"unexpected validation contract: {validation.get('contract')!r}")
     if validation.get("status") != "ok":
         raise Rma065ReportError(f"validation status is not ok: {validation}")
 
@@ -98,9 +99,7 @@ def verify_reports(
     ):
         raise Rma065ReportError(f"validation acceptance is incomplete: {acceptance}")
 
-    contact_parameters = _object(
-        profile.get("contact_parameters"), "profile.contact_parameters"
-    )
+    contact_parameters = _object(profile.get("contact_parameters"), "profile.contact_parameters")
     maximum_penetration = _finite_number(
         contact_parameters.get("maximum_penetration_metres"),
         "profile.contact_parameters.maximum_penetration_metres",
@@ -123,20 +122,29 @@ def verify_reports(
             raise Rma065ReportError(f"{key} did not observe contact: {record}")
         if record.get("finite_qpos") is not True or record.get("finite_qvel") is not True:
             raise Rma065ReportError(f"{key} state is non-finite: {record}")
-        if _finite_number(
-            record.get("maximum_normal_force_newtons"),
-            f"validation.{key}.maximum_normal_force_newtons",
-        ) <= 0.0:
+        if (
+            _finite_number(
+                record.get("maximum_normal_force_newtons"),
+                f"validation.{key}.maximum_normal_force_newtons",
+            )
+            <= 0.0
+        ):
             raise Rma065ReportError(f"{key} did not expose contact force: {record}")
-        if _finite_number(
-            record.get("maximum_impulse_newton_seconds"),
-            f"validation.{key}.maximum_impulse_newton_seconds",
-        ) <= 0.0:
+        if (
+            _finite_number(
+                record.get("maximum_impulse_newton_seconds"),
+                f"validation.{key}.maximum_impulse_newton_seconds",
+            )
+            <= 0.0
+        ):
             raise Rma065ReportError(f"{key} did not expose contact impulse: {record}")
-        if _finite_number(
-            record.get("maximum_penetration_metres"),
-            f"validation.{key}.maximum_penetration_metres",
-        ) > maximum_penetration:
+        if (
+            _finite_number(
+                record.get("maximum_penetration_metres"),
+                f"validation.{key}.maximum_penetration_metres",
+            )
+            > maximum_penetration
+        ):
             raise Rma065ReportError(f"{key} exceeds penetration limit: {record}")
 
     trials = validation.get("hard_stop_trials")

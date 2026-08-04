@@ -131,9 +131,7 @@ def validate_profile(profile: dict[str, Any]) -> None:
     transition_steps = require_positive_integer(
         defaults.get("transition_steps"), "phase_defaults.transition_steps"
     )
-    hold_steps = require_positive_integer(
-        defaults.get("hold_steps"), "phase_defaults.hold_steps"
-    )
+    hold_steps = require_positive_integer(defaults.get("hold_steps"), "phase_defaults.hold_steps")
     if defaults.get("interpolation") != "minimum_jerk":
         raise StabilityProfileError("phase interpolation must be minimum_jerk")
 
@@ -178,9 +176,7 @@ def validate_profile(profile: dict[str, Any]) -> None:
             raise StabilityProfileError(f"phases[{index}].category must be nonempty")
         phase_names.add(name)
         categories.add(category)
-        targets = require_array(
-            phase.get("targets_radians"), f"phases[{index}].targets_radians"
-        )
+        targets = require_array(phase.get("targets_radians"), f"phases[{index}].targets_radians")
         if len(targets) != len(actuators):
             raise StabilityProfileError(
                 f"phases[{index}].targets_radians must contain {len(actuators)} values"
@@ -268,14 +264,8 @@ def render_header(profile: dict[str, Any], profile_sha256: str) -> str:
         "    uint32_t allowed_out_of_range_mask;",
         "} ReachyStabilityPhase;",
         "",
-        (
-            "static const char REACHY_STABILITY_PROFILE_ID[] = "
-            f"{c_string(profile['profile_id'])};"
-        ),
-        (
-            "static const char REACHY_STABILITY_PROFILE_SHA256[] = "
-            f"{c_string(profile_sha256)};"
-        ),
+        (f"static const char REACHY_STABILITY_PROFILE_ID[] = {c_string(profile['profile_id'])};"),
+        (f"static const char REACHY_STABILITY_PROFILE_SHA256[] = {c_string(profile_sha256)};"),
         (
             "static const char REACHY_STABILITY_MODEL_SHA256[] = "
             f"{c_string(source['model_sha256'])};"

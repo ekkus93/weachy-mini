@@ -10,10 +10,11 @@ import math
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 CONTRACT_ID = "rma074_unit_calibrated_profile_v1"
 SCHEMA_VERSION = 1
@@ -213,9 +214,7 @@ def load_json_file(path: Path) -> Any:
 
 def _candidate_hash(candidate: dict[str, Any]) -> str:
     integrity = _require_dict(candidate.get("integrity"), "candidate.integrity")
-    return _require_hash(
-        integrity.get("profile_sha256"), "candidate.integrity.profile_sha256"
-    )
+    return _require_hash(integrity.get("profile_sha256"), "candidate.integrity.profile_sha256")
 
 
 def _candidate_datasets(candidate: dict[str, Any]) -> dict[str, dict[str, str]]:
@@ -237,9 +236,7 @@ def _candidate_datasets(candidate: dict[str, Any]) -> dict[str, dict[str, str]]:
             raise _error(f"{path}.role", "is duplicated")
         by_role[role] = {
             "dataset_id": _require_id(value["dataset_id"], f"{path}.dataset_id"),
-            "dataset_sha256": _require_hash(
-                value["dataset_sha256"], f"{path}.dataset_sha256"
-            ),
+            "dataset_sha256": _require_hash(value["dataset_sha256"], f"{path}.dataset_sha256"),
             "role": role,
         }
     if set(by_role) != {"fitting", "heldout"}:
@@ -271,9 +268,7 @@ def _verify_candidate_default(
             expected_compatibility=expected_compatibility,
         )
     except Exception as exc:
-        raise ApprovalValidationError(
-            f"candidate profile verification failed: {exc}"
-        ) from exc
+        raise ApprovalValidationError(f"candidate profile verification failed: {exc}") from exc
 
 
 def _validate_preflight(preflight: Any) -> str:
@@ -378,8 +373,7 @@ def _validate_metric(name: str, raw: Any) -> dict[str, Any]:
     if len(streams) > 16:
         raise _error(f"{path}.source_streams", "contains too many entries")
     normalized_streams = [
-        _require_id(item, f"{path}.source_streams[{i}]")
-        for i, item in enumerate(streams)
+        _require_id(item, f"{path}.source_streams[{i}]") for i, item in enumerate(streams)
     ]
     claim_scope = _require_string(value["claim_scope"], f"{path}.claim_scope")
     reason = value.get("reason")
@@ -469,9 +463,7 @@ def _validate_heldout_report(
             "heldout_report.metrics",
             f"must contain exactly {sorted(REQUIRED_METRICS)}",
         )
-    normalized_metrics = {
-        name: _validate_metric(name, metrics[name]) for name in sorted(metrics)
-    }
+    normalized_metrics = {name: _validate_metric(name, metrics[name]) for name in sorted(metrics)}
     for name in CORE_APPROVAL_METRICS:
         if normalized_metrics[name]["status"] != "passed":
             raise _error(
@@ -479,9 +471,7 @@ def _validate_heldout_report(
                 "core calibration metric must pass before approval",
             )
     candidate = copy.deepcopy(value)
-    expected_report_hash = _require_hash(
-        candidate["report_sha256"], "heldout_report.report_sha256"
-    )
+    expected_report_hash = _require_hash(candidate["report_sha256"], "heldout_report.report_sha256")
     candidate.pop("report_sha256")
     actual_report_hash = hashlib.sha256(canonical_json_bytes(candidate)).hexdigest()
     if expected_report_hash != actual_report_hash:
@@ -569,9 +559,7 @@ def _openssl_verify(payload: bytes, signature: bytes, public_key_path: Path) -> 
             check=False,
         )
         if result.returncode != 0:
-            raise ApprovalValidationError(
-                "Ed25519 approval signature verification failed"
-            )
+            raise ApprovalValidationError("Ed25519 approval signature verification failed")
 
 
 def create_approval(
@@ -648,17 +636,14 @@ def create_approval(
             "passed_metrics": passed_metrics,
             "limited_metrics": limited_metrics,
             "mature_accuracy_claims": [
-                normalized_report["metrics"][name]["claim_scope"]
-                for name in passed_metrics
+                normalized_report["metrics"][name]["claim_scope"] for name in passed_metrics
             ],
         },
         "approver_statement": statement,
         "integrity": {"algorithm": HASH_ALGORITHM, "approval_sha256": "0" * 64},
         "signature": {
             "algorithm": SIGNATURE_ALGORITHM,
-            "public_key_id": _require_id(
-                approval_public_key_id, "signature.public_key_id"
-            ),
+            "public_key_id": _require_id(approval_public_key_id, "signature.public_key_id"),
             "public_key_sha256": public_key_sha256,
             "signature_base64": "",
         },
@@ -723,17 +708,11 @@ def verify_approval(
     _validate_utc(value["created_utc"], "approval.created_utc")
     unit = _require_dict(value["unit"], "approval.unit")
     _require_exact_keys(unit, {"hardware_id_sha256"}, set(), "approval.unit")
-    hardware_hash = _require_hash(
-        unit["hardware_id_sha256"], "approval.unit.hardware_id_sha256"
-    )
-    if hardware_hash != _require_hash(
-        expected_hardware_id_sha256, "expected_hardware_id_sha256"
-    ):
+    hardware_hash = _require_hash(unit["hardware_id_sha256"], "approval.unit.hardware_id_sha256")
+    if hardware_hash != _require_hash(expected_hardware_id_sha256, "expected_hardware_id_sha256"):
         raise _error("approval.unit.hardware_id_sha256", "does not match connected unit")
     if value["compatibility"] != expected_compatibility:
-        raise _error(
-            "approval.compatibility", "does not exactly match runtime compatibility"
-        )
+        raise _error("approval.compatibility", "does not exactly match runtime compatibility")
     candidate = _require_dict(value["candidate"], "approval.candidate")
     _require_exact_keys(
         candidate,
@@ -745,9 +724,7 @@ def verify_approval(
         raise _error("approval.candidate.contract_id", "must identify RMA-073")
     _require_id(candidate["profile_id"], "approval.candidate.profile_id")
     _require_hash(candidate["profile_sha256"], "approval.candidate.profile_sha256")
-    _require_hash(
-        candidate["public_key_sha256"], "approval.candidate.public_key_sha256"
-    )
+    _require_hash(candidate["public_key_sha256"], "approval.candidate.public_key_sha256")
     datasets = _require_list(value["datasets"], "approval.datasets")
     if len(datasets) != 2:
         raise _error("approval.datasets", "must contain fitting and heldout entries")
@@ -764,9 +741,7 @@ def verify_approval(
             raise _error(f"{path}.hardware_id_sha256", "does not match approved unit")
         if item.get("physical_motion") is not True:
             raise _error(f"{path}.physical_motion", "must be true")
-        role_hashes[role] = _require_hash(
-            item.get("dataset_sha256"), f"{path}.dataset_sha256"
-        )
+        role_hashes[role] = _require_hash(item.get("dataset_sha256"), f"{path}.dataset_sha256")
     if (
         set(role_hashes) != {"fitting", "heldout"}
         or role_hashes["fitting"] == role_hashes["heldout"]
@@ -795,14 +770,10 @@ def verify_approval(
         raise _error("approval.claims", "does not match held-out metric outcomes")
     expected_claims = [report["metrics"][name]["claim_scope"] for name in passed_metrics]
     if claims["mature_accuracy_claims"] != expected_claims:
-        raise _error(
-            "approval.claims.mature_accuracy_claims", "contains an unpassed claim"
-        )
+        raise _error("approval.claims.mature_accuracy_claims", "contains an unpassed claim")
     _require_string(value["approver_statement"], "approval.approver_statement")
     integrity = _require_dict(value["integrity"], "approval.integrity")
-    _require_exact_keys(
-        integrity, {"algorithm", "approval_sha256"}, set(), "approval.integrity"
-    )
+    _require_exact_keys(integrity, {"algorithm", "approval_sha256"}, set(), "approval.integrity")
     if integrity["algorithm"] != HASH_ALGORITHM:
         raise _error("approval.integrity.algorithm", f"must equal {HASH_ALGORITHM}")
     expected_hash = _require_hash(
@@ -824,22 +795,16 @@ def verify_approval(
         "approval.signature",
     )
     if signature["algorithm"] != SIGNATURE_ALGORITHM:
-        raise _error(
-            "approval.signature.algorithm", f"must equal {SIGNATURE_ALGORITHM}"
-        )
+        raise _error("approval.signature.algorithm", f"must equal {SIGNATURE_ALGORITHM}")
     _require_id(signature["public_key_id"], "approval.signature.public_key_id")
     public_key_sha256 = hashlib.sha256(public_key_path.read_bytes()).hexdigest()
     if public_key_sha256 in BLOCKED_APPROVAL_PUBLIC_KEY_SHA256:
         raise _error("approval.signature.public_key_sha256", "fixture key is blocked")
     if (
-        _require_hash(
-            signature["public_key_sha256"], "approval.signature.public_key_sha256"
-        )
+        _require_hash(signature["public_key_sha256"], "approval.signature.public_key_sha256")
         != public_key_sha256
     ):
-        raise _error(
-            "approval.signature.public_key_sha256", "does not match public key"
-        )
+        raise _error("approval.signature.public_key_sha256", "does not match public key")
     try:
         signature_bytes = base64.b64decode(
             _require_string(
@@ -850,9 +815,7 @@ def verify_approval(
             validate=True,
         )
     except Exception as exc:
-        raise _error(
-            "approval.signature.signature_base64", "is not valid base64"
-        ) from exc
+        raise _error("approval.signature.signature_base64", "is not valid base64") from exc
     _openssl_verify(signature_payload_bytes(value), signature_bytes, public_key_path)
     return {
         "status": "ok",

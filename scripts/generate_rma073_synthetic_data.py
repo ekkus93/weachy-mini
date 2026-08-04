@@ -130,7 +130,9 @@ def _command(timestamp: int, sequence: int, target: float, velocity: float) -> d
     }
 
 
-def _joint(timestamp: int, sequence: int, position: float, velocity: float, torque: float) -> dict[str, Any]:
+def _joint(
+    timestamp: int, sequence: int, position: float, velocity: float, torque: float
+) -> dict[str, Any]:
     return {
         "timestamp_ns": timestamp,
         "sequence": sequence,
@@ -161,17 +163,23 @@ def _build_dataset(split: str) -> dict[str, Any]:
     current_samples: list[dict[str, Any]] = []
     voltage_samples: list[dict[str, Any]] = []
     temperature_samples: list[dict[str, Any]] = []
-    command_sequence = joint_sequence = current_sequence = voltage_sequence = temperature_sequence = 0
+    command_sequence = joint_sequence = current_sequence = voltage_sequence = (
+        temperature_sequence
+    ) = 0
 
     # Friction: torque = Coulomb*sign(v) + viscous*v.
     window = WINDOWS["friction"]
     for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):
         joint_sequence += 1
         velocity = (0.08 + 0.006 * (index % 20)) * (1.0 if (index // 10) % 2 == 0 else -1.0)
-        torque = TRUTH["coulomb_friction_nm"] * math.copysign(1.0, velocity) + TRUTH[
-            "viscous_friction_nm_s_per_rad"
-        ] * velocity + _noise(index, phase, 2e-5)
-        joint_samples.append(_joint(timestamp, joint_sequence, 0.1 * math.sin(index / 10), velocity, torque))
+        torque = (
+            TRUTH["coulomb_friction_nm"] * math.copysign(1.0, velocity)
+            + TRUTH["viscous_friction_nm_s_per_rad"] * velocity
+            + _noise(index, phase, 2e-5)
+        )
+        joint_samples.append(
+            _joint(timestamp, joint_sequence, 0.1 * math.sin(index / 10), velocity, torque)
+        )
 
     # Backlash: bidirectional target-position residual.
     window = WINDOWS["backlash"]
@@ -182,8 +190,12 @@ def _build_dataset(split: str) -> dict[str, Any]:
         command_sequence += 1
         joint_sequence += 1
         command_samples.append(_command(timestamp, command_sequence, target, direction * 0.2))
-        position = target - direction * TRUTH["backlash_half_width_rad"] + _noise(index, phase, 1e-5)
-        joint_samples.append(_joint(timestamp, joint_sequence, position, direction * 0.2, 0.01 * direction))
+        position = (
+            target - direction * TRUTH["backlash_half_width_rad"] + _noise(index, phase, 1e-5)
+        )
+        joint_samples.append(
+            _joint(timestamp, joint_sequence, position, direction * 0.2, 0.01 * direction)
+        )
 
     # Latency: 100 ms command steps with a three-sample response delay.
     window = WINDOWS["latency"]
@@ -204,9 +216,11 @@ def _build_dataset(split: str) -> dict[str, Any]:
         velocity = 0.35 * math.cos(index * 0.13 + phase)
         error = 0.03 * math.sin(index * 0.31 + 0.4 + phase)
         position = target - error
-        torque = TRUTH["position_gain_nm_per_rad"] * error - TRUTH[
-            "velocity_gain_nm_s_per_rad"
-        ] * velocity + _noise(index, phase, 4e-5)
+        torque = (
+            TRUTH["position_gain_nm_per_rad"] * error
+            - TRUTH["velocity_gain_nm_s_per_rad"] * velocity
+            + _noise(index, phase, 4e-5)
+        )
         command_sequence += 1
         joint_sequence += 1
         command_samples.append(_command(timestamp, command_sequence, target, 0.0))
@@ -216,12 +230,16 @@ def _build_dataset(split: str) -> dict[str, Any]:
     window = WINDOWS["voltage"]
     for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):
         current = 0.15 + 1.3 * ((index % 25) / 24.0)
-        voltage = TRUTH["open_circuit_voltage_v"] - TRUTH["source_impedance_ohm"] * current + _noise(
-            index, phase, 2e-5
+        voltage = (
+            TRUTH["open_circuit_voltage_v"]
+            - TRUTH["source_impedance_ohm"] * current
+            + _noise(index, phase, 2e-5)
         )
         current_sequence += 1
         voltage_sequence += 1
-        current_samples.append(_current(timestamp, current_sequence, current, 0.02 + 0.01 * current))
+        current_samples.append(
+            _current(timestamp, current_sequence, current, 0.02 + 0.01 * current)
+        )
         voltage_samples.append(
             {
                 "timestamp_ns": timestamp,
@@ -250,12 +268,14 @@ def _build_dataset(split: str) -> dict[str, Any]:
     temperature = 22.5
     previous_timestamp: int | None = None
     for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):
-        current = 0.25 + (1.2 if (index // 50) % 2 == 0 else 0.35) + 0.1 * math.sin(index * 0.07 + phase)
+        current = (
+            0.25 + (1.2 if (index // 50) % 2 == 0 else 0.35) + 0.1 * math.sin(index * 0.07 + phase)
+        )
         if previous_timestamp is not None:
             dt = (timestamp - previous_timestamp) / 1e9
-            derivative = TRUTH["heating_c_per_a2_s"] * current * current - TRUTH["cooling_per_s"] * (
-                temperature - 22.5
-            )
+            derivative = TRUTH["heating_c_per_a2_s"] * current * current - TRUTH[
+                "cooling_per_s"
+            ] * (temperature - 22.5)
             temperature += derivative * dt
         previous_timestamp = timestamp
         current_sequence += 1

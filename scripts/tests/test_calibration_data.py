@@ -128,9 +128,7 @@ class CalibrationDataTests(unittest.TestCase):
 
     def test_clock_collection_limit_is_enforced(self) -> None:
         limits = calibration_data.ImportLimits(maximum_clocks=2)
-        with self.assertRaisesRegex(
-            calibration_data.CalibrationValidationError, "too many clocks"
-        ):
+        with self.assertRaisesRegex(calibration_data.CalibrationValidationError, "too many clocks"):
             calibration_data.validate_dataset(self.fixture, limits=limits)
 
     def test_schema_descriptor_rejects_unversioned_file_drift(self) -> None:

@@ -13,11 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 PROFILE_PATH = ROOT / "models" / "reachy-mini" / "upstream-baseline-stability.json"
 HEADER_PATH = (
-    ROOT
-    / "native"
-    / "reachy_sim"
-    / "feasibility"
-    / "reachy_stability_profile.generated.h"
+    ROOT / "native" / "reachy_sim" / "feasibility" / "reachy_stability_profile.generated.h"
 )
 SCRIPT_PATH = ROOT / "scripts" / "generate_reachy_stability_header.py"
 

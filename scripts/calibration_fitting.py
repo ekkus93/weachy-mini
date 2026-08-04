@@ -8,16 +8,16 @@ import hashlib
 import importlib.util
 import json
 import math
-import os
 import re
 import statistics
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 FIT_PLAN_CONTRACT_ID = "rma073_calibration_fit_plan_v1"
 FIT_PLAN_SCHEMA_VERSION = 1
@@ -269,9 +269,13 @@ def _validate_compatibility(value: Any, path: str, limits: ImportLimits) -> dict
         set(),
         path,
     )
-    reachy_commit = _require_git_commit(compatibility["reachy_source_commit"], f"{path}.reachy_source_commit")
+    reachy_commit = _require_git_commit(
+        compatibility["reachy_source_commit"], f"{path}.reachy_source_commit"
+    )
     model_hash = _require_hash(compatibility["model_sha256"], f"{path}.model_sha256")
-    mujoco_version = _require_string(compatibility["mujoco_version"], f"{path}.mujoco_version", limits)
+    mujoco_version = _require_string(
+        compatibility["mujoco_version"], f"{path}.mujoco_version", limits
+    )
     abi = _require_integer(
         compatibility["simulator_abi_version"],
         f"{path}.simulator_abi_version",
@@ -451,7 +455,9 @@ def load_datasets(
         if identity is None:
             identity = current_identity
         elif current_identity != identity:
-            raise _error(f"plan.datasets[{index}]", "robot identity/configuration differs across split")
+            raise _error(
+                f"plan.datasets[{index}]", "robot identity/configuration differs across split"
+            )
         result[entry["role"]].append(dataset)
     return result
 
@@ -491,16 +497,18 @@ def _nearest_by_timestamp(
     pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
     j = 0
     for first in left:
-        while j + 1 < len(right) and abs(right[j + 1]["timestamp_ns"] - first["timestamp_ns"]) <= abs(
-            right[j]["timestamp_ns"] - first["timestamp_ns"]
-        ):
+        while j + 1 < len(right) and abs(
+            right[j + 1]["timestamp_ns"] - first["timestamp_ns"]
+        ) <= abs(right[j]["timestamp_ns"] - first["timestamp_ns"]):
             j += 1
         if abs(right[j]["timestamp_ns"] - first["timestamp_ns"]) <= tolerance_ns:
             pairs.append((first, right[j]))
     return pairs
 
 
-def _solve_linear(features: list[list[float]], targets: list[float]) -> tuple[list[float], dict[str, Any]]:
+def _solve_linear(
+    features: list[list[float]], targets: list[float]
+) -> tuple[list[float], dict[str, Any]]:
     if not features or len(features) != len(targets):
         raise FittingValidationError("linear fit requires non-empty aligned observations")
     width = len(features[0])
@@ -532,7 +540,9 @@ def _solve_linear(features: list[list[float]], targets: list[float]) -> tuple[li
                 matrix[row][entry] -= factor * matrix[col][entry]
     coefficients = [matrix[index][width] for index in range(width)]
     predictions = [sum(c * x for c, x in zip(coefficients, row, strict=True)) for row in features]
-    residuals = [target - prediction for target, prediction in zip(targets, predictions, strict=True)]
+    residuals = [
+        target - prediction for target, prediction in zip(targets, predictions, strict=True)
+    ]
     rmse = math.sqrt(sum(value * value for value in residuals) / len(residuals))
     mean_target = statistics.fmean(targets)
     total = sum((value - mean_target) ** 2 for value in targets)
@@ -585,12 +595,17 @@ def _unsupported(reason: str, required_streams: list[str]) -> dict[str, Any]:
     }
 
 
-def _fit_friction(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _fit_friction(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     joints = _samples(datasets, "joint", **window, actuator_id=actuator)
     observations = [sample for sample in joints if abs(float(sample["velocity_rad_s"])) >= 0.03]
     if len(observations) < 12:
         return _unsupported("insufficient nonzero-velocity joint samples", ["joint"])
-    features = [[math.copysign(1.0, sample["velocity_rad_s"]), sample["velocity_rad_s"]] for sample in observations]
+    features = [
+        [math.copysign(1.0, sample["velocity_rad_s"]), sample["velocity_rad_s"]]
+        for sample in observations
+    ]
     targets = [sample["applied_torque_nm"] for sample in observations]
     coefficients, metrics = _solve_linear(features, targets)
     sensitivity = _jackknife_sensitivity(features, targets, coefficients)
@@ -608,7 +623,9 @@ def _fit_friction(datasets: list[dict[str, Any]], window: dict[str, int], actuat
     }
 
 
-def _estimate_backlash(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _estimate_backlash(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     commands = _samples(datasets, "command", **window, actuator_id=actuator)
     joints = _samples(datasets, "joint", **window, actuator_id=actuator)
     pairs = _nearest_by_timestamp(commands, joints, tolerance_ns=2_000_000)
@@ -641,13 +658,17 @@ def _estimate_backlash(datasets: list[dict[str, Any]], window: dict[str, int], a
             "direction_negative_count": len(negative),
             "median_absolute_deviation_rad": mad,
         },
-        "confidence": "high_for_supplied_dataset" if sensitivity <= 0.1 else "medium_for_supplied_dataset",
+        "confidence": "high_for_supplied_dataset"
+        if sensitivity <= 0.1
+        else "medium_for_supplied_dataset",
         "sensitivity": {"mad_relative_to_estimate": sensitivity},
         "required_streams": ["command", "joint"],
     }
 
 
-def _estimate_latency(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _estimate_latency(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     commands = _samples(datasets, "command", **window, actuator_id=actuator)
     joints = _samples(datasets, "joint", **window, actuator_id=actuator)
     if len(commands) < 8 or len(joints) < 8:
@@ -674,13 +695,17 @@ def _estimate_latency(datasets: list[dict[str, Any]], window: dict[str, int], ac
     latencies: list[int] = []
     for command_time, command_delta in command_steps:
         for response_time, response_delta in response_steps:
-            if response_time >= command_time and math.copysign(1.0, response_delta) == math.copysign(1.0, command_delta):
+            if response_time >= command_time and math.copysign(
+                1.0, response_delta
+            ) == math.copysign(1.0, command_delta):
                 delta = response_time - command_time
                 if delta <= 1_000_000_000:
                     latencies.append(delta)
                     break
     if len(latencies) < 3:
-        return _unsupported("insufficient matched command-response transitions", ["command", "joint"])
+        return _unsupported(
+            "insufficient matched command-response transitions", ["command", "joint"]
+        )
     median_ns = int(statistics.median(latencies))
     mad_ns = statistics.median(abs(value - median_ns) for value in latencies)
     sensitivity = mad_ns / max(median_ns, 1)
@@ -688,14 +713,22 @@ def _estimate_latency(datasets: list[dict[str, Any]], window: dict[str, int], ac
         "status": "fitted",
         "method": "matched_step_transition_median",
         "values": {"command_latency_s": median_ns / 1e9},
-        "metrics": {"observation_count": len(latencies), "median_latency_ns": median_ns, "mad_ns": mad_ns},
-        "confidence": "high_for_supplied_dataset" if len(latencies) >= 5 and sensitivity <= 0.1 else "medium_for_supplied_dataset",
+        "metrics": {
+            "observation_count": len(latencies),
+            "median_latency_ns": median_ns,
+            "mad_ns": mad_ns,
+        },
+        "confidence": "high_for_supplied_dataset"
+        if len(latencies) >= 5 and sensitivity <= 0.1
+        else "medium_for_supplied_dataset",
         "sensitivity": {"mad_relative_to_estimate": sensitivity},
         "required_streams": ["command", "joint"],
     }
 
 
-def _fit_controller(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _fit_controller(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     commands = _samples(datasets, "command", **window, actuator_id=actuator)
     joints = _samples(datasets, "joint", **window, actuator_id=actuator)
     pairs = _nearest_by_timestamp(commands, joints, tolerance_ns=2_000_000)
@@ -715,7 +748,10 @@ def _fit_controller(datasets: list[dict[str, Any]], window: dict[str, int], actu
     return {
         "status": "fitted",
         "method": "ordinary_least_squares_pd_controller",
-        "values": {"position_gain_nm_per_rad": coefficients[0], "velocity_gain_nm_s_per_rad": coefficients[1]},
+        "values": {
+            "position_gain_nm_per_rad": coefficients[0],
+            "velocity_gain_nm_s_per_rad": coefficients[1],
+        },
         "metrics": metrics,
         "confidence": _confidence(metrics, sensitivity),
         "sensitivity": {"maximum_leave_one_out_relative_change": sensitivity},
@@ -723,12 +759,16 @@ def _fit_controller(datasets: list[dict[str, Any]], window: dict[str, int], actu
     }
 
 
-def _fit_voltage(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _fit_voltage(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     currents = _samples(datasets, "current_load", **window, actuator_id=actuator)
     voltages = _samples(datasets, "voltage", **window)
     pairs = _nearest_by_timestamp(currents, voltages, tolerance_ns=2_000_000)
     if len(pairs) < 12:
-        return _unsupported("insufficient aligned current and voltage observations", ["current_load", "voltage"])
+        return _unsupported(
+            "insufficient aligned current and voltage observations", ["current_load", "voltage"]
+        )
     features = [[1.0, -float(current["current_a"])] for current, _ in pairs]
     targets = [float(voltage["voltage_v"]) for _, voltage in pairs]
     coefficients, metrics = _solve_linear(features, targets)
@@ -736,7 +776,10 @@ def _fit_voltage(datasets: list[dict[str, Any]], window: dict[str, int], actuato
     return {
         "status": "fitted",
         "method": "ordinary_least_squares_shared_bus_sag",
-        "values": {"open_circuit_voltage_v": coefficients[0], "source_impedance_ohm": coefficients[1]},
+        "values": {
+            "open_circuit_voltage_v": coefficients[0],
+            "source_impedance_ohm": coefficients[1],
+        },
         "metrics": metrics,
         "confidence": _confidence(metrics, sensitivity),
         "sensitivity": {"maximum_leave_one_out_relative_change": sensitivity},
@@ -744,7 +787,9 @@ def _fit_voltage(datasets: list[dict[str, Any]], window: dict[str, int], actuato
     }
 
 
-def _estimate_compliance(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _estimate_compliance(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     commands = _samples(datasets, "command", **window, actuator_id=actuator)
     joints = _samples(datasets, "joint", **window, actuator_id=actuator)
     loads = _samples(datasets, "current_load", **window, actuator_id=actuator)
@@ -763,7 +808,9 @@ def _estimate_compliance(datasets: list[dict[str, Any]], window: dict[str, int],
         if abs(deflection) >= 1e-4 and abs(torque) >= 1e-4 and deflection * torque > 0:
             stiffness_values.append(torque / deflection)
     if len(stiffness_values) < 8:
-        return _unsupported("insufficient load/deflection observations", ["command", "joint", "current_load"])
+        return _unsupported(
+            "insufficient load/deflection observations", ["command", "joint", "current_load"]
+        )
     estimate = statistics.median(stiffness_values)
     mad = statistics.median(abs(value - estimate) for value in stiffness_values)
     sensitivity = mad / max(abs(estimate), 1e-12)
@@ -771,19 +818,28 @@ def _estimate_compliance(datasets: list[dict[str, Any]], window: dict[str, int],
         "status": "fitted",
         "method": "median_load_over_deflection",
         "values": {"compliance_stiffness_nm_per_rad": estimate},
-        "metrics": {"observation_count": len(stiffness_values), "median_absolute_deviation_nm_per_rad": mad},
-        "confidence": "high_for_supplied_dataset" if sensitivity <= 0.1 else "medium_for_supplied_dataset",
+        "metrics": {
+            "observation_count": len(stiffness_values),
+            "median_absolute_deviation_nm_per_rad": mad,
+        },
+        "confidence": "high_for_supplied_dataset"
+        if sensitivity <= 0.1
+        else "medium_for_supplied_dataset",
         "sensitivity": {"mad_relative_to_estimate": sensitivity},
         "required_streams": ["command", "joint", "current_load"],
     }
 
 
-def _fit_thermal(datasets: list[dict[str, Any]], window: dict[str, int], actuator: str) -> dict[str, Any]:
+def _fit_thermal(
+    datasets: list[dict[str, Any]], window: dict[str, int], actuator: str
+) -> dict[str, Any]:
     currents = _samples(datasets, "current_load", **window, actuator_id=actuator)
     temperatures = _samples(datasets, "temperature", **window, actuator_id=actuator)
     pairs = _nearest_by_timestamp(temperatures, currents, tolerance_ns=2_000_000)
     if len(pairs) < 20:
-        return _unsupported("insufficient aligned thermal observations", ["temperature", "current_load"])
+        return _unsupported(
+            "insufficient aligned thermal observations", ["temperature", "current_load"]
+        )
     features: list[list[float]] = []
     targets: list[float] = []
     ambient_values: list[float] = []
@@ -800,12 +856,16 @@ def _fit_thermal(datasets: list[dict[str, Any]], window: dict[str, int], actuato
         dt = (temperature["timestamp_ns"] - previous_temperature["timestamp_ns"]) / 1e9
         if dt <= 0:
             continue
-        derivative = (float(temperature["temperature_c"]) - float(previous_temperature["temperature_c"])) / dt
+        derivative = (
+            float(temperature["temperature_c"]) - float(previous_temperature["temperature_c"])
+        ) / dt
         previous_value = float(previous_temperature["temperature_c"])
         features.append([float(current["current_a"]) ** 2, -(previous_value - ambient)])
         targets.append(derivative)
     if len(features) < 15:
-        return _unsupported("insufficient positive-duration thermal intervals", ["temperature", "current_load"])
+        return _unsupported(
+            "insufficient positive-duration thermal intervals", ["temperature", "current_load"]
+        )
     coefficients, metrics = _solve_linear(features, targets)
     sensitivity = _jackknife_sensitivity(features, targets, coefficients)
     return {
@@ -857,9 +917,10 @@ def _prediction_error(
         errors = []
         for sample in observations:
             velocity = float(sample["velocity_rad_s"])
-            prediction = values["coulomb_friction_nm"] * math.copysign(1.0, velocity) + values[
-                "viscous_friction_nm_s_per_rad"
-            ] * velocity
+            prediction = (
+                values["coulomb_friction_nm"] * math.copysign(1.0, velocity)
+                + values["viscous_friction_nm_s_per_rad"] * velocity
+            )
             errors.append(float(sample["applied_torque_nm"]) - prediction)
         return _rmse(errors), len(errors), "rmse_nm"
     if family == "controller":
@@ -871,9 +932,9 @@ def _prediction_error(
             target = command.get("target_position_rad")
             if target is None:
                 continue
-            prediction = values["position_gain_nm_per_rad"] * (float(target) - float(joint["position_rad"])) - values[
-                "velocity_gain_nm_s_per_rad"
-            ] * float(joint["velocity_rad_s"])
+            prediction = values["position_gain_nm_per_rad"] * (
+                float(target) - float(joint["position_rad"])
+            ) - values["velocity_gain_nm_s_per_rad"] * float(joint["velocity_rad_s"])
             errors.append(float(joint["applied_torque_nm"]) - prediction)
         return _rmse(errors), len(errors), "rmse_nm"
     if family == "voltage":
@@ -882,7 +943,10 @@ def _prediction_error(
         pairs = _nearest_by_timestamp(currents, voltages, tolerance_ns=2_000_000)
         errors = [
             float(voltage["voltage_v"])
-            - (values["open_circuit_voltage_v"] - values["source_impedance_ohm"] * float(current["current_a"]))
+            - (
+                values["open_circuit_voltage_v"]
+                - values["source_impedance_ohm"] * float(current["current_a"])
+            )
             for current, voltage in pairs
         ]
         return _rmse(errors), len(errors), "rmse_v"
@@ -895,7 +959,11 @@ def _prediction_error(
             abs(values[key] - expected[key]) / max(abs(expected[key]), 1e-12)
             for key in ("heating_c_per_a2_s", "cooling_per_s")
         )
-        return relative, temporary["metrics"]["observation_count"], "maximum_relative_parameter_error"
+        return (
+            relative,
+            temporary["metrics"]["observation_count"],
+            "maximum_relative_parameter_error",
+        )
     temporary = _FITTERS[family](datasets, window, actuator)
     if temporary["status"] != "fitted":
         return None, 0, "heldout_estimate_unavailable"
@@ -1042,7 +1110,9 @@ def sign_profile(
 ) -> dict[str, Any]:
     value = copy.deepcopy(profile)
     if value.get("calibrated") is not False or value.get("profile_kind") != PROFILE_KIND:
-        raise FittingValidationError("RMA-073 may sign only unapproved fit candidates, never calibrated profiles")
+        raise FittingValidationError(
+            "RMA-073 may sign only unapproved fit candidates, never calibrated profiles"
+        )
     integrity = _require_dict(value.get("integrity"), "integrity")
     integrity["algorithm"] = HASH_ALGORITHM
     integrity["profile_sha256"] = compute_profile_sha256(value)
@@ -1071,7 +1141,9 @@ def sign_profile(
     return value
 
 
-def validate_profile_structure(profile: Any, *, limits: ImportLimits = DEFAULT_LIMITS) -> dict[str, Any]:
+def validate_profile_structure(
+    profile: Any, *, limits: ImportLimits = DEFAULT_LIMITS
+) -> dict[str, Any]:
     value = _require_dict(profile, "profile")
     _require_exact_keys(
         value,
@@ -1105,7 +1177,9 @@ def validate_profile_structure(profile: Any, *, limits: ImportLimits = DEFAULT_L
     if value["profile_kind"] != PROFILE_KIND:
         raise _error("profile.profile_kind", f"must equal {PROFILE_KIND}")
     if value["calibrated"] is not False:
-        raise _error("profile.calibrated", "RMA-073 profiles must remain false until RMA-074 approval")
+        raise _error(
+            "profile.calibrated", "RMA-073 profiles must remain false until RMA-074 approval"
+        )
     if value["approval_state"] != APPROVAL_STATE:
         raise _error("profile.approval_state", f"must equal {APPROVAL_STATE}")
     _validate_utc(value["created_utc"], "profile.created_utc", limits)
@@ -1178,11 +1252,15 @@ def verify_profile(
     expected_hash = profile["integrity"]["profile_sha256"]
     actual_hash = compute_profile_sha256(profile)
     if expected_hash != actual_hash:
-        raise FittingValidationError("profile.integrity.profile_sha256 does not match canonical content")
+        raise FittingValidationError(
+            "profile.integrity.profile_sha256 does not match canonical content"
+        )
     expected_key_hash = profile["signature"]["public_key_sha256"]
     actual_key_hash = public_key_sha256(public_key_path)
     if expected_key_hash != actual_key_hash:
-        raise FittingValidationError("profile signature public key hash does not match supplied key")
+        raise FittingValidationError(
+            "profile signature public key hash does not match supplied key"
+        )
     signature = base64.b64decode(profile["signature"]["signature_base64"], validate=True)
     with tempfile.TemporaryDirectory() as temp_text:
         temp = Path(temp_text)
@@ -1208,9 +1286,13 @@ def verify_profile(
         except SignatureError as exc:
             raise FittingValidationError("profile Ed25519 signature verification failed") from exc
     if expected_compatibility is not None:
-        normalized = _validate_compatibility(expected_compatibility, "expected_compatibility", DEFAULT_LIMITS)
+        normalized = _validate_compatibility(
+            expected_compatibility, "expected_compatibility", DEFAULT_LIMITS
+        )
         if summary["compatibility"] != normalized:
-            raise FittingValidationError("profile is incompatible with the expected model or simulator version")
+            raise FittingValidationError(
+                "profile is incompatible with the expected model or simulator version"
+            )
     return {
         "status": "ok",
         "profile_id": summary["profile_id"],

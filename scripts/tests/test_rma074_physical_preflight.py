@@ -40,10 +40,22 @@ class PhysicalPreflightTests(unittest.TestCase):
             "control_mode": "disabled",
             "head_pose": {
                 "pose_matrix": [
-                    1.0, 0.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0, 0.0,
-                    0.0, 0.0, 1.0, 0.2,
-                    0.0, 0.0, 0.0, 1.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.2,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
                 ]
             },
             "head_joints": [0.0] * 7,
@@ -99,9 +111,7 @@ class PhysicalPreflightTests(unittest.TestCase):
     def test_candidate_list_is_deduplicated(self) -> None:
         candidates = probe.candidate_list("127.0.0.1", 8000)
         self.assertEqual(
-            [(entry.host, entry.port) for entry in candidates].count(
-                ("127.0.0.1", 8000)
-            ),
+            [(entry.host, entry.port) for entry in candidates].count(("127.0.0.1", 8000)),
             1,
         )
 

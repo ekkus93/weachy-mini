@@ -8,10 +8,11 @@ import json
 import math
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 PLAN_CONTRACT_ID = "rma072_calibration_experiment_plan_v1"
 PLAN_SCHEMA_VERSION = 1
@@ -123,29 +124,21 @@ class SafetyState:
 class ExperimentAdapter(Protocol):
     """Physical adapter boundary. RMA-074 supplies a real robot implementation."""
 
-    def robot_id(self) -> str:
-        ...
+    def robot_id(self) -> str: ...
 
-    def begin_run(self, manifest: dict[str, Any]) -> None:
-        ...
+    def begin_run(self, manifest: dict[str, Any]) -> None: ...
 
-    def read_safety_state(self) -> SafetyState:
-        ...
+    def read_safety_state(self) -> SafetyState: ...
 
-    def record_marker(self, marker: str, experiment_id: str) -> None:
-        ...
+    def record_marker(self, marker: str, experiment_id: str) -> None: ...
 
-    def set_torque(self, actuator_id: str, enabled: bool) -> None:
-        ...
+    def set_torque(self, actuator_id: str, enabled: bool) -> None: ...
 
-    def submit_command(self, actuator_id: str, command: dict[str, Any]) -> None:
-        ...
+    def submit_command(self, actuator_id: str, command: dict[str, Any]) -> None: ...
 
-    def emergency_stop(self, reason: str) -> None:
-        ...
+    def emergency_stop(self, reason: str) -> None: ...
 
-    def end_run(self, outcome: str) -> None:
-        ...
+    def end_run(self, outcome: str) -> None: ...
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -386,7 +379,9 @@ def _validate_experiment(
         actuator = _require_id(value["actuator_id"], f"{path}.actuator_id", limits)
         if actuator not in actuators:
             raise _error(f"{path}.actuator_id", "does not identify a declared actuator")
-        start = _position(value["start_position_rad"], f"{path}.start_position_rad", actuator, actuators)
+        start = _position(
+            value["start_position_rad"], f"{path}.start_position_rad", actuator, actuators
+        )
         end = _position(value["end_position_rad"], f"{path}.end_position_rad", actuator, actuators)
         if start == end:
             raise _error(path, "sweep endpoints must differ")
@@ -445,9 +440,7 @@ def _validate_experiment(
         center = _position(
             value["center_position_rad"], f"{path}.center_position_rad", actuator, actuators
         )
-        amplitude = _require_number(
-            value["amplitude_rad"], f"{path}.amplitude_rad", minimum=1e-9
-        )
+        amplitude = _require_number(value["amplitude_rad"], f"{path}.amplitude_rad", minimum=1e-9)
         _position(center - amplitude, f"{path}.center_position_rad-amplitude", actuator, actuators)
         _position(center + amplitude, f"{path}.center_position_rad+amplitude", actuator, actuators)
         frequencies = _require_list(value["frequencies_hz"], f"{path}.frequencies_hz")
@@ -487,9 +480,7 @@ def _validate_experiment(
         center = _position(
             value["center_position_rad"], f"{path}.center_position_rad", actuator, actuators
         )
-        amplitude = _require_number(
-            value["amplitude_rad"], f"{path}.amplitude_rad", minimum=1e-9
-        )
+        amplitude = _require_number(value["amplitude_rad"], f"{path}.amplitude_rad", minimum=1e-9)
         _position(center - amplitude, f"{path}.center_position_rad-amplitude", actuator, actuators)
         _position(center + amplitude, f"{path}.center_position_rad+amplitude", actuator, actuators)
         _positive_duration(value["dwell_seconds"], f"{path}.dwell_seconds")
@@ -505,7 +496,9 @@ def _validate_experiment(
         actuator = _require_id(value["actuator_id"], f"{path}.actuator_id", limits)
         if actuator not in actuators:
             raise _error(f"{path}.actuator_id", "does not identify a declared actuator")
-        _position(value["initial_position_rad"], f"{path}.initial_position_rad", actuator, actuators)
+        _position(
+            value["initial_position_rad"], f"{path}.initial_position_rad", actuator, actuators
+        )
         _positive_duration(value["settle_seconds"], f"{path}.settle_seconds")
         _positive_duration(value["observe_seconds"], f"{path}.observe_seconds")
     elif experiment_type == "multi_actuator":
@@ -808,7 +801,9 @@ class _ScheduleBuilder:
     def advance(self, seconds: float) -> None:
         self.cursor_ns += round(seconds * 1e9)
 
-    def line(self, experiment_id: str, actuator_id: str, start: float, end: float, seconds: float) -> None:
+    def line(
+        self, experiment_id: str, actuator_id: str, start: float, end: float, seconds: float
+    ) -> None:
         steps = max(1, math.ceil(seconds * self.command_rate_hz))
         start_ns = self.cursor_ns
         duration_ns = round(seconds * 1e9)
@@ -1061,12 +1056,14 @@ def execute_schedule(
     ended = False
 
     if sleep_until_ns is None:
+
         def default_sleep_until(deadline_ns: int) -> None:
             while True:
                 remaining = deadline_ns - now_ns()
                 if remaining <= 0:
                     return
                 time.sleep(min(remaining / 1e9, 0.05))
+
         sleep_until_ns = default_sleep_until
 
     try:

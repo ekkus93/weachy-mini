@@ -243,7 +243,7 @@ def role_enum(value: str) -> str:
 
 def scalar_cpp(value: dict[str, Any]) -> str:
     return (
-        f'MechanicalScalar{{{float(value["value"]):.17g}, '
+        f"MechanicalScalar{{{float(value['value']):.17g}, "
         f'{evidence_enum(value["evidence_class"])}, "{value["evidence_id"]}"}}'
     )
 
@@ -284,7 +284,7 @@ def generate(data: dict[str, Any]) -> str:
     for binding in data["actuator_bindings"]:
         lines.append(
             f'    {{"{binding["actuator_name"]}", "{binding["parameter_set_id"]}", '
-            f'{role_enum(binding["role"])} }},'
+            f"{role_enum(binding['role'])} }},"
         )
     lines.extend(
         [

@@ -52,7 +52,9 @@ class PowerThermalBaselineTests(unittest.TestCase):
     def test_cross_role_parameter_copy_is_rejected(self) -> None:
         profile = copy.deepcopy(self.profile)
         for key in GEN.EXPECTED_UNITS["thermal"]:
-            profile["thermal_baselines"][2][key] = copy.deepcopy(profile["thermal_baselines"][1][key])
+            profile["thermal_baselines"][2][key] = copy.deepcopy(
+                profile["thermal_baselines"][1][key]
+            )
         with self.assertRaisesRegex(ValueError, "cross-role parameter copy"):
             self.validate(profile)
 
@@ -76,10 +78,18 @@ class PowerThermalBaselineTests(unittest.TestCase):
             (fake_root / "native/reachy_sim/src").mkdir(parents=True)
             copied = fake_root / "scripts/generate_reachy_power_thermal_baseline.py"
             copied.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
-            (fake_root / "models/reachy-mini/power-thermal-baseline.json").write_text(PROFILE.read_text(encoding="utf-8"), encoding="utf-8")
-            (fake_root / "models/reachy-mini/electrical-controller-baseline.json").write_text(ELECTRICAL.read_text(encoding="utf-8"), encoding="utf-8")
-            (fake_root / "native/reachy_sim/src/reachy_power_thermal_baseline.generated.hpp").write_text("stale\n", encoding="utf-8")
-            result = subprocess.run(["python3", str(copied), "--check"], text=True, capture_output=True, check=False)
+            (fake_root / "models/reachy-mini/power-thermal-baseline.json").write_text(
+                PROFILE.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (fake_root / "models/reachy-mini/electrical-controller-baseline.json").write_text(
+                ELECTRICAL.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            (
+                fake_root / "native/reachy_sim/src/reachy_power_thermal_baseline.generated.hpp"
+            ).write_text("stale\n", encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(copied), "--check"], text=True, capture_output=True, check=False
+            )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("stale", result.stderr + result.stdout)
 

@@ -15,13 +15,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 PROFILE_PATH = ROOT / "models" / "reachy-mini" / "servo-model-parameters.json"
-GENERATED_PATH = (
-    ROOT
-    / "native"
-    / "reachy_sim"
-    / "src"
-    / "reachy_servo_parameters.generated.hpp"
-)
+GENERATED_PATH = ROOT / "native" / "reachy_sim" / "src" / "reachy_servo_parameters.generated.hpp"
 
 
 class ServoParameterContractTests(unittest.TestCase):
@@ -51,25 +45,19 @@ class ServoParameterContractTests(unittest.TestCase):
 
     def test_cross_role_binding_is_rejected(self) -> None:
         profile = copy.deepcopy(self.profile)
-        profile["actuator_bindings"][1]["parameter_set_id"] = (
-            "antenna_upstream_placeholder"
-        )
+        profile["actuator_bindings"][1]["parameter_set_id"] = "antenna_upstream_placeholder"
         with self.assertRaisesRegex(MODULE.ContractError, "crosses actuator roles"):
             MODULE.validate_contract(profile)
 
     def test_unknown_quality_is_rejected(self) -> None:
         profile = copy.deepcopy(self.profile)
-        profile["parameter_sets"][0]["parameters"]["nominal_voltage_volts"][
-            "quality"
-        ] = "guess"
+        profile["parameter_sets"][0]["parameters"]["nominal_voltage_volts"]["quality"] = "guess"
         with self.assertRaisesRegex(MODULE.ContractError, "quality is invalid"):
             MODULE.validate_contract(profile)
 
     def test_null_manufacturer_estimate_is_rejected(self) -> None:
         profile = copy.deepcopy(self.profile)
-        scalar = profile["parameter_sets"][0]["parameters"][
-            "nominal_voltage_volts"
-        ]
+        scalar = profile["parameter_sets"][0]["parameters"]["nominal_voltage_volts"]
         scalar["quality"] = "manufacturer_estimate"
         with self.assertRaisesRegex(MODULE.ContractError, "null only"):
             MODULE.validate_contract(profile)

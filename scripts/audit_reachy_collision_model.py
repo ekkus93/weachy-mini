@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import numpy as np
 import hashlib
 import json
 import math
@@ -13,6 +12,8 @@ import xml.etree.ElementTree as ET
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 
 class CollisionAuditError(RuntimeError):
@@ -45,9 +46,7 @@ def source_inventory(model_path: Path) -> dict[str, Any]:
             {
                 "name": body.get("name"),
                 "direct_geom_count": len(geoms),
-                "direct_joint_names": [
-                    joint.get("name") for joint in body.findall("./joint")
-                ],
+                "direct_joint_names": [joint.get("name") for joint in body.findall("./joint")],
                 "direct_collision_geom_count": sum(
                     geom.get("class") == "collision"
                     or geom.get("contype") not in (None, "0")
@@ -77,12 +76,8 @@ def compiled_inventory(mujoco: Any, model: Any) -> dict[str, Any]:
     collision_geom_count = 0
     for geom_id in range(int(model.ngeom)):
         body_id = int(model.geom_bodyid[geom_id])
-        body_name = object_name(
-            mujoco, model, mujoco.mjtObj.mjOBJ_BODY, body_id
-        )
-        geom_name = object_name(
-            mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom_id
-        )
+        body_name = object_name(mujoco, model, mujoco.mjtObj.mjOBJ_BODY, body_id)
+        geom_name = object_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
         geom_type = int(model.geom_type[geom_id])
         type_name = mujoco.mjtGeom(geom_type).name
         geom_type_counts[type_name] += 1
@@ -103,9 +98,7 @@ def compiled_inventory(mujoco: Any, model: Any) -> dict[str, Any]:
     for joint_id in range(int(model.njnt)):
         if not bool(model.jnt_limited[joint_id]):
             continue
-        joint_name = object_name(
-            mujoco, model, mujoco.mjtObj.mjOBJ_JOINT, joint_id
-        )
+        joint_name = object_name(mujoco, model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
         limited_joints.append(
             {
                 "joint_id": joint_id,
@@ -162,20 +155,14 @@ def run_neutral_audit(
         max_contacts = max(max_contacts, int(data.ncon))
         for contact_index in range(int(data.ncon)):
             contact = data.contact[contact_index]
-            geom1 = object_name(
-                mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom1)
-            )
-            geom2 = object_name(
-                mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom2)
-            )
+            geom1 = object_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom1))
+            geom2 = object_name(mujoco, model, mujoco.mjtObj.mjOBJ_GEOM, int(contact.geom2))
             pair = tuple(sorted((geom1, geom2)))
             pair_steps[pair] += 1
             penetration = max(0.0, -float(contact.dist))
             mujoco.mj_contactForce(model, data, contact_index, contact_force)
             normal = abs(float(contact_force[0]))
-            tangent = math.hypot(
-                float(contact_force[1]), float(contact_force[2])
-            )
+            tangent = math.hypot(float(contact_force[1]), float(contact_force[2]))
             maxima = pair_maximums.setdefault(
                 pair,
                 {
@@ -212,9 +199,7 @@ def run_neutral_audit(
         "steps": steps,
         "simulated_seconds": simulated_seconds,
         "elapsed_seconds": elapsed_seconds,
-        "realtime_factor": (
-            simulated_seconds / elapsed_seconds if elapsed_seconds > 0.0 else 0.0
-        ),
+        "realtime_factor": (simulated_seconds / elapsed_seconds if elapsed_seconds > 0.0 else 0.0),
         "median_step_microseconds": sorted_times[len(sorted_times) // 2],
         "p95_step_microseconds": sorted_times[p95_index],
         "maximum_step_microseconds": max(sorted_times),
@@ -259,8 +244,7 @@ def main() -> int:
     digest = file_sha256(model_path)
     if args.expected_sha256 and digest != args.expected_sha256:
         raise CollisionAuditError(
-            "model SHA-256 mismatch: "
-            f"expected {args.expected_sha256}, found {digest}"
+            f"model SHA-256 mismatch: expected {args.expected_sha256}, found {digest}"
         )
 
     model = mujoco.MjModel.from_xml_path(str(model_path))

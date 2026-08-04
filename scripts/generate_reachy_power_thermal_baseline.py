@@ -11,7 +11,11 @@ PROFILE = ROOT / "models/reachy-mini/power-thermal-baseline.json"
 ELECTRICAL = ROOT / "models/reachy-mini/electrical-controller-baseline.json"
 OUTPUT = ROOT / "native/reachy_sim/src/reachy_power_thermal_baseline.generated.hpp"
 
-ROLES = {"body_yaw": "ActuatorRole::BodyYaw", "stewart": "ActuatorRole::Stewart", "antenna": "ActuatorRole::Antenna"}
+ROLES = {
+    "body_yaw": "ActuatorRole::BodyYaw",
+    "stewart": "ActuatorRole::Stewart",
+    "antenna": "ActuatorRole::Antenna",
+}
 EVIDENCE = {
     "manufacturer_derived": "PowerThermalEvidenceClass::ManufacturerDerived",
     "engineering_estimate": "PowerThermalEvidenceClass::EngineeringEstimate",
@@ -33,7 +37,12 @@ EXPECTED_UNITS = {
         "recovery_temperature_celsius": "degC",
     },
 }
-EXPECTED_ACTUATORS = ["yaw_body", *(f"stewart_{i}" for i in range(1, 7)), "right_antenna", "left_antenna"]
+EXPECTED_ACTUATORS = [
+    "yaw_body",
+    *(f"stewart_{i}" for i in range(1, 7)),
+    "right_antenna",
+    "left_antenna",
+]
 
 
 def fail(message: str) -> None:
@@ -57,14 +66,24 @@ def validate_scalar(value: dict, name: str) -> None:
 
 
 def validate(profile: dict, electrical: dict) -> None:
-    if profile.get("schema_version") != 1 or profile.get("contract_id") != "rma064_power_thermal_v1":
+    if (
+        profile.get("schema_version") != 1
+        or profile.get("contract_id") != "rma064_power_thermal_v1"
+    ):
         fail("invalid contract identity")
     if profile.get("overall_evidence_class") == "calibrated":
         fail("calibrated contract claim")
     if profile.get("unit_contract") != EXPECTED_UNITS:
         fail("unit contract drift")
     source = profile.get("source", {})
-    required_source = ["reachy_commit", "model_sha256", "hardware_document_path", "hardware_document_sha", "rma062_validated_commit", "rma063_validated_commit"]
+    required_source = [
+        "reachy_commit",
+        "model_sha256",
+        "hardware_document_path",
+        "hardware_document_sha",
+        "rma062_validated_commit",
+        "rma063_validated_commit",
+    ]
     if any(not source.get(key) for key in required_source):
         fail("missing pinned source identity")
 
@@ -75,7 +94,10 @@ def validate(profile: dict, electrical: dict) -> None:
         fail("calibrated supply claim")
     for key in EXPECTED_UNITS["shared_supply"]:
         validate_scalar(supply.get(key, {}), f"shared_supply.{key}")
-    if supply["minimum_bus_voltage_volts"]["value"] >= supply["open_circuit_voltage_volts"]["value"]:
+    if (
+        supply["minimum_bus_voltage_volts"]["value"]
+        >= supply["open_circuit_voltage_volts"]["value"]
+    ):
         fail("invalid supply voltage order")
 
     baselines = profile.get("thermal_baselines", [])
@@ -94,7 +116,11 @@ def validate(profile: dict, electrical: dict) -> None:
         for key in EXPECTED_UNITS["thermal"]:
             validate_scalar(baseline.get(key, {}), f"{baseline['id']}.{key}")
             values.append(float(baseline[key]["value"]))
-        if not (baseline["recovery_temperature_celsius"]["value"] < baseline["warning_temperature_celsius"]["value"] < baseline["shutdown_temperature_celsius"]["value"]):
+        if not (
+            baseline["recovery_temperature_celsius"]["value"]
+            < baseline["warning_temperature_celsius"]["value"]
+            < baseline["shutdown_temperature_celsius"]["value"]
+        ):
             fail("invalid thermal temperature order")
         fingerprint = tuple(values)
         if fingerprint in fingerprints:
@@ -114,11 +140,18 @@ def validate(profile: dict, electrical: dict) -> None:
     electrical_bindings = electrical.get("actuator_bindings", [])
     aggregate_peak = 0.0
     for binding in electrical_bindings:
-        aggregate_peak += electrical_by_id[binding["baseline_id"]]["servo_parameters"]["peak_current_limit_amperes"]["value"]
+        aggregate_peak += electrical_by_id[binding["baseline_id"]]["servo_parameters"][
+            "peak_current_limit_amperes"
+        ]["value"]
     current_limit = supply["current_limit_amperes"]["value"]
-    largest_peak = max(item["servo_parameters"]["peak_current_limit_amperes"]["value"] for item in electrical_by_id.values())
+    largest_peak = max(
+        item["servo_parameters"]["peak_current_limit_amperes"]["value"]
+        for item in electrical_by_id.values()
+    )
     if not (largest_peak < current_limit < aggregate_peak):
-        fail("shared current budget must exceed one servo peak and remain below aggregate peak demand")
+        fail(
+            "shared current budget must exceed one servo peak and remain below aggregate peak demand"
+        )
 
     expected_resistance = {
         "body_yaw": 6.0 / 2.15,
@@ -127,7 +160,9 @@ def validate(profile: dict, electrical: dict) -> None:
     }
     for baseline in baselines:
         actual = baseline["winding_resistance_ohms"]["value"]
-        if not math.isclose(actual, expected_resistance[baseline["role"]], rel_tol=0.0, abs_tol=1e-12):
+        if not math.isclose(
+            actual, expected_resistance[baseline["role"]], rel_tol=0.0, abs_tol=1e-12
+        ):
             fail("winding resistance derivation drift")
 
 
@@ -145,7 +180,7 @@ def render(profile: dict) -> str:
         "#ifndef REACHY_POWER_THERMAL_BASELINE_GENERATED_HPP",
         "#define REACHY_POWER_THERMAL_BASELINE_GENERATED_HPP",
         "",
-        "#include \"reachy_power_thermal_model.hpp\"",
+        '#include "reachy_power_thermal_model.hpp"',
         "",
         "namespace reachy::servo::generated {",
         "",
@@ -156,7 +191,11 @@ def render(profile: dict) -> str:
     ]
     for key in EXPECTED_UNITS["shared_supply"]:
         lines.append(f"    {scalar(supply[key])},")
-    lines += ["};", "", "inline constexpr std::array<ServoThermalParameters, 3> kServoThermalBaselines{{"]
+    lines += [
+        "};",
+        "",
+        "inline constexpr std::array<ServoThermalParameters, 3> kServoThermalBaselines{{",
+    ]
     for baseline in profile["thermal_baselines"]:
         lines += [
             "    ServoThermalParameters{",
@@ -168,9 +207,15 @@ def render(profile: dict) -> str:
         for key in EXPECTED_UNITS["thermal"]:
             lines.append(f"        {scalar(baseline[key])},")
         lines.append("    },")
-    lines += ["}};", "", "inline constexpr std::array<ServoActuatorBinding, kReachyPowerThermalActuatorCount> kPowerThermalBindings{{"]
+    lines += [
+        "}};",
+        "",
+        "inline constexpr std::array<ServoActuatorBinding, kReachyPowerThermalActuatorCount> kPowerThermalBindings{{",
+    ]
     for binding in profile["actuator_bindings"]:
-        lines.append(f"    ServoActuatorBinding{{{cpp_string(binding['actuator_name'])}, {cpp_string(binding['baseline_id'])}, {ROLES[binding['role']]}}},")
+        lines.append(
+            f"    ServoActuatorBinding{{{cpp_string(binding['actuator_name'])}, {cpp_string(binding['baseline_id'])}, {ROLES[binding['role']]}}},"
+        )
     lines += ["}};", "", "}  // namespace reachy::servo::generated", "", "#endif", ""]
     return "\n".join(lines)
 

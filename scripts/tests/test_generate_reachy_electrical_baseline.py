@@ -56,7 +56,9 @@ class ElectricalBaselineContractTests(unittest.TestCase):
 
     def test_encoder_conversion_drift_is_rejected(self) -> None:
         changed = copy.deepcopy(self.data)
-        changed["baselines"][2]["servo_parameters"]["encoder_position_quantum_radians"]["value"] = 0.001
+        changed["baselines"][2]["servo_parameters"]["encoder_position_quantum_radians"]["value"] = (
+            0.001
+        )
         self.assert_rejected(changed)
 
     def test_cross_role_binding_is_rejected(self) -> None:
