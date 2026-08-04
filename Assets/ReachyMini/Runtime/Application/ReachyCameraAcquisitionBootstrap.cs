@@ -45,7 +45,13 @@ namespace ReachyMini.AppState
                     acquisition = discovery.gameObject.AddComponent<
                         ReachyAndroidCameraAcquisition>();
                 }
+#if UNITY_ANDROID && !UNITY_EDITOR
+                acquisition.ConfigurePlatformForTests(
+                    discovery,
+                    new ReachyAndroidUiThreadCameraAcquisitionPlatform());
+#else
                 acquisition.Configure(discovery);
+#endif
                 InstallAcceptanceEvidenceIfRequested(
                     discovery,
                     acquisition);
