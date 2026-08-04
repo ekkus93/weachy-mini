@@ -21,6 +21,25 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Publish run link
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload="$(jq -n \
+            --arg state "pending" \
+            --arg context "Ruff Cleanup Diagnostic" \
+            --arg description "Applying reviewed Ruff repairs" \
+            --arg target_url "$STATUS_URL" \
+            '{state: $state, context: $context, description: $description, target_url: $target_url}')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/statuses/${{ github.sha }}" \
+            --data "$payload"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,182 +48,11 @@ jobs:
       - name: Install pinned Ruff
         run: python -m pip install ruff==0.12.0
 
-      - name: Apply reviewed Ruff repairs
+      - name: Apply and validate reviewed repairs
         run: |
           set -euo pipefail
-
-          # These 11 Ruff transformations were reviewed in the diagnostic diff.
           ruff check scripts --unsafe-fixes --fix || true
-
-          python - <<'PY'
-          from pathlib import Path
-
-
-          def replace_once(path_text: str, old: str, new: str) -> None:
-              path = Path(path_text)
-              content = path.read_text(encoding="utf-8")
-              count = content.count(old)
-              if count != 1:
-                  raise RuntimeError(
-                      f"expected exactly one replacement in {path_text}, found {count}"
-                  )
-              path.write_text(content.replace(old, new), encoding="utf-8")
-
-
-          replace_once(
-              "scripts/calibration_fitting.py",
-              '            raise RuntimeError("cannot load sibling calibration_data.py")',
-              '            raise RuntimeError("cannot load sibling calibration_data.py") from None',
-          )
-
-          replace_once(
-              "scripts/generate_reachy_mechanical_baseline.py",
-              '''            raise ContractError(
-                  f"cross-role mechanical parameter copy detected between {fingerprints[fingerprint]} and {identifier}"
-              )''',
-              '''            raise ContractError(
-                  "cross-role mechanical parameter copy detected between "
-                  f"{fingerprints[fingerprint]} and {identifier}"
-              )''',
-          )
-
-          replace_once(
-              "scripts/generate_reachy_power_thermal_baseline.py",
-              '''        fail(
-              "shared current budget must exceed one servo peak and remain below aggregate peak demand"
-          )''',
-              '''        fail(
-              "shared current budget must exceed one servo peak "
-              "and remain below aggregate peak demand"
-          )''',
-          )
-
-          replace_once(
-              "scripts/generate_reachy_power_thermal_baseline.py",
-              '''def scalar(value: dict) -> str:
-              return f"PowerThermalScalar{{{value['value']!r}, {EVIDENCE[value['evidence_class']]}, {cpp_string(value['evidence_id'])}}}"''',
-              '''def scalar(value: dict) -> str:
-              return (
-                  f"PowerThermalScalar{{{value['value']!r}, "
-                  f"{EVIDENCE[value['evidence_class']]}, "
-                  f"{cpp_string(value['evidence_id'])}}}"
-              )''',
-          )
-
-          replace_once(
-              "scripts/generate_reachy_power_thermal_baseline.py",
-              '''        "inline constexpr std::array<ServoActuatorBinding, kReachyPowerThermalActuatorCount> kPowerThermalBindings{{",''',
-              '''        (
-                  "inline constexpr std::array<ServoActuatorBinding, "
-                  "kReachyPowerThermalActuatorCount> kPowerThermalBindings{{"
-              ),''',
-          )
-
-          replace_once(
-              "scripts/generate_reachy_power_thermal_baseline.py",
-              '''        lines.append(
-              f"    ServoActuatorBinding{{{cpp_string(binding['actuator_name'])}, {cpp_string(binding['baseline_id'])}, {ROLES[binding['role']]}}},"
-          )''',
-              '''        lines.append(
-              "    ServoActuatorBinding{"
-              f"{cpp_string(binding['actuator_name'])}, "
-              f"{cpp_string(binding['baseline_id'])}, "
-              f"{ROLES[binding['role']]}}},"
-          )''',
-          )
-
-          replace_once(
-              "scripts/generate_rma073_synthetic_data.py",
-              '''            "operator_notes": "Deterministic synthetic data for fitting infrastructure validation only.",''',
-              '''            "operator_notes": (
-                  "Deterministic synthetic data for fitting infrastructure "
-                  "validation only."
-              ),''',
-          )
-
-          replace_once(
-              "scripts/generate_rma073_synthetic_data.py",
-              '''    # Shared supply voltage sag.
-          window = WINDOWS["voltage"]
-          for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):''',
-              '''    # Shared supply voltage sag.
-          window = WINDOWS["voltage"]
-          for voltage_sequence, (index, timestamp) in enumerate(
-              enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)),
-              start=voltage_sequence + 1,
-          ):''',
-          )
-
-          replace_once(
-              "scripts/generate_rma073_synthetic_data.py",
-              '''        current_sequence += 1
-          voltage_sequence += 1
-          current_samples.append(''',
-              '''        current_sequence += 1
-          current_samples.append(''',
-          )
-
-          replace_once(
-              "scripts/generate_rma073_synthetic_data.py",
-              '''    # Thermal: dT/dt = h*I^2 - c*(T-ambient).
-          window = WINDOWS["thermal"]
-          temperature = 22.5
-          previous_timestamp: int | None = None
-          for index, timestamp in enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)):''',
-              '''    # Thermal: dT/dt = h*I^2 - c*(T-ambient).
-          window = WINDOWS["thermal"]
-          temperature = 22.5
-          previous_timestamp: int | None = None
-          for temperature_sequence, (index, timestamp) in enumerate(
-              enumerate(range(window["start_ns"], window["end_ns"] + 1, DT_NS)),
-              start=temperature_sequence + 1,
-          ):''',
-          )
-
-          replace_once(
-              "scripts/generate_rma073_synthetic_data.py",
-              '''        current_sequence += 1
-          temperature_sequence += 1
-          current_samples.append(_current(timestamp, current_sequence, current, 0.01 * current))''',
-              '''        current_sequence += 1
-          current_samples.append(_current(timestamp, current_sequence, current, 0.01 * current))''',
-          )
-
-          replace_once(
-              "scripts/tests/test_generate_reachy_collision_model.py",
-              '''        '<body name="body_foot_3dprint"><geom name="visual_base" type="sphere" size="0.01" contype="0" conaffinity="0"/></body>',
-              '<body name="body_down_3dprint"><joint name="yaw_body" type="hinge" range="-2.8 2.8"/><geom name="source_shell" type="sphere" size="0.02" class="collision"/></body>',''',
-              '''        (
-                  '<body name="body_foot_3dprint">'
-                  '<geom name="visual_base" type="sphere" size="0.01" '
-                  'contype="0" conaffinity="0"/>'
-                  "</body>"
-              ),
-              (
-                  '<body name="body_down_3dprint">'
-                  '<joint name="yaw_body" type="hinge" range="-2.8 2.8"/>'
-                  '<geom name="source_shell" type="sphere" size="0.02" '
-                  'class="collision"/>'
-                  "</body>"
-              ),''',
-          )
-
-          replace_once(
-              "scripts/tests/test_generate_reachy_collision_model.py",
-              '''        '<default><default class="collision"><geom contype="1" conaffinity="1"/></default></default>''',
-              '''        '<default><default class="collision">'
-              '<geom contype="1" conaffinity="1"/>'
-              "</default></default>"''',
-          )
-
-          replace_once(
-              "scripts/tests/test_rma065_report_verifier.py",
-              '''from verify_rma065_reports import Rma065ReportError, verify_reports''',
-              '''# The scripts directory must be inserted before importing this standalone verifier.
-          from verify_rma065_reports import Rma065ReportError, verify_reports  # noqa: E402''',
-          )
-          PY
-
+          python scripts/ruff_cleanup_once.py
           ruff format scripts
           ruff check scripts
           ruff format --check --diff scripts
@@ -217,9 +65,11 @@ jobs:
         run: |
           set -euo pipefail
           rm .github/workflows/ruff-cleanup-diagnostic.yml
+          rm scripts/ruff_cleanup_once.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add scripts .github/workflows/ruff-cleanup-diagnostic.yml
+          git diff --cached --check
           git commit -m "fix: complete Ruff cleanup"
           git push origin HEAD:master
 
@@ -236,4 +86,24 @@ jobs:
             --header "Authorization: Bearer ${GH_TOKEN}" \
             --header "X-GitHub-Api-Version: 2022-11-28" \
             "${{ github.api_url }}/repos/${{ github.repository }}/statuses/${repaired_sha}" \
+            --data "$payload"
+
+      - name: Publish failure status
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          payload="$(jq -n \
+            --arg state "failure" \
+            --arg context "Ruff Cleanup Diagnostic" \
+            --arg description "Reviewed Ruff repair did not validate" \
+            --arg target_url "$STATUS_URL" \
+            '{state: $state, context: $context, description: $description, target_url: $target_url}')"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/statuses/${{ github.sha }}" \
             --data "$payload"
