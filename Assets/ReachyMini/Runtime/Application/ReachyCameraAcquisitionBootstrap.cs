@@ -10,6 +10,8 @@ namespace ReachyMini.AppState
     {
         public const string InstallerObjectName =
             "ReachyCameraAcquisitionInstaller";
+        public const string AcquisitionObjectName =
+            "ReachyAndroidCameraAcquisition";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void InstallAfterSceneLoad()
@@ -36,22 +38,10 @@ namespace ReachyMini.AppState
                 return false;
             }
 
-            ReachyAndroidCameraAcquisition? acquisition =
-                discovery.GetComponent<ReachyAndroidCameraAcquisition>();
             try
             {
-                if (acquisition == null)
-                {
-                    acquisition = discovery.gameObject.AddComponent<
-                        ReachyAndroidCameraAcquisition>();
-                }
-#if UNITY_ANDROID && !UNITY_EDITOR
-                acquisition.ConfigurePlatformForTests(
-                    discovery,
-                    new ReachyAndroidUiThreadCameraAcquisitionPlatform());
-#else
-                acquisition.Configure(discovery);
-#endif
+                ReachyAndroidCameraAcquisition acquisition =
+                    GetOrCreateAcquisition(discovery);
                 InstallAcceptanceEvidenceIfRequested(
                     discovery,
                     acquisition);
@@ -65,6 +55,50 @@ namespace ReachyMini.AppState
                     : exception.Message;
                 return false;
             }
+        }
+
+        private static ReachyAndroidCameraAcquisition GetOrCreateAcquisition(
+            ReachyAndroidCameraDiscovery discovery)
+        {
+            ReachyAndroidCameraAcquisition? existing =
+                discovery.GetComponentInChildren<
+                    ReachyAndroidCameraAcquisition>(true);
+            if (existing != null)
+            {
+                existing.Configure(discovery);
+                return existing;
+            }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            GameObject acquisitionObject =
+                new GameObject(AcquisitionObjectName);
+            acquisitionObject.SetActive(false);
+            acquisitionObject.transform.SetParent(
+                discovery.transform,
+                false);
+            try
+            {
+                ReachyAndroidCameraAcquisition acquisition =
+                    acquisitionObject.AddComponent<
+                        ReachyAndroidCameraAcquisition>();
+                acquisition.ConfigurePlatformForTests(
+                    discovery,
+                    new ReachyAndroidUiThreadCameraAcquisitionPlatform());
+                acquisitionObject.SetActive(true);
+                return acquisition;
+            }
+            catch
+            {
+                UnityEngine.Object.DestroyImmediate(acquisitionObject);
+                throw;
+            }
+#else
+            ReachyAndroidCameraAcquisition acquisition =
+                discovery.gameObject.AddComponent<
+                    ReachyAndroidCameraAcquisition>();
+            acquisition.Configure(discovery);
+            return acquisition;
+#endif
         }
 
         private static void InstallAcceptanceEvidenceIfRequested(
