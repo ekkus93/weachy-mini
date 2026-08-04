@@ -21,6 +21,10 @@ namespace ReachyMini.AppState
 
         string Stop();
 
+        IReachyCameraTextureFrameLease? AcquireLatestTextureFrame(
+            long sessionId,
+            long afterSequence);
+
         string Snapshot();
     }
 
@@ -173,6 +177,21 @@ namespace ReachyMini.AppState
         {
             EnsureReady();
             ApplyPlatformSnapshot(RequirePlatform().Snapshot());
+        }
+
+        public IReachyCameraTextureFrameLease? AcquireLatestTextureFrame(
+            ulong afterSequence)
+        {
+            EnsureReady();
+            ReachyCameraAcquisitionSnapshot snapshot = state.Current;
+            if (snapshot.State != ReachyCameraAcquisitionState.Running ||
+                snapshot.SessionId == 0UL)
+            {
+                return null;
+            }
+            return RequirePlatform().AcquireLatestTextureFrame(
+                checked((long)snapshot.SessionId),
+                checked((long)afterSequence));
         }
 
         private void Awake()
@@ -666,6 +685,27 @@ namespace ReachyMini.AppState
             return bridge.CallStatic<string>("stop", activity) ??
                 throw new InvalidOperationException(
                     "The Android CameraX bridge returned null from stop.");
+#else
+            throw new PlatformNotSupportedException(
+                "CameraX frame acquisition requires an Android player.");
+#endif
+        }
+
+        public IReachyCameraTextureFrameLease? AcquireLatestTextureFrame(
+            long requestedSessionId,
+            long afterSequence)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            ThrowIfDisposed();
+            using var bridge = new AndroidJavaClass(BridgeClassName);
+            AndroidJavaObject? javaLease =
+                bridge.CallStatic<AndroidJavaObject>(
+                    "acquireLatestTextureFrame",
+                    requestedSessionId,
+                    afterSequence);
+            return javaLease == null
+                ? null
+                : new ReachyAndroidJavaCameraTextureFrameLease(javaLease);
 #else
             throw new PlatformNotSupportedException(
                 "CameraX frame acquisition requires an Android player.");

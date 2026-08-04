@@ -12,6 +12,8 @@ namespace ReachyMini.AppState
             "ReachyCameraAcquisitionInstaller";
         public const string AcquisitionObjectName =
             "ReachyAndroidCameraAcquisition";
+        public const string TextureBridgeObjectName =
+            "ReachyAndroidCameraTextureBridge";
 
         private const int AndroidScreenOrientationUnspecified = -1;
 
@@ -52,6 +54,7 @@ namespace ReachyMini.AppState
             {
                 ReachyAndroidCameraAcquisition acquisition =
                     GetOrCreateAcquisition(discovery);
+                _ = GetOrCreateTextureBridge(acquisition);
                 InstallAcceptanceEvidenceIfRequested(
                     discovery,
                     acquisition);
@@ -171,6 +174,25 @@ namespace ReachyMini.AppState
             acquisition.Configure(discovery);
             return acquisition;
 #endif
+        }
+
+        private static ReachyAndroidCameraTextureBridge
+            GetOrCreateTextureBridge(
+                ReachyAndroidCameraAcquisition acquisition)
+        {
+            ReachyAndroidCameraTextureBridge? existing =
+                acquisition.GetComponent<ReachyAndroidCameraTextureBridge>();
+            if (existing != null)
+            {
+                existing.Configure(acquisition);
+                return existing;
+            }
+
+            ReachyAndroidCameraTextureBridge bridge =
+                acquisition.gameObject.AddComponent<
+                    ReachyAndroidCameraTextureBridge>();
+            bridge.Configure(acquisition);
+            return bridge;
         }
 
         private static void InstallAcceptanceEvidenceIfRequested(

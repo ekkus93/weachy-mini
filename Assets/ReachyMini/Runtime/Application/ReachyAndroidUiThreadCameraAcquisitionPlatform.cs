@@ -118,6 +118,26 @@ namespace ReachyMini.AppState
 #endif
         }
 
+        public IReachyCameraTextureFrameLease? AcquireLatestTextureFrame(
+            long requestedSessionId,
+            long afterSequence)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            ThrowIfDisposed();
+            using var bridge = new AndroidJavaClass(BridgeClassName);
+            AndroidJavaObject? javaLease =
+                bridge.CallStatic<AndroidJavaObject>(
+                    "acquireLatestTextureFrame",
+                    requestedSessionId,
+                    afterSequence);
+            return javaLease == null
+                ? null
+                : new ReachyAndroidJavaCameraTextureFrameLease(javaLease);
+#else
+            throw Unsupported();
+#endif
+        }
+
         public string Snapshot()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR

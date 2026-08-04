@@ -477,7 +477,7 @@ namespace ReachyMini.AppState
                     Graphics.Blit(
                         RequireTexture(yTexture, "Y"),
                         RequireOutputTexture(),
-                        conversionMaterial);
+                        conversionMaterial!);
 
                     lastUploadedSessionId = descriptor.SessionId;
                     lastUploadedSequence = descriptor.Sequence;
@@ -531,7 +531,7 @@ namespace ReachyMini.AppState
                 acquisition.State.Changed -= OnAcquisitionChanged;
             }
             acquisition = null;
-            DestroyResources();
+            DestroyAllResources();
         }
 
         private bool FrameMatchesActiveSession(
@@ -610,7 +610,7 @@ namespace ReachyMini.AppState
             {
                 return existing;
             }
-            DestroyObject(existing);
+            DestroyUnityObject(existing);
             var texture = new Texture2D(
                 width,
                 height,
@@ -710,7 +710,7 @@ namespace ReachyMini.AppState
         {
             lastUploadedSessionId = 0UL;
             lastUploadedSequence = 0UL;
-            DestroyResources();
+            DestroyFrameResources();
             if (current.State != ReachyCameraTextureBridgeState.Faulted &&
                 current.State != ReachyCameraTextureBridgeState.Unsupported)
             {
@@ -747,16 +747,21 @@ namespace ReachyMini.AppState
                 new ReachyCameraTextureBridgeChangedEventArgs(current));
         }
 
-        private void DestroyResources()
+        private void DestroyFrameResources()
         {
-            DestroyObject(yTexture);
-            DestroyObject(uTexture);
-            DestroyObject(vTexture);
+            DestroyUnityObject(yTexture);
+            DestroyUnityObject(uTexture);
+            DestroyUnityObject(vTexture);
             yTexture = null;
             uTexture = null;
             vTexture = null;
             DestroyOutputTexture();
-            DestroyObject(conversionMaterial);
+        }
+
+        private void DestroyAllResources()
+        {
+            DestroyFrameResources();
+            DestroyUnityObject(conversionMaterial);
             conversionMaterial = null;
         }
 
@@ -770,7 +775,7 @@ namespace ReachyMini.AppState
             {
                 outputTexture.Release();
             }
-            DestroyObject(outputTexture);
+            DestroyUnityObject(outputTexture);
             outputTexture = null;
         }
 
@@ -788,7 +793,7 @@ namespace ReachyMini.AppState
                 $"The camera {planeName} plane texture is unavailable.");
         }
 
-        private static void DestroyObject(Object? value)
+        private static void DestroyUnityObject(Object? value)
         {
             if (value == null)
             {

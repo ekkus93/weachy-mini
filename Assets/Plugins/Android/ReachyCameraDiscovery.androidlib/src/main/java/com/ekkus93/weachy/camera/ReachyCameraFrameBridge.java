@@ -136,6 +136,9 @@ public final class ReachyCameraFrameBridge {
                 ++generation;
                 expectedGeneration = generation;
                 sessionId = requestedSessionId;
+                ReachyCameraTextureFrameBridge.beginSession(
+                        expectedGeneration,
+                        sessionId);
                 deliveredSequence = 0L;
                 state = "Starting";
                 message = "Waiting for CameraX to bind Preview and ImageAnalysis.";
@@ -257,6 +260,25 @@ public final class ReachyCameraFrameBridge {
         synchronized (LOCK) {
             return snapshotLocked();
         }
+    }
+
+    public static ReachyCameraTextureFrameBridge.FrameLease
+            acquireLatestTextureFrame(
+                    long requestedSessionId,
+                    long afterSequence) {
+        final long expectedGeneration;
+        synchronized (LOCK) {
+            if (!"Running".equals(state) ||
+                    requestedSessionId <= 0L ||
+                    requestedSessionId != sessionId) {
+                return null;
+            }
+            expectedGeneration = generation;
+        }
+        return ReachyCameraTextureFrameBridge.acquireLatest(
+                expectedGeneration,
+                requestedSessionId,
+                afterSequence);
     }
 
     public static void shutdown(Activity activity) {
@@ -486,6 +508,19 @@ public final class ReachyCameraFrameBridge {
                     frameSession,
                     frameSequence,
                     frameDescriptor);
+            ReachyCameraTextureFrameBridge.Publication texturePublication =
+                    ReachyCameraTextureFrameBridge.publish(
+                            imageProxy,
+                            expectedGeneration,
+                            frame.sessionId,
+                            frame.sequence,
+                            frame.timestampNanoseconds,
+                            frame.cameraId,
+                            frame.facing,
+                            frame.sensorOrientationDegrees,
+                            frame.rotationDegrees,
+                            frame.crop);
+            frame.applyTexturePublication(texturePublication);
             synchronized (LOCK) {
                 if (expectedGeneration != generation ||
                         !"Running".equals(state) ||
@@ -493,9 +528,10 @@ public final class ReachyCameraFrameBridge {
                     return;
                 }
                 latestFrame = frame;
-                message =
-                        "Camera frame " + frameSequence +
-                        " acquired without accessing image planes or copying pixels to CPU memory.";
+                message = texturePublication.textureFramePublished
+                        ? "Camera frame " + frameSequence +
+                            " copied once into a detached direct YUV texture slot."
+                        : texturePublication.detail;
             }
         } catch (RuntimeException exception) {
             final String failureMessage = safeMessage(exception);
@@ -581,6 +617,7 @@ public final class ReachyCameraFrameBridge {
         if (analyzerExecutor != null) {
             analyzerExecutor.shutdownNow();
         }
+        ReachyCameraTextureFrameBridge.endSession(generation);
         cameraProvider = null;
         lifecycleOwner = null;
         preview = null;
@@ -619,14 +656,19 @@ public final class ReachyCameraFrameBridge {
             root.put("cameraId", cameraId);
             root.put("facing", descriptor == null ? "unknown" : descriptor.facing);
             root.put("analysisBackpressure", "keep_only_latest");
-            root.put("previewSink", "private_discard_surface_until_rma092");
-            root.put("cpuPixelCopyPerformed", false);
+            root.put("previewSink", "analysis_yuv_gpu_texture_bridge");
+            root.put(
+                    "cpuPixelCopyPerformed",
+                    latestFrame != null && latestFrame.cpuPixelCopyPerformed);
+            root.put(
+                    "textureBridge",
+                    ReachyCameraTextureFrameBridge.snapshotJson());
             root.put("latestFrame", latestFrame == null
                     ? JSONObject.NULL
                     : latestFrame.toJson());
             return root.toString();
         } catch (JSONException exception) {
-            return "{\"status\":\"error\",\"state\":\"Faulted\",\"errorCode\":\"json_encoding_failed\",\"message\":\"Camera acquisition failed while encoding diagnostics.\",\"sessionId\":0,\"cameraId\":\"\",\"facing\":\"unknown\",\"analysisBackpressure\":\"keep_only_latest\",\"previewSink\":\"private_discard_surface_until_rma092\",\"cpuPixelCopyPerformed\":false,\"latestFrame\":null}";
+            return "{\"status\":\"error\",\"state\":\"Faulted\",\"errorCode\":\"json_encoding_failed\",\"message\":\"Camera acquisition failed while encoding diagnostics.\",\"sessionId\":0,\"cameraId\":\"\",\"facing\":\"unknown\",\"analysisBackpressure\":\"keep_only_latest\",\"previewSink\":\"analysis_yuv_gpu_texture_bridge\",\"cpuPixelCopyPerformed\":false,\"latestFrame\":null}";
         }
     }
 
@@ -980,6 +1022,14 @@ public final class ReachyCameraFrameBridge {
         final Rect crop;
         final FrameIntrinsics intrinsics;
         final Rect activeArray;
+        boolean imagePlanesAccessed;
+        boolean cpuPixelCopyPerformed;
+        boolean textureFramePublished;
+        boolean textureFrameStale;
+        boolean mirrored;
+        String colorStandard = "unknown";
+        String colorRange = "unknown";
+        String textureDetail = "Texture publication has not run.";
 
         FrameSnapshot(
                 long sessionId,
@@ -1052,6 +1102,22 @@ public final class ReachyCameraFrameBridge {
                     cameraDescriptor.activeArray);
         }
 
+        void applyTexturePublication(
+                ReachyCameraTextureFrameBridge.Publication publication) {
+            if (publication == null) {
+                throw new IllegalArgumentException(
+                        "Texture publication diagnostics are required.");
+            }
+            imagePlanesAccessed = publication.imagePlanesAccessed;
+            cpuPixelCopyPerformed = publication.cpuPixelCopyPerformed;
+            textureFramePublished = publication.textureFramePublished;
+            textureFrameStale = publication.stale;
+            mirrored = publication.mirrored;
+            colorStandard = publication.colorStandard;
+            colorRange = publication.colorRange;
+            textureDetail = publication.detail;
+        }
+
         JSONObject toJson() throws JSONException {
             JSONObject value = new JSONObject();
             value.put("sessionId", sessionId);
@@ -1071,8 +1137,14 @@ public final class ReachyCameraFrameBridge {
             value.put("crop", cropValue);
             value.put("pixelFormat", "YUV_420_888");
             value.put("intrinsics", intrinsics.toJson(activeArray));
-            value.put("imagePlanesAccessed", false);
-            value.put("cpuPixelCopyPerformed", false);
+            value.put("imagePlanesAccessed", imagePlanesAccessed);
+            value.put("cpuPixelCopyPerformed", cpuPixelCopyPerformed);
+            value.put("textureFramePublished", textureFramePublished);
+            value.put("textureFrameStale", textureFrameStale);
+            value.put("mirrored", mirrored);
+            value.put("colorStandard", colorStandard);
+            value.put("colorRange", colorRange);
+            value.put("textureDetail", textureDetail);
             return value;
         }
     }

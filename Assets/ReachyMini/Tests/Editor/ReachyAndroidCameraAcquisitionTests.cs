@@ -421,6 +421,16 @@ namespace ReachyMini.Tests
                     "\"cpuPixelCopyPerformed\":false,\"latestFrame\":null}";
             }
 
+            public IReachyCameraTextureFrameLease?
+                AcquireLatestTextureFrame(
+                    long requestedSessionId,
+                    long afterSequence)
+            {
+                _ = requestedSessionId;
+                _ = afterSequence;
+                return null;
+            }
+
             public string Snapshot()
             {
                 return NextSnapshot;
