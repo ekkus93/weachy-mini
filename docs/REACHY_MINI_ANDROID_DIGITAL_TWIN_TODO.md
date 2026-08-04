@@ -1323,11 +1323,44 @@ public:
 
 ## RMA-090 — Implement camera permissions and capability discovery
 
-- [ ] Request camera permission only when needed.
-- [ ] Enumerate front/rear camera availability and characteristics.
-- [ ] Report supported analysis resolutions and orientations.
-- [ ] Record camera intrinsics when available; define calibration fallback when unavailable.
-- [ ] Handle permission denial, permanent denial, revocation, and camera-in-use errors.
+**Status:** Complete (2026-08-03)
+
+- [x] Request camera permission only when needed.
+- [x] Enumerate front/rear camera availability and characteristics.
+- [x] Report supported analysis resolutions and orientations.
+- [x] Record camera intrinsics when available; define calibration fallback when unavailable.
+- [x] Handle permission denial, permanent denial, revocation, and camera-in-use errors.
+
+**Completion evidence**
+
+- `ReachyAndroidCameraDiscovery` keeps startup at `NotRequested`, requests
+  access only from an explicit camera action, persists prior grant history,
+  and publishes denied, permanently denied, revoked, unsupported, faulted,
+  and camera-availability states without fabricating frame readiness.
+- The Android Camera2 bridge enumerates lens facing, sensor orientation,
+  hardware level, YUV analysis sizes, active-array geometry, platform
+  intrinsics when present, and a documented uncalibrated fallback when
+  calibration metadata is absent.
+- Settings and the main application shell expose permission, inventory,
+  availability, calibration provenance, and actionable unavailable states
+  while preserving the fixed presentation camera. Frame acquisition remains
+  intentionally unavailable until RMA-091.
+- Hosted run `30874543837`, job `91883241667`, passed the permanent managed
+  permission, inventory, error-state, and integration-policy contracts on
+  exact implementation commit
+  `8ce02564bed817ed215478180ee1c4468def8baa`.
+- Self-hosted run `30874543829`, job `91883242040`, passed Unity tests,
+  ARM64 API-26 IL2CPP build and verification, installed LG-H872 physical-
+  device camera acceptance, lifecycle acceptance, authoritative-rendering
+  acceptance, and all evidence uploads on that same commit.
+- The physical device proved startup without a permission request,
+  `NotRequested -> Granted -> Revoked` persistence, three available cameras
+  (two rear and one front), valid orientations and YUV analysis sizes, and
+  explicit calibration fallback because that device did not expose usable
+  platform intrinsics.
+- Detailed design and evidence are in
+  `docs/architecture/ANDROID_CAMERA_CAPABILITY_DISCOVERY.md` and
+  `docs/validation/RMA_090_CAMERA_DISCOVERY_VALIDATION_2026-08-03.md`.
 
 ## RMA-091 — Implement CameraX frame acquisition
 
