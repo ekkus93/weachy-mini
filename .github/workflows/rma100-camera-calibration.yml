@@ -113,9 +113,7 @@ jobs:
                   'PublishCombinedHealth',
               ],
               'adapter': [
-                  'ReachyCoordinateConverter.ToUnityRotation',
-                  'ToCoreRotation', 'ToUnityMatrix',
-                  'ReachyCameraCoordinateContract',
+                  'ToUnityMatrix', 'ToUnityQuaternion', 'ToCoreQuaternion',
               ],
               'program': ['Rma100CameraCalibrationContracts.Run();'],
               'managed': [
@@ -127,15 +125,16 @@ jobs:
                   'InvalidCalibrationFailsClosed',
               ],
               'unity': [
-                  'MujocoUnityBasisMatchesProductionCoordinateConverter',
-                  'UnityQuaternionConversionMatchesCoreRotation',
-                  'UnityMatrixConversionPreservesHomographyElements',
+                  'UnityAdapterPreservesCoreMatrixAndQuaternionDirections',
+                  'PersistenceRoundTripRetainsVersionedCalibration',
+                  'UnsupportedSchemaIsQuarantinedWithoutSilentCalibration',
+                  'SettingsServiceOwnsCalibrationPersistenceBoundary',
               ],
               'doc': [
-                  'Android image pixels', 'Phone optical frame',
-                  'Reachy optical frame', 'Unity world frame',
-                  'MuJoCo world frame', 'H = K_reachy',
-                  'Mirroring is never represented as a physical rotation',
+                  'Android source pixels', 'Phone optical camera',
+                  'Reachy optical camera', 'Unity world/camera local',
+                  'MuJoCo world/body', 'H = K_reachy',
+                  'Mirroring is not physical orientation',
                   'rotation-only',
               ],
           }
