@@ -258,8 +258,9 @@ if grep -Eiq \
 fi
 "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
     > "${REPORT_DIR}/package-not-requested.txt"
-if grep -A4 'android.permission.CAMERA' "${REPORT_DIR}/package-not-requested.txt" \
-    | grep -q 'granted=true'; then
+if grep -Eq \
+    '^[[:space:]]*android\.permission\.CAMERA: granted=true' \
+    "${REPORT_DIR}/package-not-requested.txt"; then
     printf '%s\n' 'Camera permission was unexpectedly granted before a user action.' >&2
     exit 1
 fi
