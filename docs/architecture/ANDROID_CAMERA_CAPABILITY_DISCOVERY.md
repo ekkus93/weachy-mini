@@ -105,3 +105,9 @@ RMA-090 validation consists of:
   inventory discovery, front/rear enumeration, resolution/orientation reporting,
   intrinsics provenance, and revocation recovery;
 - the existing installed lifecycle and authoritative-rendering gates.
+
+The accepted implementation and physical-device evidence are recorded in
+`docs/validation/RMA_090_CAMERA_DISCOVERY_VALIDATION_2026-08-03.md`. Cleanup
+commit `fbacef76f83a6cc9c73542c28bd289f9e1039801` removed the temporary
+integration workflow and patch scripts before the permanent exact-head gates
+were rerun.
