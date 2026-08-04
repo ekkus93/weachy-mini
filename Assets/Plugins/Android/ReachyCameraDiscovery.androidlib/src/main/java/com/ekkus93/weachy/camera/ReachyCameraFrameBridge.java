@@ -17,12 +17,15 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.Size;
 import android.util.SizeF;
+import android.view.Surface;
 
 import androidx.annotation.NonNull;
 import androidx.camera.camera2.interop.Camera2CameraInfo;
+import androidx.camera.core.Camera;
 import androidx.camera.core.CameraFilter;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.CameraState;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
@@ -33,6 +36,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LifecycleRegistry;
+import androidx.lifecycle.Observer;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -75,6 +79,8 @@ public final class ReachyCameraFrameBridge {
     private static CameraDescriptor descriptor;
     private static FrameSnapshot latestFrame;
     private static ProcessCameraProvider cameraProvider;
+    private static Camera boundCamera;
+    private static Observer<CameraState> cameraStateObserver;
     private static CameraLifecycleOwner lifecycleOwner;
     private static Preview preview;
     private static ImageAnalysis imageAnalysis;
@@ -119,6 +125,10 @@ public final class ReachyCameraFrameBridge {
 
             CameraDescriptor requestedDescriptor =
                     CameraDescriptor.load(activity, requestedCameraId);
+            int targetRotation = activity.getWindowManager()
+                    .getDefaultDisplay()
+                    .getRotation();
+            requireSurfaceRotation(targetRotation);
             final long expectedGeneration;
             final ListenableFuture<ProcessCameraProvider> providerFuture;
             synchronized (LOCK) {
@@ -149,7 +159,8 @@ public final class ReachyCameraFrameBridge {
                                     expectedGeneration,
                                     requestedCameraId,
                                     width,
-                                    height);
+                                    height,
+                                    targetRotation);
                         }
                     },
                     MAIN_EXECUTOR);
@@ -215,10 +226,10 @@ public final class ReachyCameraFrameBridge {
             }
             if (lifecycleOwner != null && "Paused".equals(state)) {
                 lifecycleOwner.start();
-                state = cameraProvider == null ? "Starting" : "Running";
-                message = cameraProvider == null
-                        ? "CameraX lifecycle resumed while provider binding is pending."
-                        : "CameraX lifecycle resumed Preview and ImageAnalysis.";
+                state = "Starting";
+                errorCode = "";
+                message =
+                        "CameraX lifecycle resumed; waiting for the camera device to reopen.";
             }
             return snapshotLocked();
         }
@@ -266,7 +277,8 @@ public final class ReachyCameraFrameBridge {
             long expectedGeneration,
             String requestedCameraId,
             int width,
-            int height) {
+            int height,
+            int targetRotation) {
         requireMainThread();
         try {
             ProcessCameraProvider provider = providerFuture.get();
@@ -288,10 +300,12 @@ public final class ReachyCameraFrameBridge {
                 Preview nextPreview =
                         new Preview.Builder()
                                 .setResolutionSelector(resolutionSelector)
+                                .setTargetRotation(targetRotation)
                                 .build();
                 ImageAnalysis nextAnalysis =
                         new ImageAnalysis.Builder()
                                 .setResolutionSelector(resolutionSelector)
+                                .setTargetRotation(targetRotation)
                                 .setOutputImageFormat(
                                         ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
                                 .setBackpressureStrategy(
@@ -313,19 +327,35 @@ public final class ReachyCameraFrameBridge {
                         });
 
                 CameraSelector selector = exactCameraSelector(requestedCameraId);
-                provider.bindToLifecycle(
+                Camera nextCamera = provider.bindToLifecycle(
                         requireLifecycleOwnerLocked(),
                         selector,
                         nextPreview,
                         nextAnalysis);
                 cameraProvider = provider;
+                boundCamera = nextCamera;
                 preview = nextPreview;
                 imageAnalysis = nextAnalysis;
                 previewSurfaceProvider = nextSurfaceProvider;
-                state = "Running";
+                state = "Starting";
                 message =
-                        "CameraX Preview and ImageAnalysis are bound with keep-only-latest backpressure.";
+                        "CameraX use cases are bound; waiting for the camera device to open.";
                 errorCode = "";
+
+                final long observerGeneration = expectedGeneration;
+                Observer<CameraState> nextObserver =
+                        new Observer<CameraState>() {
+                            @Override
+                            public void onChanged(CameraState cameraState) {
+                                handleCameraState(
+                                        cameraState,
+                                        observerGeneration);
+                            }
+                        };
+                cameraStateObserver = nextObserver;
+                nextCamera.getCameraInfo()
+                        .getCameraState()
+                        .observeForever(nextObserver);
             }
         } catch (ExecutionException exception) {
             failOnMain(
@@ -345,6 +375,91 @@ public final class ReachyCameraFrameBridge {
                     expectedGeneration,
                     "camera_bind_failed",
                     safeMessage(exception));
+        }
+    }
+
+    private static void handleCameraState(
+            CameraState cameraState,
+            long expectedGeneration) {
+        requireMainThread();
+        if (cameraState == null) {
+            return;
+        }
+        synchronized (LOCK) {
+            if (expectedGeneration != generation ||
+                    sessionId == 0L ||
+                    !isActiveState(state)) {
+                return;
+            }
+
+            CameraState.StateError cameraError = cameraState.getError();
+            if (cameraError != null) {
+                String nextErrorCode =
+                        cameraStateErrorCode(cameraError.getCode());
+                String detail = cameraStateErrorDetail(cameraError);
+                if (cameraError.getType() == CameraState.ErrorType.CRITICAL) {
+                    ++generation;
+                    stopBoundUseCasesLocked();
+                    setInactiveLocked(
+                            cameraStateErrorIsUnavailable(cameraError.getCode())
+                                    ? "Unavailable"
+                                    : "Faulted",
+                            nextErrorCode,
+                            detail);
+                    return;
+                }
+
+                if (!"Paused".equals(state)) {
+                    state = "Starting";
+                    errorCode = nextErrorCode;
+                    message =
+                            "CameraX is recovering from " +
+                            nextErrorCode + ": " + detail;
+                }
+                return;
+            }
+
+            switch (cameraState.getType()) {
+                case OPEN:
+                    if (!"Paused".equals(state)) {
+                        state = "Running";
+                        errorCode = "";
+                        message =
+                                "CameraX camera device is open with Preview and ImageAnalysis active.";
+                    }
+                    break;
+                case OPENING:
+                    if (!"Paused".equals(state)) {
+                        state = "Starting";
+                        errorCode = "";
+                        message = "CameraX camera device is opening.";
+                    }
+                    break;
+                case PENDING_OPEN:
+                    if (!"Paused".equals(state)) {
+                        state = "Starting";
+                        errorCode = "";
+                        message =
+                                "CameraX is waiting for the selected camera to become available.";
+                    }
+                    break;
+                case CLOSING:
+                    if (!"Paused".equals(state) &&
+                            !"Stopping".equals(state)) {
+                        message = "CameraX camera device is closing.";
+                    }
+                    break;
+                case CLOSED:
+                    if (!"Paused".equals(state) &&
+                            !"Stopping".equals(state)) {
+                        state = "Starting";
+                        message =
+                                "CameraX camera device is closed and awaiting a reopen transition.";
+                    }
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -435,6 +550,13 @@ public final class ReachyCameraFrameBridge {
     }
 
     private static void stopBoundUseCasesLocked() {
+        if (boundCamera != null && cameraStateObserver != null) {
+            boundCamera.getCameraInfo()
+                    .getCameraState()
+                    .removeObserver(cameraStateObserver);
+        }
+        cameraStateObserver = null;
+        boundCamera = null;
         if (imageAnalysis != null) {
             imageAnalysis.clearAnalyzer();
         }
@@ -547,6 +669,49 @@ public final class ReachyCameraFrameBridge {
         }
     }
 
+    private static String cameraStateErrorCode(int code) {
+        switch (code) {
+            case CameraState.ERROR_STREAM_CONFIG:
+                return "camera_stream_config";
+            case CameraState.ERROR_CAMERA_IN_USE:
+                return "camera_in_use";
+            case CameraState.ERROR_MAX_CAMERAS_IN_USE:
+                return "max_cameras_in_use";
+            case CameraState.ERROR_OTHER_RECOVERABLE_ERROR:
+                return "camera_recoverable_error";
+            case CameraState.ERROR_CAMERA_DISABLED:
+                return "camera_disabled";
+            case CameraState.ERROR_CAMERA_FATAL_ERROR:
+                return "camera_fatal_error";
+            case CameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED:
+                return "camera_do_not_disturb_enabled";
+            case CameraState.ERROR_CAMERA_REMOVED:
+                return "camera_removed";
+            default:
+                return "camera_state_error_" + code;
+        }
+    }
+
+    private static boolean cameraStateErrorIsUnavailable(int code) {
+        return code == CameraState.ERROR_CAMERA_IN_USE ||
+                code == CameraState.ERROR_MAX_CAMERAS_IN_USE ||
+                code == CameraState.ERROR_CAMERA_DISABLED ||
+                code == CameraState.ERROR_DO_NOT_DISTURB_MODE_ENABLED ||
+                code == CameraState.ERROR_CAMERA_REMOVED;
+    }
+
+    private static String cameraStateErrorDetail(
+            CameraState.StateError cameraError) {
+        Throwable cause = cameraError.getCause();
+        if (cause != null) {
+            return safeMessage(cause);
+        }
+        return "CameraX reported " +
+                cameraError.getType() +
+                " error " +
+                cameraStateErrorCode(cameraError.getCode()) + ".";
+    }
+
     private static String safeMessage(Throwable throwable) {
         String detail = throwable.getMessage();
         return detail == null || detail.trim().isEmpty()
@@ -564,6 +729,16 @@ public final class ReachyCameraFrameBridge {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             throw new IllegalStateException(
                     "CameraX lifecycle operations must run on the Android main thread.");
+        }
+    }
+
+    private static void requireSurfaceRotation(int rotation) {
+        if (rotation != Surface.ROTATION_0 &&
+                rotation != Surface.ROTATION_90 &&
+                rotation != Surface.ROTATION_180 &&
+                rotation != Surface.ROTATION_270) {
+            throw new IllegalArgumentException(
+                    "Android returned invalid display rotation " + rotation + ".");
         }
     }
 
