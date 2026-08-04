@@ -11,7 +11,7 @@ namespace ReachyMini.Tests
     public sealed class ReachyCameraAcquisitionOwnershipTests
     {
         [Test]
-        public void SelfOwnedBusySignalKeepsSessionButDisconnectStopsFailClosed()
+        public void OwnedOmissionAndBusySignalKeepSessionButDisconnectStopsFailClosed()
         {
             GameObject gameObject =
                 new GameObject("Rma091CameraOwnership");
@@ -38,6 +38,19 @@ namespace ReachyMini.Tests
                     acquisition.State.Current.State,
                     Is.EqualTo(ReachyCameraAcquisitionState.Running));
 
+                discoveryPlatform.OmitCamera = true;
+                discovery.RefreshPermissionAndCapabilities();
+
+                Assert.That(acquisitionPlatform.StopCount, Is.EqualTo(0));
+                Assert.That(acquisition.DesiredActive, Is.True);
+                Assert.That(
+                    acquisition.State.Current.SessionId,
+                    Is.EqualTo(sessionId));
+                Assert.That(
+                    acquisition.State.Current.CameraId,
+                    Is.EqualTo("rear-0"));
+
+                discoveryPlatform.OmitCamera = false;
                 discoveryPlatform.Availability =
                     "in_use_or_unavailable";
                 discovery.RefreshPermissionAndCapabilities();
@@ -50,9 +63,6 @@ namespace ReachyMini.Tests
                 Assert.That(
                     acquisition.State.Current.SessionId,
                     Is.EqualTo(sessionId));
-                Assert.That(
-                    acquisition.State.Current.CameraId,
-                    Is.EqualTo("rear-0"));
 
                 discoveryPlatform.Availability = "disconnected";
                 discovery.RefreshPermissionAndCapabilities();
@@ -102,6 +112,8 @@ namespace ReachyMini.Tests
         {
             public bool IsSupported => true;
 
+            public bool OmitCamera { get; set; }
+
             public string Availability { get; set; } = "available";
 
             public bool HasCameraPermission()
@@ -121,6 +133,13 @@ namespace ReachyMini.Tests
 
             public string DiscoverCameraCapabilitiesJson()
             {
+                if (OmitCamera)
+                {
+                    return
+                        "{\"status\":\"ok\",\"errorCode\":\"\"," +
+                        "\"message\":\"owned camera omitted by API-26 service\"," +
+                        "\"cameras\":[]}";
+                }
                 return
                     "{\"status\":\"ok\",\"errorCode\":\"\"," +
                     "\"message\":\"rear camera state updated\",\"cameras\":[{" +
