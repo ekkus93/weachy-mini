@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Reflection;
 using NUnit.Framework;
 using ReachyMini.AppState;
 using UnityEngine;
@@ -125,13 +126,13 @@ namespace ReachyMini.Tests
                     0);
                 acquisition.RefreshNow();
 
-                gameObject.SendMessage("OnApplicationPause", true);
+                InvokeApplicationPause(acquisition, true);
                 Assert.That(acquisitionPlatform.PauseCount, Is.EqualTo(1));
                 Assert.That(
                     acquisition.State.Current.State,
                     Is.EqualTo(ReachyCameraAcquisitionState.Paused));
 
-                gameObject.SendMessage("OnApplicationPause", false);
+                InvokeApplicationPause(acquisition, false);
                 Assert.That(acquisitionPlatform.ResumeCount, Is.EqualTo(1));
                 Assert.That(
                     acquisition.State.Current.State,
@@ -250,6 +251,18 @@ namespace ReachyMini.Tests
             {
                 Object.DestroyImmediate(gameObject);
             }
+        }
+
+        private static void InvokeApplicationPause(
+            ReachyAndroidCameraAcquisition acquisition,
+            bool paused)
+        {
+            MethodInfo? callback = typeof(ReachyAndroidCameraAcquisition)
+                .GetMethod(
+                    "OnApplicationPause",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(callback, Is.Not.Null);
+            callback!.Invoke(acquisition, new object[] { paused });
         }
 
         private static string RunningSnapshot(
