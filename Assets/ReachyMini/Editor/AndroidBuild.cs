@@ -6,6 +6,7 @@ using UnityEditor;
 using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+using UnityEngine;
 
 namespace ReachyMini.Editor
 {
@@ -81,7 +82,29 @@ namespace ReachyMini.Editor
             PlayerSettings.SetApplicationIdentifier(
                 NamedBuildTarget.Android,
                 "com.ekkus.weachymini");
+            ConfigureMobileOrientation();
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
+        }
+
+        private static void ConfigureMobileOrientation()
+        {
+            PlayerSettings.defaultInterfaceOrientation =
+                UIOrientation.AutoRotation;
+            PlayerSettings.allowedAutorotateToPortrait = true;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+
+            if (PlayerSettings.defaultInterfaceOrientation !=
+                    UIOrientation.AutoRotation ||
+                !PlayerSettings.allowedAutorotateToPortrait ||
+                !PlayerSettings.allowedAutorotateToPortraitUpsideDown ||
+                !PlayerSettings.allowedAutorotateToLandscapeLeft ||
+                !PlayerSettings.allowedAutorotateToLandscapeRight)
+            {
+                throw new InvalidOperationException(
+                    "Unity did not retain the required Android auto-rotation settings.");
+            }
         }
 
         private static void ConfigureAndroidSdk()
