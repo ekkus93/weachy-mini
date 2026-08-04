@@ -131,7 +131,7 @@ namespace ReachyMini.AppState
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        private static IntPtr GetDirectAddress(
+        private static unsafe IntPtr GetDirectAddress(
             AndroidJavaObject? buffer,
             string planeName)
         {
@@ -140,7 +140,7 @@ namespace ReachyMini.AppState
                 throw new InvalidOperationException(
                     $"The Android texture lease returned no {planeName} direct buffer.");
             }
-            IntPtr address = AndroidJNI.GetDirectBufferAddress(
+            IntPtr address = (IntPtr)AndroidJNI.GetDirectBufferAddress(
                 buffer.GetRawObject());
             if (address == IntPtr.Zero)
             {
