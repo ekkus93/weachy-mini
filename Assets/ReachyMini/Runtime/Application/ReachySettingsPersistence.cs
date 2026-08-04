@@ -15,17 +15,32 @@ namespace ReachyMini.AppState
 
         private const int SchemaVersion = 1;
         private readonly string persistencePath;
+        private readonly ReachyCameraCalibrationPersistenceStore cameraCalibrations;
         private bool loading;
         private string lastSerialized = string.Empty;
+        private string settingsStatusMessage = string.Empty;
 
         public ReachySettingsPersistenceApplicationService()
-            : this(Path.Combine(
-                Application.persistentDataPath,
-                SettingsFileName))
+            : this(
+                Path.Combine(
+                    Application.persistentDataPath,
+                    SettingsFileName),
+                Path.Combine(
+                    Application.persistentDataPath,
+                    ReachyCameraCalibrationPersistenceStore.CalibrationFileName))
         {
         }
 
         public ReachySettingsPersistenceApplicationService(string settingsPath)
+            : this(
+                settingsPath,
+                GetDefaultCalibrationPath(settingsPath))
+        {
+        }
+
+        public ReachySettingsPersistenceApplicationService(
+            string settingsPath,
+            string cameraCalibrationPath)
             : base(
                 "durable-settings",
                 ReachyServiceKind.Persistence,
@@ -37,24 +52,56 @@ namespace ReachyMini.AppState
                     "Settings persistence requires a file path.",
                     nameof(settingsPath));
             }
+            if (string.IsNullOrWhiteSpace(cameraCalibrationPath))
+            {
+                throw new ArgumentException(
+                    "Camera calibration persistence requires a file path.",
+                    nameof(cameraCalibrationPath));
+            }
+
             persistencePath = Path.GetFullPath(settingsPath);
+            cameraCalibrations =
+                new ReachyCameraCalibrationPersistenceStore(
+                    cameraCalibrationPath);
         }
 
         public ReachySettingsStateStore Settings { get; } =
             new ReachySettingsStateStore();
 
+        public ReachyCameraCalibrationPersistenceStore CameraCalibrations =>
+            cameraCalibrations;
+
         public string PersistencePath => persistencePath;
+
+        public string CalibrationPersistencePath =>
+            cameraCalibrations.PersistencePath;
 
         public string LastPersistenceFault { get; private set; } = string.Empty;
 
         protected override void OnInitialize()
         {
             Settings.Changed += OnSettingsChanged;
+            cameraCalibrations.Initialize();
+            cameraCalibrations.Changed += OnCameraCalibrationPersistenceChanged;
+            LoadOrCreateSettings();
+            PublishCombinedHealth();
+        }
+
+        protected override void OnDispose()
+        {
+            Settings.Changed -= OnSettingsChanged;
+            cameraCalibrations.Changed -=
+                OnCameraCalibrationPersistenceChanged;
+            cameraCalibrations.Dispose();
+        }
+
+        private void LoadOrCreateSettings()
+        {
             if (!File.Exists(persistencePath))
             {
                 PersistCurrent();
-                SetReady(
-                    $"Durable settings initialized at {persistencePath}.");
+                settingsStatusMessage =
+                    $"Durable settings initialized at {persistencePath}.";
                 return;
             }
 
@@ -62,7 +109,8 @@ namespace ReachyMini.AppState
             try
             {
                 string json = File.ReadAllText(persistencePath);
-                SettingsEnvelope envelope = JsonUtility.FromJson<SettingsEnvelope>(json) ??
+                SettingsEnvelope envelope =
+                    JsonUtility.FromJson<SettingsEnvelope>(json) ??
                     throw new InvalidDataException(
                         "The settings file did not contain a JSON object.");
                 if (envelope.schemaVersion != SchemaVersion)
@@ -74,28 +122,23 @@ namespace ReachyMini.AppState
                 Settings.ApplyDurableSettings(envelope.ToDurableSettings());
                 lastSerialized = Serialize(Settings.CaptureDurableSettings());
                 LastPersistenceFault = string.Empty;
-                SetReady(
-                    $"Durable settings restored from {persistencePath}.");
+                settingsStatusMessage =
+                    $"Durable settings restored from {persistencePath}.";
             }
             catch (Exception exception)
             {
                 string quarantinePath = QuarantineInvalidFile();
                 LastPersistenceFault = exception.Message;
                 PersistCurrent();
-                SetDegraded(
+                settingsStatusMessage =
                     "Invalid durable settings were quarantined and safe defaults " +
                     $"were restored. source={persistencePath}; " +
-                    $"quarantine={quarantinePath}; error={exception.Message}");
+                    $"quarantine={quarantinePath}; error={exception.Message}";
             }
             finally
             {
                 loading = false;
             }
-        }
-
-        protected override void OnDispose()
-        {
-            Settings.Changed -= OnSettingsChanged;
         }
 
         private void OnSettingsChanged(
@@ -109,19 +152,48 @@ namespace ReachyMini.AppState
             try
             {
                 PersistCurrent();
-                if (!string.IsNullOrEmpty(LastPersistenceFault))
-                {
-                    LastPersistenceFault = string.Empty;
-                    SetReady(
-                        $"Durable settings persistence recovered at {persistencePath}.");
-                }
+                bool recovered = !string.IsNullOrEmpty(LastPersistenceFault);
+                LastPersistenceFault = string.Empty;
+                settingsStatusMessage = recovered
+                    ? $"Durable settings persistence recovered at {persistencePath}."
+                    : $"Durable settings persisted at {persistencePath}.";
             }
             catch (Exception exception)
             {
                 LastPersistenceFault = exception.Message;
-                SetDegraded(
+                settingsStatusMessage =
                     $"Durable settings could not be saved to {persistencePath}: " +
-                    exception.Message);
+                    exception.Message;
+            }
+            PublishCombinedHealth();
+        }
+
+        private void OnCameraCalibrationPersistenceChanged(
+            object? sender,
+            ReachyCameraCalibrationPersistenceChangedEventArgs eventArgs)
+        {
+            PublishCombinedHealth();
+        }
+
+        private void PublishCombinedHealth()
+        {
+            string calibrationStatus = cameraCalibrations.IsDegraded
+                ? "Camera calibration persistence is degraded: " +
+                    cameraCalibrations.LastPersistenceFault
+                : $"Camera calibration profiles are stored at " +
+                    $"{cameraCalibrations.PersistencePath}.";
+            string settingsStatus = string.IsNullOrWhiteSpace(settingsStatusMessage)
+                ? $"Durable settings are stored at {persistencePath}."
+                : settingsStatusMessage;
+
+            if (!string.IsNullOrEmpty(LastPersistenceFault) ||
+                cameraCalibrations.IsDegraded)
+            {
+                SetDegraded(settingsStatus + " " + calibrationStatus);
+            }
+            else
+            {
+                SetReady(settingsStatus + " " + calibrationStatus);
             }
         }
 
@@ -182,6 +254,21 @@ namespace ReachyMini.AppState
                 persistencePath + $".corrupt-{stamp}";
             File.Move(persistencePath, quarantinePath);
             return quarantinePath;
+        }
+
+        private static string GetDefaultCalibrationPath(string settingsPath)
+        {
+            if (string.IsNullOrWhiteSpace(settingsPath))
+            {
+                throw new ArgumentException(
+                    "Settings persistence requires a file path.",
+                    nameof(settingsPath));
+            }
+            string fullSettingsPath = Path.GetFullPath(settingsPath);
+            return Path.Combine(
+                Path.GetDirectoryName(fullSettingsPath) ??
+                    Application.persistentDataPath,
+                ReachyCameraCalibrationPersistenceStore.CalibrationFileName);
         }
 
         private static string Serialize(ReachyDurableSettings settings)
