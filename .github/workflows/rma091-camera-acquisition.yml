@@ -14,7 +14,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
-      - 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader'
+      - 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
@@ -36,7 +36,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs'
-      - 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader'
+      - 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader'
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
@@ -90,7 +90,7 @@ jobs:
           lease_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs').read_text(encoding='utf-8')
           reference = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs').read_text(encoding='utf-8')
           bootstrap = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs').read_text(encoding='utf-8')
-          shader = (root / 'Assets/ReachyMini/Runtime/Shaders/ReachyCameraYuv420ToRgb.shader').read_text(encoding='utf-8')
+          shader = (root / 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader').read_text(encoding='utf-8')
           java_dir = root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera'
           java = (java_dir / 'ReachyCameraFrameBridge.java').read_text(encoding='utf-8')
           texture_java = (java_dir / 'ReachyCameraTextureFrameBridge.java').read_text(encoding='utf-8')
@@ -201,7 +201,7 @@ jobs:
               'Graphics.Blit',
               'descriptor.TimestampNanoseconds',
               'FrameMatchesActiveSession',
-              'lease.Dispose',
+              'using (lease)',
               'ReachyCameraTextureBridgeState.Ready',
           ]:
               if token not in texture_unity:
