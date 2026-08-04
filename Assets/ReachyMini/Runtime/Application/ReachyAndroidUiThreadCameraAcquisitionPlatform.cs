@@ -14,6 +14,12 @@ namespace ReachyMini.AppState
 #if UNITY_ANDROID && !UNITY_EDITOR
         private const string BridgeClassName =
             "com.ekkus93.weachy.camera.ReachyCameraFrameBridge";
+        private const string QueuedPauseSnapshot =
+            "{\"status\":\"ok\",\"state\":\"Paused\",\"errorCode\":\"\"," +
+            "\"message\":\"CameraX lifecycle pause is queued on the Android UI thread.\"}";
+        private const string QueuedResumeSnapshot =
+            "{\"status\":\"ok\",\"state\":\"Paused\",\"errorCode\":\"\"," +
+            "\"message\":\"CameraX lifecycle resume is queued on the Android UI thread.\"}";
         private static readonly TimeSpan UiThreadTimeout =
             TimeSpan.FromSeconds(15);
         private bool disposed;
@@ -66,13 +72,14 @@ namespace ReachyMini.AppState
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             ThrowIfDisposed();
-            return InvokeOnAndroidUiThread(
+            PostLifecycleOperationOnAndroidUiThread(
                 "pause",
                 activity =>
                 {
                     using var bridge = new AndroidJavaClass(BridgeClassName);
-                    return bridge.CallStatic<string>("pause", activity);
+                    _ = bridge.CallStatic<string>("pause", activity);
                 });
+            return QueuedPauseSnapshot;
 #else
             throw Unsupported();
 #endif
@@ -82,13 +89,14 @@ namespace ReachyMini.AppState
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             ThrowIfDisposed();
-            return InvokeOnAndroidUiThread(
+            PostLifecycleOperationOnAndroidUiThread(
                 "resume",
                 activity =>
                 {
                     using var bridge = new AndroidJavaClass(BridgeClassName);
-                    return bridge.CallStatic<string>("resume", activity);
+                    _ = bridge.CallStatic<string>("resume", activity);
                 });
+            return QueuedResumeSnapshot;
 #else
             throw Unsupported();
 #endif
@@ -177,6 +185,39 @@ namespace ReachyMini.AppState
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+        // Unity can invoke OnApplicationPause while Android is waiting for the
+        // Unity player to finish pausing. Posting without waiting avoids a
+        // Unity-thread/Android-UI-thread lifecycle deadlock.
+        private static void PostLifecycleOperationOnAndroidUiThread(
+            string operation,
+            Action<AndroidJavaObject> action)
+        {
+            if (action == null)
+            {
+                throw new ArgumentNullException(nameof(action));
+            }
+
+            using AndroidJavaObject activity = GetCurrentActivity();
+            activity.Call(
+                "runOnUiThread",
+                new AndroidJavaRunnable(
+                    () =>
+                    {
+                        try
+                        {
+                            using AndroidJavaObject currentActivity =
+                                GetCurrentActivity();
+                            action(currentActivity);
+                        }
+                        catch (Exception exception)
+                        {
+                            Debug.LogError(
+                                $"CameraX {operation} failed on the Android UI thread: " +
+                                exception.Message);
+                        }
+                    }));
+        }
+
         private string InvokeOnAndroidUiThread(
             string operation,
             Func<AndroidJavaObject, string> action,
