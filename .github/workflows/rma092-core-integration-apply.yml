@@ -55,29 +55,44 @@ jobs:
           python3 scripts/apply_rma092_core_integration.py
           python3 - <<'PY'
           from pathlib import Path
-          path = Path('Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs')
-          text = path.read_text(encoding='utf-8')
+
+          texture_path = Path(
+              'Assets/ReachyMini/Runtime/Application/'
+              'ReachyAndroidCameraTextureBridge.cs'
+          )
+          text = texture_path.read_text(encoding='utf-8')
           old = 'DestroyObject('
           if old not in text:
-              raise SystemExit('Expected Unity object-destruction helper was not found.')
-          path.write_text(text.replace(old, 'DestroyUnityObject('), encoding='utf-8')
+              raise SystemExit(
+                  'Expected Unity object-destruction helper was not found.'
+              )
+          texture_path.write_text(
+              text.replace(old, 'DestroyUnityObject('),
+              encoding='utf-8',
+          )
+
+          expected = {
+              'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java',
+              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs',
+              'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs',
+              'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs',
+              'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs',
+              'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs',
+          }
+          import subprocess
+          changed = set(
+              subprocess.check_output(
+                  ['git', 'diff', '--name-only'],
+                  text=True,
+              ).splitlines()
+          )
+          if changed != expected:
+              raise SystemExit(
+                  f'Unexpected changed paths: {sorted(changed)!r}'
+              )
           PY
           git diff --check
           bash -n scripts/*.sh
-          changed="$(git diff --name-only | sort)"
-          expected="$(cat <<'EOF'
-Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java
-Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs
-Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs
-Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs
-Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs
-Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs
-EOF
-)"
-          if [[ "${changed}" != "${expected}" ]]; then
-            printf 'Unexpected changed paths:\n%s\n' "${changed}" >&2
-            exit 1
-          fi
 
       - name: Commit integration
         shell: bash
