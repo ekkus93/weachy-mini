@@ -1,1 +1,0 @@
-Temporary trigger for exact-SHA hosted Ruff verification.
