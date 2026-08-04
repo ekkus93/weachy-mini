@@ -40,16 +40,11 @@ jobs:
           python3 - <<'PY' > "${RUNNER_TEMP}/rma100-status.json"
           import json
           import os
-
           print(json.dumps({
               "state": "pending",
               "context": "RMA-100 Camera Calibration",
               "description": "Coordinate and calibration contracts are running",
-              "target_url": (
-                  f"{os.environ['GITHUB_SERVER_URL']}/"
-                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
-                  f"{os.environ['GITHUB_RUN_ID']}"
-              ),
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
           curl --fail-with-body --silent --show-error \
@@ -83,147 +78,82 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          core = Path(
-              'Assets/ReachyMini/Runtime/Core/Application/'
-              'ReachyCameraReprojectionCalibration.cs'
-          ).read_text(encoding='utf-8')
-          persistence = Path(
-              'Assets/ReachyMini/Runtime/Application/'
-              'ReachyCameraCalibrationPersistence.cs'
-          ).read_text(encoding='utf-8')
-          settings = Path(
-              'Assets/ReachyMini/Runtime/Application/'
-              'ReachySettingsPersistence.cs'
-          ).read_text(encoding='utf-8')
-          adapter = Path(
-              'Assets/ReachyMini/Runtime/Rendering/'
-              'ReachyCameraCalibrationUnityAdapter.cs'
-          ).read_text(encoding='utf-8')
-          managed_program = Path(
-              'managed/ReachyMini.Camera.Tests/Program.cs'
-          ).read_text(encoding='utf-8')
-          managed_contracts = Path(
-              'managed/ReachyMini.Camera.Tests/'
-              'Rma100CameraCalibrationContracts.cs'
-          ).read_text(encoding='utf-8')
-          unity_tests = Path(
-              'Assets/ReachyMini/Tests/Editor/'
-              'ReachyCameraReprojectionCalibrationTests.cs'
-          ).read_text(encoding='utf-8')
-          coordinate_doc = Path(
-              'docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md'
-          ).read_text(encoding='utf-8')
+          files = {
+              'core': Path('Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs').read_text(encoding='utf-8'),
+              'persistence': Path('Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs').read_text(encoding='utf-8'),
+              'settings': Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8'),
+              'adapter': Path('Assets/ReachyMini/Runtime/Rendering/ReachyCameraCalibrationUnityAdapter.cs').read_text(encoding='utf-8'),
+              'program': Path('managed/ReachyMini.Camera.Tests/Program.cs').read_text(encoding='utf-8'),
+              'managed': Path('managed/ReachyMini.Camera.Tests/Rma100CameraCalibrationContracts.cs').read_text(encoding='utf-8'),
+              'unity': Path('Assets/ReachyMini/Tests/Editor/ReachyCameraReprojectionCalibrationTests.cs').read_text(encoding='utf-8'),
+              'doc': Path('docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md').read_text(encoding='utf-8'),
+          }
+          required = {
+              'core': [
+                  'ReachyCameraCoordinateContract', 'AndroidPixelAxes',
+                  'PhoneOpticalAxes', 'ReachyOpticalAxes',
+                  'UnityWorldFromMujocoWorld', 'OpticalFromMujocoCamera',
+                  'ReachyCameraImageNormalization', 'NormalizedFromSourcePixels',
+                  'ReachyCameraIntrinsicMatrix', 'ReachyCameraCalibrationProfile',
+                  'ReachyCameraCalibrationSelectionStatus', 'ExactCalibrated',
+                  'ExactUncalibratedEstimate', 'CameraMismatch',
+                  'ImageSizeMismatch', 'ModelMismatch',
+                  'BuildNeutralHomography',
+                  'ReachyCameraReprojectionMode.RotationOnly',
+              ],
+              'persistence': [
+                  'reachy-camera-calibration-v1.json', 'SchemaVersion = 1',
+                  'QuarantineInvalidFile',
+                  'calibration was silently substituted',
+                  'ReachyCameraCalibrationPersistenceStore',
+              ],
+              'settings': [
+                  'ReachyCameraCalibrationPersistenceStore',
+                  'CameraCalibrations', 'CalibrationPersistencePath',
+                  'PublishCombinedHealth',
+              ],
+              'adapter': [
+                  'ReachyCoordinateConverter.ToUnityRotation',
+                  'ToCoreRotation', 'ToUnityMatrix',
+                  'ReachyCameraCoordinateContract',
+              ],
+              'program': ['Rma100CameraCalibrationContracts.Run();'],
+              'managed': [
+                  'CoordinateBasesRemainExplicit',
+                  'ImageNormalizationMatchesRma092Order',
+                  'MirroringIsNotPhysicalOrientation',
+                  'PositiveOpticalYawMovesTheViewRight',
+                  'SelectionRequiresAnExactProfile',
+                  'InvalidCalibrationFailsClosed',
+              ],
+              'unity': [
+                  'MujocoUnityBasisMatchesProductionCoordinateConverter',
+                  'UnityQuaternionConversionMatchesCoreRotation',
+                  'UnityMatrixConversionPreservesHomographyElements',
+              ],
+              'doc': [
+                  'Android image pixels', 'Phone optical frame',
+                  'Reachy optical frame', 'Unity world frame',
+                  'MuJoCo world frame', 'H = K_reachy',
+                  'Mirroring is never represented as a physical rotation',
+                  'rotation-only',
+              ],
+          }
+          for name, tokens in required.items():
+              for token in tokens:
+                  if token not in files[name]:
+                      raise SystemExit(
+                          f'Missing RMA-100 {name} contract token: {token}')
 
-          required_core = [
-              'ReachyCameraCoordinateContract',
-              'AndroidPixelAxes',
-              'PhoneOpticalAxes',
-              'ReachyOpticalAxes',
-              'UnityWorldFromMujocoWorld',
-              'OpticalFromMujocoCamera',
-              'ReachyCameraImageNormalization',
-              'NormalizedFromSourcePixels',
-              'ReachyCameraIntrinsicMatrix',
-              'ReachyCameraCalibrationProfile',
-              'ReachyCameraCalibrationSelectionStatus',
-              'ExactCalibrated',
-              'ExactUncalibratedEstimate',
-              'CameraMismatch',
-              'ImageSizeMismatch',
-              'ModelMismatch',
-              'BuildNeutralHomography',
-              'ReachyCameraReprojectionMode.RotationOnly',
-          ]
-          for token in required_core:
-              if token not in core:
-                  raise SystemExit(
-                      f'Missing RMA-100 core contract token: {token}')
-
-          required_persistence = [
-              'reachy-camera-calibration-v1.json',
-              'SchemaVersion = 1',
-              'QuarantineInvalidFile',
-              'no calibration was silently substituted',
-              'ReachyCameraCalibrationPersistenceStore',
-          ]
-          for token in required_persistence:
-              if token not in persistence:
-                  raise SystemExit(
-                      f'Missing RMA-100 persistence behavior: {token}')
-
-          required_settings = [
-              'ReachyCameraCalibrationPersistenceStore',
-              'CameraCalibrations',
-              'CalibrationPersistencePath',
-              'PublishCombinedHealth',
-          ]
-          for token in required_settings:
-              if token not in settings:
-                  raise SystemExit(
-                      f'Calibration persistence is not owned by settings: {token}')
-
-          required_adapter = [
-              'ReachyCoordinateConverter.ToUnityRotation',
-              'ToCoreRotation',
-              'ToUnityMatrix',
-              'ReachyCameraCoordinateContract',
-          ]
-          for token in required_adapter:
-              if token not in adapter:
-                  raise SystemExit(
-                      f'Missing Unity coordinate adapter behavior: {token}')
-
-          if 'Rma100CameraCalibrationContracts.Run();' not in managed_program:
+          if 'ModuleInitializer' in files['managed']:
               raise SystemExit(
-                  'The hosted test entry point does not explicitly run RMA-100.')
-          if 'ModuleInitializer' in managed_contracts:
-              raise SystemExit(
-                  'RMA-100 hosted tests must not rely on an implicit module initializer.')
+                  'RMA-100 hosted tests must use the explicit program entry point.')
 
-          required_managed_tests = [
-              'CoordinateBasesRemainExplicit',
-              'ImageNormalizationMatchesRma092Order',
-              'MirroringIsNotPhysicalOrientation',
-              'PositiveOpticalYawMovesTheViewRight',
-              'SelectionRequiresAnExactProfile',
-              'InvalidCalibrationFailsClosed',
-          ]
-          for token in required_managed_tests:
-              if token not in managed_contracts:
-                  raise SystemExit(
-                      f'Missing hosted calibration test: {token}')
-
-          required_unity_tests = [
-              'MujocoUnityBasisMatchesProductionCoordinateConverter',
-              'UnityQuaternionConversionMatchesCoreRotation',
-              'UnityMatrixConversionPreservesHomographyElements',
-          ]
-          for token in required_unity_tests:
-              if token not in unity_tests:
-                  raise SystemExit(
-                      f'Missing Unity calibration test: {token}')
-
-          required_documentation = [
-              'Android image pixels',
-              'Phone optical frame',
-              'Reachy optical frame',
-              'Unity world frame',
-              'MuJoCo world frame',
-              'H = K_reachy',
-              'Mirroring is never represented as a physical rotation',
-              'rotation-only',
-          ]
-          for token in required_documentation:
-              if token not in coordinate_doc:
-                  raise SystemExit(
-                      f'Missing coordinate-system documentation: {token}')
-
-          forbidden_paths = [
+          for path in [
               Path('.github/workflows/rma100-apply-implementation.yml'),
               Path('.github/workflows/rma100-explicit-test-entry.yml'),
               Path('.github/rma100-payload'),
-          ]
-          for path in forbidden_paths:
+          ]:
               if path.exists():
                   raise SystemExit(
                       f'Temporary RMA-100 staging artifact remains: {path}')
@@ -242,21 +172,12 @@ jobs:
           python3 - <<'PY' > "${RUNNER_TEMP}/rma100-status.json"
           import json
           import os
-
           passed = os.environ['JOB_STATUS'] == 'success'
           print(json.dumps({
               "state": "success" if passed else "failure",
               "context": "RMA-100 Camera Calibration",
-              "description": (
-                  "Coordinate and calibration contracts passed"
-                  if passed
-                  else "Coordinate and calibration contracts failed"
-              ),
-              "target_url": (
-                  f"{os.environ['GITHUB_SERVER_URL']}/"
-                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
-                  f"{os.environ['GITHUB_RUN_ID']}"
-              ),
+              "description": "Coordinate and calibration contracts passed" if passed else "Coordinate and calibration contracts failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
           }))
           PY
           curl --fail-with-body --silent --show-error \
