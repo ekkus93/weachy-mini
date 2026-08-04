@@ -14,6 +14,8 @@ namespace ReachyMini.AppState
             "ReachyAndroidCameraAcquisition";
         public const string TextureBridgeObjectName =
             "ReachyAndroidCameraTextureBridge";
+        public const string TextureShaderResourceName =
+            "ReachyCameraYuv420ToRgb";
 
         private const int AndroidScreenOrientationUnspecified = -1;
 
@@ -54,10 +56,10 @@ namespace ReachyMini.AppState
             {
                 ReachyAndroidCameraAcquisition acquisition =
                     GetOrCreateAcquisition(discovery);
-                _ = GetOrCreateTextureBridge(acquisition);
                 InstallAcceptanceEvidenceIfRequested(
                     discovery,
                     acquisition);
+                _ = GetOrCreateTextureBridge(acquisition);
                 fault = string.Empty;
                 return true;
             }
@@ -180,18 +182,23 @@ namespace ReachyMini.AppState
             GetOrCreateTextureBridge(
                 ReachyAndroidCameraAcquisition acquisition)
         {
+            Shader conversionShader =
+                Resources.Load<Shader>(TextureShaderResourceName) ??
+                throw new InvalidOperationException(
+                    $"Required camera YUV conversion shader resource '{TextureShaderResourceName}' is unavailable.");
+
             ReachyAndroidCameraTextureBridge? existing =
                 acquisition.GetComponent<ReachyAndroidCameraTextureBridge>();
             if (existing != null)
             {
-                existing.Configure(acquisition);
+                existing.Configure(acquisition, conversionShader);
                 return existing;
             }
 
             ReachyAndroidCameraTextureBridge bridge =
                 acquisition.gameObject.AddComponent<
                     ReachyAndroidCameraTextureBridge>();
-            bridge.Configure(acquisition);
+            bridge.Configure(acquisition, conversionShader);
             return bridge;
         }
 
