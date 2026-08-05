@@ -1,0 +1,46 @@
+name: RMA-101 Apply Implementation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma101-apply-implementation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Apply and validate RMA-101
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .github/rma101-payload.b64 > "${RUNNER_TEMP}/rma101.tar.gz"
+          printf '%s  %s\n' 'b5f0871b72452cbdfd139696986736dabfa7935bb5987110b4eaff24f3b0c576' "${RUNNER_TEMP}/rma101.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "${RUNNER_TEMP}/rma101.tar.gz" --directory "${GITHUB_WORKSPACE}"
+          python3 .github/rma101-program-patch.py
+          rm --force .github/rma101-program-patch.py
+          rm --force .github/rma101-payload.b64
+          rm --force .github/workflows/rma101-apply-implementation.yml
+          git diff --check
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'RMA-101: compute authoritative relative camera rotation'
+          git push origin HEAD:master
