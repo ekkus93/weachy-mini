@@ -1,0 +1,283 @@
+name: RMA-102 GPU Homography Warp
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma102-gpu-homography-warp.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraHomographyWarp.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/ReachyCameraHomographyWarp.shader'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraHomographyWarpTests.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma102GpuHomographyContracts.cs'
+      - 'docs/architecture/GPU_HOMOGRAPHY_WARP.md'
+      - 'docs/validation/RMA_102_GPU_HOMOGRAPHY_WARP_VALIDATION_2026-08-04.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma102-gpu-homography-warp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Inverse-mapped GPU warp contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma102-status.json"
+          import json
+          import os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-102 GPU Homography Warp",
+              "description": "GPU inverse-warp contracts are running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma102-status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run managed camera contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify homography and GPU policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          core_path = Path(
+              "Assets/ReachyMini/Runtime/Core/Application/"
+              "ReachyCameraHomographyWarp.cs"
+          )
+          renderer_path = Path(
+              "Assets/ReachyMini/Runtime/Rendering/"
+              "ReachyCameraHomographyWarpRenderer.cs"
+          )
+          pipeline_path = Path(
+              "Assets/ReachyMini/Runtime/Rendering/"
+              "ReachyCameraHomographyWarpPipeline.cs"
+          )
+          shader_path = Path(
+              "Assets/ReachyMini/Runtime/Resources/"
+              "ReachyCameraHomographyWarp.shader"
+          )
+          managed_path = Path(
+              "managed/ReachyMini.Camera.Tests/"
+              "Rma102GpuHomographyContracts.cs"
+          )
+          unity_path = Path(
+              "Assets/ReachyMini/Tests/Editor/"
+              "ReachyCameraHomographyWarpTests.cs"
+          )
+          doc_path = Path(
+              "docs/architecture/GPU_HOMOGRAPHY_WARP.md"
+          )
+
+          core = core_path.read_text(encoding="utf-8")
+          renderer = renderer_path.read_text(encoding="utf-8")
+          pipeline = pipeline_path.read_text(encoding="utf-8")
+          shader = shader_path.read_text(encoding="utf-8")
+          managed = managed_path.read_text(encoding="utf-8")
+          unity = unity_path.read_text(encoding="utf-8")
+          doc = doc_path.read_text(encoding="utf-8")
+
+          required = {
+              "core": (
+                  core,
+                  [
+                      "PixelFromOpticalRay *",
+                      "reachyFromPhone *",
+                      "PhoneIntrinsics.OpticalRayFromPixel",
+                      "reachyFromPhone.Transposed()",
+                      "ReachyToPhonePixels",
+                      "TryMapReachyPixelToPhonePixel",
+                      "TimestampMismatch",
+                      "SourceSizeMismatch",
+                      "ApproximatelyEquals",
+                  ],
+              ),
+              "renderer": (
+                  renderer,
+                  [
+                      "Graphics.Blit",
+                      "RenderTextureFormat.ARGB32",
+                      "RenderTextureFormat.R8",
+                      "RenderTextureFormat.RFloat",
+                      "ColorTexture",
+                      "ValidityTexture",
+                      "ReachyCameraCalibrationUnityAdapter.ToUnityMatrix",
+                  ],
+              ),
+              "pipeline": (
+                  pipeline,
+                  [
+                      "ReachyAndroidCameraTextureBridge",
+                      "descriptor.TimestampNanoseconds",
+                      "descriptor.OutputWidth",
+                      "descriptor.OutputHeight",
+                      "renderer.ResetOutputs()",
+                      "ReachyCameraHomographyCalculator.Build",
+                  ],
+              ),
+              "shader": (
+                  shader,
+                  [
+                      "_ReachyToPhonePixels",
+                      "outputTopLeft * _OutputSize.xy - 0.5",
+                      "(sourcePixel + 0.5) * _SourceSize.zw",
+                      "sourceHomogeneous.z > 1.0e-6",
+                      "sourcePixel.x < 0.0",
+                      "sourcePixel.y > _SourceSize.y - 1.0",
+                      "return tex2D(_MainTex, mapped.sourceUv)",
+                      'Name "VALIDITY"',
+                  ],
+              ),
+              "managed": (
+                  managed,
+                  [
+                      "IdentityWarpMapsPixelCentersExactly",
+                      "ForwardAndInverseHomographiesRoundTrip",
+                      "OutputResolutionIsIndependentFromSource",
+                      "InvalidAndBehindCameraSamplesAreRejected",
+                      "FrameAndCalibrationMismatchesFailClosed",
+                      "[ModuleInitializer]",
+                  ],
+              ),
+              "unity": (
+                  unity,
+                  [
+                      "IdentityGpuWarpEmitsColorAndValidityMask",
+                      "OutputResolutionIsIndependentAndGpuResident",
+                      "MismatchedSourceTextureFailsClosedAndClearsOutputs",
+                      "BehindCameraCenterIsInvalidWithoutSampling",
+                  ],
+              ),
+              "documentation": (
+                  doc,
+                  [
+                      "H_phone_to_reachy",
+                      "H_reachy_to_phone",
+                      "inverse gather",
+                      "pixel-center",
+                      "GPU-resident",
+                      "validity",
+                      "RMA-103",
+                      "RMA-104",
+                  ],
+              ),
+          }
+          for category, (text, tokens) in required.items():
+              for token in tokens:
+                  if token not in text:
+                      raise SystemExit(
+                          f"Missing RMA-102 {category} token: {token}"
+                      )
+
+          runtime_text = "\n".join(
+              path.read_text(encoding="utf-8")
+              for path in (core_path, renderer_path, pipeline_path)
+          )
+          forbidden = (
+              "ReadPixels(",
+              "GetPixels(",
+              "GetPixels32(",
+              "AsyncGPUReadback",
+              "Texture2D.Apply",
+          )
+          for token in forbidden:
+              if token in runtime_text:
+                  raise SystemExit(
+                      f"Runtime GPU homography contains CPU readback: {token}"
+                  )
+
+          color_branch = shader.index("if (mapped.valid < 0.5)")
+          color_sample = shader.index(
+              "return tex2D(_MainTex, mapped.sourceUv)"
+          )
+          if color_branch > color_sample:
+              raise SystemExit(
+                  "Shader samples before rejecting invalid coordinates."
+              )
+          if shader.count("tex2D(") != 1:
+              raise SystemExit(
+                  "Only the valid color pass may sample the source texture."
+              )
+          print("RMA-102 homography and GPU policy passed.")
+          PY
+
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated managed build output is tracked.' >&2
+            exit 1
+          fi
+          echo 'RMA-102 repository cleanliness passed.'
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma102-status.json"
+          import json
+          import os
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-102 GPU Homography Warp",
+              "description": (
+                  "GPU inverse-warp contracts passed"
+                  if passed
+                  else "GPU inverse-warp contracts failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma102-status.json" >/dev/null
