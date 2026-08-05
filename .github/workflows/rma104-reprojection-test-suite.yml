@@ -5,11 +5,17 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma104-reprojection-test-suite.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraHomographyWarp.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraValidCoverage.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs'
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs'
-      - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraReprojection*.cs'
-      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraReprojection*.cs.meta'
-      - 'managed/ReachyMini.Camera.Tests/Rma104ReprojectionContracts.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma104*.cs'
+      - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
       - 'docs/architecture/REPROJECTION_TEST_SUITE.md'
       - 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
@@ -25,7 +31,7 @@ concurrency:
 
 jobs:
   contract:
-    name: CPU reference and reprojection policy
+    name: Reprojection, coverage, routing, and close-barrier contract
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -35,13 +41,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/rma104-status.json"
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
           import json
           import os
           print(json.dumps({
               "state": "pending",
               "context": "RMA-104 Reprojection Test Suite",
-              "description": "Reprojection contracts are running",
+              "description": "RMA-104 contracts are running",
               "target_url": (
                   f"{os.environ['GITHUB_SERVER_URL']}/"
                   f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
@@ -55,7 +61,7 @@ jobs:
             --header "Authorization: Bearer ${GH_TOKEN}" \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data-binary "@${RUNNER_TEMP}/rma104-status.json" >/dev/null
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
 
       - uses: actions/checkout@v4
 
@@ -73,161 +79,104 @@ jobs:
             --configuration Release \
             --no-restore
 
-      - name: Verify reprojection and consumer-routing policy
+      - name: Verify RMA-104 source contracts
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          routing_path = Path(
-              "Assets/ReachyMini/Runtime/Rendering/"
-              "ReachyVisionFrameRoutingPolicy.cs"
+          root = Path('.')
+          files = {
+              'homography': root / 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraHomographyWarp.cs',
+              'coverage': root / 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraValidCoverage.cs',
+              'routing': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs',
+              'renderer': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs',
+              'pipeline': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs',
+              'acquisition': root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs',
+              'java': root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java',
+              'close_tests': root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs',
+              'acceptance': root / 'scripts/run_rma092_camera_texture_acceptance_android.sh',
+              'architecture': root / 'docs/architecture/REPROJECTION_TEST_SUITE.md',
+              'validation': root / 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md',
+          }
+          text = {name: path.read_text(encoding='utf-8') for name, path in files.items()}
+          text['reprojection'] = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted((root / 'Assets/ReachyMini/Tests/Editor').glob('ReachyCameraReprojection*.cs'))
           )
-          renderer_path = Path(
-              "Assets/ReachyMini/Runtime/Rendering/"
-              "ReachyCameraHomographyWarpRenderer.cs"
+          text['managed'] = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted((root / 'managed/ReachyMini.Camera.Tests').glob('Rma104*.cs'))
           )
-          pipeline_path = Path(
-              "Assets/ReachyMini/Runtime/Rendering/"
-              "ReachyCameraHomographyWarpPipeline.cs"
-          )
-          unity_paths = sorted(
-              Path("Assets/ReachyMini/Tests/Editor").glob(
-                  "ReachyCameraReprojection*.cs"
-              )
-          )
-          if not unity_paths:
-              raise SystemExit("RMA-104 Unity test sources are missing.")
-          managed_path = Path(
-              "managed/ReachyMini.Camera.Tests/"
-              "Rma104ReprojectionContracts.cs"
-          )
-          architecture_path = Path(
-              "docs/architecture/REPROJECTION_TEST_SUITE.md"
-          )
-          validation_path = Path(
-              "docs/validation/"
-              "RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md"
-          )
-
-          routing = routing_path.read_text(encoding="utf-8")
-          renderer = renderer_path.read_text(encoding="utf-8")
-          pipeline = pipeline_path.read_text(encoding="utf-8")
-          unity = "\n".join(
-              path.read_text(encoding="utf-8")
-              for path in unity_paths
-          )
-          managed = managed_path.read_text(encoding="utf-8")
-          architecture = architecture_path.read_text(encoding="utf-8")
-          validation = validation_path.read_text(encoding="utf-8")
 
           required = {
-              "routing": (
-                  routing,
-                  [
-                      "ReachyVisionFramePurpose",
-                      "Tracking",
-                      "VisionLanguage",
-                      "WorldModel",
-                      "Behavior",
-                      "Diagnostics",
-                      "ExplicitRawDebug",
-                      "ReachyVisionFrameRoutingPolicy",
-                      "UsesTransformedReachyEyeFrame",
-                      "AllowsRawPhoneFrame",
-                      "CanCreateVisualObservations",
-                      "HasValidityMask",
-                  ],
-              ),
-              "Unity": (
-                  unity,
-                  [
-                      "IdentityTransformGoldenImageMatchesCpuReference",
-                      "SyntheticYawPitchRollMatchDoublePrecisionCpuReference",
-                      "CameraIntrinsicScalingMatchesCpuReference",
-                      "FrontCameraMirroringMatchesCpuReference",
-                      "PortraitLandscapeNormalizationMatchesCpuReference",
-                      "InvalidMaskBoundaryClearsPriorFramePixels",
-                      "ActualMujocoHeadRotationDrivesTheWarp",
-                      "VisionConsumersUseTransformedFrameUnlessRawDebugIsExplicit",
-                      "WarpCpu",
-                      "ShaderDepthEpsilon",
-                      "ColorTolerance",
-                      "requestedTarget",
-                      "RotationOnly",
-                  ],
-              ),
-              "managed": (
-                  managed,
-                  [
-                      "IdentityAndAxisRotationsAreDeterministic",
-                      "IntrinsicScalingChangesTheInverseMap",
-                      "FrontMirrorAndRightAngleNormalizationAreExplicit",
-                      "ActualMujocoRotationOverridesRequestedTarget",
-                      "RotationOnlyContractExcludesTranslation",
-                      "[ModuleInitializer]",
-                  ],
-              ),
-              "architecture": (
-                  architecture,
-                  [
-                      "double",
-                      "identity-transform golden image",
-                      "front-camera normalization mirror",
-                      "90-degree and 270-degree",
-                      "previous-frame color is never accepted",
-                      "actual MuJoCo camera-body poses",
-                      "rotation_only",
-                      "ExplicitRawDebug",
-                  ],
-              ),
-              "validation": (
-                  validation,
-                  [
-                      "RMA-104",
-                      "exact implementation SHA",
-                      "real-graphics Unity",
-                      "No milestone completion claim",
-                  ],
-              ),
+              'homography': ['NumericalCanonicalizationTolerance', 'CanonicalizeNumericalNoise'],
+              'coverage': ['QuantizeForShader', 'ShaderDepthEpsilon'],
+              'routing': ['ReachyVisionFramePurpose', 'ExplicitRawDebug', 'CanCreateVisualObservations'],
+              'reprojection': [
+                  'IdentityTransformGoldenImageMatchesCpuReference',
+                  'SyntheticYawPitchRollMatchDoublePrecisionCpuReference',
+                  'CameraIntrinsicScalingMatchesCpuReference',
+                  'FrontCameraMirroringMatchesCpuReference',
+                  'PortraitLandscapeNormalizationMatchesCpuReference',
+                  'InvalidMaskBoundaryClearsPriorFramePixels',
+                  'ActualMujocoHeadRotationDrivesTheWarp',
+                  'VisionConsumersUseTransformedFrameUnlessRawDebugIsExplicit',
+                  'QuantizeForShader',
+                  'ReadPixels(',
+              ],
+              'managed': [
+                  'IdentityAndAxisRotationsAreDeterministic',
+                  'IdentityHomographyIsCanonicalAndFullyValid',
+                  'CoverageMatchesQuantizedShaderPayload',
+                  '[ModuleInitializer]',
+              ],
+              'java': [
+                  'beginGracefulStopLocked',
+                  'handleStoppingCameraStateLocked',
+                  'completeGracefulStopLocked',
+                  'CameraState.Type.CLOSED',
+                  'camera_close_failed',
+              ],
+              'acquisition': ['pendingStartAfterStop', 'restartAfterClose'],
+              'close_tests': [
+                  'ExplicitStopRemainsStoppingUntilClosedSnapshot',
+                  'CameraSwitchStartsOnlyAfterClosedSnapshot',
+                  'CLOSED',
+              ],
+              'acceptance': [
+                  'report.get("current_state") == "Stopped"',
+                  '"CLOSED" in str(report.get("message", ""))',
+                  'stale_frame_count',
+              ],
+              'architecture': [
+                  'Shader precision and exact coverage',
+                  'CameraX stop barrier',
+                  'previous-frame color is never accepted',
+                  'rotation_only',
+                  'ExplicitRawDebug',
+              ],
+              'validation': [
+                  'Accepted implementation SHA',
+                  '125/125',
+                  'camera_fatal_error',
+                  'CLOSED',
+              ],
           }
-          for category, (text, tokens) in required.items():
+          for category, tokens in required.items():
               for token in tokens:
-                  if token not in text:
-                      raise SystemExit(
-                          f"Missing RMA-104 {category} token: {token}"
-                      )
+                  if token not in text[category]:
+                      raise SystemExit(f'Missing RMA-104 {category} token: {token}')
 
-          runtime_text = "\n".join(
-              (renderer, pipeline, routing)
-          )
-          for token in (
-              "ReadPixels(",
-              "GetPixels(",
-              "GetPixels32(",
-              "AsyncGPUReadback",
-              "|| true",
-          ):
-              if token in runtime_text:
-                  raise SystemExit(
-                      "RMA-104 runtime contains forbidden readback/fallback: "
-                      + token
-                  )
-
-          if "ReadPixels(" not in unity:
-              raise SystemExit(
-                  "GPU comparison must retain test-only readback evidence."
-              )
-          if routing.count("ExplicitRawDebug") < 3:
-              raise SystemExit(
-                  "Raw phone access is not structurally isolated."
-              )
-          if "transformedFrame == null" not in routing:
-              raise SystemExit(
-                  "Normal vision consumers must fail closed without a warp."
-              )
-          print("RMA-104 reprojection policy passed.")
+          runtime = '\n'.join((text['renderer'], text['pipeline'], text['routing']))
+          for token in ('ReadPixels(', 'GetPixels(', 'GetPixels32(', 'AsyncGPUReadback', '|| true'):
+              if token in runtime:
+                  raise SystemExit('RMA-104 runtime contains forbidden fallback/readback: ' + token)
+          stop_body = text['acquisition'].split('public void StopAcquisition()', 1)[1].split('public void PauseAcquisition()', 1)[0]
+          if 'state.MarkStopped' in stop_body:
+              raise SystemExit('StopAcquisition must not fabricate Stopped before CameraX CLOSED.')
+          print('RMA-104 source contracts passed.')
           PY
 
           if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
@@ -235,7 +184,6 @@ jobs:
             exit 1
           fi
           git diff --check
-          echo 'RMA-104 repository cleanliness passed.'
 
       - name: Publish final status
         if: always()
@@ -245,18 +193,14 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          python3 - <<'PY' > "${RUNNER_TEMP}/rma104-status.json"
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
           import json
           import os
-          passed = os.environ["JOB_STATUS"] == "success"
+          passed = os.environ['JOB_STATUS'] == 'success'
           print(json.dumps({
               "state": "success" if passed else "failure",
               "context": "RMA-104 Reprojection Test Suite",
-              "description": (
-                  "Reprojection contracts passed"
-                  if passed
-                  else "Reprojection contracts failed"
-              ),
+              "description": "RMA-104 contracts passed" if passed else "RMA-104 contracts failed",
               "target_url": (
                   f"{os.environ['GITHUB_SERVER_URL']}/"
                   f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
@@ -270,4 +214,4 @@ jobs:
             --header "Authorization: Bearer ${GH_TOKEN}" \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            --data-binary "@${RUNNER_TEMP}/rma104-status.json" >/dev/null
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null

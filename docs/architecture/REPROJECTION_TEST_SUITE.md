@@ -16,19 +16,38 @@ The pattern has no horizontal, vertical, or rotational symmetry, so yaw, pitch,
 roll, mirroring, right-angle orientation, stale pixels, and transposed axes
 cannot accidentally produce the same result.
 
-Source textures use point filtering. This lets the CPU reference implement the
-shader's exact source lookup:
+Source textures use point filtering. The test-only CPU reference implements the
+shader's source lookup exactly:
 
-1. transform each output pixel center with `ReachyToPhonePixels`;
-2. reject depth at or below the shader epsilon;
-3. reject source coordinates outside the closed pixel bounds;
-4. round to the point-sampled texel selected by `(sourcePixel + 0.5) / size`;
-5. emit opaque black and validity zero for every rejected pixel.
+1. quantize the inverse homography to the same `float` payload uploaded through
+   Unity's `Matrix4x4`;
+2. perform projection and division in `double`;
+3. reject depth at or below the shader epsilon;
+4. reject source coordinates outside the closed pixel bounds;
+5. round to the point-sampled texel selected by `(sourcePixel + 0.5) / size`;
+6. emit opaque black and validity zero for every rejected pixel.
 
-The reference performs projection and division in `double`. GPU color is read
-back only inside the Unity test assembly and compared with an ARGB32 tolerance
-of three byte values. Validity is compared independently. Production runtime
-files continue to prohibit `ReadPixels`, `GetPixels`, and `AsyncGPUReadback`.
+GPU color is read back only inside the Unity test assembly and compared with an
+ARGB32 tolerance of three byte values. Validity is compared independently.
+Production runtime files continue to prohibit `ReadPixels`, `GetPixels`, and
+`AsyncGPUReadback`.
+
+## Shader precision and exact coverage
+
+RMA-104 exposed two boundary defects that simpler identity tests had missed:
+
+- algebraically identical `K * inverse(K)` matrices retained machine-noise
+  coefficients that could invalidate an entire edge column after float upload;
+- RMA-103 coverage counted the pre-upload `double` homography while the shader
+  consumed a `float` matrix, allowing coverage metadata and the emitted validity
+  mask to disagree at boundaries.
+
+`ReachyCameraHomographyCalculator` now canonicalizes only coefficients within
+`1e-12` of `0`, `1`, or `-1`. This removes numerical identity noise without
+weakening meaningful rotations or translations. The valid-coverage calculator
+counts the final float shader payload. Independent managed and real-graphics
+Unity tests require an identity transform to remain exact and report all
+`187/187` output pixels valid.
 
 ## Test matrix
 
@@ -65,6 +84,31 @@ requested target. The homography is built from the actual
 CPU reference for the actual pose and differ from the reference for the
 requested target. Position is not an input and the calibration profile remains
 labeled `rotation_only`.
+
+## CameraX stop barrier
+
+Repeated physical RMA-092 failures revealed that the old stop path published
+`Stopped` immediately after `unbind()` and removed its CameraX observer before
+the camera device reached `CLOSED`. A following session could therefore start
+against hardware that was still closing.
+
+The repaired contract is an observed teardown barrier, not a sleep or retry:
+
+- Java publishes `Stopping`, unbinds Preview and ImageAnalysis, and retains the
+  camera-state observer;
+- owned preview, analyzer, executor, and camera references are released only
+  after CameraX reports `CLOSED`;
+- a critical close error becomes the visible `camera_close_failed` fault;
+- Unity preserves `Stopping` and never fabricates `Stopped`;
+- a requested camera switch is queued and begins only after the `CLOSED`
+  snapshot; and
+- physical RMA-092 acceptance requires the diagnostic
+  `CameraX camera device reached CLOSED; Preview and ImageAnalysis are fully released.`
+  before starting the rotated rear-camera session or the front-camera session.
+
+Permanent Unity tests cover explicit stop and queued switching. Physical device
+evidence proves the rear rotation restart and front switch complete with zero
+stale frames and no `camera_fatal_error`.
 
 ## Consumer routing
 
