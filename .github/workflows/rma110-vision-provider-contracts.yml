@@ -164,13 +164,13 @@ jobs:
                   raise SystemExit('RMA-110 architecture missing: ' + token)
 
           for token in (
-              'Implementation validation in progress',
-              'no milestone completion claim',
+              'RMA-110 Vision Provider Contracts Validation',
               'does not retry',
               'Exact SHAs',
+              'typed `Cancelled`, `TimedOut`',
           ):
               if token not in validation:
-                  raise SystemExit('RMA-110 validation placeholder missing: ' + token)
+                  raise SystemExit('RMA-110 validation evidence missing: ' + token)
 
           forbidden = (
               '|| true',
