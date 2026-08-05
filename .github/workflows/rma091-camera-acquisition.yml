@@ -19,6 +19,8 @@ on:
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs.meta'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
       - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
@@ -26,6 +28,7 @@ on:
       - 'third_party/THIRD_PARTY_NOTICES.md'
       - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md'
   pull_request:
     paths:
       - '.github/workflows/rma091-camera-acquisition.yml'
@@ -43,6 +46,8 @@ on:
       - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraAcquisitionOwnershipTests.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs.meta'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
       - 'managed/ReachyMini.Camera.Tests/**'
       - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
@@ -50,6 +55,7 @@ on:
       - 'third_party/THIRD_PARTY_NOTICES.md'
       - 'docs/architecture/ANDROID_CAMERAX_FRAME_ACQUISITION.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md'
   workflow_dispatch:
 
 permissions:
@@ -103,6 +109,7 @@ jobs:
           gradle = (root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle').read_text(encoding='utf-8')
           tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs').read_text(encoding='utf-8')
           texture_tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraTextureBridgeTests.cs').read_text(encoding='utf-8')
+          close_barrier_tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs').read_text(encoding='utf-8')
           inventory = json.loads((root / 'third_party/inventory.json').read_text(encoding='utf-8'))
 
           for token in [
@@ -151,6 +158,19 @@ jobs:
               raise SystemExit('ImageProxy close must remain in the analyzer finally block.')
           if '++generation' not in java or 'expectedGeneration != generation' not in java:
               raise SystemExit('Async CameraX callbacks are not session-invalidated.')
+
+          for token in [
+              '"Stopping".equals(state)',
+              'beginGracefulStopLocked()',
+              'handleStoppingCameraStateLocked',
+              'CameraState.Type.CLOSED',
+              'completeGracefulStopLocked()',
+              'camera_stop_failed',
+          ]:
+              if token not in java:
+                  raise SystemExit(
+                      f'Missing CameraX close-barrier behavior: {token}'
+                  )
 
           for token in [
               'private static final int SLOT_COUNT = 3',
@@ -286,6 +306,18 @@ jobs:
           ]:
               if token not in tests:
                   raise SystemExit(f'Missing RMA-091 lifecycle test: {token}')
+
+          for token in [
+              'ExplicitStopRemainsStoppingUntilClosedSnapshot',
+              'CameraSwitchStartsOnlyAfterClosedSnapshot',
+              'ReachyCameraAcquisitionState.Stopping',
+              'platform.CompleteStop()',
+              '"CLOSED"',
+          ]:
+              if token not in close_barrier_tests:
+                  raise SystemExit(
+                      f'Missing CameraX close-barrier regression: {token}'
+                  )
 
           camerax = next(
               (entry for entry in inventory['entries'] if entry.get('id') == 'androidx-camerax'),
