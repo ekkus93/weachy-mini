@@ -6,7 +6,7 @@
 
 **Date:** 2026-08-05
 
-**Status:** Complete; final closeout workflow evidence pending
+**Status:** Complete; closeout exact-SHA validation in progress
 
 ## Implemented contract
 
@@ -60,10 +60,11 @@ Hosted CI run `31035832714` passed on the accepted implementation SHA:
 - Android lint, Java warnings, and tests; and
 - pinned Reachy model generation and topology validation.
 
-The permanent RMA-104 workflow is updated by the closeout to watch all
-homography, coverage, consumer-routing, close-barrier, managed-test, Unity-test,
-and physical-acceptance files. Its final exact-SHA closeout run will be recorded
-in this report after that workflow completes.
+The permanent RMA-104 workflow watches all homography, coverage,
+consumer-routing, close-barrier, managed-test, Unity-test, physical-acceptance,
+and closeout-evidence files. The RMA-091 workflow also checks the Java
+`Stopping`/`CLOSED` barrier and both Unity restart regressions, and watches this
+validation report so the final evidence commit cannot bypass that contract.
 
 ## Real-graphics Unity and physical Android validation
 
@@ -118,6 +119,14 @@ The RMA-092 artifact proves:
   and
 - APK: `8942857182`,
   `sha256:e580ce36842613d42ac5e6e7bf43d5ecbe6d4cb2162708f57683138d2ef0d714`.
+
+## Closeout validation
+
+The exact commit that adds this section contains the completed authoritative
+TODO, the accepted implementation and evidence, the hardened permanent RMA-104
+workflow, the hardened RMA-091 CameraX close-barrier workflow, and no temporary
+applicator files. Its permanent, hosted, and self-hosted run IDs will be appended
+only after every required gate passes on that exact SHA.
 
 RMA-104 is accepted as the final reprojection baseline for RMA-110 vision
 provider contracts. Final closeout workflow run IDs will be appended after the
