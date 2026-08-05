@@ -4,9 +4,11 @@
 
 **Accepted implementation SHA:** `bc611b700b6bb212d4a04a927e5935d326345e05`
 
+**Closeout baseline SHA:** `cf8e215f15fc879b2bf74b3bf1e26e76dff5213f`
+
 **Date:** 2026-08-05
 
-**Status:** Complete; final evidence SHA validation pending
+**Status:** Complete
 
 ## Implemented contract
 
@@ -83,8 +85,8 @@ only two compiler-required changes were retained:
   distinction between caller cancellation and timeout.
 
 No compatibility adapter, retry, fallback, or weakened contract was added.
-The temporary applicator and repair workflows and all payload chunks were
-removed before the accepted implementation SHA.
+The temporary payload, applicator, repair, and closeout files were removed
+before the final clean closeout baseline.
 
 ## Accepted hosted validation
 
@@ -137,12 +139,25 @@ Accepted artifacts are:
 
 ## Closeout validation
 
-The permanent RMA-110 workflow watches the contracts, routing policy,
-managed regression suite, architecture, validation report, and authoritative
-TODO. It rejects retry/fallback patterns, tracked build output, missing
-evidence tokens, and repository whitespace errors.
+The clean closeout baseline SHA
+`cf8e215f15fc879b2bf74b3bf1e26e76dff5213f` contains:
 
-Exact SHAs, final closeout workflow IDs, and final clean-SHA validation are
-required before sign-off. The final evidence-only commit containing this
-completed report must pass the permanent RMA-110 workflow, hosted CI, and
-the complete self-hosted Unity/Android chain.
+- the completed authoritative RMA-110 TODO section;
+- the accepted implementation and validation report;
+- the hardened permanent RMA-110 workflow; and
+- no payload chunk, patch script, applicator, repair, or cancellation workflow.
+
+The first long-form closeout workflow wrapper was rejected by GitHub before a
+job was created because its embedded YAML was invalid. It changed no product,
+test, TODO, or validation file. A minimal wrapper then executed the separately
+validated Python patch successfully, and both the patch file and wrapper were
+removed before the clean baseline above.
+
+The permanent RMA-110 workflow watches the contracts, routing policy, managed
+regression suite, architecture, validation report, and authoritative TODO. It
+rejects retry/fallback patterns, tracked build output, missing evidence tokens,
+and repository whitespace errors.
+
+Exact SHAs remain mandatory. The final evidence-only commit that records this
+clean baseline must pass the permanent RMA-110 workflow, hosted CI, and the
+complete self-hosted Unity/Android chain before final sign-off.
