@@ -26,12 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat >> .gitignore <<'EOF'
-
-# Managed .NET generated output
-**/bin/
-**/obj/
-EOF
+          printf '\n# Managed .NET generated output\n**/bin/\n**/obj/\n' >> .gitignore
           git rm --recursive --cached --ignore-unmatch \
             managed/ReachyMini.Camera.Tests/bin \
             managed/ReachyMini.Camera.Tests/obj \
