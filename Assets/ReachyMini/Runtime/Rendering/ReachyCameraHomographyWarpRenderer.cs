@@ -12,12 +12,38 @@ namespace ReachyMini.Rendering
         internal ReachyCameraHomographyGpuFrame(
             ReachyCameraHomographyPlan plan,
             RenderTexture color,
-            RenderTexture validity)
+            RenderTexture validity,
+            ReachyCameraCoverageSnapshot coverage)
         {
             Plan = plan ?? throw new ArgumentNullException(nameof(plan));
             Color = color ?? throw new ArgumentNullException(nameof(color));
             Validity = validity ??
                 throw new ArgumentNullException(nameof(validity));
+            Coverage = coverage ??
+                throw new ArgumentNullException(nameof(coverage));
+            ReachyCameraCoverageMeasurement? measurement =
+                coverage.Measurement;
+            if (!coverage.HasCoverage ||
+                measurement == null ||
+                measurement.SourceSessionId !=
+                    plan.SourceSessionId ||
+                measurement.SourceSequence !=
+                    plan.SourceSequence ||
+                measurement.SourceTimestampNanoseconds !=
+                    plan.SourceTimestampNanoseconds ||
+                measurement.AuthoritativeSequence !=
+                    plan.AuthoritativeSequence ||
+                measurement.ContinuityId !=
+                    plan.ContinuityId ||
+                measurement.OutputWidth != plan.OutputWidth ||
+                measurement.OutputHeight != plan.OutputHeight ||
+                measurement.ReachyToPhonePixels !=
+                    plan.ReachyToPhonePixels)
+            {
+                throw new ArgumentException(
+                    "Coverage metadata does not match the GPU homography frame.",
+                    nameof(coverage));
+            }
         }
 
         public ReachyCameraHomographyPlan Plan { get; }
@@ -25,6 +51,8 @@ namespace ReachyMini.Rendering
         public RenderTexture Color { get; }
 
         public RenderTexture Validity { get; }
+
+        public ReachyCameraCoverageSnapshot Coverage { get; }
     }
 
     public sealed class ReachyCameraHomographyWarpRenderer : IDisposable
@@ -64,7 +92,8 @@ namespace ReachyMini.Rendering
 
         public ReachyCameraHomographyGpuFrame Warp(
             Texture normalizedPhoneTexture,
-            ReachyCameraHomographyPlan plan)
+            ReachyCameraHomographyPlan plan,
+            ReachyCameraCoverageSnapshot coverage)
         {
             if (normalizedPhoneTexture == null)
             {
@@ -74,6 +103,10 @@ namespace ReachyMini.Rendering
             if (plan == null)
             {
                 throw new ArgumentNullException(nameof(plan));
+            }
+            if (coverage == null)
+            {
+                throw new ArgumentNullException(nameof(coverage));
             }
             ThrowIfDisposed();
             if (normalizedPhoneTexture.width != plan.SourceWidth ||
@@ -122,7 +155,8 @@ namespace ReachyMini.Rendering
             return new ReachyCameraHomographyGpuFrame(
                 plan,
                 RequireTexture(colorTexture, "color"),
-                RequireTexture(validityTexture, "validity"));
+                RequireTexture(validityTexture, "validity"),
+                coverage);
         }
 
         public void ResetOutputs()
