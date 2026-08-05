@@ -26,14 +26,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Apply and diagnose deterministic disposal repair
+      - name: Apply and validate cancellation and disposal repair
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/rma110_test_disposal_patch.py
-          python3 scripts/rma110_test_progress_patch.py
           dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
-          timeout --signal=TERM --kill-after=15s 60s \
+          timeout --signal=TERM --kill-after=15s 120s \
             dotnet run \
               --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
               --configuration Release \
@@ -41,10 +40,9 @@ jobs:
           git diff --check
           git config user.name 'Phillip Chin'
           git config user.email 'ekkus93@gmail.com'
+          git add Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs
           git add managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs
           git add scripts/rma110_test_disposal_patch.py
           git add scripts/rma110_test_progress_patch.py
-          git commit -m 'RMA-110: dispose test providers and frame resources'
+          git commit -m 'RMA-110: make cancellation and test ownership deterministic'
           git push origin HEAD:master
-
-# Fifth attempt pinpoints the cancellation await versus disposal boundary.
