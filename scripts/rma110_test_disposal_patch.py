@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
-PATH = Path("managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs")
+TEST_PATH = Path(
+    "managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs"
+)
+EXECUTOR_PATH = Path(
+    "Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs"
+)
+PROGRESS_PATH = Path("scripts/rma110_test_progress_patch.py")
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -11,8 +17,8 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
     return source.replace(old, new)
 
 
-def main() -> None:
-    source = PATH.read_text(encoding="utf-8")
+def patch_tests() -> None:
+    source = TEST_PATH.read_text(encoding="utf-8")
 
     source = replace_once(
         source,
@@ -65,25 +71,33 @@ def main() -> None:
         "invalid resource ownership",
     )
 
-    source = source.replace(
+    source = replace_once(
+        source,
         "            var rawResources = new FakeResources(\n",
         "            await using var rawResources = new FakeResources(\n",
+        "raw resource ownership",
     )
-    source = source.replace(
+    source = replace_once(
+        source,
         "            ReachyVisionFrame raw = RawFrame(rawResources, 5UL);\n",
         "            await using ReachyVisionFrame raw =\n"
         "                RawFrame(rawResources, 5UL);\n",
+        "raw frame ownership",
     )
-    source = source.replace(
+    source = replace_once(
+        source,
         "            var staleResources = new FakeResources(10, 10, hasValidity: true);\n",
         "            await using var staleResources = new FakeResources(\n"
         "                10,\n"
         "                10,\n"
         "                hasValidity: true);\n",
+        "stale resource ownership",
     )
-    source = source.replace(
+    source = replace_once(
+        source,
         "            ReachyVisionFrame staleFrame = Frame(\n",
         "            await using ReachyVisionFrame staleFrame = Frame(\n",
+        "stale frame ownership",
     )
 
     inline_frame = (
@@ -133,10 +147,78 @@ def main() -> None:
     for old, new in provider_replacements.items():
         count = source.count(old)
         if count != expected_counts[old]:
-            raise SystemExit(f"unexpected provider declaration count for {old!r}: {count}")
+            raise SystemExit(
+                f"unexpected provider declaration count for {old!r}: {count}"
+            )
         source = source.replace(old, new)
 
-    PATH.write_text(source, encoding="utf-8")
+    cancellation_block = """            cancellation.Cancel();
+            TrackingResult result = await pending.ConfigureAwait(false);
+"""
+    bounded_cancellation_block = """            cancellation.Cancel();
+            Task completed = await Task.WhenAny(
+                pending,
+                Task.Delay(
+                    TimeSpan.FromSeconds(1.0),
+                    CancellationToken.None)).ConfigureAwait(false);
+            if (completed != pending)
+            {
+                throw new InvalidOperationException(
+                    "Managed test failed: caller cancellation did not complete within one second.");
+            }
+            TrackingResult result = await pending.ConfigureAwait(false);
+"""
+    source = replace_once(
+        source,
+        cancellation_block,
+        bounded_cancellation_block,
+        "bounded caller cancellation",
+    )
+
+    TEST_PATH.write_text(source, encoding="utf-8")
+
+
+def patch_executor() -> None:
+    source = EXECUTOR_PATH.read_text(encoding="utf-8")
+    old = """            Task callerCancellationTask = Task.Delay(
+                Timeout.InfiniteTimeSpan,
+                cancellationToken);
+            Task completed = await Task.WhenAny(
+                providerTask,
+                timeoutTask,
+                callerCancellationTask).ConfigureAwait(false);
+"""
+    new = """            var callerCancellationSignal =
+                new TaskCompletionSource<bool>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+            using CancellationTokenRegistration callerCancellationRegistration =
+                cancellationToken.Register(
+                    static state =>
+                    {
+                        var signal =
+                            (TaskCompletionSource<bool>)state!;
+                        signal.TrySetResult(true);
+                    },
+                    callerCancellationSignal);
+            Task completed = await Task.WhenAny(
+                providerTask,
+                timeoutTask,
+                callerCancellationSignal.Task).ConfigureAwait(false);
+"""
+    source = replace_once(
+        source,
+        old,
+        new,
+        "explicit caller cancellation signal",
+    )
+    EXECUTOR_PATH.write_text(source, encoding="utf-8")
+
+
+def main() -> None:
+    patch_tests()
+    patch_executor()
+    if PROGRESS_PATH.exists():
+        PROGRESS_PATH.unlink()
     Path(__file__).unlink()
 
 
