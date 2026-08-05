@@ -9,8 +9,8 @@ per-frame valid-coverage metadata, fail-closed publication ordering, coverage
 classification, and the safety signal required to stop vision-driven turning
 before coverage becomes unusable.
 
-The numeric thresholds in this milestone are explicit engineering policy
-defaults. They are configurable and are not physical-camera calibration claims.
+The numeric thresholds in this milestone are explicit engineering policy defaults.
+They are configurable and are not physical-camera calibration claims.
 
 ## 1. Coverage calculation
 
