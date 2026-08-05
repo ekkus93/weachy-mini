@@ -1609,11 +1609,54 @@ H = K_reachy * R_reachy_phone * inverse(K_phone)
 
 ## RMA-103 — Implement valid-coverage policy
 
-- [ ] Calculate valid coverage percentage.
-- [ ] Ensure invalid pixels are never filled from prior frames.
-- [ ] Propagate validity metadata to tracking, VLM, world model, behavior, and diagnostics.
-- [ ] Define thresholds for normal, degraded, and unusable coverage.
-- [ ] Ensure the behavior planner can stop vision-driven turning before coverage becomes unusable.
+**Status:** Complete (2026-08-05)
+
+- [x] Calculate valid coverage percentage.
+- [x] Ensure invalid pixels are never filled from prior frames.
+- [x] Propagate validity metadata to tracking, VLM, world model, behavior, and diagnostics.
+- [x] Define thresholds for normal, degraded, and unusable coverage.
+- [x] Ensure the behavior planner can stop vision-driven turning before coverage becomes unusable.
+
+**Completion evidence**
+
+- `ReachyCameraValidCoverageCalculator` counts the exact integer output
+  pixels accepted by the same five affine half-plane predicates used by
+  the RMA-102 shader. It uses bounded row-interval searches, performs no
+  GPU readback or full-image CPU scan, and retains camera, calibration,
+  timestamp, model, authoritative-sequence, and continuity identity.
+- `ReachyCameraCoverageStateMachine` rejects stale ordering, timestamp
+  conflict, model/camera identity drift, and conflicting duplicate
+  coverage. New camera sessions or simulation continuities explicitly
+  permit sequence restart; rejected publication clears color, validity,
+  and coverage rather than retaining a previous-frame fallback.
+- The engineering baseline uses hysteresis: unusable entry at `<= 25%`,
+  unusable exit at `>= 35%`, normal exit below `65%`, and normal entry at
+  `>= 75%`. Vision-driven turning is stopped at `<= 35%`, before the
+  image reaches unusable coverage.
+- Immutable frame metadata exposes validity-mask availability, coverage
+  class, observation eligibility, degradation disclosure, and the
+  planner-facing turning-stop signal for future tracking, VLM, world-model,
+  behavior, and diagnostics interfaces.
+- Permanent workflow run `31014441081` passed managed camera contracts,
+  exact shader-predicate coverage, hysteresis, stale/conflict rejection,
+  continuity reset, consumer policy, no-readback rules, fail-closed
+  clearing, and repository cleanliness on exact implementation SHA
+  `9bcacfec7d4395e3e83e5f599402066f0d184718`.
+- Hosted CI run `31014441299` passed static, managed warnings-as-errors,
+  native and sanitizer, Android, and pinned Reachy-model jobs on the same
+  exact SHA.
+- Self-hosted Local Unity Android Validation run `31014441080`, attempt 2,
+  passed `112/112` EditMode and `1/1` PlayMode tests under OpenGL Core
+  with Mesa llvmpipe, ARM64 API-26 APK build and verification, RMA-090,
+  RMA-091, RMA-092, RMA-022 lifecycle, authoritative rendering, all
+  evidence uploads, APK upload, and final commit-status publication.
+- Attempt 1 encountered a CameraX `camera_fatal_error` during the second
+  rear-camera start in RMA-092 after valid Vulkan output and zero stale
+  frames. The unchanged-SHA attempt 2 passed the complete sequence, so no
+  production fallback or source change was justified.
+- Detailed architecture and evidence are in
+  `docs/architecture/CAMERA_VALID_COVERAGE_POLICY.md` and
+  `docs/validation/RMA_103_VALID_COVERAGE_POLICY_VALIDATION_2026-08-05.md`.
 
 ## RMA-104 — Build reprojection test suite
 
