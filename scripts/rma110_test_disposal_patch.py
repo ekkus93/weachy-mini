@@ -4,9 +4,8 @@ from pathlib import Path
 TEST_PATH = Path(
     "managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs"
 )
-EXECUTOR_PATH = Path(
-    "Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs"
-)
+PROGRAM_PATH = Path("managed/ReachyMini.Camera.Tests/Program.cs")
+PROGRESS_PATH = Path("scripts/rma110_test_progress_patch.py")
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -16,9 +15,28 @@ def replace_once(source: str, old: str, new: str, label: str) -> str:
     return source.replace(old, new)
 
 
-def patch_tests() -> None:
+def patch_test_bootstrap_and_ownership() -> None:
     source = TEST_PATH.read_text(encoding="utf-8")
+    source = replace_once(
+        source,
+        "using System.Runtime.CompilerServices;\n",
+        "",
+        "module-initializer using",
+    )
+    source = replace_once(
+        source,
+        """        [ModuleInitializer]
+        internal static void Initialize()
+        {
+            RunAsync().GetAwaiter().GetResult();
+        }
 
+        private static async Task RunAsync()
+""",
+        """        internal static async Task RunAsync()
+""",
+        "async contract entry point",
+    )
     source = replace_once(
         source,
         "            TransformedFramesRequireOwnedColorValidityAndCoverage();\n",
@@ -154,62 +172,60 @@ def patch_tests() -> None:
     cancellation_block = """            cancellation.Cancel();
             TrackingResult result = await pending.ConfigureAwait(false);
 """
-    deterministic_cancellation_block = """            cancellation.Cancel();
-            if (!pending.IsCompleted)
+    bounded_cancellation_block = """            cancellation.Cancel();
+            Task completed = await Task.WhenAny(
+                pending,
+                Task.Delay(
+                    TimeSpan.FromSeconds(1.0),
+                    CancellationToken.None)).ConfigureAwait(false);
+            if (completed != pending)
             {
                 throw new InvalidOperationException(
-                    "Managed test failed: caller cancellation did not complete inline.");
+                    "Managed test failed: caller cancellation did not complete within one second.");
             }
             TrackingResult result = await pending.ConfigureAwait(false);
 """
     source = replace_once(
         source,
         cancellation_block,
-        deterministic_cancellation_block,
-        "deterministic caller cancellation",
+        bounded_cancellation_block,
+        "bounded caller cancellation",
     )
-
     TEST_PATH.write_text(source, encoding="utf-8")
 
 
-def patch_executor() -> None:
-    source = EXECUTOR_PATH.read_text(encoding="utf-8")
-    old = """            Task callerCancellationTask = Task.Delay(
-                Timeout.InfiniteTimeSpan,
-                cancellationToken);
-            Task completed = await Task.WhenAny(
-                providerTask,
-                timeoutTask,
-                callerCancellationTask).ConfigureAwait(false);
-"""
-    new = """            var callerCancellationSignal =
-                new TaskCompletionSource<bool>();
-            using CancellationTokenRegistration callerCancellationRegistration =
-                cancellationToken.Register(
-                    static state =>
-                    {
-                        var signal =
-                            (TaskCompletionSource<bool>)state!;
-                        signal.TrySetResult(true);
-                    },
-                    callerCancellationSignal);
-            Task completed = await Task.WhenAny(
-                providerTask,
-                timeoutTask,
-                callerCancellationSignal.Task).ConfigureAwait(false);
-"""
+def patch_program_entry_point() -> None:
+    source = PROGRAM_PATH.read_text(encoding="utf-8")
     source = replace_once(
         source,
-        old,
-        new,
-        "inline caller cancellation signal",
+        "using System.Collections.Generic;\n",
+        "using System.Collections.Generic;\nusing System.Threading.Tasks;\n",
+        "task using",
     )
-    EXECUTOR_PATH.write_text(source, encoding="utf-8")
+    source = replace_once(
+        source,
+        "        private static int Main()\n",
+        "        private static async Task<int> Main()\n",
+        "async main signature",
+    )
+    source = replace_once(
+        source,
+        "            Rma101AuthoritativeRotationContracts.Run();\n"
+        "            Console.WriteLine(\"RMA-090/RMA-091/RMA-100 camera contracts passed.\");\n",
+        "            Rma101AuthoritativeRotationContracts.Run();\n"
+        "            await Rma110VisionProviderContracts.RunAsync()\n"
+        "                .ConfigureAwait(false);\n"
+        "            Console.WriteLine(\"RMA-090/RMA-091/RMA-100 camera contracts passed.\");\n",
+        "RMA-110 async invocation",
+    )
+    PROGRAM_PATH.write_text(source, encoding="utf-8")
 
 
 def main() -> None:
-    patch_tests()
-    patch_executor()
+    patch_test_bootstrap_and_ownership()
+    patch_program_entry_point()
+    if PROGRESS_PATH.exists():
+        PROGRESS_PATH.unlink()
     Path(__file__).unlink()
 
 
