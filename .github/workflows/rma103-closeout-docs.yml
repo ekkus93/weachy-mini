@@ -86,9 +86,8 @@ jobs:
               "- Detailed architecture and evidence are in",
               "  `docs/architecture/CAMERA_VALID_COVERAGE_POLICY.md` and",
               "  `docs/validation/RMA_103_VALID_COVERAGE_POLICY_VALIDATION_2026-08-05.md`.",
-              "",
           ]
-          replacement = "\n".join(todo_lines) + "\n"
+          replacement = "\n".join(todo_lines) + "\n\n"
           todo_path.write_text(
               todo[:start] + replacement + todo[end:],
               encoding="utf-8",
@@ -175,10 +174,9 @@ jobs:
               "- APK: `8934664829`, `sha256:107f621f594bf18a3104b1188639988a8b21f37dec3ed4b47de035f51894d30f`.",
               "",
               "RMA-103 is accepted as the coverage-policy baseline for RMA-104 and later vision-provider interfaces.",
-              "",
           ]
           report_path.write_text(
-              "\n".join(report_lines) + "\n",
+              "\n".join(report_lines).rstrip() + "\n",
               encoding="utf-8",
           )
           PY
