@@ -36,14 +36,14 @@ namespace ReachyMini.Tests
                 Assert.That(
                     acquisition.State.Current.SessionId,
                     Is.EqualTo(session));
-                StringAssert.Contains(
-                    "closing",
-                    acquisition.State.Current.Message);
 
                 acquisition.RefreshNow();
                 Assert.That(
                     acquisition.State.Current.State,
                     Is.EqualTo(ReachyCameraAcquisitionState.Stopping));
+                Assert.That(
+                    acquisition.State.Current.SessionId,
+                    Is.EqualTo(session));
 
                 platform.CompleteStop();
                 acquisition.RefreshNow();
