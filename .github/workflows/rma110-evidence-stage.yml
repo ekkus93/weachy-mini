@@ -1,0 +1,36 @@
+name: RMA-110 Evidence Stage
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma110-evidence-stage.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma110-evidence-stage
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply authoritative TODO evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/rma110_todo_evidence_patch.py
+          git diff --check
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git add scripts/rma110_todo_evidence_patch.py
+          git commit -m 'docs: update final RMA-110 TODO evidence'
+          git push origin HEAD:master
