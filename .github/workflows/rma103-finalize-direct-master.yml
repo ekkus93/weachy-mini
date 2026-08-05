@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply exact closeout edits
+      - name: Apply non-workflow closeout edits
         shell: bash
         run: |
           set -euo pipefail
@@ -53,26 +53,6 @@ jobs:
               test.replace(old_test, new_test),
               encoding="utf-8",
           )
-
-          workflow_path = Path(
-              ".github/workflows/rma103-valid-coverage-policy.yml"
-          )
-          workflow = workflow_path.read_text(encoding="utf-8")
-          replacements = {
-              '"coverage.Measurement.SourceSessionId",':
-                  '"measurement.SourceSessionId",',
-              '"coverage.Measurement.AuthoritativeSequence",':
-                  '"measurement.AuthoritativeSequence",',
-              '"coverage.Measurement.ContinuityId",':
-                  '"measurement.ContinuityId",',
-          }
-          for old, new in replacements.items():
-              if old not in workflow:
-                  raise SystemExit(
-                      f"Expected RMA-103 workflow token not found: {old}"
-                  )
-              workflow = workflow.replace(old, new)
-          workflow_path.write_text(workflow, encoding="utf-8")
 
           todo_path = Path(
               "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
@@ -136,13 +116,11 @@ jobs:
           )
           PY
 
-          git rm .github/workflows/rma103-finalize-direct-master.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            .github/workflows/rma103-valid-coverage-policy.yml \
             Assets/ReachyMini/Tests/Editor/ReachyCameraHomographyWarpTests.cs \
             docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
           git diff --cached --check
-          git commit -m 'RMA-102 closeout and RMA-103 integration cleanup'
+          git commit -m 'RMA-102 closeout and RMA-103 test cleanup'
           git push origin HEAD:master
