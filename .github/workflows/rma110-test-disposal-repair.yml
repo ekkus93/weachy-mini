@@ -43,3 +43,5 @@ jobs:
           git add scripts/rma110_test_disposal_patch.py
           git commit -m 'RMA-110: dispose test providers and frame resources'
           git push origin HEAD:master
+
+# Second attempt corrects only the fail-closed patch precondition count.
