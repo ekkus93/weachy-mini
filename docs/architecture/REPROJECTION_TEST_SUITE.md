@@ -58,9 +58,9 @@ fallback.
 
 ## Authoritative orientation
 
-The authoritative-orientation test creates two MuJoCo camera-body poses: the
-solved actual pose and a deliberately different requested target. The
-homography is built from the actual
+The authoritative-orientation test uses actual MuJoCo camera-body poses and
+creates two cases: the solved actual pose and a deliberately different
+requested target. The homography is built from the actual
 `ReachyCameraRelativeRotationCalculator` sample. Its GPU output must match the
 CPU reference for the actual pose and differ from the reference for the
 requested target. Position is not an input and the calibration profile remains
