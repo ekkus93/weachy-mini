@@ -44,6 +44,7 @@ namespace ReachyMini.AppState
         private ulong nextSessionId = 1UL;
         private ReachyCameraFacing preferredFacing =
             ReachyCameraFacing.Unconfigured;
+        private bool pendingStartAfterStop;
 
         public ReachyCameraAcquisitionStateStore State => state;
 
@@ -105,11 +106,24 @@ namespace ReachyMini.AppState
         {
             EnsureReady();
             preferredFacing = facing;
+            if (state.Current.IsActive)
+            {
+                desiredActive = true;
+                pendingStartAfterStop = true;
+                if (state.Current.State !=
+                    ReachyCameraAcquisitionState.Stopping)
+                {
+                    StopPlatformForSwitch();
+                }
+                return;
+            }
+
             ReachyCameraCapabilitySnapshot capabilities =
                 RequireDiscovery().State.Current;
             if (capabilities.Permission != ReachyCameraPermissionState.Granted)
             {
                 desiredActive = false;
+                pendingStartAfterStop = false;
                 if (capabilities.Permission == ReachyCameraPermissionState.Revoked)
                 {
                     state.MarkPermissionRevoked(capabilities.Message);
@@ -126,6 +140,7 @@ namespace ReachyMini.AppState
             if (selected == null)
             {
                 desiredActive = false;
+                pendingStartAfterStop = false;
                 state.MarkUnavailable(
                     $"No available {GetFacingLabel(facing)} camera exposes a YUV analysis resolution.");
                 return;
@@ -133,14 +148,10 @@ namespace ReachyMini.AppState
 
             ReachyCameraResolution resolution =
                 selected.AnalysisResolutions[0];
-            if (state.Current.IsActive)
-            {
-                StopPlatformForSwitch();
-            }
-
             ulong session = nextSessionId;
             nextSessionId = checked(nextSessionId + 1UL);
             desiredActive = true;
+            pendingStartAfterStop = false;
             state.BeginStart(
                 session,
                 selected.Facing,
@@ -159,6 +170,7 @@ namespace ReachyMini.AppState
         {
             EnsureReady();
             desiredActive = false;
+            pendingStartAfterStop = false;
             if (state.Current.IsActive &&
                 state.Current.State != ReachyCameraAcquisitionState.Stopping)
             {
@@ -166,11 +178,7 @@ namespace ReachyMini.AppState
                     "Stopping CameraX Preview and ImageAnalysis.");
             }
             ApplyPlatformSnapshot(RequirePlatform().Stop());
-            if (state.Current.State != ReachyCameraAcquisitionState.Stopped)
-            {
-                state.MarkStopped(
-                    "CameraX Preview and ImageAnalysis are stopped.");
-            }
+            nextPollTime = Time.unscaledTime + PollIntervalSeconds;
         }
 
         public void RefreshNow()
@@ -270,6 +278,7 @@ namespace ReachyMini.AppState
             discovery = null;
             initialized = false;
             desiredActive = false;
+            pendingStartAfterStop = false;
         }
 
         private void OnCapabilitiesChanged(
@@ -325,11 +334,7 @@ namespace ReachyMini.AppState
                     "Unbinding the current camera before an explicit switch.");
             }
             ApplyPlatformSnapshot(RequirePlatform().Stop());
-            if (state.Current.State != ReachyCameraAcquisitionState.Stopped)
-            {
-                state.MarkStopped(
-                    "The previous camera is fully unbound before switching.");
-            }
+            nextPollTime = Time.unscaledTime + PollIntervalSeconds;
         }
 
         private void ApplyPlatformSnapshot(string json)
@@ -392,7 +397,14 @@ namespace ReachyMini.AppState
                     }
                     break;
                 case "Stopped":
+                    bool restartAfterClose =
+                        desiredActive && pendingStartAfterStop;
                     state.MarkStopped(detail);
+                    if (restartAfterClose)
+                    {
+                        pendingStartAfterStop = false;
+                        StartPreferred(preferredFacing);
+                    }
                     break;
                 case "PermissionRevoked":
                     desiredActive = false;

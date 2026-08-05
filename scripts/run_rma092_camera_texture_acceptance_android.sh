@@ -297,6 +297,7 @@ elif condition == "acquisition_stopped":
         report.get("last_command_id") == command_id
         and report.get("last_command_status") == "ok"
         and report.get("current_state") == "Stopped"
+        and "CLOSED" in str(report.get("message", ""))
     )
 
 raise SystemExit(0 if matched else 1)

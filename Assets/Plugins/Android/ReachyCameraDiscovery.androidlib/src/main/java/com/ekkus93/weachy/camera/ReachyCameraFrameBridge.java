@@ -132,6 +132,9 @@ public final class ReachyCameraFrameBridge {
             final long expectedGeneration;
             final ListenableFuture<ProcessCameraProvider> providerFuture;
             synchronized (LOCK) {
+                if ("Stopping".equals(state)) {
+                    return snapshotLocked();
+                }
                 stopBoundUseCasesLocked();
                 ++generation;
                 expectedGeneration = generation;
@@ -242,16 +245,23 @@ public final class ReachyCameraFrameBridge {
         requireMainThread();
         requireActivity(activity);
         synchronized (LOCK) {
-            if (isActiveState(state)) {
-                state = "Stopping";
-                message = "Unbinding CameraX Preview and ImageAnalysis.";
+            if (!isActiveState(state) || "Stopping".equals(state)) {
+                return snapshotLocked();
             }
+            state = "Stopping";
+            message =
+                    "CameraX use cases are unbinding; waiting for camera device CLOSED.";
+            errorCode = "";
             ++generation;
-            stopBoundUseCasesLocked();
-            setInactiveLocked(
-                    "Stopped",
-                    "",
-                    "CameraX Preview and ImageAnalysis are unbound.");
+            try {
+                beginGracefulStopLocked();
+            } catch (RuntimeException exception) {
+                stopBoundUseCasesLocked();
+                setInactiveLocked(
+                        "Faulted",
+                        "camera_stop_failed",
+                        safeMessage(exception));
+            }
             return snapshotLocked();
         }
     }
@@ -408,6 +418,10 @@ public final class ReachyCameraFrameBridge {
             return;
         }
         synchronized (LOCK) {
+            if ("Stopping".equals(state)) {
+                handleStoppingCameraStateLocked(cameraState);
+                return;
+            }
             if (expectedGeneration != generation ||
                     sessionId == 0L ||
                     !isActiveState(state)) {
@@ -583,6 +597,106 @@ public final class ReachyCameraFrameBridge {
         return new CameraSelector.Builder()
                 .addCameraFilter(filter)
                 .build();
+    }
+
+    private static void beginGracefulStopLocked() {
+        if (boundCamera == null) {
+            stopBoundUseCasesLocked();
+            setInactiveLocked(
+                    "Stopped",
+                    "",
+                    "No CameraX device was bound; stop completed without a close transition.");
+            return;
+        }
+
+        ReachyCameraTextureFrameBridge.endSession(generation);
+        if (imageAnalysis != null) {
+            imageAnalysis.clearAnalyzer();
+        }
+        if (preview != null) {
+            preview.setSurfaceProvider((Preview.SurfaceProvider) null);
+        }
+        if (lifecycleOwner != null) {
+            lifecycleOwner.destroy();
+        }
+        if (cameraProvider != null) {
+            if (preview != null && imageAnalysis != null) {
+                cameraProvider.unbind(preview, imageAnalysis);
+            } else if (preview != null) {
+                cameraProvider.unbind(preview);
+            } else if (imageAnalysis != null) {
+                cameraProvider.unbind(imageAnalysis);
+            }
+        }
+
+        descriptor = null;
+        latestFrame = null;
+        deliveredSequence = 0L;
+        if (!"Stopping".equals(state) || boundCamera == null) {
+            return;
+        }
+        CameraState current = boundCamera.getCameraInfo()
+                .getCameraState()
+                .getValue();
+        if (current != null &&
+                current.getType() == CameraState.Type.CLOSED) {
+            completeGracefulStopLocked();
+        }
+    }
+
+    private static void handleStoppingCameraStateLocked(
+            CameraState cameraState) {
+        CameraState.StateError cameraError = cameraState.getError();
+        if (cameraError != null &&
+                cameraError.getType() == CameraState.ErrorType.CRITICAL) {
+            String detail = cameraStateErrorDetail(cameraError);
+            stopBoundUseCasesLocked();
+            setInactiveLocked(
+                    "Faulted",
+                    "camera_close_failed",
+                    "CameraX failed while closing the camera device: " + detail);
+            return;
+        }
+
+        switch (cameraState.getType()) {
+            case CLOSING:
+                message =
+                        "CameraX camera device is closing; restart remains blocked.";
+                break;
+            case CLOSED:
+                completeGracefulStopLocked();
+                break;
+            default:
+                message =
+                        "CameraX use cases are unbound; waiting for camera device CLOSED.";
+                break;
+        }
+    }
+
+    private static void completeGracefulStopLocked() {
+        if (boundCamera != null && cameraStateObserver != null) {
+            boundCamera.getCameraInfo()
+                    .getCameraState()
+                    .removeObserver(cameraStateObserver);
+        }
+        cameraStateObserver = null;
+        boundCamera = null;
+        if (previewSurfaceProvider != null) {
+            previewSurfaceProvider.close();
+        }
+        if (analyzerExecutor != null) {
+            analyzerExecutor.shutdownNow();
+        }
+        cameraProvider = null;
+        lifecycleOwner = null;
+        preview = null;
+        imageAnalysis = null;
+        previewSurfaceProvider = null;
+        analyzerExecutor = null;
+        setInactiveLocked(
+                "Stopped",
+                "",
+                "CameraX camera device reached CLOSED; Preview and ImageAnalysis are fully released.");
     }
 
     private static void stopBoundUseCasesLocked() {
