@@ -1,0 +1,62 @@
+name: RMA-101 Clean Generated .NET Output
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma101-clean-generated-dotnet.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  clean:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Remove tracked generated output and verify ignore policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >> .gitignore <<'EOF'
+
+# Managed .NET generated output
+**/bin/
+**/obj/
+EOF
+          git rm --recursive --cached --ignore-unmatch \
+            managed/ReachyMini.Camera.Tests/bin \
+            managed/ReachyMini.Camera.Tests/obj \
+            managed/ReachyMini.Core/bin \
+            managed/ReachyMini.Core/obj
+          rm --recursive --force \
+            managed/ReachyMini.Camera.Tests/bin \
+            managed/ReachyMini.Camera.Tests/obj \
+            managed/ReachyMini.Core/bin \
+            managed/ReachyMini.Core/obj
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated .NET output remains tracked.' >&2
+            exit 1
+          fi
+          git check-ignore --quiet managed/ReachyMini.Camera.Tests/bin/Release/net8.0/ReachyMini.Camera.Tests.deps.json
+          git check-ignore --quiet managed/ReachyMini.Core/obj/project.assets.json
+          rm --force .github/workflows/rma101-clean-generated-dotnet.yml
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add --all
+          git commit -m 'RMA-101: remove generated managed build output'
+          git push origin HEAD:master
