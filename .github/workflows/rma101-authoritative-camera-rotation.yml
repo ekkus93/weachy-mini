@@ -83,8 +83,29 @@ jobs:
             'efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46' \
             "${model}" | sha256sum --check --strict
           MODEL_PATH="${model}" python3 - <<'PY'
+          import math
           import os
           import xml.etree.ElementTree as ET
+
+          def numbers(value):
+              return [float(part) for part in value.split()]
+
+          def rotation(quaternion):
+              w, x, y, z = quaternion
+              norm = math.sqrt(w*w + x*x + y*y + z*z)
+              w, x, y, z = (part / norm for part in (w, x, y, z))
+              return [
+                  [1 - 2*(y*y + z*z), 2*(x*y - z*w), 2*(x*z + y*w)],
+                  [2*(x*y + z*w), 1 - 2*(x*x + z*z), 2*(y*z - x*w)],
+                  [2*(x*z - y*w), 2*(y*z + x*w), 1 - 2*(x*x + y*y)],
+              ]
+
+          def transpose(matrix):
+              return [[matrix[column][row] for column in range(3)] for row in range(3)]
+
+          def multiply(left, right):
+              return [[sum(left[row][k] * right[k][column] for k in range(3))
+                       for column in range(3)] for row in range(3)]
 
           root = ET.parse(os.environ['MODEL_PATH']).getroot()
           parent = {child: node for node in root.iter() for child in node}
@@ -92,10 +113,30 @@ jobs:
           sites = [node for node in root.iter('site') if node.get('name') == 'camera_optical']
           if len(cameras) != 1 or len(sites) != 1:
               raise SystemExit('Pinned MJCF must contain exactly one eye_camera and camera_optical.')
-          if parent.get(cameras[0]) is not parent.get(sites[0]):
-              raise SystemExit('eye_camera and camera_optical no longer share the pinned fixed body.')
-          if parent[cameras[0]].tag != 'body':
-              raise SystemExit('Pinned optical frames are not attached to a MuJoCo body.')
+
+          camera = cameras[0]
+          optical_site = sites[0]
+          camera_body = parent.get(camera)
+          optical_parent = parent.get(optical_site)
+          if camera_body is None or optical_parent is None or camera_body.tag != 'body' or optical_parent.tag != 'body':
+              raise SystemExit('Pinned camera hierarchy is not body-backed.')
+          if parent.get(camera_body) is not optical_parent:
+              raise SystemExit('eye_camera must remain on the fixed child of the camera_optical parent body.')
+          if camera.get('quat') not in (None, '1 0 0 0'):
+              raise SystemExit('eye_camera gained an unexpected local rotation.')
+
+          camera_position = numbers(camera_body.get('pos', '0 0 0'))
+          site_position = numbers(optical_site.get('pos', '0 0 0'))
+          if any(abs(left - right) > 1.0e-9 for left, right in zip(camera_position, site_position)):
+              raise SystemExit('eye_camera child and camera_optical no longer share an origin.')
+
+          parent_from_camera_body = rotation(numbers(camera_body.get('quat', '1 0 0 0')))
+          parent_from_optical = rotation(numbers(optical_site.get('quat', '1 0 0 0')))
+          camera_body_from_optical = multiply(transpose(parent_from_camera_body), parent_from_optical)
+          expected = [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]]
+          if any(abs(camera_body_from_optical[row][column] - expected[row][column]) > 2.0e-6
+                 for row in range(3) for column in range(3)):
+              raise SystemExit('Pinned camera-body-to-optical rotation changed.')
           print('Pinned MJCF camera provenance passed.')
           PY
 
@@ -115,103 +156,75 @@ jobs:
           doc = Path('docs/architecture/AUTHORITATIVE_CAMERA_RELATIVE_ROTATION.md').read_text(encoding='utf-8')
           binding = json.loads(Path('models/reachy-mini/camera-reprojection-binding.json').read_text(encoding='utf-8'))
 
-          required_core = [
-              'PinnedSourceCommit', 'PinnedSourceModelSha256',
-              'PinnedOpticalSiteName', 'PinnedCameraName',
-              'PinnedCanonicalCameraBodyName', 'CanonicalCameraBodyId = 15U',
-              'CanonicalBodyPoseCount = 18', 'CameraBodyFromOptical',
-              'NeutralMujocoWorldFromOptical',
-              'currentWorldFromOptical.Transposed()',
-              'CurrentReachyFromNeutralReachy',
-              'CurrentReachyFromCurrentPhone',
-              'NeutralPhoneFromCurrentPhone',
-          ]
-          for token in required_core:
-              if token not in core:
-                  raise SystemExit(f'Missing RMA-101 core token: {token}')
+          required = {
+              'core': (core, [
+                  'PinnedSourceCommit', 'PinnedSourceModelSha256',
+                  'PinnedOpticalSiteName', 'PinnedCameraName',
+                  'PinnedCanonicalCameraBodyName', 'CanonicalCameraBodyId = 15U',
+                  'CanonicalBodyPoseCount = 18', 'CameraBodyFromOptical',
+                  'NeutralMujocoWorldFromOptical',
+                  'currentWorldFromOptical.Transposed()',
+                  'CurrentReachyFromNeutralReachy',
+                  'CurrentReachyFromCurrentPhone',
+                  'NeutralPhoneFromCurrentPhone',
+              ]),
+              'source': (source, [
+                  'IReachyPublishedAuthoritativeStateSource',
+                  'TryCaptureLatestAuthoritativeState(frame)',
+                  'frame.GetBodyPose(cameraIndex)',
+                  'pose.QuaternionW', 'pose.QuaternionX',
+                  'pose.QuaternionY', 'pose.QuaternionZ',
+                  'StaleAuthoritativeState', 'CameraBodyMissing',
+                  'CameraBodyDuplicated', 'AuthoritativeLayoutMismatch',
+                  'body translation was not consumed',
+              ]),
+              'managed': (managed, [
+                  'NeutralSolvedPoseProducesNeutralRotation',
+                  'YawPitchAndRollSignsAreExplicit',
+                  'PhoneOrientationComposesAfterNeutralCalibration',
+                  'TranslationIsAbsentFromTheApi',
+                  'ModelMismatchFailsClosed',
+              ]),
+              'unity': (unity, [
+                  'GeneratedModelRetainsPinnedCanonicalCameraBody',
+                  'SourceUsesSolvedPoseAndRejectsStaleSequence',
+                  'SourceIgnoresTranslationAndAcceptsContinuityReset',
+                  'SourceFailsClosedForMissingOrDuplicatedCameraBody',
+              ]),
+              'documentation': (doc, [
+                  'mjData.xquat', 'body ID 15', 'camera_optical', 'eye_camera',
+                  'Body position is not read by the calculator',
+                  'R_currentReachy_from_currentPhone',
+                  'positive yaw', 'positive pitch', 'positive roll',
+                  'Requested head targets', 'RMA-102',
+              ]),
+          }
+          for category, (text, tokens) in required.items():
+              for token in tokens:
+                  if token not in text:
+                      raise SystemExit(f'Missing RMA-101 {category} token: {token}')
 
-          required_source = [
-              'IReachyPublishedAuthoritativeStateSource',
-              'TryCaptureLatestAuthoritativeState(frame)',
-              'frame.GetBodyPose(cameraIndex)',
-              'pose.QuaternionW', 'pose.QuaternionX',
-              'pose.QuaternionY', 'pose.QuaternionZ',
-              'StaleAuthoritativeState', 'CameraBodyMissing',
-              'CameraBodyDuplicated', 'AuthoritativeLayoutMismatch',
-              'body translation was not consumed',
-          ]
-          for token in required_source:
-              if token not in source:
-                  raise SystemExit(f'Missing authoritative-source token: {token}')
-
-          forbidden_dynamic_inputs = [
-              'requestedOrientation', 'targetOrientation',
-              'RequestedOrientation', 'TargetOrientation',
-          ]
-          for token in forbidden_dynamic_inputs:
-              if token in core or token in source:
-                  raise SystemExit(f'Forbidden target-orientation input remains: {token}')
-
-          calculate_signature = core.split('public static ReachyCameraRelativeRotationSample Calculate(', 1)[1].split(')', 1)[0]
-          for token in ('position', 'translation'):
-              if token.lower() in calculate_signature.lower():
-                  raise SystemExit(f'Level 1 calculator accepts forbidden {token} input.')
-
-          required_managed = [
-              'NeutralSolvedPoseProducesNeutralRotation',
-              'YawPitchAndRollSignsAreExplicit',
-              'PhoneOrientationComposesAfterNeutralCalibration',
-              'TranslationIsAbsentFromTheApi',
-              'ModelMismatchFailsClosed',
-          ]
-          for token in required_managed:
-              if token not in managed:
-                  raise SystemExit(f'Missing managed RMA-101 contract: {token}')
           if 'Rma101AuthoritativeRotationContracts.Run();' not in program:
               raise SystemExit('Managed test entry point does not explicitly execute RMA-101.')
+          for token in ('requestedOrientation', 'targetOrientation', 'RequestedOrientation', 'TargetOrientation'):
+              if token in core or token in source:
+                  raise SystemExit(f'Forbidden target-orientation input remains: {token}')
+          signature = core.split('public static ReachyCameraRelativeRotationSample Calculate(', 1)[1].split(')', 1)[0]
+          if 'position' in signature.lower() or 'translation' in signature.lower():
+              raise SystemExit('Level 1 calculator accepts translation.')
 
-          required_unity = [
-              'GeneratedModelRetainsPinnedCanonicalCameraBody',
-              'SourceUsesSolvedPoseAndRejectsStaleSequence',
-              'SourceIgnoresTranslationAndAcceptsContinuityReset',
-              'SourceFailsClosedForMissingOrDuplicatedCameraBody',
-          ]
-          for token in required_unity:
-              if token not in unity:
-                  raise SystemExit(f'Missing Unity RMA-101 test: {token}')
-
-          expected = {
-              'schema_version': 1,
-              'model_compatibility': 'reachy-mini-official-v1',
-          }
-          for key, value in expected.items():
-              if binding.get(key) != value:
-                  raise SystemExit(f'Binding mismatch for {key}.')
           camera = binding['authoritative_camera']
+          if binding.get('schema_version') != 1 or binding.get('model_compatibility') != 'reachy-mini-official-v1':
+              raise SystemExit('Binding schema or model key changed.')
           if camera['camera_name'] != 'eye_camera' or camera['optical_site_name'] != 'camera_optical':
               raise SystemExit('Pinned camera/site names changed.')
           if camera['canonical_body_name'] != '__body_15' or camera['body_id'] != 15:
               raise SystemExit('Pinned canonical camera body changed.')
           if camera['expected_body_pose_count'] != 18:
               raise SystemExit('Pinned body layout changed.')
-          if binding['level_1_policy']['translation_used'] is not False:
-              raise SystemExit('Level 1 binding unexpectedly consumes translation.')
-          if binding['level_1_policy']['requested_target_orientation_allowed'] is not False:
-              raise SystemExit('Level 1 binding unexpectedly permits requested targets.')
-
-          required_doc = [
-              'mjData.xquat', 'body ID 15', 'camera_optical', 'eye_camera',
-              'Translation is intentionally absent',
-              'R_currentReachy_from_currentPhone',
-              'positive yaw', 'positive pitch', 'positive roll',
-              'Requested head targets', 'RMA-102',
-          ]
-          for token in required_doc:
-              if token not in doc:
-                  raise SystemExit(f'Missing RMA-101 documentation token: {token}')
-
-          tracked = Path('.').resolve()
-          del tracked
+          policy = binding['level_1_policy']
+          if policy['translation_used'] is not False or policy['requested_target_orientation_allowed'] is not False:
+              raise SystemExit('Level 1 binding weakened its rotation-only policy.')
           PY
           if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
             echo 'Generated managed build output is tracked.' >&2
