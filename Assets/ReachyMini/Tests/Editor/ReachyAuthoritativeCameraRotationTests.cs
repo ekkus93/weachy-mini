@@ -88,32 +88,36 @@ namespace ReachyMini.Tests
         [Test]
         public void SourceIgnoresTranslationAndAcceptsContinuityReset()
         {
-            var firstFake = new FakeAuthoritativeStateSource();
-            firstFake.Publish(
+            var fake = new FakeAuthoritativeStateSource();
+            var source =
+                new ReachyAuthoritativeCameraRotationSource(fake);
+
+            fake.Publish(
                 5UL,
                 1U,
                 NeutralCameraBodyPose(0.0, 0.0, 0.0));
-            var secondFake = new FakeAuthoritativeStateSource();
-            secondFake.Publish(
+            ReachyCameraRotationCaptureResult first = source.Capture(
+                Profile(),
+                ReachyPhoneOpticalOrientationSample.Identity(1L));
+
+            fake.Publish(
                 1UL,
                 2U,
                 NeutralCameraBodyPose(9.0e6, -8.0e6, 7.0e6));
-
-            ReachyCameraRotationCaptureResult first =
-                new ReachyAuthoritativeCameraRotationSource(firstFake)
-                    .Capture(
-                        Profile(),
-                        ReachyPhoneOpticalOrientationSample.Identity(1L));
-            ReachyCameraRotationCaptureResult second =
-                new ReachyAuthoritativeCameraRotationSource(secondFake)
-                    .Capture(
-                        Profile(),
-                        ReachyPhoneOpticalOrientationSample.Identity(2L));
+            ReachyCameraRotationCaptureResult reset = source.Capture(
+                Profile(),
+                ReachyPhoneOpticalOrientationSample.Identity(2L));
 
             Assert.That(first.Succeeded, Is.True, first.Message);
-            Assert.That(second.Succeeded, Is.True, second.Message);
+            Assert.That(reset.Succeeded, Is.True, reset.Message);
             Assert.That(
-                second.Sample!.CurrentReachyFromCurrentPhone
+                reset.Sample!.AuthoritativeSequence,
+                Is.EqualTo(1UL));
+            Assert.That(
+                reset.Sample.AuthoritativeContinuityId,
+                Is.EqualTo(2U));
+            Assert.That(
+                reset.Sample.CurrentReachyFromCurrentPhone
                     .ApproximatelyEquals(
                         first.Sample!.CurrentReachyFromCurrentPhone,
                         1.0e-9),
