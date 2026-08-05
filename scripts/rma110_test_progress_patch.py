@@ -4,13 +4,6 @@ from pathlib import Path
 PATH = Path("managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs")
 
 
-def replace_once(source: str, old: str, new: str, label: str) -> str:
-    count = source.count(old)
-    if count != 1:
-        raise SystemExit(f"unexpected {label} count: {count}")
-    return source.replace(old, new)
-
-
 def main() -> None:
     source = PATH.read_text(encoding="utf-8")
     old = """            ProviderKindsAndCapabilitiesRemainExplicit();
@@ -58,53 +51,12 @@ def main() -> None:
             Console.WriteLine("RMA-110 exactly-once disposal contract starting.");
             await FrameResourcesDisposeExactlyOnceAsync()
                 .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 managed contracts completed.");
 """
-    source = replace_once(source, old, new, "RMA-110 run sequence")
-
-    start = source.index(
-        "        private static async Task CallerCancellationReturnsTypedFailureAsync()"
-    )
-    end = source.index(
-        "        private static async Task TimeoutQuarantinesProviderAsync()",
-        start,
-    )
-    method = source[start:end]
-    method = replace_once(
-        method,
-        """            Task<TrackingResult> pending = VisionProviderExecutor.TrackAsync(
-                tracker,
-                request,
-                selection,
-                cancellation.Token).AsTask();
-            cancellation.Cancel();
-            TrackingResult result = await pending.ConfigureAwait(false);
-""",
-        """            Task<TrackingResult> pending = VisionProviderExecutor.TrackAsync(
-                tracker,
-                request,
-                selection,
-                cancellation.Token).AsTask();
-            Console.WriteLine("RMA-110 caller cancellation pending task created.");
-            cancellation.Cancel();
-            Console.WriteLine("RMA-110 caller cancellation source cancelled.");
-            TrackingResult result = await pending.ConfigureAwait(false);
-            Console.WriteLine("RMA-110 caller cancellation pending task completed.");
-""",
-        "caller cancellation await block",
-    )
-    method = replace_once(
-        method,
-        """            await frame.DisposeAsync().ConfigureAwait(false);
-""",
-        """            Console.WriteLine("RMA-110 caller cancellation explicit frame disposal starting.");
-            await frame.DisposeAsync().ConfigureAwait(false);
-            Console.WriteLine("RMA-110 caller cancellation method body completed.");
-""",
-        "caller cancellation disposal block",
-    )
-    source = source[:start] + method + source[end:]
-
-    PATH.write_text(source, encoding="utf-8")
+    count = source.count(old)
+    if count != 1:
+        raise SystemExit(f"unexpected RMA-110 run sequence count: {count}")
+    PATH.write_text(source.replace(old, new), encoding="utf-8")
     Path(__file__).unlink()
 
 
