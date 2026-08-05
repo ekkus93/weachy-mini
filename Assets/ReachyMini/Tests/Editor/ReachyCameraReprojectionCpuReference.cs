@@ -24,6 +24,11 @@ namespace ReachyMini.Tests
                     nameof(sourceTopLeftPixels));
             }
 
+            // Unity uploads the homography through Matrix4x4 float fields. The
+            // reference first reproduces that exact shader payload, then keeps
+            // all projection and boundary arithmetic in double precision.
+            ReachyMatrix3x3 shaderMatrix =
+                QuantizeForShader(plan.ReachyToPhonePixels);
             int total = checked(
                 plan.OutputWidth * plan.OutputHeight);
             var colors = new Color32[total];
@@ -40,7 +45,7 @@ namespace ReachyMini.Tests
                     int outputIndex =
                         outputY * plan.OutputWidth + outputX;
                     ReachyVector3D projected =
-                        plan.ReachyToPhonePixels.Transform(
+                        shaderMatrix.Transform(
                             new ReachyVector3D(
                                 outputX,
                                 outputY,
@@ -90,6 +95,21 @@ namespace ReachyMini.Tests
                 validity,
                 validCount,
                 total);
+        }
+
+        private static ReachyMatrix3x3 QuantizeForShader(
+            ReachyMatrix3x3 matrix)
+        {
+            return new ReachyMatrix3x3(
+                (double)(float)matrix.M00,
+                (double)(float)matrix.M01,
+                (double)(float)matrix.M02,
+                (double)(float)matrix.M10,
+                (double)(float)matrix.M11,
+                (double)(float)matrix.M12,
+                (double)(float)matrix.M20,
+                (double)(float)matrix.M21,
+                (double)(float)matrix.M22);
         }
 
         private static void AssertReadbackMatches(
