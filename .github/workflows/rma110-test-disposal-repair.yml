@@ -48,4 +48,4 @@ jobs:
           git commit -m 'RMA-110: make cancellation and test ownership deterministic'
           git push origin HEAD:master
 
-# Eighth bounded run traces cancellation delivery after the explicit signal repair.
+# Ninth bounded run uses inline cancellation completion and deterministic ownership.
