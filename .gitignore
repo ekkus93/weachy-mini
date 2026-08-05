@@ -129,3 +129,7 @@ InitTestScene*.unity*
 /Assets/AddressableAssetsData/*/*.bin*
 /Assets/Unity.VisualScripting.Generated/
 /Assets/SceneDependencyCache*
+
+# Managed .NET generated output
+**/bin/
+**/obj/
