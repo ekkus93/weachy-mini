@@ -114,7 +114,7 @@ namespace ReachyMini.Tests
                 reset.Sample!.AuthoritativeSequence,
                 Is.EqualTo(1UL));
             Assert.That(
-                reset.Sample.AuthoritativeContinuityId,
+                reset.Sample.ContinuityId,
                 Is.EqualTo(2U));
             Assert.That(
                 reset.Sample.CurrentReachyFromCurrentPhone
