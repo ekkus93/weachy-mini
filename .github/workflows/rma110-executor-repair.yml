@@ -1,0 +1,55 @@
+name: RMA-110 Executor Repair
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma110-executor-repair.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma110-executor-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore aligned executor and apply compiler fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          path='Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs'
+          git show 'a2b28dd4ac8e6b78572d0ea46ad5c009f9815ca8:'"${path}" > "${path}"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs')
+          source = path.read_text(encoding='utf-8')
+          old_diagnostic = 'private static string Diagnostic<T>(Execution<T> execution)\n        {'
+          new_diagnostic = 'private static string Diagnostic<T>(Execution<T> execution)\n            where T : class\n        {'
+          if source.count(old_diagnostic) != 1:
+              raise SystemExit('unexpected Diagnostic<T> contract')
+          source = source.replace(old_diagnostic, new_diagnostic)
+          old_delay = 'Task timeoutTask = Task.Delay(timeout);'
+          new_delay = 'Task timeoutTask = Task.Delay(\n                timeout,\n                CancellationToken.None);'
+          if source.count(old_delay) != 1:
+              raise SystemExit('unexpected timeout clock contract')
+          source = source.replace(old_delay, new_delay)
+          path.write_text(source, encoding='utf-8')
+          PY
+          git diff --check
+          grep -F 'where T : class' "${path}" >/dev/null
+          grep -F 'CancellationToken.None' "${path}" >/dev/null
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add "${path}"
+          git commit -m 'RMA-110: align executor with provider contracts'
+          git push origin HEAD:master
