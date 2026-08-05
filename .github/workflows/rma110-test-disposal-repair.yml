@@ -47,3 +47,5 @@ jobs:
           git add scripts/rma110_test_progress_patch.py
           git commit -m 'RMA-110: make cancellation and test ownership deterministic'
           git push origin HEAD:master
+
+# Eighth bounded run traces cancellation delivery after the explicit signal repair.
