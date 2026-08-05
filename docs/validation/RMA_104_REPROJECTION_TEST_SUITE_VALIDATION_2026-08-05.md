@@ -21,6 +21,6 @@ The accepted implementation SHA must pass:
 - authoritative rendering acceptance; and
 - artifact and final commit-status publication.
 
-The final report will record exact run, job, artifact, and digest evidence. No
-milestone completion claim is made until the exact implementation SHA passes
-the complete chain.
+The final report will record exact run, job, artifact, and digest evidence.
+No milestone completion claim is valid until the exact implementation SHA
+passes the complete chain.
