@@ -62,40 +62,35 @@ def main() -> None:
 """
     source = replace_once(source, old, new, "RMA-110 run sequence")
 
-    bounded = """            cancellation.Cancel();
-            Task completed = await Task.WhenAny(
-                pending,
-                Task.Delay(
-                    TimeSpan.FromSeconds(1.0),
-                    CancellationToken.None)).ConfigureAwait(false);
-            if (completed != pending)
+    deterministic = """            cancellation.Cancel();
+            if (!pending.IsCompleted)
             {
                 throw new InvalidOperationException(
-                    "Managed test failed: caller cancellation did not complete within one second.");
+                    "Managed test failed: caller cancellation did not complete inline.");
             }
             TrackingResult result = await pending.ConfigureAwait(false);
 """
     traced = """            Console.WriteLine("RMA-110 cancellation pending task created.");
             cancellation.Cancel();
             Console.WriteLine("RMA-110 cancellation source returned from Cancel().");
-            Task completed = await Task.WhenAny(
-                pending,
-                Task.Delay(
-                    TimeSpan.FromSeconds(1.0),
-                    CancellationToken.None)).ConfigureAwait(false);
             Console.WriteLine(
-                completed == pending
-                    ? "RMA-110 cancellation pending task won."
-                    : "RMA-110 cancellation safety timeout won.");
-            if (completed != pending)
+                pending.IsCompleted
+                    ? "RMA-110 cancellation completed inline."
+                    : "RMA-110 cancellation remained pending.");
+            if (!pending.IsCompleted)
             {
                 throw new InvalidOperationException(
-                    "Managed test failed: caller cancellation did not complete within one second.");
+                    "Managed test failed: caller cancellation did not complete inline.");
             }
             TrackingResult result = await pending.ConfigureAwait(false);
             Console.WriteLine("RMA-110 cancellation result awaited.");
 """
-    source = replace_once(source, bounded, traced, "caller cancellation trace")
+    source = replace_once(
+        source,
+        deterministic,
+        traced,
+        "caller cancellation trace",
+    )
 
     PATH.write_text(source, encoding="utf-8")
     Path(__file__).unlink()
