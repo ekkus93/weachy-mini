@@ -274,3 +274,10 @@ solved MuJoCo camera-body orientation to a timestamped
 `CurrentReachyFromCurrentPhone` rotation suitable for RMA-102's GPU homography
 warp. Requested targets, presentation transforms, and translation cannot
 silently substitute for authoritative solved orientation.
+
+## 12. Formal roadmap closeout
+
+The authoritative roadmap was changed to `Complete (2026-08-04)`, all five
+RMA-101 tasks were checked, the exact implementation and validation evidence
+was added, and the temporary self-removing finalizer was deleted in closeout
+commit `da61a7252e9be508ec3fd4530eaf0a40b961b1d3`.
