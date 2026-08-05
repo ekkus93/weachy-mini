@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "model_compatibility": "reachy-mini-official-v1",
+  "source": {
+    "repository": "https://github.com/pollen-robotics/reachy_mini.git",
+    "commit": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
+    "model_path": "src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml",
+    "model_sha256": "efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46"
+  },
+  "authoritative_camera": {
+    "camera_name": "eye_camera",
+    "optical_site_name": "camera_optical",
+    "canonical_body_name": "__body_15",
+    "body_id": 15,
+    "expected_body_pose_count": 18,
+    "camera_body_from_optical_matrix": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        -1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        -1.0
+      ]
+    ],
+    "neutral_mujoco_world_from_optical_matrix": [
+      [
+        0.0,
+        0.0,
+        1.0
+      ],
+      [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        -1.0,
+        0.0
+      ]
+    ]
+  },
+  "level_1_policy": {
+    "translation_used": false,
+    "requested_target_orientation_allowed": false,
+    "source": "MuJoCo solved data.xquat for body 15",
+    "composition": "currentReachy_from_currentPhone = currentReachy_from_neutralReachy * neutralReachy_from_neutralPhone * neutralPhone_from_currentPhone"
+  }
+}

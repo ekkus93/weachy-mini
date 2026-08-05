@@ -19,6 +19,7 @@ namespace ReachyMini.Camera.Tests
             CameraSwitchCreatesANewSession();
             InvalidFrameContractsFailClosed();
             Rma100CameraCalibrationContracts.Run();
+            Rma101AuthoritativeRotationContracts.Run();
             Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");
             return 0;
         }
