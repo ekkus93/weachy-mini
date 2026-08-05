@@ -225,6 +225,10 @@ namespace ReachyMini.Rendering
             {
                 return;
             }
+            if (ReferenceEquals(RenderTexture.active, texture))
+            {
+                RenderTexture.active = null;
+            }
             if (texture.IsCreated())
             {
                 texture.Release();

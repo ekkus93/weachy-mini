@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in */scripts/*.py) ruff check --fix \"$f\" && ruff format \"$f\" ;; esac; } 2>/dev/null || true"
+            "command": "jq -r '.tool_input.file_path // \"\"' | { IFS= read -r f || f=''; case \"$f\" in */scripts/*.py|scripts/*.py) if command -v ruff >/dev/null 2>&1; then ruff check --fix \"$f\" && ruff format \"$f\"; elif command -v uv >/dev/null 2>&1; then uv run ruff check --fix \"$f\" && uv run ruff format \"$f\"; else printf '%s\\n' 'Ruff hook requires ruff or uv.' >&2; exit 127; fi ;; esac; }"
           }
         ]
       }

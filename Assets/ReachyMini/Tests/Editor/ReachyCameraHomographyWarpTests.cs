@@ -5,6 +5,7 @@ using NUnit.Framework;
 using ReachyMini.AppState;
 using ReachyMini.Rendering;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
 namespace ReachyMini.Tests
@@ -214,6 +215,10 @@ namespace ReachyMini.Tests
 
         private static Shader RequireShader()
         {
+            Assert.That(
+                SystemInfo.graphicsDeviceType,
+                Is.Not.EqualTo(GraphicsDeviceType.Null),
+                "GPU homography tests require a real graphics device; do not use -nographics.");
             Shader shader = Shader.Find(
                 ReachyCameraHomographyWarpRenderer.ShaderName);
             Assert.That(shader, Is.Not.Null);
