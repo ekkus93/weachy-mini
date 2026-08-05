@@ -2,13 +2,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using ReachyMini.AppState;
 
 namespace ReachyMini.Camera.Tests
 {
     internal static class Program
     {
-        private static int Main()
+        private static async Task<int> Main()
         {
             PermissionTransitionsRemainExplicit();
             DiscoveryPublishesImmutableCapabilities();
@@ -20,6 +21,8 @@ namespace ReachyMini.Camera.Tests
             InvalidFrameContractsFailClosed();
             Rma100CameraCalibrationContracts.Run();
             Rma101AuthoritativeRotationContracts.Run();
+            await Rma110VisionProviderContracts.RunAsync()
+                .ConfigureAwait(false);
             Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");
             return 0;
         }

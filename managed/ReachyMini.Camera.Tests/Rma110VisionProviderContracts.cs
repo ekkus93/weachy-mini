@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Perception;
@@ -11,16 +10,11 @@ namespace ReachyMini.Camera.Tests
 {
     internal static class Rma110VisionProviderContracts
     {
-        [ModuleInitializer]
-        internal static void Initialize()
-        {
-            RunAsync().GetAwaiter().GetResult();
-        }
-
-        private static async Task RunAsync()
+        internal static async Task RunAsync()
         {
             ProviderKindsAndCapabilitiesRemainExplicit();
-            TransformedFramesRequireOwnedColorValidityAndCoverage();
+            await TransformedFramesRequireOwnedColorValidityAndCoverageAsync()
+                .ConfigureAwait(false);
             await FrameSourceRejectsRawFallbackAndStaleSequenceAsync()
                 .ConfigureAwait(false);
             await CallerCancellationReturnsTypedFailureAsync()
@@ -111,13 +105,14 @@ namespace ReachyMini.Camera.Tests
                 "zero timeout");
         }
 
-        private static void TransformedFramesRequireOwnedColorValidityAndCoverage()
+        private static async Task
+            TransformedFramesRequireOwnedColorValidityAndCoverageAsync()
         {
-            var resources = new FakeResources(
+            await using var resources = new FakeResources(
                 width: 10,
                 height: 10,
                 hasValidity: true);
-            ReachyVisionFrame frame = Frame(
+            await using ReachyVisionFrame frame = Frame(
                 resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
@@ -131,11 +126,15 @@ namespace ReachyMini.Camera.Tests
                 frame.Resources.HasResource(VisionResourceKind.ValidityMask),
                 "validity resource");
 
+            await using var invalidResources = new FakeResources(
+                10,
+                10,
+                hasValidity: false);
             Throws<ArgumentException>(
                 () =>
                 {
                     _ = Frame(
-                        new FakeResources(10, 10, hasValidity: false),
+                        invalidResources,
                         VisionFrameOrigin.TransformedReachyEye,
                         VisionCoverageState.Normal,
                         sourceSequence: 2UL);
@@ -166,12 +165,13 @@ namespace ReachyMini.Camera.Tests
                 "frame-source-1",
                 selection,
                 TimeSpan.FromSeconds(1.0));
-            var rawResources = new FakeResources(
+            await using var rawResources = new FakeResources(
                 width: 10,
                 height: 10,
                 hasValidity: false);
-            ReachyVisionFrame raw = RawFrame(rawResources, 5UL);
-            var source = new FakeFrameSource(
+            await using ReachyVisionFrame raw =
+                RawFrame(rawResources, 5UL);
+            await using var source = new FakeFrameSource(
                 descriptor,
                 (_, _) => new ValueTask<FrameSourceResult>(
                     FrameSourceResult.Success(
@@ -200,8 +200,11 @@ namespace ReachyMini.Camera.Tests
                 "frame-source-2",
                 selection,
                 TimeSpan.FromSeconds(1.0));
-            var staleResources = new FakeResources(10, 10, hasValidity: true);
-            ReachyVisionFrame staleFrame = Frame(
+            await using var staleResources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame staleFrame = Frame(
                 staleResources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
@@ -236,8 +239,12 @@ namespace ReachyMini.Camera.Tests
                 "tracker-cancel",
                 VisionProviderLocation.OnDevice);
             var selection = new VisionProviderSelection(descriptor);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
                 sourceSequence: 10UL);
@@ -247,7 +254,7 @@ namespace ReachyMini.Camera.Tests
                     "track-cancel",
                     selection,
                     TimeSpan.FromSeconds(2.0)));
-            var tracker = new FakeTracker(
+            await using var tracker = new FakeTracker(
                 descriptor,
                 WaitForTrackerCancellationAsync);
             using var cancellation = new CancellationTokenSource();
@@ -257,6 +264,16 @@ namespace ReachyMini.Camera.Tests
                 selection,
                 cancellation.Token).AsTask();
             cancellation.Cancel();
+            Task completed = await Task.WhenAny(
+                pending,
+                Task.Delay(
+                    TimeSpan.FromSeconds(1.0),
+                    CancellationToken.None)).ConfigureAwait(false);
+            if (completed != pending)
+            {
+                throw new InvalidOperationException(
+                    "Managed test failed: caller cancellation did not complete within one second.");
+            }
             TrackingResult result = await pending.ConfigureAwait(false);
 
             Equal(
@@ -275,8 +292,12 @@ namespace ReachyMini.Camera.Tests
                 "tracker-timeout",
                 VisionProviderLocation.OnDevice);
             var selection = new VisionProviderSelection(descriptor);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
                 sourceSequence: 11UL);
@@ -288,7 +309,7 @@ namespace ReachyMini.Camera.Tests
                     TimeSpan.FromMilliseconds(50.0)));
             var completion = new TaskCompletionSource<TrackingResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var tracker = new FakeTracker(
+            await using var tracker = new FakeTracker(
                 descriptor,
                 (_, _) => new ValueTask<TrackingResult>(completion.Task));
 
@@ -317,8 +338,12 @@ namespace ReachyMini.Camera.Tests
                 "tracker-fault",
                 VisionProviderLocation.OnDevice);
             var selection = new VisionProviderSelection(descriptor);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
                 sourceSequence: 12UL);
@@ -328,7 +353,7 @@ namespace ReachyMini.Camera.Tests
                     "track-fault",
                     selection,
                     TimeSpan.FromSeconds(1.0)));
-            var tracker = new FakeTracker(
+            await using var tracker = new FakeTracker(
                 descriptor,
                 ThrowTrackerFailure);
 
@@ -360,8 +385,12 @@ namespace ReachyMini.Camera.Tests
                 "tracker-new",
                 VisionProviderLocation.OnDevice);
             var selection = new VisionProviderSelection(first);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
                 sourceSequence: 13UL);
@@ -373,7 +402,7 @@ namespace ReachyMini.Camera.Tests
                     TimeSpan.FromSeconds(1.0)));
             var completion = new TaskCompletionSource<TrackingResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var tracker = new FakeTracker(
+            await using var tracker = new FakeTracker(
                 first,
                 (_, _) => new ValueTask<TrackingResult>(completion.Task));
 
@@ -420,8 +449,12 @@ namespace ReachyMini.Camera.Tests
                 "tracker-wrong",
                 VisionProviderLocation.OnDevice);
             var selection = new VisionProviderSelection(descriptor);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Degraded,
                 sourceSequence: 14UL);
@@ -431,7 +464,7 @@ namespace ReachyMini.Camera.Tests
                     "track-identity",
                     selection,
                     TimeSpan.FromSeconds(1.0)));
-            var tracker = new FakeTracker(
+            await using var tracker = new FakeTracker(
                 descriptor,
                 (_, _) => new ValueTask<TrackingResult>(
                     TrackingResult.Success(
@@ -461,8 +494,12 @@ namespace ReachyMini.Camera.Tests
                 "cloud-vlm",
                 VisionProviderLocation.Cloud);
             var selection = new VisionProviderSelection(descriptor);
-            ReachyVisionFrame frame = Frame(
-                new FakeResources(10, 10, hasValidity: true),
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
+            await using ReachyVisionFrame frame = Frame(
+                resources,
                 VisionFrameOrigin.TransformedReachyEye,
                 VisionCoverageState.Normal,
                 sourceSequence: 15UL);
@@ -475,7 +512,7 @@ namespace ReachyMini.Camera.Tests
                 "What is visible?",
                 context,
                 networkDisclosureAcknowledged: false);
-            var provider = new FakeVisionLanguageProvider(
+            await using var provider = new FakeVisionLanguageProvider(
                 descriptor,
                 (_, _) => new ValueTask<VisionLanguageResult>(
                     VisionLanguageResult.Success(
@@ -501,7 +538,10 @@ namespace ReachyMini.Camera.Tests
 
         private static async Task FrameResourcesDisposeExactlyOnceAsync()
         {
-            var resources = new FakeResources(10, 10, hasValidity: true);
+            await using var resources = new FakeResources(
+                10,
+                10,
+                hasValidity: true);
             ReachyVisionFrame frame = Frame(
                 resources,
                 VisionFrameOrigin.TransformedReachyEye,
