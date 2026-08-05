@@ -135,9 +135,9 @@ jobs:
                   renderer,
                   [
                       "ReachyCameraCoverageSnapshot",
-                      "coverage.Measurement.SourceSessionId",
-                      "coverage.Measurement.AuthoritativeSequence",
-                      "coverage.Measurement.ContinuityId",
+                      "measurement.SourceSessionId",
+                      "measurement.AuthoritativeSequence",
+                      "measurement.ContinuityId",
                       "public ReachyCameraCoverageSnapshot Coverage",
                   ],
               ),
