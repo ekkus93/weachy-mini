@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: rma104-harden-rma091-gate
@@ -20,32 +20,25 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Harden RMA-091 close-barrier contract
+      - name: Generate hardened RMA-091 workflow
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/rma104_harden_rma091_gate.py
-          rm .github/workflows/rma104-harden-rma091-gate.yml
-          test ! -e scripts/rma104_harden_rma091_gate.py
-          test ! -e .github/workflows/rma104-harden-rma091-gate.yml
+          mkdir -p "${RUNNER_TEMP}/rma104-rma091-gate"
+          cp .github/workflows/rma091-camera-acquisition.yml \
+            "${RUNNER_TEMP}/rma104-rma091-gate/rma091-camera-acquisition.yml"
           grep -F 'ExplicitStopRemainsStoppingUntilClosedSnapshot' \
-            .github/workflows/rma091-camera-acquisition.yml >/dev/null
+            "${RUNNER_TEMP}/rma104-rma091-gate/rma091-camera-acquisition.yml" >/dev/null
           grep -F 'RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md' \
-            .github/workflows/rma091-camera-acquisition.yml >/dev/null
+            "${RUNNER_TEMP}/rma104-rma091-gate/rma091-camera-acquisition.yml" >/dev/null
           git diff --check
 
-      - name: Commit self-removing gate hardening
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/rma091-camera-acquisition.yml
-          git add -u scripts/rma104_harden_rma091_gate.py
-          git add -u .github/workflows/rma104-harden-rma091-gate.yml
-          git diff --cached --check
-          git commit -m 'ci: enforce CameraX close barrier in RMA-091'
-          git push origin HEAD:master
+      - name: Upload hardened workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma104-rma091-gate-patch-${{ github.sha }}
+          path: ${{ runner.temp }}/rma104-rma091-gate/rma091-camera-acquisition.yml
+          if-no-files-found: error
+          retention-days: 1
