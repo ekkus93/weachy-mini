@@ -11,6 +11,7 @@ before coverage becomes unusable.
 
 The numeric thresholds in this milestone are explicit engineering policy defaults.
 They are configurable and are not physical-camera calibration claims.
+Coverage is propagated to tracking, VLM, world-model, behavior, and diagnostics consumers.
 
 ## 1. Coverage calculation
 
@@ -81,9 +82,7 @@ Within one epoch it rejects:
 
 An exact duplicate is idempotent. A new camera session or simulation continuity
 starts a new classification epoch and permits sequence restart. Rejected
-publication causes the production pipeline to release both RMA-102 render
-targets and publish `Unavailable`; it never keeps the previous frame as a
-fallback.
+publication causes the production pipeline to release both RMA-102 render targets and publish `Unavailable`; it never keeps the previous frame as a fallback.
 
 ## 4. Coverage classes and hysteresis
 
