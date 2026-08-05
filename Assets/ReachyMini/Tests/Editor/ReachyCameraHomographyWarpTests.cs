@@ -23,16 +23,28 @@ namespace ReachyMini.Tests
             {
                 ReachyCameraHomographyPlan plan =
                     BuildPlan(3, 3, 3, 3, ReachyMatrix3x3.Identity);
+                ReachyCameraCoverageSnapshot coverage =
+                    PublishCoverage(plan);
                 using var renderer =
                     new ReachyCameraHomographyWarpRenderer(shader);
                 ReachyCameraHomographyGpuFrame frame =
-                    renderer.Warp(source, plan);
+                    renderer.Warp(source, plan, coverage);
 
                 Assert.That(frame.Color.width, Is.EqualTo(3));
                 Assert.That(frame.Color.height, Is.EqualTo(3));
                 Assert.That(frame.Validity.width, Is.EqualTo(3));
                 Assert.That(frame.Validity.height, Is.EqualTo(3));
                 Assert.That(frame.Plan, Is.SameAs(plan));
+                Assert.That(frame.Coverage, Is.SameAs(coverage));
+                Assert.That(
+                    frame.Coverage.State,
+                    Is.EqualTo(ReachyCameraCoverageState.Normal));
+                Assert.That(
+                    frame.Coverage.Measurement!.ValidPixelCount,
+                    Is.EqualTo(9L));
+                Assert.That(
+                    frame.Coverage.Measurement.CoverageFraction,
+                    Is.EqualTo(1.0));
 
                 colorReadback = ReadBack(frame.Color);
                 validityReadback = ReadBack(frame.Validity);
@@ -70,10 +82,12 @@ namespace ReachyMini.Tests
                 source.Apply(false, false);
                 ReachyCameraHomographyPlan plan =
                     BuildPlan(8, 6, 4, 3, ReachyMatrix3x3.Identity);
+                ReachyCameraCoverageSnapshot coverage =
+                    PublishCoverage(plan);
                 using var renderer =
                     new ReachyCameraHomographyWarpRenderer(shader);
                 ReachyCameraHomographyGpuFrame frame =
-                    renderer.Warp(source, plan);
+                    renderer.Warp(source, plan, coverage);
 
                 Assert.That(frame.Color.width, Is.EqualTo(4));
                 Assert.That(frame.Color.height, Is.EqualTo(3));
@@ -82,6 +96,10 @@ namespace ReachyMini.Tests
                 Assert.That(frame.Color, Is.Not.SameAs(source));
                 Assert.That(frame.Color.IsCreated(), Is.True);
                 Assert.That(frame.Validity.IsCreated(), Is.True);
+                Assert.That(frame.Coverage.HasValidityMask, Is.True);
+                Assert.That(
+                    frame.Coverage.CanCreateVisualObservations,
+                    Is.True);
             }
             finally
             {
@@ -109,11 +127,13 @@ namespace ReachyMini.Tests
             {
                 ReachyCameraHomographyPlan plan =
                     BuildPlan(4, 4, 4, 4, ReachyMatrix3x3.Identity);
+                ReachyCameraCoverageSnapshot coverage =
+                    PublishCoverage(plan);
                 using var renderer =
                     new ReachyCameraHomographyWarpRenderer(shader);
-                renderer.Warp(source, plan);
+                renderer.Warp(source, plan, coverage);
                 Assert.Throws<ArgumentException>(
-                    () => renderer.Warp(wrong, plan));
+                    () => renderer.Warp(wrong, plan, coverage));
                 Assert.That(renderer.ColorTexture, Is.Null);
                 Assert.That(renderer.ValidityTexture, Is.Null);
             }
@@ -122,6 +142,81 @@ namespace ReachyMini.Tests
                 Destroy(source);
                 Destroy(wrong);
             }
+        }
+
+        [Test]
+        public void CoverageIdentityMismatchIsRejectedBeforeFramePublication()
+        {
+            Shader shader = RequireShader();
+            Texture2D source = new Texture2D(
+                4,
+                4,
+                TextureFormat.RGBA32,
+                false,
+                true);
+            try
+            {
+                source.Apply(false, false);
+                ReachyCameraHomographyPlan plan =
+                    BuildPlan(4, 4, 4, 4, ReachyMatrix3x3.Identity);
+                ReachyCameraHomographyPlan different =
+                    BuildPlan(
+                        4,
+                        4,
+                        4,
+                        4,
+                        ReachyQuaternionD.FromAxisAngle(
+                            new ReachyVector3D(0.0, 1.0, 0.0),
+                            Math.PI / 18.0)
+                        .ToRotationMatrix());
+                ReachyCameraCoverageSnapshot wrongCoverage =
+                    PublishCoverage(different);
+                using var renderer =
+                    new ReachyCameraHomographyWarpRenderer(shader);
+
+                Assert.Throws<ArgumentException>(
+                    () => renderer.Warp(
+                        source,
+                        plan,
+                        wrongCoverage));
+            }
+            finally
+            {
+                Destroy(source);
+            }
+        }
+
+        [Test]
+        public void CoverageCountMatchesShaderValidityPredicate()
+        {
+            ReachyMatrix3x3 rotation =
+                ReachyQuaternionD.FromAxisAngle(
+                    new ReachyVector3D(0.0, 1.0, 0.0),
+                    Math.PI / 12.0)
+                .ToRotationMatrix();
+            ReachyCameraHomographyPlan plan =
+                BuildPlan(19, 13, 17, 11, rotation);
+            ReachyCameraCoverageMeasurement measurement =
+                ReachyCameraValidCoverageCalculator.Calculate(plan);
+
+            long expected = 0L;
+            for (int y = 0; y < plan.OutputHeight; ++y)
+            {
+                for (int x = 0; x < plan.OutputWidth; ++x)
+                {
+                    if (IsShaderValid(plan, x, y))
+                    {
+                        ++expected;
+                    }
+                }
+            }
+
+            Assert.That(
+                measurement.ValidPixelCount,
+                Is.EqualTo(expected));
+            Assert.That(
+                measurement.TotalPixelCount,
+                Is.EqualTo(187L));
         }
 
         [Test]
@@ -140,6 +235,11 @@ namespace ReachyMini.Tests
                     2.0,
                     out _),
                 Is.False);
+            ReachyCameraCoverageMeasurement measurement =
+                ReachyCameraValidCoverageCalculator.Calculate(plan);
+            Assert.That(
+                measurement.CoverageFraction,
+                Is.LessThan(0.5));
         }
 
         private static ReachyCameraHomographyPlan BuildPlan(
@@ -171,8 +271,8 @@ namespace ReachyMini.Tests
                 "rear-0",
                 ReachyDeviceCameraFacing.Rear,
                 ReachyCameraCalibrationProvenance.MeasuredCheckerboard,
-                "Unity RMA-102 test profile",
-                "sha256:unity-rma102",
+                "Unity RMA-102/RMA-103 test profile",
+                "sha256:unity-rma102-rma103",
                 ReachyCameraMujocoOpticalBinding
                     .OfficialModelCompatibility,
                 DateTimeOffset.UnixEpoch,
@@ -211,6 +311,39 @@ namespace ReachyMini.Tests
                     sourceHeight);
             Assert.That(result.Succeeded, Is.True, result.Message);
             return result.Plan!;
+        }
+
+        private static ReachyCameraCoverageSnapshot PublishCoverage(
+            ReachyCameraHomographyPlan plan)
+        {
+            var state = new ReachyCameraCoverageStateMachine();
+            ReachyCameraCoveragePublishResult result = state.Publish(
+                ReachyCameraValidCoverageCalculator.Calculate(plan));
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            return result.Snapshot;
+        }
+
+        private static bool IsShaderValid(
+            ReachyCameraHomographyPlan plan,
+            int outputX,
+            int outputY)
+        {
+            ReachyVector3D projected =
+                plan.ReachyToPhonePixels.Transform(
+                    new ReachyVector3D(outputX, outputY, 1.0));
+            if (projected.Z <=
+                ReachyCameraValidCoverageCalculator
+                    .ShaderDepthEpsilon)
+            {
+                return false;
+            }
+
+            double sourceX = projected.X / projected.Z;
+            double sourceY = projected.Y / projected.Z;
+            return sourceX >= 0.0 &&
+                sourceX <= plan.SourceWidth - 1.0 &&
+                sourceY >= 0.0 &&
+                sourceY <= plan.SourceHeight - 1.0;
         }
 
         private static Shader RequireShader()
