@@ -29,22 +29,24 @@ jobs:
               "ReachyCameraHomographyWarpTests.cs"
           )
           test = test_path.read_text(encoding="utf-8")
-          old_test = '''                Assert.That(
-                    frame.Coverage.Measurement!.ValidPixelCount,
-                    Is.EqualTo(9L));
-                Assert.That(
-                    frame.Coverage.Measurement.CoverageFraction,
-                    Is.EqualTo(1.0));
-'''
-          new_test = '''                ReachyCameraCoverageMeasurement measurement =
-                    frame.Coverage.Measurement!;
-                Assert.That(
-                    measurement.ValidPixelCount,
-                    Is.EqualTo(9L));
-                Assert.That(
-                    measurement.CoverageFraction,
-                    Is.EqualTo(1.0));
-'''
+          old_test = (
+              "                Assert.That(\n"
+              "                    frame.Coverage.Measurement!.ValidPixelCount,\n"
+              "                    Is.EqualTo(9L));\n"
+              "                Assert.That(\n"
+              "                    frame.Coverage.Measurement.CoverageFraction,\n"
+              "                    Is.EqualTo(1.0));\n"
+          )
+          new_test = (
+              "                ReachyCameraCoverageMeasurement measurement =\n"
+              "                    frame.Coverage.Measurement!;\n"
+              "                Assert.That(\n"
+              "                    measurement.ValidPixelCount,\n"
+              "                    Is.EqualTo(9L));\n"
+              "                Assert.That(\n"
+              "                    measurement.CoverageFraction,\n"
+              "                    Is.EqualTo(1.0));\n"
+          )
           if old_test not in test:
               raise SystemExit("Expected nullable Unity-test block not found.")
           test_path.write_text(
@@ -83,49 +85,51 @@ jobs:
               "## RMA-103 — Implement valid-coverage policy\n",
               start,
           )
-          replacement = '''## RMA-102 — Implement GPU homography warp
-
-**Status:** Complete (2026-08-05)
-
-- [x] Compute:
-
-```text
-H = K_reachy * R_reachy_phone * inverse(K_phone)
-```
-
-- [x] Pass the inverse mapping required by the shader to avoid holes from forward splatting.
-- [x] Sample only valid source coordinates.
-- [x] Emit transformed color and a validity mask.
-- [x] Support output resolution independent from source resolution.
-- [x] Avoid CPU readback for local trackers that can consume GPU input.
-
-**Completion evidence**
-
-- `ReachyCameraHomographyCalculator` builds the exact phone-to-Reachy
-  homography and its inverse from RMA-100 calibration and timestamp-matched
-  RMA-101 authoritative rotation. Camera, model, dimensions, timestamps,
-  rotation, and matrix round-trip mismatches fail closed.
-- `ReachyCameraHomographyWarpRenderer` performs inverse GPU gathering into
-  reusable color and validity render textures. Invalid rays are rejected before
-  source sampling, output resolution is independent, and runtime code performs
-  no image readback.
-- The validation harness was repaired to require a real graphics device rather
-  than accepting `NullGfxDevice` evidence. Shader math and the `> 0.9` identity
-  threshold were not weakened, and active render targets are unbound before
-  release.
-- Hosted CI run `31008738003` passed static, native, sanitizer, managed,
-  Reachy-model, and Android jobs on exact implementation SHA
-  `b5aabd8f4e937867ec72e75539a96a6182ecd89b`.
-- Self-hosted run `31009555103` passed OpenGL Core Unity tests on `kawa`
-  (`110/110` EditMode and `1/1` PlayMode), ARM64 API-26 APK build and
-  verification, RMA-090/RMA-091/RMA-092 physical camera acceptance, RMA-022
-  lifecycle acceptance, authoritative rendering, evidence uploads, and final
-  status publication on the same exact SHA.
-- Detailed architecture and evidence are in
-  `docs/architecture/GPU_HOMOGRAPHY_WARP.md` and
-  `docs/validation/RMA_102_GPU_HOMOGRAPHY_WARP_VALIDATION_2026-08-04.md`.
-
-'''
+          lines = [
+              "## RMA-102 — Implement GPU homography warp",
+              "",
+              "**Status:** Complete (2026-08-05)",
+              "",
+              "- [x] Compute:",
+              "",
+              "```text",
+              "H = K_reachy * R_reachy_phone * inverse(K_phone)",
+              "```",
+              "",
+              "- [x] Pass the inverse mapping required by the shader to avoid holes from forward splatting.",
+              "- [x] Sample only valid source coordinates.",
+              "- [x] Emit transformed color and a validity mask.",
+              "- [x] Support output resolution independent from source resolution.",
+              "- [x] Avoid CPU readback for local trackers that can consume GPU input.",
+              "",
+              "**Completion evidence**",
+              "",
+              "- `ReachyCameraHomographyCalculator` builds the exact phone-to-Reachy",
+              "  homography and its inverse from RMA-100 calibration and timestamp-matched",
+              "  RMA-101 authoritative rotation. Camera, model, dimensions, timestamps,",
+              "  rotation, and matrix round-trip mismatches fail closed.",
+              "- `ReachyCameraHomographyWarpRenderer` performs inverse GPU gathering into",
+              "  reusable color and validity render textures. Invalid rays are rejected before",
+              "  source sampling, output resolution is independent, and runtime code performs",
+              "  no image readback.",
+              "- The validation harness was repaired to require a real graphics device rather",
+              "  than accepting `NullGfxDevice` evidence. Shader math and the `> 0.9` identity",
+              "  threshold were not weakened, and active render targets are unbound before",
+              "  release.",
+              "- Hosted CI run `31008738003` passed static, native, sanitizer, managed,",
+              "  Reachy-model, and Android jobs on exact implementation SHA",
+              "  `b5aabd8f4e937867ec72e75539a96a6182ecd89b`.",
+              "- Self-hosted run `31009555103` passed OpenGL Core Unity tests on `kawa`",
+              "  (`110/110` EditMode and `1/1` PlayMode), ARM64 API-26 APK build and",
+              "  verification, RMA-090/RMA-091/RMA-092 physical camera acceptance, RMA-022",
+              "  lifecycle acceptance, authoritative rendering, evidence uploads, and final",
+              "  status publication on the same exact SHA.",
+              "- Detailed architecture and evidence are in",
+              "  `docs/architecture/GPU_HOMOGRAPHY_WARP.md` and",
+              "  `docs/validation/RMA_102_GPU_HOMOGRAPHY_WARP_VALIDATION_2026-08-04.md`.",
+              "",
+          ]
+          replacement = "\n".join(lines) + "\n"
           todo_path.write_text(
               todo[:start] + replacement + todo[end:],
               encoding="utf-8",
