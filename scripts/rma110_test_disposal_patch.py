@@ -7,7 +7,6 @@ TEST_PATH = Path(
 EXECUTOR_PATH = Path(
     "Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderExecutor.cs"
 )
-PROGRESS_PATH = Path("scripts/rma110_test_progress_patch.py")
 
 
 def replace_once(source: str, old: str, new: str, label: str) -> str:
@@ -217,8 +216,6 @@ def patch_executor() -> None:
 def main() -> None:
     patch_tests()
     patch_executor()
-    if PROGRESS_PATH.exists():
-        PROGRESS_PATH.unlink()
     Path(__file__).unlink()
 
 
