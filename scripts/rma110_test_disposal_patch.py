@@ -154,24 +154,19 @@ def patch_tests() -> None:
     cancellation_block = """            cancellation.Cancel();
             TrackingResult result = await pending.ConfigureAwait(false);
 """
-    bounded_cancellation_block = """            cancellation.Cancel();
-            Task completed = await Task.WhenAny(
-                pending,
-                Task.Delay(
-                    TimeSpan.FromSeconds(1.0),
-                    CancellationToken.None)).ConfigureAwait(false);
-            if (completed != pending)
+    deterministic_cancellation_block = """            cancellation.Cancel();
+            if (!pending.IsCompleted)
             {
                 throw new InvalidOperationException(
-                    "Managed test failed: caller cancellation did not complete within one second.");
+                    "Managed test failed: caller cancellation did not complete inline.");
             }
             TrackingResult result = await pending.ConfigureAwait(false);
 """
     source = replace_once(
         source,
         cancellation_block,
-        bounded_cancellation_block,
-        "bounded caller cancellation",
+        deterministic_cancellation_block,
+        "deterministic caller cancellation",
     )
 
     TEST_PATH.write_text(source, encoding="utf-8")
@@ -188,8 +183,7 @@ def patch_executor() -> None:
                 callerCancellationTask).ConfigureAwait(false);
 """
     new = """            var callerCancellationSignal =
-                new TaskCompletionSource<bool>(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
+                new TaskCompletionSource<bool>();
             using CancellationTokenRegistration callerCancellationRegistration =
                 cancellationToken.Register(
                     static state =>
@@ -208,7 +202,7 @@ def patch_executor() -> None:
         source,
         old,
         new,
-        "explicit caller cancellation signal",
+        "inline caller cancellation signal",
     )
     EXECUTOR_PATH.write_text(source, encoding="utf-8")
 
