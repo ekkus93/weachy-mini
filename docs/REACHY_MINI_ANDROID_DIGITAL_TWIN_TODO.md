@@ -1722,9 +1722,11 @@ H = K_reachy * R_reachy_phone * inverse(K_phone)
 
 ## RMA-110 — Define vision provider contracts
 
-- [ ] Separate frame source, lightweight tracker, and semantic VLM interfaces.
-- [ ] Include cancellation, timeouts, capability metadata, and provider identity.
-- [ ] Include validity mask/coverage with requests.
+**Status:** Complete (2026-08-05)
+
+- [x] Separate frame source, lightweight tracker, and semantic VLM interfaces.
+- [x] Include cancellation, timeouts, capability metadata, and provider identity.
+- [x] Include validity mask/coverage with requests.
 
 Suggested managed interfaces:
 
@@ -1745,6 +1747,41 @@ public interface IVisionLanguageProvider : IAsyncDisposable
         CancellationToken cancellationToken);
 }
 ```
+
+
+**Completion evidence**
+
+- `ReachyMini.Perception` defines separate `IReachyVisionFrameSource`,
+  `IVisualTracker`, and `IVisionLanguageProvider` boundaries with explicit
+  provider descriptors, capability declarations, locality, instance identity,
+  request identity, and monotonic provider-selection epochs.
+- `ReachyVisionFrame` owns an asynchronous resource lease and carries transformed
+  Reachy-eye identity, color/validity resource presence, validity coverage,
+  calibration and model provenance, sequence/timestamp continuity, orientation,
+  and mirror metadata. Normal observation purposes reject raw frames, missing
+  masks, unusable coverage, disposed resources, and stale sequences. Raw phone
+  access remains limited to `ExplicitRawDebug`.
+- `VisionProviderExecutor` applies explicit bounded deadlines and caller
+  cancellation. It returns typed `Cancelled`, `TimedOut`, `ProviderFailure`,
+  `ContractViolation`, `InvalidFrame`, `Unavailable`, and `Superseded` results.
+  Timeout and provider faults require reset; provider replacement invalidates
+  late completions. It does not retry, silently substitute another provider,
+  reuse stale output, or cross the raw/transformed privacy boundary.
+- Managed warnings-as-errors contracts cover capability truthfulness, owned
+  frame validity, stale/raw rejection, cancellation, timeout quarantine,
+  visible provider faults, provider-switch supersession, result-identity
+  mismatch, cloud-disclosure enforcement, and exactly-once resource disposal.
+- Hosted CI run `31046134407` passed static, managed, native/sanitizer, Android,
+  and pinned Reachy-model jobs on accepted implementation SHA
+  `bc611b700b6bb212d4a04a927e5935d326345e05`.
+- Self-hosted run `31046135097`, job `92442017380`, passed real-graphics Unity
+  tests (`125/125` EditMode and `1/1` PlayMode), ARM64 API-26 APK build and
+  verification, RMA-090, RMA-091, RMA-092, RMA-022 lifecycle, authoritative
+  rendering, all evidence uploads, APK upload, and final status publication on
+  the same exact SHA.
+- Detailed architecture and evidence are in
+  `docs/architecture/VISION_PROVIDER_CONTRACTS.md` and
+  `docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md`.
 
 ## RMA-111 — Implement on-device lightweight tracking
 
