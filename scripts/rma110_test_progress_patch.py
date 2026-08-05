@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+from pathlib import Path
+
+PATH = Path("managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs")
+
+
+def main() -> None:
+    source = PATH.read_text(encoding="utf-8")
+    old = """            ProviderKindsAndCapabilitiesRemainExplicit();
+            await TransformedFramesRequireOwnedColorValidityAndCoverageAsync()
+                .ConfigureAwait(false);
+            await FrameSourceRejectsRawFallbackAndStaleSequenceAsync()
+                .ConfigureAwait(false);
+            await CallerCancellationReturnsTypedFailureAsync()
+                .ConfigureAwait(false);
+            await TimeoutQuarantinesProviderAsync().ConfigureAwait(false);
+            await ProviderFaultRemainsVisibleAsync().ConfigureAwait(false);
+            await ProviderSwitchSupersedesLateResultsAsync()
+                .ConfigureAwait(false);
+            await ResultIdentityMismatchFailsClosedAsync()
+                .ConfigureAwait(false);
+            await CloudDisclosureIsRequiredBeforeInvocationAsync()
+                .ConfigureAwait(false);
+            await FrameResourcesDisposeExactlyOnceAsync()
+                .ConfigureAwait(false);
+"""
+    new = """            Console.WriteLine("RMA-110 provider capability contract starting.");
+            ProviderKindsAndCapabilitiesRemainExplicit();
+            Console.WriteLine("RMA-110 transformed frame ownership contract starting.");
+            await TransformedFramesRequireOwnedColorValidityAndCoverageAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 frame-source rejection contract starting.");
+            await FrameSourceRejectsRawFallbackAndStaleSequenceAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 caller cancellation contract starting.");
+            await CallerCancellationReturnsTypedFailureAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 timeout quarantine contract starting.");
+            await TimeoutQuarantinesProviderAsync().ConfigureAwait(false);
+            Console.WriteLine("RMA-110 provider fault contract starting.");
+            await ProviderFaultRemainsVisibleAsync().ConfigureAwait(false);
+            Console.WriteLine("RMA-110 provider switch contract starting.");
+            await ProviderSwitchSupersedesLateResultsAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 result identity contract starting.");
+            await ResultIdentityMismatchFailsClosedAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 cloud disclosure contract starting.");
+            await CloudDisclosureIsRequiredBeforeInvocationAsync()
+                .ConfigureAwait(false);
+            Console.WriteLine("RMA-110 exactly-once disposal contract starting.");
+            await FrameResourcesDisposeExactlyOnceAsync()
+                .ConfigureAwait(false);
+"""
+    count = source.count(old)
+    if count != 1:
+        raise SystemExit(f"unexpected RMA-110 run sequence count: {count}")
+    PATH.write_text(source.replace(old, new), encoding="utf-8")
+    Path(__file__).unlink()
+
+
+if __name__ == "__main__":
+    main()
