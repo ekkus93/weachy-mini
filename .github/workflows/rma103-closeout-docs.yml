@@ -101,9 +101,12 @@ jobs:
           report_lines = [
               "# RMA-103 Valid-Coverage Policy Validation",
               "",
-              "**Milestone:** RMA-103  ",
-              "**Accepted implementation SHA:** `9bcacfec7d4395e3e83e5f599402066f0d184718`  ",
-              "**Date:** 2026-08-05  ",
+              "**Milestone:** RMA-103",
+              "",
+              "**Accepted implementation SHA:** `9bcacfec7d4395e3e83e5f599402066f0d184718`",
+              "",
+              "**Date:** 2026-08-05",
+              "",
               "**Status:** Complete",
               "",
               "## Implemented contract",
@@ -175,7 +178,7 @@ jobs:
               "",
           ]
           report_path.write_text(
-              "\n".join(report_lines),
+              "\n".join(report_lines) + "\n",
               encoding="utf-8",
           )
           PY
