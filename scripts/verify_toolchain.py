@@ -195,6 +195,51 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
         android["cmake"],
     )
 
+    dotnet_output = run_version([require_executable("dotnet"), "--version"])
+    require_pattern(
+        ".NET SDK",
+        dotnet_output,
+        r"(\d+\.\d+)\.\d+",
+        quality["dotnet_channel"],
+    )
+
+    ruff_output = run_version([require_executable("ruff"), "--version"])
+    require_pattern(
+        "Ruff",
+        ruff_output,
+        r"ruff (\d+\.\d+\.\d+)",
+        quality["ruff"],
+    )
+
+    shellcheck_output = run_version([require_executable("shellcheck"), "--version"])
+    require_pattern(
+        "ShellCheck",
+        shellcheck_output,
+        r"version:\s*(\d+\.\d+\.\d+)",
+        quality["shellcheck"],
+    )
+
+    actionlint_output = run_version([require_executable("actionlint"), "--version"])
+    require_pattern(
+        "actionlint",
+        actionlint_output,
+        r"(\d+\.\d+\.\d+)",
+        quality["actionlint"],
+    )
+
+    gradle_wrapper = ROOT / "android-plugin" / "gradlew"
+    if not gradle_wrapper.is_file():
+        # The wrapper JAR is intentionally not committed (see docs/ASSET_POLICY.md), so a
+        # bootstrap `gradle` executable is only required until `gradle wrapper` has been run
+        # once. After that, ./gradlew is self-contained and this check no longer applies.
+        gradle_output = run_version([require_executable("gradle"), "--version"])
+        require_pattern(
+            "Gradle",
+            gradle_output,
+            r"Gradle (\d+\.\d+\.\d+)",
+            android["gradle"],
+        )
+
     java_output = run_version([require_executable("java"), "-version"])
     java_match = re.search(r'version "(\d+)', java_output)
     if java_match is None:
