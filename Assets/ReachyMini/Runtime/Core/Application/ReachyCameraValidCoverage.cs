@@ -264,7 +264,8 @@ namespace ReachyMini.AppState
             long totalPixelCount = checked(
                 (long)plan.OutputWidth * plan.OutputHeight);
             long validPixelCount = 0L;
-            ReachyMatrix3x3 matrix = plan.ReachyToPhonePixels;
+            ReachyMatrix3x3 matrix = QuantizeForShader(
+                plan.ReachyToPhonePixels);
             double sourceMaximumX = plan.SourceWidth - 1.0;
             double sourceMaximumY = plan.SourceHeight - 1.0;
 
@@ -319,6 +320,21 @@ namespace ReachyMini.AppState
                 plan,
                 validPixelCount,
                 totalPixelCount);
+        }
+
+        private static ReachyMatrix3x3 QuantizeForShader(
+            ReachyMatrix3x3 matrix)
+        {
+            return new ReachyMatrix3x3(
+                (double)(float)matrix.M00,
+                (double)(float)matrix.M01,
+                (double)(float)matrix.M02,
+                (double)(float)matrix.M10,
+                (double)(float)matrix.M11,
+                (double)(float)matrix.M12,
+                (double)(float)matrix.M20,
+                (double)(float)matrix.M21,
+                (double)(float)matrix.M22);
         }
 
         private static bool ApplyConstraint(

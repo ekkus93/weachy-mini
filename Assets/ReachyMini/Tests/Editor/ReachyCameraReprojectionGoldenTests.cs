@@ -40,10 +40,19 @@ namespace ReachyMini.Tests
                 plan.SourceHeight);
 
             Assert.That(
-                plan.ReachyToPhonePixels.ApproximatelyEquals(
-                    ReachyMatrix3x3.Identity,
-                    1.0e-12),
-                Is.True);
+                plan.PhoneToReachyPixels,
+                Is.EqualTo(ReachyMatrix3x3.Identity));
+            Assert.That(
+                plan.ReachyToPhonePixels,
+                Is.EqualTo(ReachyMatrix3x3.Identity));
+            ReachyCameraCoverageMeasurement coverage =
+                ReachyCameraValidCoverageCalculator.Calculate(plan);
+            Assert.That(
+                coverage.ValidPixelCount,
+                Is.EqualTo(coverage.TotalPixelCount));
+            Assert.That(
+                coverage.TotalPixelCount,
+                Is.EqualTo(17L * 11L));
             AssertGpuMatchesCpu(plan, image);
         }
 

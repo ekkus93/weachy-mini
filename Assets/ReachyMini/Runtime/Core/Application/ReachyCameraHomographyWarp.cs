@@ -171,6 +171,8 @@ namespace ReachyMini.AppState
 
     public static class ReachyCameraHomographyCalculator
     {
+        private const double NumericalCanonicalizationTolerance = 1.0e-12;
+
         public static ReachyCameraHomographyBuildResult Build(
             ReachyCameraCalibrationProfile calibration,
             ReachyCameraRelativeRotationSample rotation,
@@ -250,14 +252,14 @@ namespace ReachyMini.AppState
 
             try
             {
-                ReachyMatrix3x3 phoneToReachyPixels =
+                ReachyMatrix3x3 phoneToReachyPixels = CanonicalizeNumericalNoise(
                     calibration.ReachyIntrinsics.PixelFromOpticalRay *
                     reachyFromPhone *
-                    calibration.PhoneIntrinsics.OpticalRayFromPixel;
-                ReachyMatrix3x3 reachyToPhonePixels =
+                    calibration.PhoneIntrinsics.OpticalRayFromPixel);
+                ReachyMatrix3x3 reachyToPhonePixels = CanonicalizeNumericalNoise(
                     calibration.PhoneIntrinsics.PixelFromOpticalRay *
                     reachyFromPhone.Transposed() *
-                    calibration.ReachyIntrinsics.OpticalRayFromPixel;
+                    calibration.ReachyIntrinsics.OpticalRayFromPixel);
 
                 ReachyMatrix3x3 roundTrip =
                     phoneToReachyPixels * reachyToPhonePixels;
@@ -288,6 +290,40 @@ namespace ReachyMini.AppState
                     ReachyCameraHomographyBuildStatus.InvalidHomography,
                     $"Homography construction failed closed: {exception.Message}");
             }
+        }
+
+        private static ReachyMatrix3x3 CanonicalizeNumericalNoise(
+            ReachyMatrix3x3 matrix)
+        {
+            return new ReachyMatrix3x3(
+                CanonicalizeScalar(matrix.M00),
+                CanonicalizeScalar(matrix.M01),
+                CanonicalizeScalar(matrix.M02),
+                CanonicalizeScalar(matrix.M10),
+                CanonicalizeScalar(matrix.M11),
+                CanonicalizeScalar(matrix.M12),
+                CanonicalizeScalar(matrix.M20),
+                CanonicalizeScalar(matrix.M21),
+                CanonicalizeScalar(matrix.M22));
+        }
+
+        private static double CanonicalizeScalar(double value)
+        {
+            if (Math.Abs(value) <= NumericalCanonicalizationTolerance)
+            {
+                return 0.0;
+            }
+            if (Math.Abs(value - 1.0) <=
+                NumericalCanonicalizationTolerance)
+            {
+                return 1.0;
+            }
+            if (Math.Abs(value + 1.0) <=
+                NumericalCanonicalizationTolerance)
+            {
+                return -1.0;
+            }
+            return value;
         }
 
         private static ReachyCameraHomographyBuildResult Failure(
