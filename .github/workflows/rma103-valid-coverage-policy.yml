@@ -1,0 +1,264 @@
+name: RMA-103 Valid Coverage Policy
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma103-valid-coverage-policy.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraValidCoverage.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyCameraHomographyWarpTests.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma103ValidCoverageContracts.cs'
+      - 'docs/architecture/CAMERA_VALID_COVERAGE_POLICY.md'
+      - 'docs/validation/RMA_103_VALID_COVERAGE_POLICY_VALIDATION_2026-08-05.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma103-valid-coverage-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Exact coverage and fail-closed policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma103-status.json"
+          import json
+          import os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-103 Valid Coverage Policy",
+              "description": "Coverage and safety contracts are running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma103-status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run managed camera contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify coverage, consumer, and no-readback policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          core_path = Path(
+              "Assets/ReachyMini/Runtime/Core/Application/"
+              "ReachyCameraValidCoverage.cs"
+          )
+          renderer_path = Path(
+              "Assets/ReachyMini/Runtime/Rendering/"
+              "ReachyCameraHomographyWarpRenderer.cs"
+          )
+          pipeline_path = Path(
+              "Assets/ReachyMini/Runtime/Rendering/"
+              "ReachyCameraHomographyWarpPipeline.cs"
+          )
+          managed_path = Path(
+              "managed/ReachyMini.Camera.Tests/"
+              "Rma103ValidCoverageContracts.cs"
+          )
+          unity_path = Path(
+              "Assets/ReachyMini/Tests/Editor/"
+              "ReachyCameraHomographyWarpTests.cs"
+          )
+          doc_path = Path(
+              "docs/architecture/CAMERA_VALID_COVERAGE_POLICY.md"
+          )
+
+          core = core_path.read_text(encoding="utf-8")
+          renderer = renderer_path.read_text(encoding="utf-8")
+          pipeline = pipeline_path.read_text(encoding="utf-8")
+          managed = managed_path.read_text(encoding="utf-8")
+          unity = unity_path.read_text(encoding="utf-8")
+          doc = doc_path.read_text(encoding="utf-8")
+
+          required = {
+              "core": (
+                  core,
+                  [
+                      "ReachyCameraCoverageState",
+                      "ReachyCameraCoveragePolicy",
+                      "EngineeringBaseline",
+                      "ShaderDepthEpsilon = 1.0e-6",
+                      "ReachyCameraValidCoverageCalculator",
+                      "ApplyConstraint",
+                      "ValidPixelCount",
+                      "CoverageFraction",
+                      "ReachyCameraCoverageStateMachine",
+                      "StaleFrame",
+                      "IdentityMismatch",
+                      "ShouldStopVisionDrivenTurning",
+                      "CanCreateVisualObservations",
+                      "CoverageDisclosureRequired",
+                  ],
+              ),
+              "renderer": (
+                  renderer,
+                  [
+                      "ReachyCameraCoverageSnapshot",
+                      "coverage.Measurement.SourceSessionId",
+                      "coverage.Measurement.AuthoritativeSequence",
+                      "coverage.Measurement.ContinuityId",
+                      "public ReachyCameraCoverageSnapshot Coverage",
+                  ],
+              ),
+              "pipeline": (
+                  pipeline,
+                  [
+                      "ReachyCameraValidCoverageCalculator.Calculate",
+                      "coverageState.Publish",
+                      "CoverageRejected",
+                      "CurrentCoverage",
+                      "public void Reset(string message)",
+                      "renderer.ResetOutputs()",
+                      "coverageState.Reset",
+                  ],
+              ),
+              "managed": (
+                  managed,
+                  [
+                      "IdentityCoverageIsExact",
+                      "CoverageMatchesShaderPredicate",
+                      "PolicyUsesHysteresisAndPreemptiveStop",
+                      "StaleAndConflictingCoverageFailClosed",
+                      "ContinuityResetAllowsSequenceRestart",
+                      "ConsumerMetadataIsExplicit",
+                      "[ModuleInitializer]",
+                  ],
+              ),
+              "unity": (
+                  unity,
+                  [
+                      "IdentityGpuWarpEmitsColorAndValidityMask",
+                      "CoverageIdentityMismatchIsRejectedBeforeFramePublication",
+                      "CoverageCountMatchesShaderValidityPredicate",
+                      "frame.Coverage",
+                  ],
+              ),
+              "documentation": (
+                  doc,
+                  [
+                      "exact number",
+                      "five affine half-plane constraints",
+                      "engineering policy defaults",
+                      "stop vision-driven turning",
+                      "tracking, VLM, world-model, behavior, and diagnostics",
+                      "never keeps the previous frame as a fallback",
+                  ],
+              ),
+          }
+          for category, (text, tokens) in required.items():
+              for token in tokens:
+                  if token not in text:
+                      raise SystemExit(
+                          f"Missing RMA-103 {category} token: {token}"
+                      )
+
+          runtime_text = "\n".join(
+              path.read_text(encoding="utf-8")
+              for path in (core_path, renderer_path, pipeline_path)
+          )
+          forbidden = (
+              "ReadPixels(",
+              "GetPixels(",
+              "GetPixels32(",
+              "AsyncGPUReadback",
+              "Texture2D.Apply",
+              "|| true",
+          )
+          for token in forbidden:
+              if token in runtime_text:
+                  raise SystemExit(
+                      f"RMA-103 runtime contains forbidden fallback/readback: {token}"
+                  )
+
+          if "coverageState.Reset(message)" not in pipeline:
+              raise SystemExit(
+                  "Pipeline failures must clear prior coverage."
+              )
+          if core.count("StopVisionDrivenTurningMaximum") < 3:
+              raise SystemExit(
+                  "Preemptive turning-stop policy is not structurally retained."
+              )
+          print("RMA-103 valid coverage policy passed.")
+          PY
+
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated managed build output is tracked.' >&2
+            exit 1
+          fi
+          echo 'RMA-103 repository cleanliness passed.'
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma103-status.json"
+          import json
+          import os
+          passed = os.environ["JOB_STATUS"] == "success"
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-103 Valid Coverage Policy",
+              "description": (
+                  "Coverage and safety contracts passed"
+                  if passed
+                  else "Coverage and safety contracts failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma103-status.json" >/dev/null
