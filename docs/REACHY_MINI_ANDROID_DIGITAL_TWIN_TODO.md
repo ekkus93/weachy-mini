@@ -1516,11 +1516,54 @@ public:
 
 ## RMA-101 — Compute relative rotation from MuJoCo state
 
-- [ ] Extract the actual head-camera rotation from the authoritative MuJoCo body/site transform.
-- [ ] Do not substitute requested target orientation for actual simulated orientation.
-- [ ] Remove the translational component for Level 1 only.
-- [ ] Combine device/camera orientation and simulated head rotation consistently.
-- [ ] Unit-test signs for yaw, pitch, and roll.
+**Status:** Complete (2026-08-04)
+
+- [x] Extract the actual head-camera rotation from the authoritative MuJoCo body/site transform.
+- [x] Do not substitute requested target orientation for actual simulated orientation.
+- [x] Remove the translational component for Level 1 only.
+- [x] Combine device/camera orientation and simulated head rotation consistently.
+- [x] Unit-test signs for yaw, pitch, and roll.
+
+**Completion evidence**
+
+- `ReachyCameraMujocoOpticalBinding` pins the upstream Reachy Mini MJCF,
+  named `camera_optical` site, `eye_camera`, canonical generated body
+  `__body_15` / MuJoCo body ID 15, expected body layout, fixed
+  camera-body-to-optical rotation, and neutral optical frame.
+- `ReachyAuthoritativeCameraRotationSource` consumes only the immutable
+  solved authoritative body pose published from MuJoCo. Requested head
+  targets, Unity presentation transforms, and interpolation are not inputs.
+- `ReachyCameraRelativeRotationCalculator` composes actual optical
+  rotation, the selected RMA-100 neutral phone-to-Reachy calibration, and
+  an explicit timestamped phone orientation. Its API accepts no body
+  position, so Level 1 translation is excluded by construction.
+- Capture fails closed for model/calibration mismatch, zero model hash,
+  layout drift, unavailable state, missing or duplicate camera body,
+  invalid quaternion/rotation, and stale sequence within one continuity.
+  A continuity change permits a sequence reset.
+- Managed and Unity tests cover positive optical yaw, pitch, and roll
+  signs; actual-versus-requested orientation; translation independence;
+  generated body binding; stale rejection; same-source continuity reset;
+  and missing/duplicate-body failures.
+- Permanent run `30964753440`, job `92176195712`, passed managed camera
+  contracts, exact pinned-MJCF hierarchy and hash verification,
+  authoritative-state integration policy, sign contracts, fail-closed
+  behavior, and repository cleanliness on exact implementation SHA
+  `ffeb02af405cac3131a4d69fe816fdf3e6908db7`.
+- Hosted CI run `30964753430` passed Reachy-model, native, static,
+  Android, and managed jobs on the same exact SHA.
+- Self-hosted run `30964753429` passed on unchanged-SHA rerun job
+  `92182165671`: 106/106 Unity edit-mode tests, 1/1 play-mode test,
+  ARM64/API-26 APK build and verification, RMA-090, RMA-091, RMA-092,
+  RMA-022 lifecycle, authoritative rendering, evidence uploads, APK
+  upload, and final status publication.
+- The first device attempt encountered a one-off CameraX critical error
+  during RMA-091 after Unity and APK validation had passed. The unchanged
+  implementation SHA reran successfully through all downstream gates;
+  no source or recovery-path change was justified.
+- Detailed architecture and exact evidence are in
+  `docs/architecture/AUTHORITATIVE_CAMERA_RELATIVE_ROTATION.md` and
+  `docs/validation/RMA_101_AUTHORITATIVE_CAMERA_ROTATION_VALIDATION_2026-08-04.md`.
 
 ## RMA-102 — Implement GPU homography warp
 
