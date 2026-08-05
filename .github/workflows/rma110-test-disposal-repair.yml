@@ -1,0 +1,45 @@
+name: RMA-110 Test Disposal Repair
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma110-test-disposal-repair.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma110-test-disposal-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Apply and validate deterministic disposal repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/rma110_test_disposal_patch.py
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+          git diff --check
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs
+          git add scripts/rma110_test_disposal_patch.py
+          git commit -m 'RMA-110: dispose test providers and frame resources'
+          git push origin HEAD:master
