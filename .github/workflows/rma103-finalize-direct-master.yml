@@ -1,0 +1,144 @@
+name: Finalize RMA-102 and RMA-103 direct master files
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma103-finalize-direct-master.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply exact closeout edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path(
+              "Assets/ReachyMini/Tests/Editor/"
+              "ReachyCameraHomographyWarpTests.cs"
+          )
+          test = test_path.read_text(encoding="utf-8")
+          old_test = '''                Assert.That(
+                    frame.Coverage.Measurement!.ValidPixelCount,
+                    Is.EqualTo(9L));
+                Assert.That(
+                    frame.Coverage.Measurement.CoverageFraction,
+                    Is.EqualTo(1.0));
+'''
+          new_test = '''                ReachyCameraCoverageMeasurement measurement =
+                    frame.Coverage.Measurement!;
+                Assert.That(
+                    measurement.ValidPixelCount,
+                    Is.EqualTo(9L));
+                Assert.That(
+                    measurement.CoverageFraction,
+                    Is.EqualTo(1.0));
+'''
+          if old_test not in test:
+              raise SystemExit("Expected nullable Unity-test block not found.")
+          test_path.write_text(
+              test.replace(old_test, new_test),
+              encoding="utf-8",
+          )
+
+          workflow_path = Path(
+              ".github/workflows/rma103-valid-coverage-policy.yml"
+          )
+          workflow = workflow_path.read_text(encoding="utf-8")
+          replacements = {
+              '"coverage.Measurement.SourceSessionId",':
+                  '"measurement.SourceSessionId",',
+              '"coverage.Measurement.AuthoritativeSequence",':
+                  '"measurement.AuthoritativeSequence",',
+              '"coverage.Measurement.ContinuityId",':
+                  '"measurement.ContinuityId",',
+          }
+          for old, new in replacements.items():
+              if old not in workflow:
+                  raise SystemExit(
+                      f"Expected RMA-103 workflow token not found: {old}"
+                  )
+              workflow = workflow.replace(old, new)
+          workflow_path.write_text(workflow, encoding="utf-8")
+
+          todo_path = Path(
+              "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+          )
+          todo = todo_path.read_text(encoding="utf-8")
+          start = todo.index(
+              "## RMA-102 — Implement GPU homography warp\n"
+          )
+          end = todo.index(
+              "## RMA-103 — Implement valid-coverage policy\n",
+              start,
+          )
+          replacement = '''## RMA-102 — Implement GPU homography warp
+
+**Status:** Complete (2026-08-05)
+
+- [x] Compute:
+
+```text
+H = K_reachy * R_reachy_phone * inverse(K_phone)
+```
+
+- [x] Pass the inverse mapping required by the shader to avoid holes from forward splatting.
+- [x] Sample only valid source coordinates.
+- [x] Emit transformed color and a validity mask.
+- [x] Support output resolution independent from source resolution.
+- [x] Avoid CPU readback for local trackers that can consume GPU input.
+
+**Completion evidence**
+
+- `ReachyCameraHomographyCalculator` builds the exact phone-to-Reachy
+  homography and its inverse from RMA-100 calibration and timestamp-matched
+  RMA-101 authoritative rotation. Camera, model, dimensions, timestamps,
+  rotation, and matrix round-trip mismatches fail closed.
+- `ReachyCameraHomographyWarpRenderer` performs inverse GPU gathering into
+  reusable color and validity render textures. Invalid rays are rejected before
+  source sampling, output resolution is independent, and runtime code performs
+  no image readback.
+- The validation harness was repaired to require a real graphics device rather
+  than accepting `NullGfxDevice` evidence. Shader math and the `> 0.9` identity
+  threshold were not weakened, and active render targets are unbound before
+  release.
+- Hosted CI run `31008738003` passed static, native, sanitizer, managed,
+  Reachy-model, and Android jobs on exact implementation SHA
+  `b5aabd8f4e937867ec72e75539a96a6182ecd89b`.
+- Self-hosted run `31009555103` passed OpenGL Core Unity tests on `kawa`
+  (`110/110` EditMode and `1/1` PlayMode), ARM64 API-26 APK build and
+  verification, RMA-090/RMA-091/RMA-092 physical camera acceptance, RMA-022
+  lifecycle acceptance, authoritative rendering, evidence uploads, and final
+  status publication on the same exact SHA.
+- Detailed architecture and evidence are in
+  `docs/architecture/GPU_HOMOGRAPHY_WARP.md` and
+  `docs/validation/RMA_102_GPU_HOMOGRAPHY_WARP_VALIDATION_2026-08-04.md`.
+
+'''
+          todo_path.write_text(
+              todo[:start] + replacement + todo[end:],
+              encoding="utf-8",
+          )
+          PY
+
+          git rm .github/workflows/rma103-finalize-direct-master.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/rma103-valid-coverage-policy.yml \
+            Assets/ReachyMini/Tests/Editor/ReachyCameraHomographyWarpTests.cs \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git diff --cached --check
+          git commit -m 'RMA-102 closeout and RMA-103 integration cleanup'
+          git push origin HEAD:master
