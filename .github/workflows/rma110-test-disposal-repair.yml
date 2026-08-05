@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: rma110-test-disposal-repair
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   repair:
@@ -32,10 +32,11 @@ jobs:
           set -euo pipefail
           python3 scripts/rma110_test_disposal_patch.py
           dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
-          dotnet run \
-            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
-            --configuration Release \
-            --no-restore
+          timeout --signal=TERM --kill-after=15s 120s \
+            dotnet run \
+              --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+              --configuration Release \
+              --no-restore
           git diff --check
           git config user.name 'Phillip Chin'
           git config user.email 'ekkus93@gmail.com'
@@ -43,5 +44,3 @@ jobs:
           git add scripts/rma110_test_disposal_patch.py
           git commit -m 'RMA-110: dispose test providers and frame resources'
           git push origin HEAD:master
-
-# Second attempt corrects only the fail-closed patch precondition count.
