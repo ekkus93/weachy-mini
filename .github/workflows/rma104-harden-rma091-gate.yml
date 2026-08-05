@@ -1,0 +1,51 @@
+name: RMA-104 Harden RMA-091 Gate
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma104-harden-rma091-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma104-harden-rma091-gate
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Harden RMA-091 close-barrier contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/rma104_harden_rma091_gate.py
+          rm .github/workflows/rma104-harden-rma091-gate.yml
+          test ! -e scripts/rma104_harden_rma091_gate.py
+          test ! -e .github/workflows/rma104-harden-rma091-gate.yml
+          grep -F 'ExplicitStopRemainsStoppingUntilClosedSnapshot' \
+            .github/workflows/rma091-camera-acquisition.yml >/dev/null
+          grep -F 'RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md' \
+            .github/workflows/rma091-camera-acquisition.yml >/dev/null
+          git diff --check
+
+      - name: Commit self-removing gate hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/rma091-camera-acquisition.yml
+          git add -u scripts/rma104_harden_rma091_gate.py
+          git add -u .github/workflows/rma104-harden-rma091-gate.yml
+          git diff --cached --check
+          git commit -m 'ci: enforce CameraX close barrier in RMA-091'
+          git push origin HEAD:master
