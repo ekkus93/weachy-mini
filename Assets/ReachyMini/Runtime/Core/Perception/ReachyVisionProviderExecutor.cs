@@ -1,3 +1,5 @@
+#nullable enable
+
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -7,62 +9,56 @@ namespace ReachyMini.Perception
     public static class VisionProviderExecutor
     {
         public static async ValueTask<FrameSourceResult> AcquireFrameAsync(
-            IReachyVisionFrameSource provider,
-            VisionProviderSelection selection,
+            IReachyVisionFrameSource source,
             FrameSourceRequest request,
+            VisionProviderSelection selection,
             CancellationToken cancellationToken)
         {
-            if (provider == null)
+            if (source == null)
             {
-                throw new ArgumentNullException(nameof(provider));
-            }
-            if (selection == null)
-            {
-                throw new ArgumentNullException(nameof(selection));
+                throw new ArgumentNullException(nameof(source));
             }
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
-
-            ProviderDescriptor descriptor = provider.Descriptor;
-            ValidateProvider(
-                descriptor,
+            if (selection == null)
+            {
+                throw new ArgumentNullException(nameof(selection));
+            }
+            ValidateDescriptor(
+                source.Descriptor,
                 VisionProviderKind.FrameSource,
                 request.Context);
-            VisionProviderSelectionSnapshot selectionSnapshot =
-                selection.Read();
-            if (!selectionSnapshot.Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
+            if (source.Capabilities == null)
             {
                 return FrameSourceResult.Failure(
-                    VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Frame-source selection changed before invocation.");
+                    VisionOperationStatus.ContractViolation,
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: true,
+                    "Frame source capability metadata is unavailable.");
             }
 
             Execution<FrameSourceResult> execution = await ExecuteAsync(
-                token => provider.AcquireAsync(request, token),
+                token => source.AcquireAsync(request, token),
                 request.Context.Timeout,
                 cancellationToken).ConfigureAwait(false);
             if (execution.Status != ExecutionStatus.Completed)
             {
                 return FrameSourceResult.Failure(
                     MapStatus(execution.Status),
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    Diagnostic(execution),
-                    execution.RequiresProviderReset);
+                    source.Descriptor,
+                    request.Context,
+                    execution.Status == ExecutionStatus.TimedOut ||
+                        execution.Status == ExecutionStatus.Faulted,
+                    Diagnostic(execution));
             }
 
-            FrameSourceResult result = execution.Value!;
-            if (!selection.Read().Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
+            FrameSourceResult result = execution.Value ??
+                throw new InvalidOperationException(
+                    "Completed frame-source execution has no result.");
+            if (!selection.IsCurrent(request.Context))
             {
                 if (result.Frame != null)
                 {
@@ -70,16 +66,16 @@ namespace ReachyMini.Perception
                 }
                 return FrameSourceResult.Failure(
                     VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Frame-source selection changed while the request was in flight.");
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: false,
+                    "The selected frame source changed before completion.");
             }
             if (!Matches(
                     result.ProviderInstanceId,
                     result.RequestId,
                     result.SelectionEpoch,
-                    descriptor,
+                    source.Descriptor,
                     request.Context))
             {
                 if (result.Frame != null)
@@ -88,237 +84,216 @@ namespace ReachyMini.Perception
                 }
                 return FrameSourceResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Frame-source result identity did not match the request.",
-                    requiresProviderReset: true);
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: true,
+                    "Frame-source result identity does not match the request.");
             }
-            if (result.Status != VisionOperationStatus.Succeeded)
+            if (!result.Succeeded)
             {
-                if (result.Frame != null)
-                {
-                    await result.Frame.DisposeAsync().ConfigureAwait(false);
-                    return FrameSourceResult.Failure(
-                        VisionOperationStatus.ContractViolation,
-                        descriptor.InstanceId,
-                        request.Context.RequestId,
-                        request.Context.SelectionEpoch,
-                        "A failed frame-source result retained a frame lease.",
-                        requiresProviderReset: true);
-                }
                 return result;
             }
             if (result.Frame == null)
             {
                 return FrameSourceResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "A successful frame-source result omitted its frame lease.",
-                    requiresProviderReset: true);
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: true,
+                    "Frame source reported success without a frame.");
             }
-
-            string? frameFailure = result.Frame.ValidateForPurpose(
-                request.Purpose,
-                request.MinimumSourceSequence);
-            if (frameFailure != null)
+            if (request.Purpose != VisionFramePurpose.ExplicitRawDebug &&
+                !result.Frame.IsObservationEligible)
             {
                 await result.Frame.DisposeAsync().ConfigureAwait(false);
                 return FrameSourceResult.Failure(
                     VisionOperationStatus.InvalidFrame,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    frameFailure);
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: false,
+                    "Perception requires a transformed, validity-bearing, observation-eligible frame.");
             }
-            if (result.Frame.Width > provider.Capabilities.MaximumWidth ||
-                result.Frame.Height > provider.Capabilities.MaximumHeight)
+            if (request.Purpose == VisionFramePurpose.ExplicitRawDebug &&
+                result.Frame.Origin != VisionFrameOrigin.RawPhoneDebug)
             {
                 await result.Frame.DisposeAsync().ConfigureAwait(false);
                 return FrameSourceResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Frame dimensions exceeded the provider capability declaration.",
-                    requiresProviderReset: true);
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: true,
+                    "Explicit raw debug acquisition returned a transformed frame.");
+            }
+            if (result.Frame.Width > source.Capabilities.MaximumWidth ||
+                result.Frame.Height > source.Capabilities.MaximumHeight)
+            {
+                await result.Frame.DisposeAsync().ConfigureAwait(false);
+                return FrameSourceResult.Failure(
+                    VisionOperationStatus.ContractViolation,
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: true,
+                    "Frame dimensions exceed the source capability declaration.");
+            }
+            if (result.Frame.Identity.SourceSequence <
+                request.MinimumSourceSequence)
+            {
+                await result.Frame.DisposeAsync().ConfigureAwait(false);
+                return FrameSourceResult.Failure(
+                    VisionOperationStatus.InvalidFrame,
+                    source.Descriptor,
+                    request.Context,
+                    requiresProviderReset: false,
+                    "Frame source returned a sequence older than requested.");
             }
             return result;
         }
 
         public static async ValueTask<TrackingResult> TrackAsync(
-            IVisualTracker provider,
-            VisionProviderSelection selection,
+            IVisualTracker tracker,
             TrackingRequest request,
+            VisionProviderSelection selection,
             CancellationToken cancellationToken)
         {
-            if (provider == null)
+            if (tracker == null)
             {
-                throw new ArgumentNullException(nameof(provider));
-            }
-            if (selection == null)
-            {
-                throw new ArgumentNullException(nameof(selection));
+                throw new ArgumentNullException(nameof(tracker));
             }
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
-
-            ProviderDescriptor descriptor = provider.Descriptor;
-            ValidateProvider(
-                descriptor,
+            if (selection == null)
+            {
+                throw new ArgumentNullException(nameof(selection));
+            }
+            ValidateDescriptor(
+                tracker.Descriptor,
                 VisionProviderKind.LightweightTracker,
                 request.Context);
-            if (!provider.Capabilities.SupportsFaceTracking &&
-                !provider.Capabilities.SupportsPersonTracking &&
-                !provider.Capabilities.SupportsObjectTracking &&
-                !provider.Capabilities.SupportsMotionTracking)
+            if (tracker.Capabilities == null)
             {
                 return TrackingResult.Failure(
-                    VisionOperationStatus.Unavailable,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Tracker advertises no supported tracking capability.");
+                    VisionOperationStatus.ContractViolation,
+                    tracker.Descriptor,
+                    request,
+                    requiresProviderReset: true,
+                    "Tracker capability metadata is unavailable.");
             }
-            string? frameFailure = request.Frame.ValidateForPurpose(
-                request.Purpose,
-                minimumSourceSequence: 0);
-            if (frameFailure != null)
+            if (!request.Frame.IsObservationEligible)
             {
                 return TrackingResult.Failure(
                     VisionOperationStatus.InvalidFrame,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    frameFailure);
-            }
-            if (!selection.Read().Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
-            {
-                return TrackingResult.Failure(
-                    VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Tracker selection changed before invocation.");
+                    tracker.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "Tracker input is not an eligible transformed Reachy-eye frame.");
             }
 
             Execution<TrackingResult> execution = await ExecuteAsync(
-                token => provider.AnalyzeAsync(request, token),
+                token => tracker.AnalyzeAsync(request, token),
                 request.Context.Timeout,
                 cancellationToken).ConfigureAwait(false);
             if (execution.Status != ExecutionStatus.Completed)
             {
                 return TrackingResult.Failure(
                     MapStatus(execution.Status),
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    Diagnostic(execution),
-                    execution.RequiresProviderReset);
+                    tracker.Descriptor,
+                    request,
+                    execution.Status == ExecutionStatus.TimedOut ||
+                        execution.Status == ExecutionStatus.Faulted,
+                    Diagnostic(execution));
             }
-
-            TrackingResult result = execution.Value!;
-            if (!selection.Read().Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
+            if (!selection.IsCurrent(request.Context))
             {
                 return TrackingResult.Failure(
                     VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Tracker selection changed while the request was in flight.");
+                    tracker.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "The selected tracker changed before completion.");
             }
+
+            TrackingResult result = execution.Value ??
+                throw new InvalidOperationException(
+                    "Completed tracker execution has no result.");
             if (!Matches(
                     result.ProviderInstanceId,
                     result.RequestId,
                     result.SelectionEpoch,
-                    descriptor,
-                    request.Context))
+                    tracker.Descriptor,
+                    request.Context) ||
+                !request.Frame.Identity.Matches(result.FrameIdentity))
             {
                 return TrackingResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Tracker result identity did not match the request.",
-                    requiresProviderReset: true);
+                    tracker.Descriptor,
+                    request,
+                    requiresProviderReset: true,
+                    "Tracker result identity does not match the request frame and provider.");
             }
             return result;
         }
 
-        public static async ValueTask<VisionLanguageResult>
-            AnalyzeVisionLanguageAsync(
-                IVisionLanguageProvider provider,
-                VisionProviderSelection selection,
-                VisionLanguageRequest request,
-                CancellationToken cancellationToken)
+        public static async ValueTask<VisionLanguageResult> AnalyzeVisionLanguageAsync(
+            IVisionLanguageProvider provider,
+            VisionLanguageRequest request,
+            VisionProviderSelection selection,
+            CancellationToken cancellationToken)
         {
             if (provider == null)
             {
                 throw new ArgumentNullException(nameof(provider));
             }
-            if (selection == null)
-            {
-                throw new ArgumentNullException(nameof(selection));
-            }
             if (request == null)
             {
                 throw new ArgumentNullException(nameof(request));
             }
-
-            ProviderDescriptor descriptor = provider.Descriptor;
-            ValidateProvider(
-                descriptor,
+            if (selection == null)
+            {
+                throw new ArgumentNullException(nameof(selection));
+            }
+            ValidateDescriptor(
+                provider.Descriptor,
                 VisionProviderKind.SemanticVisionLanguage,
                 request.Context);
-            if (request.Prompt.Length > provider.Capabilities.MaximumPromptCharacters)
+            if (provider.Capabilities == null)
             {
                 return VisionLanguageResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Prompt length exceeded the provider capability declaration.");
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: true,
+                    "VLM capability metadata is unavailable.");
             }
-            if (descriptor.Location != VisionProviderLocation.OnDevice &&
+            if (request.Prompt.Length >
+                provider.Capabilities.MaximumPromptCharacters)
+            {
+                return VisionLanguageResult.Failure(
+                    VisionOperationStatus.ContractViolation,
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "The VLM prompt exceeds the provider capability limit.");
+            }
+            if (provider.Descriptor.RequiresNetworkDisclosure &&
                 !request.NetworkDisclosureAcknowledged)
             {
                 return VisionLanguageResult.Failure(
                     VisionOperationStatus.Unavailable,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Network disclosure must be acknowledged before invoking a remote vision provider.");
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "Network disclosure acknowledgement is required for this provider.");
             }
-            string? frameFailure = request.Frame.ValidateForPurpose(
-                request.Purpose,
-                minimumSourceSequence: 0);
-            if (frameFailure != null)
+            if (!request.Frame.IsObservationEligible)
             {
                 return VisionLanguageResult.Failure(
                     VisionOperationStatus.InvalidFrame,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    frameFailure);
-            }
-            if (!selection.Read().Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
-            {
-                return VisionLanguageResult.Failure(
-                    VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Vision-language selection changed before invocation.");
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "VLM input is not an eligible transformed Reachy-eye frame.");
             }
 
             Execution<VisionLanguageResult> execution = await ExecuteAsync(
@@ -329,44 +304,53 @@ namespace ReachyMini.Perception
             {
                 return VisionLanguageResult.Failure(
                     MapStatus(execution.Status),
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    Diagnostic(execution),
-                    execution.RequiresProviderReset);
+                    provider.Descriptor,
+                    request,
+                    execution.Status == ExecutionStatus.TimedOut ||
+                        execution.Status == ExecutionStatus.Faulted,
+                    Diagnostic(execution));
             }
-
-            VisionLanguageResult result = execution.Value!;
-            if (!selection.Read().Matches(
-                    descriptor.InstanceId,
-                    request.Context.SelectionEpoch))
+            if (!selection.IsCurrent(request.Context))
             {
                 return VisionLanguageResult.Failure(
                     VisionOperationStatus.Superseded,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Vision-language selection changed while the request was in flight.");
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: false,
+                    "The selected VLM provider changed before completion.");
             }
+
+            VisionLanguageResult result = execution.Value ??
+                throw new InvalidOperationException(
+                    "Completed VLM execution has no result.");
             if (!Matches(
                     result.ProviderInstanceId,
                     result.RequestId,
                     result.SelectionEpoch,
-                    descriptor,
-                    request.Context))
+                    provider.Descriptor,
+                    request.Context) ||
+                !request.Frame.Identity.Matches(result.FrameIdentity))
             {
                 return VisionLanguageResult.Failure(
                     VisionOperationStatus.ContractViolation,
-                    descriptor.InstanceId,
-                    request.Context.RequestId,
-                    request.Context.SelectionEpoch,
-                    "Vision-language result identity did not match the request.",
-                    requiresProviderReset: true);
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: true,
+                    "VLM result identity does not match the request frame and provider.");
+            }
+            if (result.Succeeded && string.IsNullOrWhiteSpace(result.Text))
+            {
+                return VisionLanguageResult.Failure(
+                    VisionOperationStatus.ContractViolation,
+                    provider.Descriptor,
+                    request,
+                    requiresProviderReset: true,
+                    "VLM provider reported success without semantic text.");
             }
             return result;
         }
 
-        private static void ValidateProvider(
+        private static void ValidateDescriptor(
             ProviderDescriptor descriptor,
             VisionProviderKind expectedKind,
             VisionRequestContext context)
@@ -458,7 +442,9 @@ namespace ReachyMini.Perception
                 return Execution<T>.Faulted(exception);
             }
 
-            Task timeoutTask = Task.Delay(timeout);
+            Task timeoutTask = Task.Delay(
+                timeout,
+                CancellationToken.None);
             Task callerCancellationTask = Task.Delay(
                 Timeout.InfiniteTimeSpan,
                 cancellationToken);
@@ -535,48 +521,37 @@ namespace ReachyMini.Perception
 
             public Exception? Exception { get; }
 
-            public bool RequiresProviderReset =>
-                Status == ExecutionStatus.TimedOut ||
-                Status == ExecutionStatus.Faulted;
-
             public static Execution<T> Completed(T value)
             {
-                if (value == null)
-                {
-                    throw new ArgumentNullException(nameof(value));
-                }
                 return new Execution<T>(
                     ExecutionStatus.Completed,
-                    value,
-                    exception: null);
+                    value ?? throw new ArgumentNullException(nameof(value)),
+                    null);
             }
 
             public static Execution<T> Cancelled()
             {
                 return new Execution<T>(
                     ExecutionStatus.Cancelled,
-                    value: null,
-                    exception: null);
+                    null,
+                    null);
             }
 
             public static Execution<T> TimedOut()
             {
                 return new Execution<T>(
                     ExecutionStatus.TimedOut,
-                    value: null,
-                    exception: null);
+                    null,
+                    null);
             }
 
             public static Execution<T> Faulted(Exception exception)
             {
-                if (exception == null)
-                {
-                    throw new ArgumentNullException(nameof(exception));
-                }
                 return new Execution<T>(
                     ExecutionStatus.Faulted,
-                    value: null,
-                    exception);
+                    null,
+                    exception ?? throw new ArgumentNullException(
+                        nameof(exception)));
             }
         }
     }
