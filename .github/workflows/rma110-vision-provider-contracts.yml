@@ -1,0 +1,231 @@
+name: RMA-110 Vision Provider Contracts
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma110-vision-provider-contracts.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Perception/**'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma110*.cs'
+      - 'docs/architecture/VISION_PROVIDER_CONTRACTS.md'
+      - 'docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma110-vision-provider-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Identity, ownership, cancellation, and timeout contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json
+          import os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-110 Vision Provider Contracts",
+              "description": "RMA-110 contracts are running",
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run managed camera and vision contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify RMA-110 source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          contract_paths = sorted(
+              (root / 'Assets/ReachyMini/Runtime/Core/Perception').glob('*.cs')
+          )
+          if not contract_paths:
+              raise SystemExit('RMA-110 perception contracts are missing.')
+          contracts = '\n'.join(
+              path.read_text(encoding='utf-8') for path in contract_paths
+          )
+          tests = '\n'.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted(
+                  (root / 'managed/ReachyMini.Camera.Tests').glob('Rma110*.cs')
+              )
+          )
+          routing = (
+              root / 'Assets/ReachyMini/Runtime/Rendering/'
+              'ReachyVisionFrameRoutingPolicy.cs'
+          ).read_text(encoding='utf-8')
+          architecture = (
+              root / 'docs/architecture/VISION_PROVIDER_CONTRACTS.md'
+          ).read_text(encoding='utf-8')
+          validation = (
+              root / 'docs/validation/'
+              'RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md'
+          ).read_text(encoding='utf-8')
+
+          required_contracts = [
+              'IReachyVisionFrameSource',
+              'IVisualTracker',
+              'IVisionLanguageProvider',
+              'ProviderDescriptor',
+              'VisionProviderSelection',
+              'SelectionEpoch',
+              'VisionRequestContext',
+              'MaximumTimeout',
+              'IReachyVisionFrameResources',
+              'IAsyncDisposable',
+              'ReachyVisionFrameIdentity',
+              'ReachyVisionCoverage',
+              'HasValidityMask',
+              'CanCreateVisualObservations',
+              'ExplicitRawDebug',
+              'VisionOperationStatus.TimedOut',
+              'VisionOperationStatus.Superseded',
+              'requiresProviderReset: true',
+              'networkDisclosureAcknowledged',
+          ]
+          for token in required_contracts:
+              if token not in contracts:
+                  raise SystemExit('Missing RMA-110 contract token: ' + token)
+
+          required_tests = [
+              '[ModuleInitializer]',
+              'TransformedFramesRequireOwnedColorValidityAndCoverage',
+              'FrameSourceRejectsRawFallbackAndStaleSequenceAsync',
+              'CallerCancellationReturnsTypedFailureAsync',
+              'TimeoutQuarantinesProviderAsync',
+              'ProviderFaultRemainsVisibleAsync',
+              'ProviderSwitchSupersedesLateResultsAsync',
+              'ResultIdentityMismatchFailsClosedAsync',
+              'CloudDisclosureIsRequiredBeforeInvocationAsync',
+              'FrameResourcesDisposeExactlyOnceAsync',
+          ]
+          for token in required_tests:
+              if token not in tests:
+                  raise SystemExit('Missing RMA-110 managed test token: ' + token)
+
+          for token in (
+              'ExplicitRawDebug',
+              'CanCreateVisualObservations',
+              'transformed Reachy-eye frame',
+          ):
+              if token not in routing:
+                  raise SystemExit('RMA-110 routing baseline missing: ' + token)
+
+          for token in (
+              'Owned frame lease',
+              'Timeout does not trigger a retry',
+              'Raw phone frames are a separate',
+              'Superseded',
+          ):
+              if token not in architecture:
+                  raise SystemExit('RMA-110 architecture missing: ' + token)
+
+          for token in (
+              'Implementation validation in progress',
+              'no milestone completion claim',
+              'does not retry',
+              'Exact SHAs',
+          ):
+              if token not in validation:
+                  raise SystemExit('RMA-110 validation placeholder missing: ' + token)
+
+          forbidden = (
+              '|| true',
+              'catch {',
+              'Task.Run(',
+              'Thread.Sleep(',
+              'Retry',
+              'retryCount',
+              'fallbackProvider',
+          )
+          for token in forbidden:
+              if token in contracts:
+                  raise SystemExit(
+                      'RMA-110 contains forbidden retry/fallback pattern: ' + token
+                  )
+
+          print('RMA-110 source contracts passed.')
+          PY
+
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated managed build output is tracked.' >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
+          import json
+          import os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-110 Vision Provider Contracts",
+              "description": (
+                  "RMA-110 contracts passed"
+                  if passed else "RMA-110 contracts failed"
+              ),
+              "target_url": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/"
+                  f"{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/status.json" >/dev/null
