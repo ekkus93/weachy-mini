@@ -173,7 +173,7 @@ jobs:
           for token in ('ReadPixels(', 'GetPixels(', 'GetPixels32(', 'AsyncGPUReadback', '|| true'):
               if token in runtime:
                   raise SystemExit('RMA-104 runtime contains forbidden fallback/readback: ' + token)
-          stop_body = text['acquisition'].split('public void StopAcquisition()', 1)[1].split('public void PauseAcquisition()', 1)[0]
+          stop_body = text['acquisition'].split('public void StopAcquisition()', 1)[1].split('public void RefreshNow()', 1)[0]
           if 'state.MarkStopped' in stop_body:
               raise SystemExit('StopAcquisition must not fabricate Stopped before CameraX CLOSED.')
           print('RMA-104 source contracts passed.')
