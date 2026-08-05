@@ -26,13 +26,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Apply and validate cancellation and disposal repair
+      - name: Apply and diagnose cancellation and disposal repair
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/rma110_test_disposal_patch.py
+          python3 scripts/rma110_test_progress_patch.py
           dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
-          timeout --signal=TERM --kill-after=15s 120s \
+          timeout --signal=TERM --kill-after=15s 60s \
             dotnet run \
               --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
               --configuration Release \
