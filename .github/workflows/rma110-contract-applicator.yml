@@ -1,0 +1,81 @@
+name: RMA-110 Contract Applicator
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma110-contract-applicator.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma110-contract-applicator
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode, verify, and apply RMA-110 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import subprocess
+          import tarfile
+          import zlib
+          from pathlib import Path
+
+          root = Path('.').resolve()
+          chunks = [root / f'scripts/.rma110_payload_{index:02d}' for index in range(4)]
+          for chunk in chunks:
+              if not chunk.is_file():
+                  raise SystemExit(f'missing payload chunk: {chunk}')
+          payload = ''.join(chunk.read_text(encoding='utf-8') for chunk in chunks)
+          expected_payload = '2f82e01eeb4e436b6eec72c0c23e2b9f48556de0c706294d3f8e7bcb217b5aeb'
+          if hashlib.sha256(payload.encode()).hexdigest() != expected_payload:
+              raise SystemExit('RMA-110 payload hash mismatch')
+          archive_bytes = zlib.decompress(base64.b85decode(payload.encode()))
+          expected_archive = 'b4276b5949ba27b9325916525196b8eef89e5ad8d4febe8f41edaf0f0f9ebad0'
+          if hashlib.sha256(archive_bytes).hexdigest() != expected_archive:
+              raise SystemExit('RMA-110 archive hash mismatch')
+          with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode='r:') as archive:
+              members = archive.getmembers()
+              for member in members:
+                  target = (root / member.name).resolve()
+                  if root not in target.parents:
+                      raise SystemExit(f'unsafe archive path: {member.name}')
+                  if not member.isfile():
+                      raise SystemExit(f'non-file archive entry: {member.name}')
+              archive.extractall(root)
+          for chunk in chunks:
+              chunk.unlink()
+          subprocess.run(['git', 'diff', '--check'], check=True)
+          subprocess.run(['git', 'config', 'user.name', 'Phillip Chin'], check=True)
+          subprocess.run(['git', 'config', 'user.email', 'ekkus93@gmail.com'], check=True)
+          subprocess.run([
+              'git', 'add',
+              'Assets/ReachyMini/Runtime/Core/Perception',
+              'managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs',
+              'docs/architecture/VISION_PROVIDER_CONTRACTS.md',
+              'docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md',
+              'scripts/.rma110_payload_00',
+              'scripts/.rma110_payload_01',
+              'scripts/.rma110_payload_02',
+              'scripts/.rma110_payload_03',
+          ], check=True)
+          subprocess.run([
+              'git', 'commit', '-m',
+              'RMA-110: define vision provider contracts',
+          ], check=True)
+          subprocess.run(['git', 'push', 'origin', 'HEAD:master'], check=True)
+          PY
