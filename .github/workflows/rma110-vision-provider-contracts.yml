@@ -7,6 +7,7 @@ on:
       - '.github/workflows/rma110-vision-provider-contracts.yml'
       - 'Assets/ReachyMini/Runtime/Core/Perception/**'
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs'
+      - 'managed/ReachyMini.Camera.Tests/Program.cs'
       - 'managed/ReachyMini.Camera.Tests/Rma110*.cs'
       - 'docs/architecture/VISION_PROVIDER_CONTRACTS.md'
       - 'docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md'
@@ -66,10 +67,11 @@ jobs:
         run: |
           set -euo pipefail
           dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
-          dotnet run \
-            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
-            --configuration Release \
-            --no-restore
+          timeout --signal=TERM --kill-after=15s 120s \
+            dotnet run \
+              --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+              --configuration Release \
+              --no-restore
 
       - name: Verify RMA-110 source contracts
         shell: bash
@@ -93,6 +95,9 @@ jobs:
                   (root / 'managed/ReachyMini.Camera.Tests').glob('Rma110*.cs')
               )
           )
+          program = (
+              root / 'managed/ReachyMini.Camera.Tests/Program.cs'
+          ).read_text(encoding='utf-8')
           routing = (
               root / 'Assets/ReachyMini/Runtime/Rendering/'
               'ReachyVisionFrameRoutingPolicy.cs'
@@ -131,8 +136,8 @@ jobs:
                   raise SystemExit('Missing RMA-110 contract token: ' + token)
 
           required_tests = [
-              '[ModuleInitializer]',
-              'TransformedFramesRequireOwnedColorValidityAndCoverage',
+              'internal static async Task RunAsync()',
+              'TransformedFramesRequireOwnedColorValidityAndCoverageAsync',
               'FrameSourceRejectsRawFallbackAndStaleSequenceAsync',
               'CallerCancellationReturnsTypedFailureAsync',
               'TimeoutQuarantinesProviderAsync',
@@ -141,10 +146,26 @@ jobs:
               'ResultIdentityMismatchFailsClosedAsync',
               'CloudDisclosureIsRequiredBeforeInvocationAsync',
               'FrameResourcesDisposeExactlyOnceAsync',
+              'await using var source',
+              'await using var tracker',
+              'await using var provider',
+              'await using var resources',
           ]
           for token in required_tests:
               if token not in tests:
                   raise SystemExit('Missing RMA-110 managed test token: ' + token)
+
+          for token in (
+              'private static async Task<int> Main()',
+              'await Rma110VisionProviderContracts.RunAsync()',
+              '.ConfigureAwait(false)',
+          ):
+              if token not in program:
+                  raise SystemExit('RMA-110 async test entry point missing: ' + token)
+          if '[ModuleInitializer]' in tests or 'GetAwaiter().GetResult()' in tests:
+              raise SystemExit(
+                  'RMA-110 async contracts must not run from a synchronous module initializer.'
+              )
 
           for token in (
               'ExplicitRawDebug',
@@ -192,6 +213,10 @@ jobs:
 
           if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
             echo 'Generated managed build output is tracked.' >&2
+            exit 1
+          fi
+          if git ls-files | grep -E 'rma110_(test|closeout|executor)|rma110-.*(repair|applicator|cancel)'; then
+            echo 'Temporary RMA-110 repair/applicator files are tracked.' >&2
             exit 1
           fi
           git diff --check
