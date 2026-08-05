@@ -1,0 +1,258 @@
+name: RMA-101 Authoritative Camera Rotation
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma101-authoritative-camera-rotation.yml'
+      - '.gitignore'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAuthoritativeRotation.cs'
+      - 'Assets/ReachyMini/Runtime/Simulation/ReachyAuthoritativeCameraRotationSource.cs'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyAuthoritativeCameraRotationTests.cs'
+      - 'managed/ReachyMini.Camera.Tests/Program.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma101AuthoritativeRotationContracts.cs'
+      - 'models/reachy-mini/camera-reprojection-binding.json'
+      - 'docs/architecture/AUTHORITATIVE_CAMERA_RELATIVE_ROTATION.md'
+      - 'docs/validation/RMA_101_AUTHORITATIVE_CAMERA_ROTATION_VALIDATION_2026-08-04.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma101-authoritative-camera-rotation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Solved-state relative-rotation contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Publish pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma101-status.json"
+          import json
+          import os
+          print(json.dumps({
+              "state": "pending",
+              "context": "RMA-101 Authoritative Camera Rotation",
+              "description": "Solved-state camera rotation contracts are running",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma101-status.json" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run managed camera contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Verify pinned MJCF provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          model="${RUNNER_TEMP}/reachy_mini.xml"
+          curl --fail-with-body --silent --show-error --location \
+            'https://raw.githubusercontent.com/pollen-robotics/reachy_mini/a739a6e461eb6d722901f1cfc225265ffc85c28d/src/reachy_mini/descriptions/reachy_mini/mjcf/reachy_mini.xml' \
+            --output "${model}"
+          printf '%s  %s\n' \
+            'efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46' \
+            "${model}" | sha256sum --check --strict
+          MODEL_PATH="${model}" python3 - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(os.environ['MODEL_PATH']).getroot()
+          parent = {child: node for node in root.iter() for child in node}
+          cameras = [node for node in root.iter('camera') if node.get('name') == 'eye_camera']
+          sites = [node for node in root.iter('site') if node.get('name') == 'camera_optical']
+          if len(cameras) != 1 or len(sites) != 1:
+              raise SystemExit('Pinned MJCF must contain exactly one eye_camera and camera_optical.')
+          if parent.get(cameras[0]) is not parent.get(sites[0]):
+              raise SystemExit('eye_camera and camera_optical no longer share the pinned fixed body.')
+          if parent[cameras[0]].tag != 'body':
+              raise SystemExit('Pinned optical frames are not attached to a MuJoCo body.')
+          print('Pinned MJCF camera provenance passed.')
+          PY
+
+      - name: Verify integration and fail-closed policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          core = Path('Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAuthoritativeRotation.cs').read_text(encoding='utf-8')
+          source = Path('Assets/ReachyMini/Runtime/Simulation/ReachyAuthoritativeCameraRotationSource.cs').read_text(encoding='utf-8')
+          managed = Path('managed/ReachyMini.Camera.Tests/Rma101AuthoritativeRotationContracts.cs').read_text(encoding='utf-8')
+          program = Path('managed/ReachyMini.Camera.Tests/Program.cs').read_text(encoding='utf-8')
+          unity = Path('Assets/ReachyMini/Tests/Editor/ReachyAuthoritativeCameraRotationTests.cs').read_text(encoding='utf-8')
+          doc = Path('docs/architecture/AUTHORITATIVE_CAMERA_RELATIVE_ROTATION.md').read_text(encoding='utf-8')
+          binding = json.loads(Path('models/reachy-mini/camera-reprojection-binding.json').read_text(encoding='utf-8'))
+
+          required_core = [
+              'PinnedSourceCommit', 'PinnedSourceModelSha256',
+              'PinnedOpticalSiteName', 'PinnedCameraName',
+              'PinnedCanonicalCameraBodyName', 'CanonicalCameraBodyId = 15U',
+              'CanonicalBodyPoseCount = 18', 'CameraBodyFromOptical',
+              'NeutralMujocoWorldFromOptical',
+              'currentWorldFromOptical.Transposed()',
+              'CurrentReachyFromNeutralReachy',
+              'CurrentReachyFromCurrentPhone',
+              'NeutralPhoneFromCurrentPhone',
+          ]
+          for token in required_core:
+              if token not in core:
+                  raise SystemExit(f'Missing RMA-101 core token: {token}')
+
+          required_source = [
+              'IReachyPublishedAuthoritativeStateSource',
+              'TryCaptureLatestAuthoritativeState(frame)',
+              'frame.GetBodyPose(cameraIndex)',
+              'pose.QuaternionW', 'pose.QuaternionX',
+              'pose.QuaternionY', 'pose.QuaternionZ',
+              'StaleAuthoritativeState', 'CameraBodyMissing',
+              'CameraBodyDuplicated', 'AuthoritativeLayoutMismatch',
+              'body translation was not consumed',
+          ]
+          for token in required_source:
+              if token not in source:
+                  raise SystemExit(f'Missing authoritative-source token: {token}')
+
+          forbidden_dynamic_inputs = [
+              'requestedOrientation', 'targetOrientation',
+              'RequestedOrientation', 'TargetOrientation',
+          ]
+          for token in forbidden_dynamic_inputs:
+              if token in core or token in source:
+                  raise SystemExit(f'Forbidden target-orientation input remains: {token}')
+
+          calculate_signature = core.split('public static ReachyCameraRelativeRotationSample Calculate(', 1)[1].split(')', 1)[0]
+          for token in ('position', 'translation'):
+              if token.lower() in calculate_signature.lower():
+                  raise SystemExit(f'Level 1 calculator accepts forbidden {token} input.')
+
+          required_managed = [
+              'NeutralSolvedPoseProducesNeutralRotation',
+              'YawPitchAndRollSignsAreExplicit',
+              'PhoneOrientationComposesAfterNeutralCalibration',
+              'TranslationIsAbsentFromTheApi',
+              'ModelMismatchFailsClosed',
+          ]
+          for token in required_managed:
+              if token not in managed:
+                  raise SystemExit(f'Missing managed RMA-101 contract: {token}')
+          if 'Rma101AuthoritativeRotationContracts.Run();' not in program:
+              raise SystemExit('Managed test entry point does not explicitly execute RMA-101.')
+
+          required_unity = [
+              'GeneratedModelRetainsPinnedCanonicalCameraBody',
+              'SourceUsesSolvedPoseAndRejectsStaleSequence',
+              'SourceIgnoresTranslationAndAcceptsContinuityReset',
+              'SourceFailsClosedForMissingOrDuplicatedCameraBody',
+          ]
+          for token in required_unity:
+              if token not in unity:
+                  raise SystemExit(f'Missing Unity RMA-101 test: {token}')
+
+          expected = {
+              'schema_version': 1,
+              'model_compatibility': 'reachy-mini-official-v1',
+          }
+          for key, value in expected.items():
+              if binding.get(key) != value:
+                  raise SystemExit(f'Binding mismatch for {key}.')
+          camera = binding['authoritative_camera']
+          if camera['camera_name'] != 'eye_camera' or camera['optical_site_name'] != 'camera_optical':
+              raise SystemExit('Pinned camera/site names changed.')
+          if camera['canonical_body_name'] != '__body_15' or camera['body_id'] != 15:
+              raise SystemExit('Pinned canonical camera body changed.')
+          if camera['expected_body_pose_count'] != 18:
+              raise SystemExit('Pinned body layout changed.')
+          if binding['level_1_policy']['translation_used'] is not False:
+              raise SystemExit('Level 1 binding unexpectedly consumes translation.')
+          if binding['level_1_policy']['requested_target_orientation_allowed'] is not False:
+              raise SystemExit('Level 1 binding unexpectedly permits requested targets.')
+
+          required_doc = [
+              'mjData.xquat', 'body ID 15', 'camera_optical', 'eye_camera',
+              'Translation is intentionally absent',
+              'R_currentReachy_from_currentPhone',
+              'positive yaw', 'positive pitch', 'positive roll',
+              'Requested head targets', 'RMA-102',
+          ]
+          for token in required_doc:
+              if token not in doc:
+                  raise SystemExit(f'Missing RMA-101 documentation token: {token}')
+
+          tracked = Path('.').resolve()
+          del tracked
+          PY
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated managed build output is tracked.' >&2
+            exit 1
+          fi
+          for path in \
+            .github/workflows/rma101-apply-implementation.yml \
+            .github/workflows/rma101-clean-generated-dotnet.yml \
+            .github/rma101-payload.b64 \
+            .github/rma101-payload \
+            .github/rma101-payload-v2; do
+            if [[ -e "${path}" ]]; then
+              echo "Temporary RMA-101 artifact remains: ${path}" >&2
+              exit 1
+            fi
+          done
+          echo 'RMA-101 authoritative camera rotation static contract passed.'
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > "${RUNNER_TEMP}/rma101-status.json"
+          import json
+          import os
+          passed = os.environ['JOB_STATUS'] == 'success'
+          print(json.dumps({
+              "state": "success" if passed else "failure",
+              "context": "RMA-101 Authoritative Camera Rotation",
+              "description": "Solved-state camera rotation contracts passed" if passed else "Solved-state camera rotation contracts failed",
+              "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }))
+          PY
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary "@${RUNNER_TEMP}/rma101-status.json" >/dev/null
