@@ -39,11 +39,13 @@ namespace ReachyMini.Tests
                 Assert.That(
                     frame.Coverage.State,
                     Is.EqualTo(ReachyCameraCoverageState.Normal));
+                ReachyCameraCoverageMeasurement measurement =
+                    frame.Coverage.Measurement!;
                 Assert.That(
-                    frame.Coverage.Measurement!.ValidPixelCount,
+                    measurement.ValidPixelCount,
                     Is.EqualTo(9L));
                 Assert.That(
-                    frame.Coverage.Measurement.CoverageFraction,
+                    measurement.CoverageFraction,
                     Is.EqualTo(1.0));
 
                 colorReadback = ReadBack(frame.Color);

@@ -1567,32 +1567,45 @@ public:
 
 ## RMA-102 — Implement GPU homography warp
 
-- [ ] Compute:
+**Status:** Complete (2026-08-05)
+
+- [x] Compute:
 
 ```text
 H = K_reachy * R_reachy_phone * inverse(K_phone)
 ```
 
-- [ ] Pass the inverse mapping required by the shader to avoid holes from forward splatting.
-- [ ] Sample only valid source coordinates.
-- [ ] Emit transformed color and a validity mask.
-- [ ] Support output resolution independent from source resolution.
-- [ ] Avoid CPU readback for local trackers that can consume GPU input.
+- [x] Pass the inverse mapping required by the shader to avoid holes from forward splatting.
+- [x] Sample only valid source coordinates.
+- [x] Emit transformed color and a validity mask.
+- [x] Support output resolution independent from source resolution.
+- [x] Avoid CPU readback for local trackers that can consume GPU input.
 
-Shader pseudocode:
+**Completion evidence**
 
-```text
-for each output pixel p_out:
-    ray_reachy = inverse(K_reachy) * homogeneous(p_out)
-    ray_phone  = inverse(R_reachy_phone) * ray_reachy
-    p_source   = K_phone * normalize_project(ray_phone)
-    if p_source inside source image and ray_phone.z > 0:
-        color = sample(source, p_source)
-        valid = 1
-    else:
-        color = configured_invalid_visual
-        valid = 0
-```
+- `ReachyCameraHomographyCalculator` builds the exact phone-to-Reachy
+  homography and its inverse from RMA-100 calibration and timestamp-matched
+  RMA-101 authoritative rotation. Camera, model, dimensions, timestamps,
+  rotation, and matrix round-trip mismatches fail closed.
+- `ReachyCameraHomographyWarpRenderer` performs inverse GPU gathering into
+  reusable color and validity render textures. Invalid rays are rejected before
+  source sampling, output resolution is independent, and runtime code performs
+  no image readback.
+- The validation harness was repaired to require a real graphics device rather
+  than accepting `NullGfxDevice` evidence. Shader math and the `> 0.9` identity
+  threshold were not weakened, and active render targets are unbound before
+  release.
+- Hosted CI run `31008738003` passed static, native, sanitizer, managed,
+  Reachy-model, and Android jobs on exact implementation SHA
+  `b5aabd8f4e937867ec72e75539a96a6182ecd89b`.
+- Self-hosted run `31009555103` passed OpenGL Core Unity tests on `kawa`
+  (`110/110` EditMode and `1/1` PlayMode), ARM64 API-26 APK build and
+  verification, RMA-090/RMA-091/RMA-092 physical camera acceptance, RMA-022
+  lifecycle acceptance, authoritative rendering, evidence uploads, and final
+  status publication on the same exact SHA.
+- Detailed architecture and evidence are in
+  `docs/architecture/GPU_HOMOGRAPHY_WARP.md` and
+  `docs/validation/RMA_102_GPU_HOMOGRAPHY_WARP_VALIDATION_2026-08-04.md`.
 
 ## RMA-103 — Implement valid-coverage policy
 
