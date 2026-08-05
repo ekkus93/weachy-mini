@@ -26,14 +26,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/rma101-payload/part-* > "${RUNNER_TEMP}/rma101.b64"
+          cat .github/rma101-payload-v2/part-* > "${RUNNER_TEMP}/rma101.b64"
           base64 --decode "${RUNNER_TEMP}/rma101.b64" > "${RUNNER_TEMP}/rma101.tar.gz"
-          printf '%s  %s\n' 'b5f0871b72452cbdfd139696986736dabfa7935bb5987110b4eaff24f3b0c576' "${RUNNER_TEMP}/rma101.tar.gz" | sha256sum --check --strict
+          printf '%s  %s\n' 'a5577d5e43cdd716ba02106397653864fd176a709e814776945a5ada032ba9a8' "${RUNNER_TEMP}/rma101.tar.gz" | sha256sum --check --strict
           tar --extract --gzip --file "${RUNNER_TEMP}/rma101.tar.gz" --directory "${GITHUB_WORKSPACE}"
           python3 .github/rma101-program-patch.py
           rm --force .github/rma101-program-patch.py
           rm --force .github/rma101-payload.b64
           rm --recursive --force .github/rma101-payload
+          rm --recursive --force .github/rma101-payload-v2
           rm --force .github/workflows/rma101-apply-implementation.yml
           git diff --check
           dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
