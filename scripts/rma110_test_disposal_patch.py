@@ -127,7 +127,7 @@ def main() -> None:
     }
     expected_counts = {
         "            var source = new FakeFrameSource(\n": 1,
-        "            var tracker = new FakeTracker(\n": 4,
+        "            var tracker = new FakeTracker(\n": 5,
         "            var provider = new FakeVisionLanguageProvider(\n": 1,
     }
     for old, new in provider_replacements.items():
