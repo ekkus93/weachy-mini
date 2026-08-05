@@ -46,3 +46,5 @@ jobs:
           git add scripts/rma110_test_progress_patch.py
           git commit -m 'RMA-110: dispose test providers and frame resources'
           git push origin HEAD:master
+
+# Fifth attempt pinpoints the cancellation await versus disposal boundary.
