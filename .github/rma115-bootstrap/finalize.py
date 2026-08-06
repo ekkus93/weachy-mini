@@ -11,6 +11,7 @@ from pathlib import Path
 PREFIX_SHA = "2671e6d4f8d74507ccd410e9783edc035eac8152b9a48a93500abe746e79126b"
 TAIL_SHA = "bba85255dd12a9c958718b98e0d6f1082540b0adc2174e12fb43bc1b1524a5df"
 PROGRAM_SHA = "3c0439fb309021bb5bd385c7d81ba2e3f3a44294d577a357e43eb01de9b958ac"
+OVERLAP_BYTES = 862
 
 
 def digest(data: bytes) -> str:
@@ -28,8 +29,10 @@ def prepare() -> None:
     tail = gzip.decompress(base64.b64decode(encoded, validate=True))
     if len(tail) != 23444 or digest(tail) != TAIL_SHA:
         raise SystemExit("unexpected RMA-115 test tail")
-    complete = prefix + tail
-    if digest(complete) != PROGRAM_SHA:
+    if prefix[-OVERLAP_BYTES:] != tail[:OVERLAP_BYTES]:
+        raise SystemExit("RMA-115 test prefix/tail overlap mismatch")
+    complete = prefix[:-OVERLAP_BYTES] + tail
+    if len(complete) != 70630 or digest(complete) != PROGRAM_SHA:
         raise SystemExit("completed RMA-115 test program digest mismatch")
     program.write_bytes(complete)
 
