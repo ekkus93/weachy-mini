@@ -282,6 +282,14 @@ namespace ReachyMini.Perception
     public sealed class VlmScheduleLease
     {
         private readonly CancellationTokenSource cancellation;
+        private readonly CancellationToken cancellationToken;
+        private readonly object cancellationSync = new object();
+        private bool cancellationRequested;
+        private bool cancellationDispatchStarted;
+        private bool cancellationDispatchCompleted;
+        private bool cancellationDisposed;
+        private bool cancellationDisposalRequested;
+        private int cancellationDispatchThreadId;
 
         internal VlmScheduleLease(
             string requestId,
@@ -303,6 +311,7 @@ namespace ReachyMini.Perception
             ScheduledTimestampNanoseconds = scheduledTimestampNanoseconds;
             Disclosure = disclosure;
             this.cancellation = cancellation;
+            cancellationToken = cancellation.Token;
         }
 
         public string RequestId { get; }
@@ -325,11 +334,7 @@ namespace ReachyMini.Perception
 
         public VlmDisclosureSnapshot Disclosure { get; }
 
-        public CancellationToken CancellationToken => cancellation.Token;
-
-        private readonly object cancellationSync = new object();
-        private bool cancellationRequested;
-        private bool cancellationDisposed;
+        public CancellationToken CancellationToken => cancellationToken;
 
         public bool IsCancellationRequested
         {
@@ -357,33 +362,69 @@ namespace ReachyMini.Perception
 
         internal bool DispatchCancellation()
         {
+            int currentThreadId = Environment.CurrentManagedThreadId;
             lock (cancellationSync)
             {
                 if (cancellationDisposed ||
                     !cancellationRequested ||
-                    cancellation.IsCancellationRequested)
+                    cancellationDispatchStarted)
                 {
                     return false;
                 }
-                try
+                cancellationDispatchStarted = true;
+                cancellationDispatchThreadId = currentThreadId;
+            }
+
+            bool callbackFailure = false;
+            try
+            {
+                cancellation.Cancel();
+            }
+            catch (AggregateException)
+            {
+                callbackFailure = true;
+            }
+            finally
+            {
+                lock (cancellationSync)
                 {
-                    cancellation.Cancel();
-                    return false;
-                }
-                catch (AggregateException)
-                {
-                    return true;
+                    cancellationDispatchCompleted = true;
+                    cancellationDispatchThreadId = 0;
+                    if (cancellationDisposalRequested && !cancellationDisposed)
+                    {
+                        cancellation.Dispose();
+                        cancellationDisposed = true;
+                    }
+                    Monitor.PulseAll(cancellationSync);
                 }
             }
+            return callbackFailure;
         }
 
         internal void DisposeCancellation()
         {
+            int currentThreadId = Environment.CurrentManagedThreadId;
             lock (cancellationSync)
             {
                 if (cancellationDisposed)
                 {
                     return;
+                }
+                if (cancellationDispatchStarted && !cancellationDispatchCompleted)
+                {
+                    cancellationDisposalRequested = true;
+                    if (cancellationDispatchThreadId == currentThreadId)
+                    {
+                        return;
+                    }
+                    while (!cancellationDispatchCompleted && !cancellationDisposed)
+                    {
+                        Monitor.Wait(cancellationSync);
+                    }
+                    if (cancellationDisposed)
+                    {
+                        return;
+                    }
                 }
                 cancellation.Dispose();
                 cancellationDisposed = true;
@@ -926,6 +967,7 @@ namespace ReachyMini.Perception
         public VlmCompletionResult Complete(string requestId)
         {
             requestId = ProviderDescriptor.RequireText(requestId, nameof(requestId));
+            VlmScheduleLease? completedLease = null;
             lock (sync)
             {
                 ThrowIfDisposed();
@@ -934,24 +976,30 @@ namespace ReachyMini.Perception
                     if (state.ActiveRequests.TryGetValue(requestId, out VlmScheduleLease? lease))
                     {
                         state.ActiveRequests.Remove(requestId);
-                        bool cancelled = lease.IsCancellationRequested;
-                        lease.DisposeCancellation();
                         completedRequestCount = checked(completedRequestCount + 1L);
-                        return new VlmCompletionResult(
-                            VlmCompletionStatus.Completed,
-                            cancelled,
-                            cancelled
-                                ? "The cancelled VLM request completed and released its concurrency slot."
-                                : "The VLM request completed and released its concurrency slot.");
+                        completedLease = lease;
+                        break;
                     }
                 }
 
-                unknownCompletionCount = checked(unknownCompletionCount + 1L);
-                return new VlmCompletionResult(
-                    VlmCompletionStatus.UnknownRequest,
-                    false,
-                    "The completion request ID is not active.");
+                if (completedLease == null)
+                {
+                    unknownCompletionCount = checked(unknownCompletionCount + 1L);
+                    return new VlmCompletionResult(
+                        VlmCompletionStatus.UnknownRequest,
+                        false,
+                        "The completion request ID is not active.");
+                }
             }
+
+            bool cancelled = completedLease.IsCancellationRequested;
+            completedLease.DisposeCancellation();
+            return new VlmCompletionResult(
+                VlmCompletionStatus.Completed,
+                cancelled,
+                cancelled
+                    ? "The cancelled VLM request completed and released its concurrency slot."
+                    : "The VLM request completed and released its concurrency slot.");
         }
 
         public VlmSchedulerSnapshot GetSnapshot(long timestampNanoseconds)

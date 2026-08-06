@@ -32,6 +32,7 @@ namespace ReachyMini.VlmScheduling.Tests
             StaleSignalsAreRejectedWithoutAdmission();
             SchedulingTimestampsCannotRegress();
             CancellationCallbackFailuresRemainVisible();
+            CancellationDispatchDoesNotInvertCompletionLocks();
             ProviderPolicyStateIsBounded();
             SnapshotsAreImmutableCopies();
             UnknownCompletionIsVisible();
@@ -417,6 +418,94 @@ namespace ReachyMini.VlmScheduling.Tests
             Equal(1L, scheduler.GetSnapshot(1_010L).Diagnostics.CancellationCallbackFailureCount, "callback failure diagnostic");
         }
 
+        private static void CancellationDispatchDoesNotInvertCompletionLocks()
+        {
+            using ReachyVlmScheduler scheduler = Scheduler(OnDevicePolicy());
+            VlmScheduleLease lease = scheduler.TrySchedule(
+                ManualSignal("vlm-device", 1UL),
+                1_010L).Lease!;
+            using var callbackEntered = new ManualResetEventSlim(false);
+            using var allowCallback = new ManualResetEventSlim(false);
+            Exception? updateFailure = null;
+            Exception? completionFailure = null;
+            VlmCompletionResult? completion = null;
+            using CancellationTokenRegistration registration = lease.CancellationToken.Register(
+                () =>
+                {
+                    callbackEntered.Set();
+                    if (!allowCallback.Wait(TimeSpan.FromSeconds(5)))
+                    {
+                        throw new TimeoutException("Cancellation callback release was not signalled.");
+                    }
+                    _ = scheduler.GetSnapshot(1_010L);
+                });
+
+            var updateThread = new Thread(
+                () =>
+                {
+                    try
+                    {
+                        _ = scheduler.UpdateContext(2UL, 1UL);
+                    }
+                    catch (Exception exception)
+                    {
+                        updateFailure = exception;
+                    }
+                })
+            {
+                IsBackground = true,
+                Name = "rma113-cancellation-dispatch",
+            };
+            updateThread.Start();
+            True(callbackEntered.Wait(TimeSpan.FromSeconds(5)), "cancellation callback entered");
+
+            var completionThread = new Thread(
+                () =>
+                {
+                    try
+                    {
+                        completion = scheduler.Complete(lease.RequestId);
+                    }
+                    catch (Exception exception)
+                    {
+                        completionFailure = exception;
+                    }
+                })
+            {
+                IsBackground = true,
+                Name = "rma113-concurrent-completion",
+            };
+            completionThread.Start();
+
+            bool completionIsWaiting = SpinWait.SpinUntil(
+                () => (completionThread.ThreadState & ThreadState.WaitSleepJoin) != 0,
+                TimeSpan.FromSeconds(5));
+            if (!completionIsWaiting)
+            {
+                allowCallback.Set();
+                _ = updateThread.Join(TimeSpan.FromSeconds(1));
+                _ = completionThread.Join(TimeSpan.FromSeconds(1));
+                throw new InvalidOperationException(
+                    "Concurrent completion did not reach its cancellation wait boundary.");
+            }
+
+            allowCallback.Set();
+            True(updateThread.Join(TimeSpan.FromSeconds(5)), "cancellation dispatch completed");
+            True(completionThread.Join(TimeSpan.FromSeconds(5)), "concurrent completion completed");
+            if (updateFailure != null)
+            {
+                throw new InvalidOperationException("Cancellation dispatch failed.", updateFailure);
+            }
+            if (completionFailure != null)
+            {
+                throw new InvalidOperationException("Concurrent completion failed.", completionFailure);
+            }
+            True(completion != null, "completion result available");
+            True(completion!.WasCancellationRequested, "completion retained cancellation state");
+            True(lease.CancellationToken.IsCancellationRequested, "cached token remains readable");
+            scheduler.Dispose();
+        }
+
         private static void ProviderPolicyStateIsBounded()
         {
             var policies = new List<VlmProviderSchedulingPolicy>();
@@ -478,6 +567,8 @@ namespace ReachyMini.VlmScheduling.Tests
             Contains(source, "no fallback provider", "no fallback contract");
             Contains(source, "MarkCancellationRequested", "obsolete cancellation contract");
             Contains(source, "CancellationCallbackFailureCount", "cancellation failure visibility");
+            Contains(source, "Monitor.Wait(cancellationSync)", "completion waits without scheduler lock");
+            Contains(source, "cancellationToken = cancellation.Token", "cached cancellation token");
             DoesNotContain(source, "CameraFrame", "no frame-rate trigger");
             DoesNotContain(source, "catch (Exception", "no broad exception fallback");
         }
