@@ -16,13 +16,52 @@ ORIGINAL = MODULE.correct_payload_preconditions
 
 def corrected_payload_preconditions() -> None:
     ORIGINAL()
-    path = ROOT / "scripts/run_rma111_lightweight_tracking_acceptance_android.sh"
-    source = path.read_text(encoding="utf-8")
+
+    acceptance_path = (
+        ROOT / "scripts/run_rma111_lightweight_tracking_acceptance_android.sh"
+    )
+    acceptance = acceptance_path.read_text(encoding="utf-8")
     suppressed_pipeline = "            || true\n"
-    count = source.count(suppressed_pipeline)
-    if count != 1:
-        raise SystemExit(f"Unexpected RMA-111 ADB suppression count: {count}")
-    path.write_text(source.replace(suppressed_pipeline, ""), encoding="utf-8")
+    suppression_count = acceptance.count(suppressed_pipeline)
+    if suppression_count != 1:
+        raise SystemExit(
+            f"Unexpected RMA-111 ADB suppression count: {suppression_count}"
+        )
+    acceptance_path.write_text(
+        acceptance.replace(suppressed_pipeline, ""),
+        encoding="utf-8",
+    )
+
+    tracker_path = (
+        ROOT
+        / "Assets/ReachyMini/Runtime/Core/Perception/ReachyLightweightTracking.cs"
+    )
+    tracker = tracker_path.read_text(encoding="utf-8")
+    malformed_descriptor = """            Descriptor = new ProviderDescriptor(
+                "weachy.mlkit.lightweight-tracker",
+                instanceId,
+                backend.BackendVersion,
+                VisionProviderKind.LightweightTracker,
+                VisionProviderLocation.OnDevice);
+"""
+    corrected_descriptor = """            Descriptor = new ProviderDescriptor(
+                VisionProviderKind.LightweightTracker,
+                "weachy.mlkit.lightweight-tracker",
+                instanceId,
+                "On-device lightweight tracker",
+                backend.BackendVersion,
+                VisionProviderLocation.OnDevice);
+"""
+    descriptor_count = tracker.count(malformed_descriptor)
+    if descriptor_count != 1:
+        raise SystemExit(
+            "Unexpected RMA-111 ProviderDescriptor constructor count: "
+            f"{descriptor_count}"
+        )
+    tracker_path.write_text(
+        tracker.replace(malformed_descriptor, corrected_descriptor),
+        encoding="utf-8",
+    )
 
 
 MODULE.correct_payload_preconditions = corrected_payload_preconditions
