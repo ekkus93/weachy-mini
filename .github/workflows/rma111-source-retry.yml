@@ -43,6 +43,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/rma111_retry_applicator.py
+          python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 2 aligns the fixture dimensions and actual Android dependency anchor.
+# Attempt 3 removes silent ADB failure suppression before source validation.
