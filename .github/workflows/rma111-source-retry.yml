@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 6 supplies the pinned Unity Gradle properties to the standalone harness.
+# Attempt 7 fixes the CameraX experimental interop opt-in lint errors.
