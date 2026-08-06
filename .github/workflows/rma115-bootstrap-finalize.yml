@@ -5,12 +5,7 @@ on:
     branches:
       - agent/rma115-bootstrap
     paths:
-      - ".github/rma115-bootstrap/test-tail.gz.b64"
-      - ".github/workflows/rma115-bootstrap-finalize.yml"
-  pull_request:
-    branches:
-      - master
-    paths:
+      - ".github/rma115-bootstrap/finalize.py"
       - ".github/rma115-bootstrap/test-tail.gz.b64"
       - ".github/workflows/rma115-bootstrap-finalize.yml"
   workflow_dispatch:
@@ -20,136 +15,33 @@ permissions:
 
 jobs:
   finalize-and-test:
-    if: >-
-      github.event_name == 'push' ||
-      github.event_name == 'workflow_dispatch' ||
-      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out exact branch commit
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - uses: actions/setup-dotnet@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-      - name: Restore deterministic test tail and project files
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import base64
-          import gzip
-          import hashlib
-          from pathlib import Path
 
-          program = Path('managed/ReachyMini.RemoteVlm.Tests/Program.cs')
-          prefix = program.read_bytes()
-          if len(prefix) != 48048:
-              raise SystemExit(f'unexpected test prefix size: {len(prefix)}')
-          if hashlib.sha256(prefix).hexdigest() != '2671e6d4f8d74507ccd410e9783edc035eac8152b9a48a93500abe746e79126b':
-              raise SystemExit('test prefix digest mismatch')
-          encoded = Path('.github/rma115-bootstrap/test-tail.gz.b64').read_text(encoding='utf-8')
-          tail = gzip.decompress(base64.b64decode(encoded, validate=True))
-          if len(tail) != 23444:
-              raise SystemExit(f'unexpected test tail size: {len(tail)}')
-          if hashlib.sha256(tail).hexdigest() != 'bba85255dd12a9c958718b98e0d6f1082540b0adc2174e12fb43bc1b1524a5df':
-              raise SystemExit('test tail digest mismatch')
-          program.write_bytes(prefix + tail)
-          if hashlib.sha256(program.read_bytes()).hexdigest() != '3c0439fb309021bb5bd385c7d81ba2e3f3a44294d577a357e43eb01de9b958ac':
-              raise SystemExit('completed test program digest mismatch')
+      - name: Reconstruct managed contract suite
+        run: python3 .github/rma115-bootstrap/finalize.py prepare
 
-          project = '''<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <LangVersion>latest</LangVersion>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../ReachyMini.Core/ReachyMini.Core.csproj" />
-  </ItemGroup>
-</Project>
-'''
-          Path('managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj').write_text(project, encoding='utf-8')
-          readme = '''# RMA-115 remote VLM contracts
-
-Run:
-
-```bash
-dotnet run --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj --configuration Release
-```
-
-The deterministic suite opens no network connection and needs no API key. Its 60 cases cover Responses and Chat Completions selection, transformed-frame and validity-mask enforcement, bounded image policy, coverage limitations, stale-entity exclusion, cancellation, concurrency, structured error validation, secret redaction, disposal, and single-attempt/no-fallback behavior.
-'''
-          Path('managed/ReachyMini.RemoteVlm.Tests/README.md').write_text(readme, encoding='utf-8')
-
-          todo_path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
-          todo = todo_path.read_text(encoding='utf-8')
-          start = todo.index('## RMA-115 — Implement OpenAI and compatible VLM adapters')
-          end = todo.index('\n---\n', start)
-          section = '''## RMA-115 — Implement OpenAI and compatible VLM adapters
-
-**Status:** Complete (2026-08-06)
-
-- [x] Reuse the selected Responses- or Chat-style provider transport.
-- [x] Encode only transformed valid image content.
-- [x] Define image resizing and quality policy.
-- [x] Include prompt context stating coverage limitations where relevant.
-- [x] Validate structured results and preserve provider error detail without secrets.
-
-**Acceptance criteria**
-
-- [x] Basic face tracking works without a VLM.
-- [x] VLM requests are selective and cancellable.
-- [x] Stale entities are not presented to the LLM as currently visible.
-
-**Completion evidence**
-
-- Responses-style and Chat Completions-style providers share one explicit transport boundary. Endpoint style, model ID, output limit, image policy, and provider identity are configuration values; mismatches fail construction rather than trying another protocol.
-- Only observation-eligible transformed Reachy-eye frames with validity masks reach the encoder. Encoded results must prove identity, mask application before resize, valid-only content, exact policy application, bounded dimensions and bytes, and no upscaling before one transport call is permitted.
-- The default policy is aspect-preserving 1024x1024 maximum, 4 MiB maximum, JPEG quality 85, automatic detail, black replacement for invalid pixels, and no upscaling. The owned encoded payload is copied and zeroed on disposal.
-- Coverage context states normal or degraded coverage and the valid-pixel fraction, prohibits inference outside valid regions, and explicitly excludes world-model history and stale entities from current visual evidence.
-- Structured outcomes retain safe category, code, HTTP status, provider request ID, and bounded detail. Credential-, data-URL-, payload-, and opaque-token-like detail is redacted; uncaught exceptions expose only their type.
-- Automatic retry, provider fallback, response storage, and streaming are disabled. Concurrency overflow and cancellation are typed and visible; no request is silently queued or rerouted.
-- RMA-111 face/person tracking remains independent and bundled on device. RMA-113 remains the selective admission policy; these adapters contain no frame-rate loop, timer, or automatic invocation path.
-- The permanent 60-case suite and exact-SHA gate are documented in `docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md` and `docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md`.
-'''
-          todo_path.write_text(todo[:start] + section + todo[end:], encoding='utf-8')
-          PY
       - name: Build managed core with warnings as errors
-        run: >-
-          dotnet build
-          managed/ReachyMini.Core/ReachyMini.Core.csproj
-          --configuration Release
-          --warnaserror
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+
       - name: Run all RMA-115 contracts
-        run: >-
-          dotnet run
-          --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj
-          --configuration Release
-      - name: Write branch validation record
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md <<EOF
-          # RMA-115 OpenAI-compatible VLM adapter validation
+        run: dotnet run --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj --configuration Release
 
-          **Status:** Candidate implementation validated
-          **Date:** 2026-08-06
-          **Bootstrap source SHA:** ${GITHUB_SHA}
-          **Bootstrap workflow run:** ${GITHUB_RUN_ID}
+      - name: Record candidate validation
+        run: python3 .github/rma115-bootstrap/finalize.py record
 
-          The warnings-as-errors managed-core build and all 60 deterministic remote-VLM contracts passed before the candidate files were committed to the disposable branch. The suite used fake encoders and a mock transport, opened no network connection, and required no credential.
-
-          This is not the final exact-master evidence boundary. The permanent RMA-115 workflow must pass on the final implementation commit before final evidence is added.
-          EOF
-      - name: Commit validated non-workflow implementation
+      - name: Commit validated non-workflow files
         shell: bash
         run: |
           set -euo pipefail
