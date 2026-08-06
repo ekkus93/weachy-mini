@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 7 fixes the CameraX experimental interop opt-in lint errors.
+# Attempt 8 uses AndroidX OptIn without propagating CameraX experimental status.
