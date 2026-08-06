@@ -20,14 +20,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: rma115-bootstrap-finalize
+  cancel-in-progress: true
+
 jobs:
   finalize-and-test:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - weachy-mini-android-device
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out exact branch commit
