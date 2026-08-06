@@ -1,4 +1,5 @@
 name: RMA-111 Authoritative Install Repair
+# One-use retry after resolving the applicator repository root.
 
 on:
   push:
