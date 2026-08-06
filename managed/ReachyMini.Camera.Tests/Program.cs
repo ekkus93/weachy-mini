@@ -23,6 +23,8 @@ namespace ReachyMini.Camera.Tests
             Rma101AuthoritativeRotationContracts.Run();
             await Rma110VisionProviderContracts.RunAsync()
                 .ConfigureAwait(false);
+            await Rma111LightweightTrackingContracts.RunAsync()
+                .ConfigureAwait(false);
             Console.WriteLine("RMA-090/RMA-091/RMA-100 camera contracts passed.");
             return 0;
         }
