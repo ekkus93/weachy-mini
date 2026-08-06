@@ -42,7 +42,7 @@ Before RMA-111 can be marked complete, one exact implementation SHA must pass:
   regressions; and
 - permanent RMA-111 workflow, hosted CI, and final commit-status publication.
 
-## Rejected candidate and repair
+## Rejected candidates and repairs
 
 - Candidate `3b8b9440f60ff8a79de42e22537a273515b81567` was rejected after permanent
   workflow run `31064376991` failed during Unity script compilation. The four
@@ -55,8 +55,23 @@ Before RMA-111 can be marked complete, one exact implementation SHA must pass:
   import, and removes the non-Android dead `disposed` assignment. The one-use
   repair workflow failed closed on unexpected source shapes and removed itself
   from the repair commit.
+- Candidate `33452be00d74e70aa52fd98b26d92c69a04797c9` was rejected after permanent
+  workflow run `31067334232` compiled the runtime assembly but failed the
+  editor-test assembly. The RMA-111 validity texture test supplied a `Color[]`
+  to a helper requiring `Color32[]`.
+- Repair `9af54646567537ea642b811b7f337a9c934088d1` supplies four explicit
+  `Color32` validity pixels. It also closes a separate fail-closed lifecycle
+  defect in the Android bridge: a synchronous exception from either ML Kit
+  `process()` start can no longer strand `activeRequest` or leak the request
+  bitmap. Face listeners are attached before person segmentation starts, the
+  first-task start failure releases ownership immediately, and a second-task
+  start failure drains through the already-running face task. A permanent
+  managed source contract verifies that ordering and cleanup shape.
+- One-use repair run `31067797579` passed its exact-pattern applicator, managed
+  warnings-as-errors contracts, scoped repository-diff gate, and self-removal
+  checks before producing `9af54646567537ea642b811b7f337a9c934088d1`.
 - Exact-head permanent validation of the repaired source remains required; this
-  document does not treat the repair applicator checks as completion evidence.
+  document does not treat applicator checks as completion evidence.
 
 Exact SHAs, workflow IDs, artifact IDs, digests, test counts, physical-device
 results, and any additional rejected Ralph-loop candidates will be recorded
