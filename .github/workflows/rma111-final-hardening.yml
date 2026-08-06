@@ -8,7 +8,7 @@ on:
       - .github/workflows/rma111-final-hardening.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   harden:
@@ -26,6 +26,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
+
+      - name: Reconstruct validated patch base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show \
+            598b431fd8002dde0223be6b6bf2aae39c8be375:.github/workflows/local-unity-android-validation.yml \
+            > .github/workflows/local-unity-android-validation.yml
 
       - name: Apply fail-closed RMA-111 hardening
         shell: bash
@@ -52,39 +60,41 @@ jobs:
             --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
             --configuration Release
 
-      - name: Verify scoped repository diff
+      - name: Verify source-only commit scope
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
-          mapfile -t changed < <(git status --short | awk '{print $2}' | sort)
-          expected=(
-            .github/rma111_final_hardening.py
-            .github/workflows/local-unity-android-validation.yml
-            .github/workflows/rma111-final-hardening.yml
+          if ! git diff --quiet -- .github/workflows/local-unity-android-validation.yml; then
+            printf '%s\n' 'Reconstructed permanent workflow differs from the validated pinned workflow.' >&2
+            exit 1
+          fi
+          changed_sources=(
             Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java
             Assets/ReachyMini/Runtime/Application/ReachyRma111TrackingAcceptance.cs
             managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs
             managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs
             scripts/run_rma111_lightweight_tracking_acceptance_android.sh
           )
-          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
-          if [[ "${changed[*]}" != "${expected_sorted[*]}" ]]; then
-            printf 'Unexpected RMA-111 final-hardening diff.\nChanged:\n' >&2
-            printf '  %s\n' "${changed[@]}" >&2
-            exit 1
-          fi
+          for path in "${changed_sources[@]}"; do
+            if git diff --quiet -- "${path}"; then
+              printf 'Expected validated source change is missing: %s\n' "${path}" >&2
+              exit 1
+            fi
+          done
 
-      - name: Upload validated hardening patch
-        uses: actions/upload-artifact@v4
-        with:
-          name: rma111-validated-hardening-${{ github.sha }}
-          path: |
-            .github/workflows/local-unity-android-validation.yml
-            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java
-            Assets/ReachyMini/Runtime/Application/ReachyRma111TrackingAcceptance.cs
-            managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs
-            managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs
+      - name: Commit and push validated source hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java \
+            Assets/ReachyMini/Runtime/Application/ReachyRma111TrackingAcceptance.cs \
+            managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs \
+            managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs \
             scripts/run_rma111_lightweight_tracking_acceptance_android.sh
-          if-no-files-found: error
-          retention-days: 7
+          git diff --cached --check
+          git commit -m 'RMA-111: harden physical tracking acceptance'
+          git push origin HEAD:master
