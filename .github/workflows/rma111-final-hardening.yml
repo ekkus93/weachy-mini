@@ -1,0 +1,87 @@
+name: One-use RMA-111 final hardening
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma111-final-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact triggering revision
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Apply fail-closed RMA-111 hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/rma111_final_hardening.py
+
+      - name: Validate shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/run_rma111_lightweight_tracking_acceptance_android.sh
+          bash -n scripts/run_rma090_camera_discovery_acceptance_android.sh
+          bash -n scripts/run_rma091_camera_acquisition_acceptance_android.sh
+          bash -n scripts/run_rma092_camera_texture_acceptance_android.sh
+          bash -n scripts/run_unity_native_lifecycle_acceptance_android.sh
+          bash -n scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh
+
+      - name: Run managed RMA contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release
+
+      - name: Verify scoped repository diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          mapfile -t changed < <(git status --short | awk '{print $2}' | sort)
+          expected=(
+            .github/rma111_final_hardening.py
+            .github/workflows/local-unity-android-validation.yml
+            .github/workflows/rma111-final-hardening.yml
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java
+            Assets/ReachyMini/Runtime/Application/ReachyRma111TrackingAcceptance.cs
+            managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs
+            managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs
+            scripts/run_rma111_lightweight_tracking_acceptance_android.sh
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          if [[ "${changed[*]}" != "${expected_sorted[*]}" ]]; then
+            printf 'Unexpected RMA-111 final-hardening diff.\nChanged:\n' >&2
+            printf '  %s\n' "${changed[@]}" >&2
+            exit 1
+          fi
+
+      - name: Commit and push hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'RMA-111: harden physical tracking acceptance'
+          git push origin HEAD:master
