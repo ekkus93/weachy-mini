@@ -1,0 +1,137 @@
+name: RMA-112 Bounded World Model
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Perception/**"
+      - "managed/ReachyMini.Core/**"
+      - "managed/ReachyMini.WorldModel.Tests/**"
+      - ".github/workflows/rma112-bounded-world-model.yml"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - "docs/validation/RMA_112_BOUNDED_WORLD_MODEL_VALIDATION_2026-08-06.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma112-bounded-world-model-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bounded-world-model:
+    name: RMA-112 managed contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-112 Bounded World Model",
+              description: "Bounded world-model validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run bounded world-model contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.WorldModel.Tests/ReachyMini.WorldModel.Tests.csproj
+          --configuration Release
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/rma112-bounded-world-model
+          SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyBoundedWorldModel.cs"
+          SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          export SOURCE_SHA256
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "implementation": "managed_bounded_world_model",
+              "position_policy": "unknown_from_2d_tracking",
+              "direction_policy": "normalized_reachy_eye_image_ray_non_metric",
+              "entity_capacity_fail_closed": True,
+              "deterministic_expiry": True,
+              "description_deduplication": True,
+              "immutable_snapshots": True,
+              "bounded_entity_history": True,
+              "bounded_description_history": True,
+              "bounded_scope_cursors": True,
+              "silent_fallback": False,
+              "contract_case_count": 16,
+              "source_sha256": os.environ["SOURCE_SHA256"],
+          }
+          path = Path("artifacts/rma112-bounded-world-model/report.json")
+          path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+
+      - name: Record source digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyBoundedWorldModel.cs \
+            managed/ReachyMini.WorldModel.Tests/Program.cs \
+            managed/ReachyMini.WorldModel.Tests/ReachyMini.WorldModel.Tests.csproj \
+            > artifacts/rma112-bounded-world-model/source-sha256.txt
+
+      - name: Upload bounded world-model evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma112-bounded-world-model-evidence-${{ github.sha }}
+          path: artifacts/rma112-bounded-world-model
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-112 Bounded World Model",
+              description: succeeded
+                ? "Bounded world-model contracts passed"
+                : "Bounded world-model contracts failed"
+            });
