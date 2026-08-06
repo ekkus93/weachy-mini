@@ -300,9 +300,115 @@ pre-install, and final installed digests all matched:
 Install status and launch status were both zero, and the evidence records
 `installed_apk_matches_candidate=true`.
 
+## Final evidence addendum
+
+The first complete documentation boundary was
+`b4177d337537e5bc0baf3c5bdee3252022f08298`. It passed every permanent RMA-114
+and repository acceptance gate without changing the accepted implementation.
+
+### Dedicated local-VLM gate
+
+- run: `31102008463`;
+- job: `92617588082`;
+- conclusion: success;
+- warnings-as-errors managed-core build: success;
+- local-VLM contracts: 45 passed;
+- manifest-schema parse: success;
+- evidence upload and final status publication: success;
+- artifact ID: `8967872322`;
+- artifact digest:
+  `sha256:de4dbd81c797b07bfe00602abf86c01f48ab985877e92d18937c51ba91e806b2`.
+
+The final exact report preserved the accepted implementation properties:
+
+```json
+{
+  "artifact_integrity_required": true,
+  "automatic_model_download": false,
+  "automatic_provider_fallback": false,
+  "candidate_benchmarking_deferred": true,
+  "commit_sha": "b4177d337537e5bc0baf3c5bdee3252022f08298",
+  "contract_case_count": 45,
+  "exact_on_device_provider_identity": true,
+  "implementation": "optional_local_vlm_extension_point",
+  "local_vlm_required_for_first_release": false,
+  "manifest_schema_version": 1,
+  "model_payload_bundled": false,
+  "network_dependent_local_runtime": false,
+  "status": "passed",
+  "unavailable_stub": true
+}
+```
+
+### Hosted CI
+
+Hosted CI run `31102008708` passed on the same exact SHA. All five jobs were
+successful:
+
+- static repository checks, actionlint, Ruff, and ShellCheck;
+- managed warnings-as-errors and native lifecycle tests;
+- native warnings-as-errors and ASan/UBSan tests;
+- Android lint, Java warnings, and tests;
+- pinned Reachy/MuJoCo source, topology, parameter, compilation, step, and
+  reference-trace validation.
+
+### Final Unity and physical Android validation
+
+Self-hosted run `31102008833`, job `92617589982`, completed successfully on the
+LG-H872 running Android 8.0.0/API 26/arm64-v8a. It passed:
+
+- `129/129` Unity EditMode tests;
+- `1/1` Unity PlayMode test;
+- ARM64/API-26 IL2CPP APK build and verification;
+- physical RMA-090 camera discovery;
+- physical RMA-091 acquisition, switching, rotation, and lifecycle;
+- physical RMA-092 Vulkan texture conversion and stale-buffer rejection;
+- physical RMA-111 bundled face/person tracking;
+- RMA-022 native lifecycle validation;
+- authoritative MuJoCo-driven rendering;
+- every evidence upload, APK upload, and final status publication.
+
+Final physical artifacts:
+
+| Evidence | Artifact ID | Digest |
+|---|---:|---|
+| Unity tests | `8967943032` | `sha256:ba03ae093fa1c80432538bdd783e46dd020bff965e78c5a78776195f7fd77a28` |
+| RMA-090 | `8968020219` | `sha256:8612811bc923a4c98a45b1f391968e4d8bf4937873a3c12807745ae73c82f817` |
+| RMA-091 | `8968063390` | `sha256:ab129f47169a6fd651a373cf302fc8b844b82ffdce6c0625f0c0c6eef0e4b4ef` |
+| RMA-092 | `8968093802` | `sha256:22b0338cee4ec0cf8389f9df53a1e418df3466978491fe1336e05f781d7f4db0` |
+| RMA-111 | `8968113110` | `sha256:9fb9c25a59acce668027c597e2987e19a0e0e8a93ad549387ea7b09bc37ca1d2` |
+| Lifecycle | `8968146775` | `sha256:7cad514d1f3f45179138027f5f7f1df2ecc25fb54d225f4ed8dd6c9031409ceb` |
+| Rendering | `8968164871` | `sha256:b076850511b18328aafa670b4f3a51f5a8cb2f8587f59166e03808ad808d9351` |
+| APK | `8968190565` | `sha256:805553c7d13aef3fd6504b4628a979f4b1c461ea2194754e24817d203b05a8d0` |
+
+RMA-111 again recorded one face and one person on both frames, stable
+`face-000001` and `person-000001` identities, invalid-center suppression, zero
+VLM invocations, and no runtime model download.
+
+Authoritative rendering again recorded 17 moved bodies, all six Stewart links
+moving, body yaw, head, and both antennas moving, valid renderer structure,
+`runtime_status=Running`, `renderer_status=Rendering`, and
+`hidden_kinematic_fallback=false`.
+
+The authoritative gate reused the installed APK only after the candidate,
+pre-install installed APK, and final installed APK SHA-256 values all matched:
+
+`1e5e20ad86aff79d07b0a09c809d7f057cecc4a5b56e8c3b64a67d8013f28c59`
+
+Install and launch status were both zero, and the evidence records
+`installed_apk_matches_candidate=true`.
+
+The combined commit statuses on `b4177d337537e5bc0baf3c5bdee3252022f08298`
+were both successful:
+
+- `RMA-114 Local VLM Extension`;
+- `Local Unity Android Validation`.
+
 ## Completion boundary
 
-RMA-114 is complete only after the final documentation/evidence SHA passes the
-same dedicated, hosted, Unity, APK, physical camera/tracking/lifecycle, and
-authoritative-rendering gates. The final exact SHA and its run identities are
-recorded after that validation completes.
+This addendum records the fully validated documentation boundary immediately
+preceding it. The clean addendum commit is followed by one user-authored,
+validation-only boundary so GitHub runs every permanent workflow on an exact
+post-addendum tree. RMA-114 is complete only when that successor SHA also passes
+the dedicated local-VLM gate, hosted CI, complete Unity/APK/device suite, and
+both permanent commit statuses.
