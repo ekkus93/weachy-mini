@@ -72,10 +72,10 @@ namespace ReachyMini.Tests.Editor
                 "RMA-111 source validity",
                 new[]
                 {
-                    Color.white,
-                    Color.white,
-                    Color.white,
-                    Color.white,
+                    new Color32(255, 255, 255, 255),
+                    new Color32(255, 255, 255, 255),
+                    new Color32(255, 255, 255, 255),
+                    new Color32(255, 255, 255, 255),
                 });
             var resources = new ReachyUnityTrackingFrameResources(
                 "rma111-unity-test",

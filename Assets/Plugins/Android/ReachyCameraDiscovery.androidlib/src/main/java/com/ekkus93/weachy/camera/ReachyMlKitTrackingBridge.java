@@ -98,11 +98,24 @@ public final class ReachyMlKitTrackingBridge implements AutoCloseable {
         }
 
         InputImage image = InputImage.fromBitmap(bitmap, 0);
-        Task<List<Face>> faceTask = faceDetector.process(image);
-        Task<SegmentationMask> personTask = personSegmenter.process(image);
+        Task<List<Face>> faceTask;
+        try {
+            faceTask = faceDetector.process(image);
+        } catch (Exception error) {
+            failImmediately(state, "face_detection_start_failed", error);
+            return;
+        }
         faceTask
                 .addOnSuccessListener(faces -> completeFaces(state, faces))
                 .addOnFailureListener(error -> failPart(state, "face_detection_failed", error));
+
+        Task<SegmentationMask> personTask;
+        try {
+            personTask = personSegmenter.process(image);
+        } catch (Exception error) {
+            failPart(state, "person_segmentation_start_failed", error);
+            return;
+        }
         personTask
                 .addOnSuccessListener(mask -> completePerson(state, mask))
                 .addOnFailureListener(error -> failPart(state, "person_segmentation_failed", error));
@@ -152,6 +165,28 @@ public final class ReachyMlKitTrackingBridge implements AutoCloseable {
             state.person = personDetection(mask);
             state.completedParts++;
             finishIfCompleteLocked(state);
+        }
+    }
+
+    private void failImmediately(
+            RequestState state,
+            String code,
+            Exception error) {
+        synchronized (lock) {
+            if (!isCurrent(state)) {
+                return;
+            }
+            activeRequest = null;
+            try {
+                if (!state.cancelled && !closed) {
+                    state.callback.onFailure(
+                            state.requestId,
+                            code,
+                            safeMessage(error));
+                }
+            } finally {
+                state.bitmap.recycle();
+            }
         }
     }
 

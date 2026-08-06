@@ -13,6 +13,7 @@ namespace ReachyMini.Camera.Tests
         {
             await ProviderCapabilitiesRemainTruthfulAsync().ConfigureAwait(false);
             TrackingPixelsRequireExactColorAndValidityLengths();
+            Rma111AndroidBridgeSourceContracts.Run();
             StableIdsSurviveMotionAndProviderIdDrift();
             ExpiryAndOrderingAreDeterministic();
             CameraContinuityResetDoesNotReuseIds();
