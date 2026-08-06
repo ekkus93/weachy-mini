@@ -190,11 +190,11 @@ namespace ReachyMini.AppState
                     "The managed stable person identifier changed across equivalent frames.");
             }
 
-            byte[] invalidCenter = CreateValidity(
+            byte[] invalidFaceRegion = CreateValidity(
                 fixture.Width,
                 fixture.Height);
-            InvalidateCenter(
-                invalidCenter,
+            InvalidateFaceRegion(
+                invalidFaceRegion,
                 fixture.Width,
                 fixture.Height,
                 secondFace.Bounds);
@@ -204,7 +204,7 @@ namespace ReachyMini.AppState
                 fixture,
                 sourceSequence: 3UL,
                 timestampNanoseconds: 1_100_000_000L,
-                validity: invalidCenter,
+                validity: invalidFaceRegion,
                 requestId: "rma111-invalid-center");
             RequireSuccess(masked, "invalid-center inference");
             bool invalidFaceSuppressed = !masked.Objects.Any(item =>
@@ -338,19 +338,45 @@ namespace ReachyMini.AppState
             return validity;
         }
 
-        private static void InvalidateCenter(
+        private static void InvalidateFaceRegion(
             byte[] validity,
             int width,
             int height,
             NormalizedVisionBounds bounds)
         {
-            int centerX = Math.Min(
-                width - 1,
-                Math.Max(0, (int)Math.Floor(bounds.CenterX * width)));
-            int centerY = Math.Min(
-                height - 1,
-                Math.Max(0, (int)Math.Floor(bounds.CenterY * height)));
-            validity[centerY * width + centerX] = 0;
+            double horizontalPadding = bounds.Width * 0.5;
+            double verticalPadding = bounds.Height * 0.5;
+            int left = Math.Max(
+                0,
+                (int)Math.Floor(
+                    (bounds.Left - horizontalPadding) * width));
+            int top = Math.Max(
+                0,
+                (int)Math.Floor(
+                    (bounds.Top - verticalPadding) * height));
+            int rightExclusive = Math.Min(
+                width,
+                (int)Math.Ceiling(
+                    (bounds.Left + bounds.Width + horizontalPadding) * width));
+            int bottomExclusive = Math.Min(
+                height,
+                (int)Math.Ceiling(
+                    (bounds.Top + bounds.Height + verticalPadding) * height));
+            if (rightExclusive <= left || bottomExclusive <= top)
+            {
+                throw new InvalidOperationException(
+                    "The detected face did not produce a non-empty invalid region.");
+            }
+
+            int invalidWidth = rightExclusive - left;
+            for (int y = top; y < bottomExclusive; ++y)
+            {
+                Array.Fill(
+                    validity,
+                    (byte)0,
+                    (y * width) + left,
+                    invalidWidth);
+            }
         }
 
         private static long CountValid(byte[] validity)

@@ -104,6 +104,18 @@ namespace ReachyMini.Camera.Tests
                 "second_person_id",
                 "second person report ID");
             RequireText(
+                acceptance,
+                "private static void InvalidateFaceRegion(",
+                "detector-jitter-tolerant invalid face region");
+            RequireText(
+                acceptance,
+                "Array.Fill(\n                    validity,\n                    (byte)0,",
+                "multi-pixel invalid face region fill");
+            RejectText(
+                acceptance,
+                "validity[centerY * width + centerX] = 0;",
+                "brittle single-pixel physical invalidation");
+            RequireText(
                 script,
                 "\"stable_person_id\"",
                 "stable person shell gate");
@@ -206,6 +218,18 @@ namespace ReachyMini.Camera.Tests
             string contract)
         {
             if (!source.Contains(expected, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Managed RMA-111 source contract failed: {contract}.");
+            }
+        }
+
+        private static void RejectText(
+            string source,
+            string rejected,
+            string contract)
+        {
+            if (source.Contains(rejected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Managed RMA-111 source contract failed: {contract}.");
