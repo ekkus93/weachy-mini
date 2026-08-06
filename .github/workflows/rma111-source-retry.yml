@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 8 uses AndroidX OptIn without propagating CameraX experimental status.
+# Attempt 9 verifies the physical acceptance implementation and evidence fields.
