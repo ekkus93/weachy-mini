@@ -29,3 +29,11 @@ scheduler-lock/cancellation-lock inversion.
 
 The permanent CI workflow is
 `.github/workflows/rma113-vlm-scheduling-policy.yml`.
+
+## Closeout validation boundary
+
+RMA-113 completion requires this harness, hosted CI, and the full physical
+Unity/Android acceptance workflow to pass on the same exact final commit. The
+authoritative implementation history, rejected lock-inversion candidate,
+artifact digests, and device evidence are recorded in
+`docs/validation/RMA_113_VLM_SCHEDULING_POLICY_VALIDATION_2026-08-06.md`.
