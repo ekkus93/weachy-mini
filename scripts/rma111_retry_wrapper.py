@@ -193,6 +193,14 @@ def corrected_payload_preconditions() -> None:
     camera_bridge = camera_bridge_path.read_text(encoding="utf-8")
     camera_bridge = replace_exact(
         camera_bridge,
+        "import androidx.annotation.NonNull;\n",
+        "import androidx.annotation.NonNull;\n"
+        "import androidx.annotation.OptIn;\n",
+        1,
+        "AndroidX OptIn import",
+    )
+    camera_bridge = replace_exact(
+        camera_bridge,
         "import androidx.camera.camera2.interop.Camera2CameraInfo;\n",
         "import androidx.camera.camera2.interop.Camera2CameraInfo;\n"
         "import androidx.camera.camera2.interop.ExperimentalCamera2Interop;\n",
@@ -202,10 +210,10 @@ def corrected_payload_preconditions() -> None:
     camera_bridge = replace_exact(
         camera_bridge,
         "    private static CameraSelector exactCameraSelector(final String selectedId) {\n",
-        "    @ExperimentalCamera2Interop\n"
+        "    @OptIn(markerClass = ExperimentalCamera2Interop.class)\n"
         "    private static CameraSelector exactCameraSelector(final String selectedId) {\n",
         1,
-        "CameraX interop opt-in",
+        "private CameraX interop opt-in",
     )
     camera_bridge_path.write_text(camera_bridge, encoding="utf-8")
 
