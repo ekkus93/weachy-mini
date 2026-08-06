@@ -1817,11 +1817,49 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 ## RMA-112 — Implement bounded world model
 
-- [ ] Store entity ID, class/description, position, estimated direction, confidence, first/last seen, provider, description age, and coverage context.
-- [ ] Expire stale entities deterministically.
-- [ ] Deduplicate VLM descriptions for a tracked entity.
-- [ ] Limit memory and history growth.
-- [ ] Expose immutable snapshots to the conversation/behavior layers.
+**Status:** Complete (2026-08-06)
+
+- [x] Store entity ID, class/description, position, estimated direction, confidence, first/last seen, provider, description age, and coverage context.
+- [x] Expire stale entities deterministically.
+- [x] Deduplicate VLM descriptions for a tracked entity.
+- [x] Limit memory and history growth.
+- [x] Expose immutable snapshots to the conversation/behavior layers.
+
+**Completion evidence**
+
+- `ReachyBoundedWorldModel` is a Unity-independent managed core that consumes
+  RMA-110/RMA-111 transformed-frame tracking results and publishes immutable
+  current/recent entity snapshots for later conversation and behavior layers.
+- Entity state retains generation, tracker/provider and complete frame
+  provenance, classification, confidence, first/last seen, source bounds,
+  coverage context, bounded observations, and bounded semantic descriptions.
+  Metric position remains explicitly unknown for two-dimensional tracking;
+  direction is labeled as a normalized non-metric Reachy-eye image ray.
+- Exact-boundary expiry is deterministic. Stable IDs update one entity while
+  session/continuity reuse creates a new generation. Expired entities cannot be
+  presented as currently visible.
+- All entity, observation, description, text, and ordering-cursor growth is
+  bounded. Capacity and history drops are visible; no entity or cursor is
+  silently overwritten. Cursor capacity is at least entity capacity.
+- Duplicate/stale ordering checks and retained-scope cursor preflight occur
+  before clock, expiry, or visibility mutation. A later-timestamp stale frame is
+  non-mutating, and ordering cursors protecting retained entities cannot be
+  evicted to admit a new scope.
+- Semantic duplicates are normalized and deduplicated, retain confirmation
+  count and latest-provider provenance, and cannot cross entity generations.
+  No stale observation, semantic result, or fallback provider is substituted.
+- Permanent run `31085246677`, job `92563054033`, passed warnings-as-errors and
+  all 18 bounded-world-model contracts on accepted implementation SHA
+  `4e5d08d9dc917b5e7a22a0dada0a34ab5ed11f7f`. Artifact `8961118733` has digest
+  `sha256:599b2c8918cc850a43445e719e57a43dbd004bf3dedf57d813101ec72e9134c7`.
+- Hosted CI run `31085246701` passed on the same SHA. Self-hosted run
+  `31085246680`, job `92563129531`, passed `129/129` EditMode and `1/1`
+  PlayMode tests, ARM64/API-26 APK build and verification, physical RMA-090,
+  RMA-091, RMA-092, RMA-111, RMA-022 lifecycle, authoritative rendering, every
+  evidence upload, APK upload, and final status publication on an LG-H872.
+- Detailed design, rejected-candidate history, exact artifact digests, and
+  physical evidence are in
+  `docs/validation/RMA_112_BOUNDED_WORLD_MODEL_VALIDATION_2026-08-06.md`.
 
 ## RMA-113 — Implement VLM scheduling policy
 
