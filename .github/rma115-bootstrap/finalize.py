@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import base64
+import gzip
+import hashlib
+import os
+from pathlib import Path
+
+PREFIX_SHA = "2671e6d4f8d74507ccd410e9783edc035eac8152b9a48a93500abe746e79126b"
+TAIL_SHA = "bba85255dd12a9c958718b98e0d6f1082540b0adc2174e12fb43bc1b1524a5df"
+PROGRAM_SHA = "3c0439fb309021bb5bd385c7d81ba2e3f3a44294d577a357e43eb01de9b958ac"
+
+
+def digest(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def prepare() -> None:
+    program = Path("managed/ReachyMini.RemoteVlm.Tests/Program.cs")
+    prefix = program.read_bytes()
+    if len(prefix) != 48048 or digest(prefix) != PREFIX_SHA:
+        raise SystemExit("unexpected RMA-115 test prefix")
+    encoded = Path(".github/rma115-bootstrap/test-tail.gz.b64").read_text(
+        encoding="utf-8"
+    )
+    tail = gzip.decompress(base64.b64decode(encoded, validate=True))
+    if len(tail) != 23444 or digest(tail) != TAIL_SHA:
+        raise SystemExit("unexpected RMA-115 test tail")
+    complete = prefix + tail
+    if digest(complete) != PROGRAM_SHA:
+        raise SystemExit("completed RMA-115 test program digest mismatch")
+    program.write_bytes(complete)
+
+    project = """<Project Sdk=\"Microsoft.NET.Sdk\">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include=\"../ReachyMini.Core/ReachyMini.Core.csproj\" />
+  </ItemGroup>
+</Project>
+"""
+    Path(
+        "managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj"
+    ).write_text(project, encoding="utf-8")
+    readme = """# RMA-115 remote VLM contracts
+
+Run:
+
+```bash
+dotnet run --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj --configuration Release
+```
+
+The deterministic suite opens no network connection and needs no API key. Its 60 cases cover Responses and Chat Completions selection, transformed-frame and validity-mask enforcement, bounded image policy, coverage limitations, stale-entity exclusion, cancellation, concurrency, structured error validation, secret redaction, disposal, and single-attempt/no-fallback behavior.
+"""
+    Path("managed/ReachyMini.RemoteVlm.Tests/README.md").write_text(
+        readme, encoding="utf-8"
+    )
+
+    todo_path = Path("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
+    todo = todo_path.read_text(encoding="utf-8")
+    start = todo.index("## RMA-115 — Implement OpenAI and compatible VLM adapters")
+    end = todo.index("\n---\n", start)
+    section = """## RMA-115 — Implement OpenAI and compatible VLM adapters
+
+**Status:** Complete (2026-08-06)
+
+- [x] Reuse the selected Responses- or Chat-style provider transport.
+- [x] Encode only transformed valid image content.
+- [x] Define image resizing and quality policy.
+- [x] Include prompt context stating coverage limitations where relevant.
+- [x] Validate structured results and preserve provider error detail without secrets.
+
+**Acceptance criteria**
+
+- [x] Basic face tracking works without a VLM.
+- [x] VLM requests are selective and cancellable.
+- [x] Stale entities are not presented to the LLM as currently visible.
+
+**Completion evidence**
+
+- Responses-style and Chat Completions-style providers share one explicit transport boundary. Endpoint style, model ID, output limit, image policy, and provider identity are configuration values; mismatches fail construction rather than trying another protocol.
+- Only observation-eligible transformed Reachy-eye frames with validity masks reach the encoder. Encoded results must prove identity, mask application before resize, valid-only content, exact policy application, bounded dimensions and bytes, and no upscaling before one transport call is permitted.
+- The default policy is aspect-preserving 1024x1024 maximum, 4 MiB maximum, JPEG quality 85, automatic detail, black replacement for invalid pixels, and no upscaling. The owned encoded payload is copied and zeroed on disposal.
+- Coverage context states normal or degraded coverage and the valid-pixel fraction, prohibits inference outside valid regions, and explicitly excludes world-model history and stale entities from current visual evidence.
+- Structured outcomes retain safe category, code, HTTP status, provider request ID, and bounded detail. Credential-, data-URL-, payload-, and opaque-token-like detail is redacted; uncaught exceptions expose only their type.
+- Automatic retry, provider fallback, response storage, and streaming are disabled. Concurrency overflow and cancellation are typed and visible; no request is silently queued or rerouted.
+- RMA-111 face/person tracking remains independent and bundled on device. RMA-113 remains the selective admission policy; these adapters contain no frame-rate loop, timer, or automatic invocation path.
+- The permanent 60-case suite and exact-SHA gate are documented in `docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md` and `docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md`.
+"""
+    todo_path.write_text(todo[:start] + section + todo[end:], encoding="utf-8")
+
+
+def record() -> None:
+    run_id = os.environ.get("GITHUB_RUN_ID", "unknown")
+    source_sha = os.environ.get("GITHUB_SHA", "unknown")
+    text = f"""# RMA-115 OpenAI-compatible VLM adapter validation
+
+**Status:** Candidate implementation validated
+**Date:** 2026-08-06
+**Bootstrap source SHA:** `{source_sha}`
+**Bootstrap workflow run:** `{run_id}`
+
+The warnings-as-errors managed-core build and all 60 deterministic remote-VLM contracts passed before the candidate files were committed to the disposable branch. The suite used fake encoders and a mock transport, opened no network connection, and required no credential.
+
+This is not the final exact-master evidence boundary. The permanent RMA-115 workflow must pass on the final implementation commit before final evidence is added.
+"""
+    Path(
+        "docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md"
+    ).write_text(text, encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", choices=("prepare", "record"))
+    args = parser.parse_args()
+    if args.mode == "prepare":
+        prepare()
+    else:
+        record()
+
+
+if __name__ == "__main__":
+    main()
