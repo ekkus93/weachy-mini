@@ -142,28 +142,40 @@ namespace ReachyMini.Camera.Tests
         {
             RequireText(
                 implementation,
-                "\"${ADB[@]}\" uninstall \"${PACKAGE_NAME}\"",
-                "clean authoritative package uninstall");
+                "probe_installed_package()",
+                "installed-package state probe");
             RequireText(
                 implementation,
-                "package-path-after-uninstall-status.txt",
-                "post-uninstall package probe status evidence");
+                "hash_installed_apk()",
+                "installed APK digest capture");
             RequireText(
                 implementation,
-                "package_absence_status=$?",
-                "fail-closed package absence verification");
+                "reuse_exact_installed_apk",
+                "exact installed APK reuse mode");
             RequireText(
                 implementation,
-                "package_absence_status != 1",
-                "Android Package Manager absent-package status contract");
+                "replace_mismatched_installed_apk",
+                "mismatched APK replacement mode");
             RequireText(
                 implementation,
-                "package_absence_state_status=$?",
-                "ADB transport verification after package absence");
+                "installed_apk_matches_candidate=true",
+                "post-selection exact APK identity evidence");
             RequireText(
                 implementation,
-                "package-absence-adb-state-status.txt",
-                "package-absence transport status evidence");
+                "installed-apk-final-sha256.txt",
+                "final installed APK digest evidence");
+            RequireText(
+                implementation,
+                "installed_final_sha256 != \"${candidate_sha256}\"",
+                "final installed APK digest equality gate");
+            RequireText(
+                implementation,
+                "status != 1",
+                "Android Package Manager absence status contract");
+            RequireText(
+                implementation,
+                "ADB transport was not healthy while confirming package absence",
+                "package-absence transport verification");
             RequireText(
                 implementation,
                 "UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS",
@@ -171,15 +183,11 @@ namespace ReachyMini.Camera.Tests
             RequireText(
                 implementation,
                 "timeout --signal=TERM --kill-after=15s",
-                "bounded streaming ADB installation");
+                "bounded ADB transfer and installation");
             RequireText(
                 implementation,
-                "\"${INSTALL_TIMEOUT_SECONDS}s\"",
-                "configured physical install deadline");
-            RequireText(
-                implementation,
-                "\"${ADB[@]}\" install -g \"${APK_PATH}\"",
-                "proven streaming install path");
+                "\"${ADB[@]}\" install -r -g \"${APK_PATH}\"",
+                "proven bounded replacement install path");
             RequireText(
                 implementation,
                 "> \"${REPORT_DIR}/install.txt\" 2>&1",
@@ -190,16 +198,8 @@ namespace ReachyMini.Camera.Tests
                 "real bounded install exit status");
             RequireText(
                 implementation,
-                "cat \"${REPORT_DIR}/install.txt\"",
-                "post-install console evidence publication");
-            RequireText(
-                implementation,
                 "install_status == 124 || install_status == 137",
                 "explicit TERM/KILL install timeout diagnosis");
-            RequireText(
-                implementation,
-                "package_presence_status=$?",
-                "fail-closed installed-package verification");
             RequireText(
                 implementation,
                 "capture_install_diagnostics",
@@ -212,14 +212,18 @@ namespace ReachyMini.Camera.Tests
                 implementation,
                 "apk-sha256.txt",
                 "APK digest evidence");
+            RequireText(
+                implementation,
+                "shell pm clear \"${PACKAGE_NAME}\"",
+                "clean application-data boundary before launch");
+            RejectExecutableText(
+                implementation,
+                "uninstall \"${PACKAGE_NAME}\"",
+                "destructive uninstall before authoritative acceptance");
             RejectExecutableText(
                 implementation,
                 "install --no-streaming",
                 "hanging non-streaming installation");
-            RejectExecutableText(
-                implementation,
-                "install -r",
-                "state-contaminating replacement install");
             RejectExecutableText(
                 implementation,
                 "| tee \"${REPORT_DIR}/install.txt\"",
