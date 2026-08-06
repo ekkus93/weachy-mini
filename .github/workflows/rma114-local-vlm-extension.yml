@@ -80,8 +80,9 @@ jobs:
           mkdir -p artifacts/rma114-local-vlm-extension
           SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs"
           SCHEMA="models/manifests/local-vlm-manifest.schema.json"
-          export SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
-          export SCHEMA_SHA256="$(sha256sum "$SCHEMA" | awk '{print $1}')"
+          SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          SCHEMA_SHA256="$(sha256sum "$SCHEMA" | awk '{print $1}')"
+          export SOURCE_SHA256 SCHEMA_SHA256
           python3 - <<'PY'
           import json
           import os
