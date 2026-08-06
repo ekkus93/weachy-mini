@@ -185,6 +185,30 @@ def corrected_payload_preconditions() -> None:
     )
     tests_path.write_text(tests, encoding="utf-8")
 
+    camera_bridge_path = (
+        ROOT
+        / "Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/"
+        "com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java"
+    )
+    camera_bridge = camera_bridge_path.read_text(encoding="utf-8")
+    camera_bridge = replace_exact(
+        camera_bridge,
+        "import androidx.camera.camera2.interop.Camera2CameraInfo;\n",
+        "import androidx.camera.camera2.interop.Camera2CameraInfo;\n"
+        "import androidx.camera.camera2.interop.ExperimentalCamera2Interop;\n",
+        1,
+        "CameraX experimental import",
+    )
+    camera_bridge = replace_exact(
+        camera_bridge,
+        "    private static CameraSelector exactCameraSelector(final String selectedId) {\n",
+        "    @ExperimentalCamera2Interop\n"
+        "    private static CameraSelector exactCameraSelector(final String selectedId) {\n",
+        1,
+        "CameraX interop opt-in",
+    )
+    camera_bridge_path.write_text(camera_bridge, encoding="utf-8")
+
 
 MODULE.correct_payload_preconditions = corrected_payload_preconditions
 Path(__file__).unlink()
