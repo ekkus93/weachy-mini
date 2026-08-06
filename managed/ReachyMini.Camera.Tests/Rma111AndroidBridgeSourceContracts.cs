@@ -162,11 +162,11 @@ namespace ReachyMini.Camera.Tests
                 "post-selection exact APK identity evidence");
             RequireText(
                 implementation,
-                "installed-apk-final-sha256.txt",
+                "installed-apk-${label}-sha256.txt",
                 "final installed APK digest evidence");
             RequireText(
                 implementation,
-                "installed_final_sha256 != \"${candidate_sha256}\"",
+                "\"${installed_final_sha256}\" != \"${candidate_sha256}\"",
                 "final installed APK digest equality gate");
             RequireText(
                 implementation,
@@ -378,7 +378,7 @@ namespace ReachyMini.Camera.Tests
         {
             foreach (string line in source.Split('\n'))
             {
-                if (line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                if (line.TrimStart().StartsWith('#'))
                 {
                     continue;
                 }
