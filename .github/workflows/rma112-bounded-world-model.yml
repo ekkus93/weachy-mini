@@ -92,7 +92,7 @@ jobs:
               "bounded_description_history": True,
               "bounded_scope_cursors": True,
               "silent_fallback": False,
-              "contract_case_count": 16,
+              "contract_case_count": 18,
               "source_sha256": os.environ["SOURCE_SHA256"],
           }
           path = Path("artifacts/rma112-bounded-world-model/report.json")

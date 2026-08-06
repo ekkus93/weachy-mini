@@ -69,6 +69,12 @@ namespace ReachyMini.Perception
                 throw new ArgumentOutOfRangeException(
                     nameof(maximumScopeCursors));
             }
+            if (maximumScopeCursors < maximumEntities)
+            {
+                throw new ArgumentException(
+                    "Scope-cursor capacity must cover every retained entity scope.",
+                    nameof(maximumScopeCursors));
+            }
 
             MaximumEntities = maximumEntities;
             MaximumObservationHistoryPerEntity =
@@ -858,7 +864,7 @@ namespace ReachyMini.Perception
 
             public string Text { get; }
 
-            public string ProviderInstanceId { get; }
+            public string ProviderInstanceId { get; set; }
 
             public long FirstObservedTimestampNanoseconds { get; }
 
@@ -997,27 +1003,9 @@ namespace ReachyMini.Perception
                         "The tracking frame timestamp precedes the world-model clock.",
                         lastModelTimestampNanoseconds);
                 }
-                AdvanceModelTime(timestamp);
-                ExpireInternal(timestamp);
                 string scopeKey = BuildScopeKey(
                     batch.ProviderInstanceId,
                     batch.FrameIdentity);
-                MarkOtherGenerationsNotVisible(
-                    batch.ProviderInstanceId,
-                    batch.FrameIdentity.CameraId,
-                    scopeKey);
-
-                if (!batch.Coverage.CanCreateVisualObservations)
-                {
-                    MarkScopeNotVisible(scopeKey);
-                    invalidCoverageBatchCount = checked(
-                        invalidCoverageBatchCount + 1L);
-                    return Result(
-                        WorldModelUpdateStatus.InvalidCoverageRejected,
-                        "Coverage is unusable or unavailable; no observation was created.",
-                        timestamp);
-                }
-
                 if (cursorsByScope.TryGetValue(
                     scopeKey,
                     out FrameCursor? cursor))
@@ -1029,7 +1017,7 @@ namespace ReachyMini.Perception
                         return Result(
                             WorldModelUpdateStatus.DuplicateIgnored,
                             "The exact tracking frame was already applied.",
-                            timestamp);
+                            lastModelTimestampNanoseconds);
                     }
                     if (batch.FrameIdentity.SourceSequence <=
                             cursor.SourceSequence ||
@@ -1042,8 +1030,43 @@ namespace ReachyMini.Perception
                         return Result(
                             WorldModelUpdateStatus.StaleRejected,
                             "The tracking frame is stale or conflicts with accepted ordering.",
-                            timestamp);
+                            lastModelTimestampNanoseconds);
                     }
+                }
+
+                if (!TrySelectCursorEviction(
+                    scopeKey,
+                    timestamp,
+                    out string? cursorToEvict))
+                {
+                    capacityRejectedBatchCount = checked(
+                        capacityRejectedBatchCount + 1L);
+                    return Result(
+                        WorldModelUpdateStatus.CapacityExceeded,
+                        "Ordering cursor capacity is occupied by retained entity scopes; the batch was rejected without mutation.",
+                        lastModelTimestampNanoseconds);
+                }
+
+                AdvanceModelTime(timestamp);
+                ExpireInternal(timestamp);
+                MarkOtherGenerationsNotVisible(
+                    batch.ProviderInstanceId,
+                    batch.FrameIdentity.CameraId,
+                    scopeKey);
+
+                if (!batch.Coverage.CanCreateVisualObservations)
+                {
+                    MarkScopeNotVisible(scopeKey);
+                    CommitCursor(
+                        scopeKey,
+                        batch.FrameIdentity,
+                        cursorToEvict);
+                    invalidCoverageBatchCount = checked(
+                        invalidCoverageBatchCount + 1L);
+                    return Result(
+                        WorldModelUpdateStatus.InvalidCoverageRejected,
+                        "Coverage is unusable or unavailable; no observation was created.",
+                        timestamp);
                 }
 
                 int newEntityCount = CountNewEntities(batch, scopeKey);
@@ -1051,6 +1074,10 @@ namespace ReachyMini.Perception
                     policy.MaximumEntities)
                 {
                     MarkScopeNotVisible(scopeKey);
+                    CommitCursor(
+                        scopeKey,
+                        batch.FrameIdentity,
+                        cursorToEvict);
                     capacityRejectedBatchCount = checked(
                         capacityRejectedBatchCount + 1L);
                     return Result(
@@ -1074,6 +1101,10 @@ namespace ReachyMini.Perception
                             StringComparison.Ordinal))
                     {
                         MarkScopeNotVisible(scopeKey);
+                        CommitCursor(
+                            scopeKey,
+                            batch.FrameIdentity,
+                            cursorToEvict);
                         classificationConflictCount = checked(
                             classificationConflictCount + 1L);
                         return Result(
@@ -1096,11 +1127,10 @@ namespace ReachyMini.Perception
                         coverage);
                 }
 
-                EnsureCursorCapacity(scopeKey);
-                cursorsByScope[scopeKey] = new FrameCursor(
-                    batch.FrameIdentity.SourceSequence,
-                    timestamp,
-                    batch.FrameIdentity.AuthoritativeSequence);
+                CommitCursor(
+                    scopeKey,
+                    batch.FrameIdentity,
+                    cursorToEvict);
                 acceptedTrackingBatchCount = checked(
                     acceptedTrackingBatchCount + 1L);
                 return Result(
@@ -1191,6 +1221,8 @@ namespace ReachyMini.Perception
                     {
                         description.LastConfirmedTimestampNanoseconds =
                             timestamp;
+                        description.ProviderInstanceId =
+                            update.ProviderInstanceId;
                         description.ConfirmationCount = checked(
                             description.ConfirmationCount + 1);
                         description.SourceFrameIdentity =
@@ -1485,18 +1517,28 @@ namespace ReachyMini.Perception
                     droppedScopeCursorCount));
         }
 
-        private void EnsureCursorCapacity(string scopeKey)
+        private bool TrySelectCursorEviction(
+            string scopeKey,
+            long timestampNanoseconds,
+            out string? cursorToEvict)
         {
+            cursorToEvict = null;
             if (cursorsByScope.ContainsKey(scopeKey) ||
                 cursorsByScope.Count < policy.MaximumScopeCursors)
             {
-                return;
+                return true;
             }
 
             string? oldestKey = null;
             long oldestTimestamp = long.MaxValue;
             foreach (KeyValuePair<string, FrameCursor> entry in cursorsByScope)
             {
+                if (HasEntityRetainedForScopeAt(
+                    entry.Key,
+                    timestampNanoseconds))
+                {
+                    continue;
+                }
                 if (entry.Value.SourceTimestampNanoseconds < oldestTimestamp ||
                     (entry.Value.SourceTimestampNanoseconds == oldestTimestamp &&
                      string.CompareOrdinal(entry.Key, oldestKey) < 0))
@@ -1508,12 +1550,55 @@ namespace ReachyMini.Perception
             }
             if (oldestKey == null)
             {
-                throw new InvalidOperationException(
-                    "A full cursor set did not contain an eviction candidate.");
+                return false;
             }
-            cursorsByScope.Remove(oldestKey);
-            droppedScopeCursorCount = checked(
-                droppedScopeCursorCount + 1L);
+            cursorToEvict = oldestKey;
+            return true;
+        }
+
+        private bool HasEntityRetainedForScopeAt(
+            string scopeKey,
+            long timestampNanoseconds)
+        {
+            foreach (EntityState entity in entitiesById.Values)
+            {
+                if (!string.Equals(
+                    entity.ScopeKey,
+                    scopeKey,
+                    StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                long age = checked(
+                    timestampNanoseconds -
+                    entity.LastSeenTimestampNanoseconds);
+                if (age < policy.EntityExpiryNanoseconds)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void CommitCursor(
+            string scopeKey,
+            ReachyVisionFrameIdentity frameIdentity,
+            string? cursorToEvict)
+        {
+            if (cursorToEvict != null)
+            {
+                if (!cursorsByScope.Remove(cursorToEvict))
+                {
+                    throw new InvalidOperationException(
+                        "The selected ordering cursor disappeared before commit.");
+                }
+                droppedScopeCursorCount = checked(
+                    droppedScopeCursorCount + 1L);
+            }
+            cursorsByScope[scopeKey] = new FrameCursor(
+                frameIdentity.SourceSequence,
+                frameIdentity.SourceTimestampNanoseconds,
+                frameIdentity.AuthoritativeSequence);
         }
 
         private static bool HasObservation(

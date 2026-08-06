@@ -25,6 +25,8 @@ namespace ReachyMini.WorldModel.Tests
             TwoDimensionalTrackingNeverFabricatesPosition();
             VisibilityDistinguishesCurrentRecentAndExpired();
             StaleAndConflictingInputsFailClosed();
+            StaleFutureFramesAreNonMutating();
+            RetainedScopesProtectOrderingCursors();
             SemanticResultsCannotCrossEntityGenerations();
             SourceContractRemainsExplicit();
             Console.WriteLine("RMA-112 bounded world-model contracts passed.");
@@ -181,7 +183,7 @@ namespace ReachyMini.WorldModel.Tests
             WorldModelUpdateResult duplicate = model.ApplyDescription(
                 new WorldModelDescriptionUpdate(
                     entity.EntityId,
-                    "vlm-local",
+                    "vlm-cloud",
                     "  person   wearing a BLUE shirt  ",
                     source,
                     160L));
@@ -189,6 +191,14 @@ namespace ReachyMini.WorldModel.Tests
             WorldEntitySnapshot described = duplicate.Snapshot.Entities[0];
             Equal(1, described.Descriptions.Count, "deduplicated count");
             Equal(2, described.Descriptions[0].ConfirmationCount, "confirmation count");
+            Equal(
+                "vlm-cloud",
+                described.DescriptionProviderInstanceId,
+                "latest confirming provider");
+            Equal(
+                "vlm-cloud",
+                described.Descriptions[0].ProviderInstanceId,
+                "description provenance matches source confirmation");
             Equal(0L, described.DescriptionAgeNanoseconds, "description age at confirmation");
             Equal(
                 40L,
@@ -294,6 +304,7 @@ namespace ReachyMini.WorldModel.Tests
         private static void SessionOrderingMemoryRemainsBounded()
         {
             var model = CreateModel(
+                maximumEntities: 3,
                 expiryNanoseconds: 10_000L,
                 maximumScopeCursors: 3);
             for (int index = 1; index <= 5; ++index)
@@ -410,6 +421,81 @@ namespace ReachyMini.WorldModel.Tests
             Equal(1L, conflict.Snapshot.Diagnostics.ClassificationConflictCount, "conflict counter");
         }
 
+        private static void StaleFutureFramesAreNonMutating()
+        {
+            var model = CreateModel(expiryNanoseconds: 100L);
+            model.ApplyTracking(
+                Batch(
+                    timestamp: 100L,
+                    sourceSequence: 5UL,
+                    authoritativeSequence: 5UL,
+                    objects: new[] { Tracked("face-1", "face", 0.8, 0.2) }));
+
+            WorldModelUpdateResult rejected = model.ApplyTracking(
+                Batch(
+                    timestamp: 250L,
+                    sourceSequence: 4UL,
+                    authoritativeSequence: 6UL,
+                    objects: new[] { Tracked("face-1", "face", 0.9, 0.3) }));
+
+            Equal(WorldModelUpdateStatus.StaleRejected, rejected.Status, "future stale status");
+            Equal(1, rejected.Snapshot.Entities.Count, "future stale retains entity");
+            Equal(100L, rejected.Snapshot.Entities[0].LastSeenTimestampNanoseconds, "future stale does not refresh");
+            True(rejected.Snapshot.Entities[0].IsCurrentlyVisible, "future stale does not alter visibility");
+            Equal(0L, rejected.Snapshot.Diagnostics.ExpiredEntityCount, "future stale does not expire");
+            Equal(1, model.GetSnapshot(199L).Entities.Count, "future stale does not advance clock");
+        }
+
+        private static void RetainedScopesProtectOrderingCursors()
+        {
+            var model = CreateModel(
+                maximumEntities: 2,
+                expiryNanoseconds: 10_000L,
+                maximumScopeCursors: 2);
+            model.ApplyTracking(
+                Batch(
+                    timestamp: 100L,
+                    sourceSequence: 5UL,
+                    authoritativeSequence: 5UL,
+                    sourceSessionId: 1UL,
+                    continuityId: 1U,
+                    objects: new[] { Tracked("person-1", "person", 0.8, 0.1) }));
+            model.ApplyTracking(
+                Batch(
+                    timestamp: 200L,
+                    sourceSequence: 5UL,
+                    authoritativeSequence: 5UL,
+                    sourceSessionId: 2UL,
+                    continuityId: 2U,
+                    objects: new[] { Tracked("person-2", "person", 0.8, 0.6) }));
+
+            WorldModelUpdateResult full = model.ApplyTracking(
+                Batch(
+                    timestamp: 300L,
+                    sourceSequence: 1UL,
+                    authoritativeSequence: 1UL,
+                    sourceSessionId: 3UL,
+                    continuityId: 3U,
+                    objects: Array.Empty<TrackedObject>()));
+            Equal(WorldModelUpdateStatus.CapacityExceeded, full.Status, "retained cursor capacity status");
+            Equal(2, full.Snapshot.Diagnostics.ActiveScopeCursorCount, "retained cursor count");
+            Equal(2, full.Snapshot.Entities.Count, "retained entities unchanged");
+            Equal(1, full.Snapshot.CurrentlyVisibleEntities.Count, "retained visibility unchanged");
+            Equal("person-2", full.Snapshot.CurrentlyVisibleEntities[0].TrackingLocalId, "latest generation remains visible");
+
+            WorldModelUpdateResult stale = model.ApplyTracking(
+                Batch(
+                    timestamp: 400L,
+                    sourceSequence: 4UL,
+                    authoritativeSequence: 6UL,
+                    sourceSessionId: 1UL,
+                    continuityId: 1U,
+                    objects: new[] { Tracked("person-1", "person", 0.9, 0.2) }));
+            Equal(WorldModelUpdateStatus.StaleRejected, stale.Status, "retained cursor rejects regression");
+            Equal(100L, stale.Snapshot.Entities[0].LastSeenTimestampNanoseconds, "regression did not refresh entity");
+            Equal(2, stale.Snapshot.Diagnostics.ActiveScopeCursorCount, "regression preserves cursors");
+        }
+
         private static void SemanticResultsCannotCrossEntityGenerations()
         {
             var model = CreateModel(expiryNanoseconds: 1_000L);
@@ -448,6 +534,9 @@ namespace ReachyMini.WorldModel.Tests
             Contains(source, "unavailable_from_2d_tracking", "unknown position contract");
             Contains(source, "MaximumEntities", "entity bound contract");
             Contains(source, "MaximumScopeCursors", "cursor bound contract");
+            Contains(source, "TrySelectCursorEviction", "retained cursor preflight contract");
+            Contains(source, "HasEntityRetainedForScopeAt", "cursor/entity retention contract");
+            Contains(source, "CommitCursor", "cursor commit contract");
             Contains(source, "DescriptionDuplicate", "description dedup contract");
             Contains(source, "InvalidCoverageRejected", "coverage rejection contract");
             Contains(source, "ExpireInternal", "expiry contract");
