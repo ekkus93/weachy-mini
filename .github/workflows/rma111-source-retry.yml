@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 3 removes silent ADB failure suppression before source validation.
+# Attempt 4 aligns the RMA-110 ProviderDescriptor constructor contract.
