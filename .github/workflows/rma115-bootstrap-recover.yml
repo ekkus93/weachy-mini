@@ -72,22 +72,10 @@ jobs:
           if set(complete) != wanted_complete or partial_bytes != 48048:
               raise SystemExit(
                   f'unexpected recovery: complete={complete!r}, partial={partial_bytes}')
-
-          source_path = root / 'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs'
-          source = source_path.read_text(encoding='utf-8')
-          duplicate = (
-              '            RemoteVlmImageFormat format,\n'
-              '            RemoteVlmImageFormat format,\n')
-          if source.count(duplicate) != 1:
-              raise SystemExit('expected exactly one duplicated format parameter')
-          source = source.replace(
-              duplicate,
-              '            RemoteVlmImageFormat format,\n',
-              1)
-          source_path.write_text(source, encoding='utf-8')
+          source = (root / 'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs').read_text(encoding='utf-8')
           if source.count('RemoteVlmImageFormat format,') != 1:
-              raise SystemExit('format parameter repair did not produce one declaration')
-          print(f'recovered adapter, docs, metadata, and {partial_bytes}-byte test prefix')
+              raise SystemExit('recovered adapter has an invalid format parameter declaration')
+          print(f'recovered exact adapter, docs, metadata, and {partial_bytes}-byte test prefix')
           PY
       - name: Commit recovered non-workflow files
         shell: bash
