@@ -224,6 +224,38 @@ jobs:
           set -euo pipefail
           test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
+      - name: Pin one physical Android device
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t physical_serials < <(
+            adb devices               | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${physical_serials[@]}"; do
+            state="$(adb -s "${serial}" get-state | tr -d '\r')"
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            printf 'physical_device=%s state=%s abi=%s sdk=%s\n'               "${serial}" "${state}" "${abi}" "${sdk}"
+            if [[ "${state}" == "device" &&                   "${abi}" == "arm64-v8a" &&                   "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
+              accepted+=("${serial}")
+            fi
+          done
+          if (( ${#accepted[@]} != 1 )); then
+            printf 'Expected exactly one physical arm64-v8a API-26+ device at suite start; found %s.\n'               "${#accepted[@]}" >&2
+            adb devices -l >&2
+            exit 1
+          fi
+          serial="${accepted[0]}"
+          adb -s "${serial}" wait-for-device
+          if [[ "$(adb -s "${serial}" get-state | tr -d '\r')" != "device" ]]; then
+            printf 'Pinned Android device is not ready: %s\n' "${serial}" >&2
+            exit 1
+          fi
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+
       - name: Install and run RMA-090 camera discovery acceptance
         id: camera_discovery_acceptance
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
