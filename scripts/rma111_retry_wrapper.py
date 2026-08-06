@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 ROOT = Path.cwd().resolve()
@@ -218,6 +219,92 @@ def corrected_payload_preconditions() -> None:
     camera_bridge_path.write_text(camera_bridge, encoding="utf-8")
 
 
+def corrected_verify_source_contracts() -> None:
+    required = {
+        "core tracker": (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Core/Perception/ReachyLightweightTracking.cs"
+        ),
+        "Unity staging": (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyUnityTrackingFrameResources.cs"
+        ),
+        "Android backend": (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyAndroidMlKitTrackingBackend.cs"
+        ),
+        "physical acceptance": (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyRma111TrackingAcceptance.cs"
+        ),
+        "Java bridge": (
+            ROOT
+            / "Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/"
+            "com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java"
+        ),
+        "managed contracts": (
+            ROOT
+            / "managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs"
+        ),
+        "Unity contracts": (
+            ROOT
+            / "Assets/ReachyMini/Tests/Editor/ReachyLightweightTrackingTests.cs"
+        ),
+        "fixture": (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyRma111Fixture.generated.cs"
+        ),
+        "acceptance shell": (
+            ROOT / "scripts/run_rma111_lightweight_tracking_acceptance_android.sh"
+        ),
+    }
+    for label, path in required.items():
+        if not path.is_file():
+            raise SystemExit(f"Missing RMA-111 {label}: {path}")
+    combined = "\n".join(
+        path.read_text(encoding="utf-8") for path in required.values()
+    )
+    build_gradle = (
+        ROOT / "Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle"
+    ).read_text(encoding="utf-8")
+    for token in (
+        "ReachyOnDeviceLightweightTracker",
+        "ReachyStableTrackStore",
+        "AsyncGPUReadback",
+        "IsDetectionCenterValid",
+        "face-000001",
+        "invalid_center_suppressed",
+        "vlm_invocation_count",
+        "com.google.mlkit:face-detection:16.1.7",
+        "com.google.mlkit:segmentation-selfie:16.0.0-beta6",
+    ):
+        if token not in combined and token not in build_gradle:
+            raise SystemExit(f"Missing RMA-111 token: {token}")
+    for token in (
+        "play-services-mlkit",
+        "ReadPixels(",
+        "fallbackProvider",
+        "|| true",
+    ):
+        if token in combined:
+            raise SystemExit(f"Forbidden RMA-111 pattern: {token}")
+    MODULE.run("git", "diff", "--check")
+    changed = subprocess.check_output(
+        ["git", "diff", "--name-only"], cwd=ROOT, text=True
+    ).splitlines()
+    if any(path.startswith(".github/workflows/") for path in changed):
+        raise SystemExit("Retry applicator changed a workflow file")
+    tracked = subprocess.check_output(
+        ["git", "ls-files"], cwd=ROOT, text=True
+    ).splitlines()
+    if any(
+        path.startswith("managed/") and ("/bin/" in path or "/obj/" in path)
+        for path in tracked
+    ):
+        raise SystemExit("Generated managed build output is tracked")
+
+
 MODULE.correct_payload_preconditions = corrected_payload_preconditions
+MODULE.verify_source_contracts = corrected_verify_source_contracts
 Path(__file__).unlink()
 MODULE.main()
