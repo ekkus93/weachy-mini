@@ -1863,11 +1863,49 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 ## RMA-113 — Implement VLM scheduling policy
 
-- [ ] Trigger only for user visual questions, explicit planner requests, significant scene changes, new entities, manual requests, or a configured slow interval.
-- [ ] Add per-provider rate and concurrency limits.
-- [ ] Never run VLM continuously at camera frame rate by default.
-- [ ] Cancel obsolete requests when the scene or question changes.
-- [ ] Surface cost/network disclosure for cloud requests.
+**Status:** Complete (2026-08-06)
+
+- [x] Trigger only for user visual questions, explicit planner requests, significant scene changes, new entities, manual requests, or a configured slow interval.
+- [x] Add per-provider rate and concurrency limits.
+- [x] Never run VLM continuously at camera frame rate by default.
+- [x] Cancel obsolete requests when the scene or question changes.
+- [x] Surface cost/network disclosure for cloud requests.
+
+**Completion evidence**
+
+- `ReachyVlmScheduler` is a Unity-independent managed admission policy over the
+  existing RMA-110 VLM provider/executor contracts. It schedules exact provider
+  instances and does not invoke models, duplicate provider execution, or select
+  a fallback provider.
+- The trigger vocabulary is limited to user visual questions, explicit planner
+  requests, significant scene changes, new entities, manual requests, and an
+  optional slow interval. There is no camera-frame trigger, and the slow
+  interval is disabled by default.
+- Sliding-window rate limits, active-request concurrency leases, trigger-sequence
+  deduplication, bounded provider-policy state, and immutable diagnostics are
+  enforced independently for each provider.
+- Monotonic scene and question revisions cancel obsolete work. Cancellation
+  callbacks run without the scheduler or lease monitor held, while concurrent
+  completion releases the scheduler monitor before waiting for cancellation
+  disposal. A deterministic threaded regression rejects the prior lock
+  inversion.
+- Cloud providers require non-empty network disclosure plus acknowledgement.
+  Providers configured as potentially billable also require non-empty cost
+  disclosure plus separate acknowledgement before admission.
+- Permanent run `31091982708`, job `92584899909`, passed warnings-as-errors and
+  all 25 scheduling contracts on accepted implementation SHA
+  `b29db6abbd41c6e1c3dee0ea5f5b2a2bbc90aa09`. Artifact `8963824901` has digest
+  `sha256:4967e21791c153a5512120d2807c02181e3da20bf08e5f0ed0a7a417fb5c5ab3`.
+- Hosted CI run `31091981878` passed static, managed, native/sanitizer, Android,
+  and pinned Reachy-model jobs on the same SHA.
+- Self-hosted run `31091982334`, job `92584898645`, passed `129/129` EditMode and
+  `1/1` PlayMode tests, ARM64/API-26 APK build and verification, physical
+  RMA-090, RMA-091, RMA-092, RMA-111, RMA-022 lifecycle, authoritative
+  rendering, every evidence upload, APK upload, and final status publication on
+  an LG-H872.
+- Detailed architecture, rejected-candidate history, exact artifact digests,
+  and physical evidence are in
+  `docs/validation/RMA_113_VLM_SCHEDULING_POLICY_VALIDATION_2026-08-06.md`.
 
 ## RMA-114 — Implement local VLM extension point
 
