@@ -10,6 +10,7 @@ LAUNCH_EXTRA_NAME="weachy_physical_acceptance"
 RESULT_FILE_NAME="weachy-authoritative-acceptance.json"
 REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
 TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-120}"
+LAUNCH_READY_FILE="${REPORT_DIR}/launch-issued"
 
 if [[ ! -s "${APK_PATH}" ]]; then
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2
@@ -62,31 +63,107 @@ else:
 PY
 }
 
+resolve_android_build_tool()
+{
+    local tool_name="$1"
+    if command -v "${tool_name}" >/dev/null 2>&1; then
+        command -v "${tool_name}"
+        return
+    fi
+
+    local sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+    if [[ -z "${sdk_root}" || ! -d "${sdk_root}/build-tools" ]]; then
+        return 1
+    fi
+
+    find "${sdk_root}/build-tools" \
+        -mindepth 2 \
+        -maxdepth 2 \
+        -type f \
+        -name "${tool_name}" \
+        -perm -u+x \
+        -print \
+        | sort -V \
+        | tail -n 1
+}
+
 DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:-$(select_device_serial | tail -n 1)}"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 rm -rf -- "${REPORT_DIR}"
 mkdir -p "${REPORT_DIR}"
 
+capture_host_apk_evidence()
+{
+    sha256sum "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"
+
+    local aapt_bin=""
+    local apksigner_bin=""
+    aapt_bin="$(resolve_android_build_tool aapt || true)"
+    apksigner_bin="$(resolve_android_build_tool apksigner || true)"
+
+    if [[ -n "${aapt_bin}" ]]; then
+        set +e
+        "${aapt_bin}" dump badging "${APK_PATH}" \
+            > "${REPORT_DIR}/apk-badging.txt" 2>&1
+        printf '%s\n' "$?" > "${REPORT_DIR}/apk-badging-status.txt"
+        set -e
+    else
+        printf '%s\n' 'aapt was not available in PATH or the Android SDK build-tools directories.' \
+            > "${REPORT_DIR}/apk-badging.txt"
+        printf '%s\n' 'unavailable' > "${REPORT_DIR}/apk-badging-status.txt"
+    fi
+
+    if [[ -n "${apksigner_bin}" ]]; then
+        set +e
+        "${apksigner_bin}" verify --verbose --print-certs "${APK_PATH}" \
+            > "${REPORT_DIR}/apk-signature.txt" 2>&1
+        printf '%s\n' "$?" > "${REPORT_DIR}/apk-signature-status.txt"
+        set -e
+    else
+        printf '%s\n' 'apksigner was not available in PATH or the Android SDK build-tools directories.' \
+            > "${REPORT_DIR}/apk-signature.txt"
+        printf '%s\n' 'unavailable' > "${REPORT_DIR}/apk-signature-status.txt"
+    fi
+}
+
 capture_diagnostics()
 {
     set +e
-    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt"
+    "${ADB[@]}" logcat -d -v raw > "${REPORT_DIR}/logcat.txt" 2>&1
     "${ADB[@]}" shell dumpsys activity activities \
-        > "${REPORT_DIR}/activity.txt"
+        > "${REPORT_DIR}/activity.txt" 2>&1
     "${ADB[@]}" shell dumpsys window windows \
-        > "${REPORT_DIR}/window.txt"
+        > "${REPORT_DIR}/window.txt" 2>&1
     "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
-        > "${REPORT_DIR}/package.txt"
+        > "${REPORT_DIR}/package.txt" 2>&1
     "${ADB[@]}" shell ps \
-        > "${REPORT_DIR}/processes.txt"
+        > "${REPORT_DIR}/processes.txt" 2>&1
     "${ADB[@]}" shell \
         "ls -laR '/sdcard/Android/data/${PACKAGE_NAME}' 2>&1" \
-        > "${REPORT_DIR}/external-files.txt"
+        > "${REPORT_DIR}/external-files.txt" 2>&1
     "${ADB[@]}" shell \
         "run-as '${PACKAGE_NAME}' sh -c 'pwd; find . -maxdepth 3 -type f -print' 2>&1" \
-        > "${REPORT_DIR}/internal-files.txt"
+        > "${REPORT_DIR}/internal-files.txt" 2>&1
     "${ADB[@]}" exec-out screencap -p \
-        > "${REPORT_DIR}/device-screen.png"
+        > "${REPORT_DIR}/device-screen.png" \
+        2> "${REPORT_DIR}/device-screen-error.txt"
+}
+
+capture_install_diagnostics()
+{
+    set +e
+    "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
+    "${ADB_BIN}" devices -l > "${REPORT_DIR}/adb-devices.txt" 2>&1
+    "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
+    "${ADB[@]}" shell df -h /data > "${REPORT_DIR}/data-filesystem.txt" 2>&1
+    "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+        > "${REPORT_DIR}/package-path-on-install-failure.txt" 2>&1
+    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
+        > "${REPORT_DIR}/package-on-install-failure.txt" 2>&1
+    "${ADB[@]}" shell dumpsys package installer \
+        > "${REPORT_DIR}/package-installer.txt" 2>&1
+    "${ADB[@]}" logcat -d -b all \
+        > "${REPORT_DIR}/install-logcat.txt" 2>&1
 }
 
 on_exit()
@@ -123,6 +200,8 @@ read_device_report()
     printf '%s' "${report_json}"
 }
 
+capture_host_apk_evidence
+
 {
     printf 'serial=%s\n' "${DEVICE_SERIAL}"
     printf 'manufacturer=%s\n' "$("${ADB[@]}" shell getprop ro.product.manufacturer | tr -d '\r')"
@@ -133,10 +212,47 @@ read_device_report()
     printf 'abi=%s\n' "$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
 } > "${REPORT_DIR}/device.txt"
 
-"${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt"
-"${ADB[@]}" shell pm path "${PACKAGE_NAME}" > "${REPORT_DIR}/package-path.txt"
+"${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/package-path-before-uninstall.txt" 2>&1 || true
+"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/force-stop-before-uninstall.txt" 2>&1 || true
+
+set +e
+"${ADB[@]}" uninstall "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/uninstall.txt" 2>&1
+uninstall_status=$?
+set -e
+printf '%s\n' "${uninstall_status}" > "${REPORT_DIR}/uninstall-status.txt"
+
+"${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/package-path-after-uninstall.txt" 2>&1 || true
+if grep -q '^package:' "${REPORT_DIR}/package-path-after-uninstall.txt"; then
+    capture_install_diagnostics
+    printf '%s\n' 'Package remained installed after authoritative acceptance cleanup.' >&2
+    exit 1
+fi
+
+set +e
+"${ADB[@]}" install --no-streaming "${APK_PATH}" 2>&1 \
+    | tee "${REPORT_DIR}/install.txt"
+install_status=${PIPESTATUS[0]}
+set -e
+printf '%s\n' "${install_status}" > "${REPORT_DIR}/install-status.txt"
+if (( install_status != 0 )); then
+    capture_install_diagnostics
+    printf 'APK installation failed with status %s.\n' "${install_status}" >&2
+    exit "${install_status}"
+fi
+
+"${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/package-path.txt" 2>&1
+if ! grep -q '^package:' "${REPORT_DIR}/package-path.txt"; then
+    capture_install_diagnostics
+    printf '%s\n' 'Package Manager did not report the package after installation.' >&2
+    exit 1
+fi
 "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
-    > "${REPORT_DIR}/package-before-launch.txt"
+    > "${REPORT_DIR}/package-before-launch.txt" 2>&1
 launch_component="$(
     awk '
         /android.intent.action.MAIN:/ { in_main = 1; next }
@@ -149,16 +265,37 @@ if [[ -z "${launch_component}" || "${launch_component}" != */* ]]; then
 fi
 printf '%s\n' "${launch_component}" > "${REPORT_DIR}/launch-component.txt"
 
-"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
-"${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/clear.txt"
-"${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" || true
-"${ADB[@]}" logcat -c || true
+"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/force-stop-before-launch.txt" 2>&1
+"${ADB[@]}" shell pm clear "${PACKAGE_NAME}" \
+    > "${REPORT_DIR}/clear.txt" 2>&1
+"${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" \
+    > "${REPORT_DIR}/remove-old-report.txt" 2>&1 || true
+"${ADB[@]}" logcat -c > "${REPORT_DIR}/logcat-clear.txt" 2>&1 || true
+
+set +e
 "${ADB[@]}" shell am start -W \
     -n "${launch_component}" \
     -a android.intent.action.MAIN \
     -c android.intent.category.LAUNCHER \
     --ez "${LAUNCH_EXTRA_NAME}" true \
-    > "${REPORT_DIR}/launch.txt"
+    2>&1 | tee "${REPORT_DIR}/launch.txt"
+launch_status=${PIPESTATUS[0]}
+set -e
+printf '%s\n' "${launch_status}" > "${REPORT_DIR}/launch-status.txt"
+if (( launch_status != 0 )) || \
+        grep -Eq '(^|[[:space:]])(Error:|Exception)' "${REPORT_DIR}/launch.txt"; then
+    printf 'Unity launch failed with status %s.\n' "${launch_status}" >&2
+    exit 1
+fi
+
+launch_ready_tmp="${LAUNCH_READY_FILE}.tmp"
+{
+    printf 'serial=%s\n' "${DEVICE_SERIAL}"
+    printf 'component=%s\n' "${launch_component}"
+    printf 'issued_epoch=%s\n' "$(date +%s)"
+} > "${launch_ready_tmp}"
+mv -f -- "${launch_ready_tmp}" "${LAUNCH_READY_FILE}"
 
 start_epoch="$(date +%s)"
 report_json=""

@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 ADB_BIN="${ADB_BIN:-adb}"
 PACKAGE_NAME="com.ekkus.weachymini"
+REPORT_DIR="${UNITY_AUTHORITATIVE_REPORT_DIR:-${ROOT_DIR}/build/unity-authoritative-device-report}"
+LAUNCH_READY_FILE="${REPORT_DIR}/launch-issued"
+LAUNCH_READY_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_LAUNCH_READY_TIMEOUT_SECONDS:-180}"
+FOCUS_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_FOCUS_TIMEOUT_SECONDS:-60}"
 FOREGROUND_HELPER="${ROOT_DIR}/scripts/android_device_acceptance_foreground.sh"
 IMPLEMENTATION="${ROOT_DIR}/scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh"
 
@@ -45,6 +49,7 @@ select_device_serial()
 
 DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:-$(select_device_serial)}"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
+implementation_pid=""
 
 restore_device()
 {
@@ -65,15 +70,42 @@ trap on_exit EXIT
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
     prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+rm -f -- "${LAUNCH_READY_FILE}" "${LAUNCH_READY_FILE}.tmp"
 
 REACHY_ANDROID_SERIAL="${DEVICE_SERIAL}" \
 ADB_BIN="${ADB_BIN}" \
+UNITY_AUTHORITATIVE_REPORT_DIR="${REPORT_DIR}" \
     bash "${IMPLEMENTATION}" &
 implementation_pid=$!
 
+launch_ready_deadline=$(( $(date +%s) + LAUNCH_READY_TIMEOUT_SECONDS ))
+while [[ ! -s "${LAUNCH_READY_FILE}" ]]; do
+    if ! kill -0 "${implementation_pid}" >/dev/null 2>&1; then
+        set +e
+        wait "${implementation_pid}"
+        implementation_status=$?
+        set -e
+        if (( implementation_status == 0 )); then
+            implementation_status=1
+        fi
+        printf 'Authoritative acceptance exited before launch readiness with status %s.\n' \
+            "${implementation_status}" >&2
+        exit "${implementation_status}"
+    fi
+
+    if (( $(date +%s) >= launch_ready_deadline )); then
+        kill "${implementation_pid}" >/dev/null 2>&1 || true
+        wait "${implementation_pid}" >/dev/null 2>&1 || true
+        printf 'Authoritative acceptance did not issue a verified launch within %s seconds.\n' \
+            "${LAUNCH_READY_TIMEOUT_SECONDS}" >&2
+        exit 1
+    fi
+    sleep 1
+done
+
 set +e
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
-    wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 60
+    wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" "${FOCUS_TIMEOUT_SECONDS}"
 focus_status=$?
 set -e
 if (( focus_status != 0 )); then

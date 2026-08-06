@@ -16,6 +16,10 @@ namespace ReachyMini.Camera.Tests
             "ReachyRma111TrackingAcceptance.cs";
         private const string AcceptanceScriptPath =
             "scripts/run_rma111_lightweight_tracking_acceptance_android.sh";
+        private const string AuthoritativeWrapperPath =
+            "scripts/run_unity_authoritative_rendering_acceptance_android.sh";
+        private const string AuthoritativeImplementationPath =
+            "scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh";
         private const string WorkflowPath =
             ".github/workflows/local-unity-android-validation.yml";
 
@@ -26,6 +30,9 @@ namespace ReachyMini.Camera.Tests
             VerifyPhysicalAcceptance(
                 Read(repositoryRoot, AcceptancePath),
                 Read(repositoryRoot, AcceptanceScriptPath));
+            VerifyAuthoritativeInstallHarness(
+                Read(repositoryRoot, AuthoritativeWrapperPath),
+                Read(repositoryRoot, AuthoritativeImplementationPath));
             VerifyPinnedDeviceWorkflow(
                 repositoryRoot,
                 Read(repositoryRoot, WorkflowPath));
@@ -129,6 +136,80 @@ namespace ReachyMini.Camera.Tests
                 "person ID shell gate");
         }
 
+        private static void VerifyAuthoritativeInstallHarness(
+            string wrapper,
+            string implementation)
+        {
+            RequireText(
+                implementation,
+                "\"${ADB[@]}\" uninstall \"${PACKAGE_NAME}\"",
+                "clean authoritative package uninstall");
+            RequireText(
+                implementation,
+                "package-path-after-uninstall.txt",
+                "post-uninstall package verification evidence");
+            RequireText(
+                implementation,
+                "install --no-streaming",
+                "non-streaming API-26 installation");
+            RequireText(
+                implementation,
+                "2>&1 \\\n    | tee \"${REPORT_DIR}/install.txt\"",
+                "complete install output capture");
+            RequireText(
+                implementation,
+                "install_status=${PIPESTATUS[0]}",
+                "real adb install exit status");
+            RequireText(
+                implementation,
+                "capture_install_diagnostics",
+                "installation failure evidence capture");
+            RequireText(
+                implementation,
+                "apk-signature.txt",
+                "APK signer evidence");
+            RequireText(
+                implementation,
+                "apk-sha256.txt",
+                "APK digest evidence");
+            RejectText(
+                implementation,
+                "install -r",
+                "state-contaminating replacement install");
+
+            int launch = RequireAfter(
+                implementation,
+                "\"${ADB[@]}\" shell am start -W",
+                0,
+                "authoritative launch command");
+            int launchStatus = RequireAfter(
+                implementation,
+                "launch_status=${PIPESTATUS[0]}",
+                launch,
+                "authoritative launch status capture");
+            _ = RequireAfter(
+                implementation,
+                "mv -f -- \"${launch_ready_tmp}\" \"${LAUNCH_READY_FILE}\"",
+                launchStatus,
+                "post-launch readiness publication");
+
+            int readinessWait = RequireAfter(
+                wrapper,
+                "while [[ ! -s \"${LAUNCH_READY_FILE}\" ]]",
+                0,
+                "launch readiness wait");
+            int processGuard = RequireAfter(
+                wrapper,
+                "kill -0 \"${implementation_pid}\"",
+                readinessWait,
+                "early implementation failure guard");
+            _ = RequireAfter(
+                wrapper,
+                "wait-focus",
+                processGuard,
+                "foreground wait after launch readiness");
+        }
+
         private static void VerifyPinnedDeviceWorkflow(
             string repositoryRoot,
             string workflow)
@@ -153,7 +234,8 @@ namespace ReachyMini.Camera.Tests
                 "scripts/run_rma092_camera_texture_acceptance_android.sh",
                 "scripts/run_rma111_lightweight_tracking_acceptance_android.sh",
                 "scripts/run_unity_native_lifecycle_acceptance_android.sh",
-                "scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh",
+                AuthoritativeWrapperPath,
+                AuthoritativeImplementationPath,
             };
             foreach (string relativePath in scripts)
             {
