@@ -42,6 +42,22 @@ Before RMA-111 can be marked complete, one exact implementation SHA must pass:
   regressions; and
 - permanent RMA-111 workflow, hosted CI, and final commit-status publication.
 
+## Rejected candidate and repair
+
+- Candidate `3b8b9440f60ff8a79de42e22537a273515b81567` was rejected after permanent
+  workflow run `31064376991` failed during Unity script compilation. The four
+  new runtime files declared `ReachyMini.Application`, which shadowed
+  `UnityEngine.Application` throughout sibling `ReachyMini.*` namespaces and
+  broke existing `persistentDataPath`, `isPlaying`, `platform`, and
+  `onBeforeRender` references.
+- Repair `f833e50cb25578499a1366eea6c015e1286baa1f` moves those runtime types into
+  the existing `ReachyMini.AppState` namespace, updates the scoped editor-test
+  import, and removes the non-Android dead `disposed` assignment. The one-use
+  repair workflow failed closed on unexpected source shapes and removed itself
+  from the repair commit.
+- Exact-head permanent validation of the repaired source remains required; this
+  document does not treat the repair applicator checks as completion evidence.
+
 Exact SHAs, workflow IDs, artifact IDs, digests, test counts, physical-device
-results, and any rejected Ralph-loop candidates will be recorded here after the
-acceptance boundary is crossed.
+results, and any additional rejected Ralph-loop candidates will be recorded
+here after the acceptance boundary is crossed.
