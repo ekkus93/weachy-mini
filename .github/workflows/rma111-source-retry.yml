@@ -44,3 +44,5 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/rma111_retry_applicator.py
+
+# Attempt 2 aligns the fixture dimensions and actual Android dependency anchor.
