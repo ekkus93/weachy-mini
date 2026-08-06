@@ -1,39 +1,47 @@
 name: RMA-115 Bootstrap Finalize
 
 on:
+  push:
+    branches:
+      - agent/rma115-bootstrap
+    paths:
+      - ".github/rma115-bootstrap/test-tail.gz.b64"
+      - ".github/workflows/rma115-bootstrap-finalize.yml"
   pull_request:
     branches:
       - master
     paths:
+      - ".github/rma115-bootstrap/test-tail.gz.b64"
       - ".github/workflows/rma115-bootstrap-finalize.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   finalize-and-test:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
       - name: Restore deterministic test tail and project files
         shell: bash
-        env:
-          TEST_TAIL_GZIP_BASE64: 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
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import base64
           import gzip
           import hashlib
-          import os
           from pathlib import Path
 
           program = Path('managed/ReachyMini.RemoteVlm.Tests/Program.cs')
@@ -42,7 +50,8 @@ jobs:
               raise SystemExit(f'unexpected test prefix size: {len(prefix)}')
           if hashlib.sha256(prefix).hexdigest() != '2671e6d4f8d74507ccd410e9783edc035eac8152b9a48a93500abe746e79126b':
               raise SystemExit('test prefix digest mismatch')
-          tail = gzip.decompress(base64.b64decode(os.environ['TEST_TAIL_GZIP_BASE64'], validate=True))
+          encoded = Path('.github/rma115-bootstrap/test-tail.gz.b64').read_text(encoding='utf-8')
+          tail = gzip.decompress(base64.b64decode(encoded, validate=True))
           if len(tail) != 23444:
               raise SystemExit(f'unexpected test tail size: {len(tail)}')
           if hashlib.sha256(tail).hexdigest() != 'bba85255dd12a9c958718b98e0d6f1082540b0adc2174e12fb43bc1b1524a5df':
@@ -102,14 +111,14 @@ The deterministic suite opens no network connection and needs no API key. Its 60
 
 **Completion evidence**
 
-- Separate Responses-style and Chat Completions-style providers share one explicit transport boundary. Endpoint style, model ID, output limit, image policy, and provider identity are configuration values; mismatches fail construction rather than trying another protocol.
+- Responses-style and Chat Completions-style providers share one explicit transport boundary. Endpoint style, model ID, output limit, image policy, and provider identity are configuration values; mismatches fail construction rather than trying another protocol.
 - Only observation-eligible transformed Reachy-eye frames with validity masks reach the encoder. Encoded results must prove identity, mask application before resize, valid-only content, exact policy application, bounded dimensions and bytes, and no upscaling before one transport call is permitted.
 - The default policy is aspect-preserving 1024x1024 maximum, 4 MiB maximum, JPEG quality 85, automatic detail, black replacement for invalid pixels, and no upscaling. The owned encoded payload is copied and zeroed on disposal.
 - Coverage context states normal or degraded coverage and the valid-pixel fraction, prohibits inference outside valid regions, and explicitly excludes world-model history and stale entities from current visual evidence.
-- Structured transport outcomes retain safe category, code, HTTP status, provider request ID, and bounded detail. Credential-, data-URL-, payload-, and opaque-token-like detail is redacted; uncaught exceptions expose only their type.
+- Structured outcomes retain safe category, code, HTTP status, provider request ID, and bounded detail. Credential-, data-URL-, payload-, and opaque-token-like detail is redacted; uncaught exceptions expose only their type.
 - Automatic retry, provider fallback, response storage, and streaming are disabled. Concurrency overflow and cancellation are typed and visible; no request is silently queued or rerouted.
 - RMA-111 face/person tracking remains independent and bundled on device. RMA-113 remains the selective admission policy; these adapters contain no frame-rate loop, timer, or automatic invocation path.
-- The permanent 60-case managed contract suite and dedicated exact-SHA workflow are documented in `docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md` and `docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md`.
+- The permanent 60-case suite and exact-SHA gate are documented in `docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md` and `docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md`.
 '''
           todo_path.write_text(todo[:start] + section + todo[end:], encoding='utf-8')
           PY
@@ -138,7 +147,7 @@ The deterministic suite opens no network connection and needs no API key. Its 60
 
           The warnings-as-errors managed-core build and all 60 deterministic remote-VLM contracts passed before the candidate files were committed to the disposable branch. The suite used fake encoders and a mock transport, opened no network connection, and required no credential.
 
-          This record is not the final exact-master evidence boundary. The permanent `RMA-115 OpenAI-compatible VLM Adapters` workflow must pass on the final implementation commit before release completion evidence is added.
+          This is not the final exact-master evidence boundary. The permanent RMA-115 workflow must pass on the final implementation commit before final evidence is added.
           EOF
       - name: Commit validated non-workflow implementation
         shell: bash
