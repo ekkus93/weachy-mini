@@ -9,10 +9,10 @@ on:
       - ".github/workflows/rma115-bootstrap-recover.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  recover-complete-members:
+  recover-candidate:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -20,8 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Recover exact complete files and partial test prefix
+      - name: Recover complete members and test prefix
         shell: bash
         run: |
           set -euo pipefail
@@ -31,78 +30,70 @@ jobs:
           import zlib
 
           root = pathlib.Path.cwd().resolve()
+          output = root / 'artifacts' / 'rma115-recovery'
+          output.mkdir(parents=True, exist_ok=True)
           parts = sorted((root / '.github' / 'rma115-bootstrap').glob('part-*'))
           encoded = ''.join(path.read_text(encoding='utf-8') for path in parts)
           payload = base64.b64decode(''.join(encoded.split()), validate=True)
           decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
           tar_bytes = decompressor.decompress(payload) + decompressor.flush()
 
-          allowed_complete = {
+          allowed = {
               '.github/workflows/rma115-openai-vlm-adapters.yml',
               'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs',
               'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta',
               'docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md',
           }
-          partial_target = 'managed/ReachyMini.RemoteVlm.Tests/Program.cs'
-          recovered_partial = None
-          offset = 0
+          partial_name = 'managed/ReachyMini.RemoteVlm.Tests/Program.cs'
           complete = []
+          partial_bytes = 0
+          offset = 0
           while offset + 512 <= len(tar_bytes):
               header = tar_bytes[offset:offset + 512]
               if header == b'\0' * 512:
                   break
               name = header[0:100].split(b'\0', 1)[0].decode('utf-8')
-              size_field = header[124:136].split(b'\0', 1)[0].strip() or b'0'
-              size = int(size_field, 8)
+              size = int((header[124:136].split(b'\0', 1)[0].strip() or b'0'), 8)
               data_start = offset + 512
-              data_end = data_start + size
-              available_end = min(data_end, len(tar_bytes))
-              data = tar_bytes[data_start:available_end]
-              if len(data) == size:
-                  if name in allowed_complete:
-                      destination = root / pathlib.PurePosixPath(name)
-                      destination.parent.mkdir(parents=True, exist_ok=True)
-                      destination.write_bytes(data)
-                      complete.append(name)
-              elif name == partial_target:
-                  recovered_partial = data
+              data = tar_bytes[data_start:min(data_start + size, len(tar_bytes))]
+              destination = output / pathlib.PurePosixPath(name)
+              if len(data) == size and name in allowed:
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  destination.write_bytes(data)
+                  complete.append(name)
+              elif name == partial_name:
+                  destination.parent.mkdir(parents=True, exist_ok=True)
+                  destination.write_bytes(data)
+                  partial_bytes = len(data)
                   break
-              else:
+              elif len(data) != size:
                   break
               offset = data_start + ((size + 511) // 512) * 512
 
-          if complete != [
+          expected = [
               '.github/workflows/rma115-openai-vlm-adapters.yml',
               'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs',
               'Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta',
               'docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md',
-          ]:
-              raise SystemExit(f'unexpected complete member set: {complete!r}')
-          if not recovered_partial:
-              raise SystemExit('the interrupted test source prefix was not recoverable')
-
-          recovery = root / '.github' / 'rma115-recovery'
-          recovery.mkdir(parents=True, exist_ok=True)
-          (recovery / 'Program.partial.cs').write_bytes(recovered_partial)
-          (recovery / 'report.txt').write_text(
-              '\n'.join([
-                  f'compressed_bytes={len(payload)}',
-                  f'recovered_tar_bytes={len(tar_bytes)}',
-                  f'gzip_eof={decompressor.eof}',
-                  f'partial_program_bytes={len(recovered_partial)}',
-                  *[f'complete={name}' for name in complete],
-                  '',
-              ]),
-              encoding='utf-8')
-          print((recovery / 'report.txt').read_text(encoding='utf-8'))
+          ]
+          if complete != expected or partial_bytes == 0:
+              raise SystemExit(
+                  f'unexpected recovery: complete={complete!r}, partial={partial_bytes}')
+          report = '\n'.join([
+              f'compressed_bytes={len(payload)}',
+              f'recovered_tar_bytes={len(tar_bytes)}',
+              f'gzip_eof={decompressor.eof}',
+              f'partial_program_bytes={partial_bytes}',
+              *[f'complete={name}' for name in complete],
+              '',
+          ])
+          (output / 'report.txt').write_text(report, encoding='utf-8')
+          print(report)
           PY
-      - name: Commit recovered files to disposable branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f .github/workflows/rma115-bootstrap-recover.yml
-          git add -A
-          git commit -m "chore: recover interrupted RMA-115 candidate"
-          git push origin HEAD:agent/rma115-bootstrap
+      - name: Upload recovered candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma115-interrupted-candidate-${{ github.event.pull_request.head.sha }}
+          path: artifacts/rma115-recovery
+          if-no-files-found: error
+          retention-days: 7
