@@ -17,6 +17,7 @@ on:
       - 'scripts/run_rma090_camera_discovery_acceptance_android.sh'
       - 'docs/architecture/ANDROID_CAMERA_CAPABILITY_DISCOVERY.md'
       - 'docs/validation/RMA_090_CAMERA_CAPABILITY_DISCOVERY_VALIDATION_2026-08-03.md'
+      - 'docs/validation/RMA_111_LIGHTWEIGHT_TRACKING_VALIDATION_2026-08-05.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
   workflow_dispatch:
 
