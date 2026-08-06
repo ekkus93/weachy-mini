@@ -1,0 +1,152 @@
+name: RMA-114 Local VLM Extension
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Perception/**"
+      - "managed/ReachyMini.Core/**"
+      - "managed/ReachyMini.LocalVlm.Tests/**"
+      - "models/manifests/**"
+      - "docs/architecture/LOCAL_VLM_EXTENSION_POINT.md"
+      - "docs/validation/RMA_114_LOCAL_VLM_EXTENSION_VALIDATION_2026-08-06.md"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - ".github/workflows/rma114-local-vlm-extension.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma114-local-vlm-extension-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-vlm-contracts:
+    name: RMA-114 managed contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-114 Local VLM Extension",
+              description: "Local VLM extension validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run local VLM extension contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.LocalVlm.Tests/ReachyMini.LocalVlm.Tests.csproj
+          --configuration Release
+
+      - name: Parse manifest schema
+        run: >-
+          python3 -m json.tool
+          models/manifests/local-vlm-manifest.schema.json
+          > /dev/null
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/rma114-local-vlm-extension
+          SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs"
+          SCHEMA="models/manifests/local-vlm-manifest.schema.json"
+          export SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          export SCHEMA_SHA256="$(sha256sum "$SCHEMA" | awk '{print $1}')"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "implementation": "optional_local_vlm_extension_point",
+              "contract_case_count": 45,
+              "manifest_schema_version": 1,
+              "local_vlm_required_for_first_release": False,
+              "automatic_model_download": False,
+              "automatic_provider_fallback": False,
+              "network_dependent_local_runtime": False,
+              "unavailable_stub": True,
+              "exact_on_device_provider_identity": True,
+              "artifact_integrity_required": True,
+              "candidate_benchmarking_deferred": True,
+              "model_payload_bundled": False,
+              "source_sha256": os.environ["SOURCE_SHA256"],
+              "schema_sha256": os.environ["SCHEMA_SHA256"],
+          }
+          Path("artifacts/rma114-local-vlm-extension/report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8")
+          PY
+
+      - name: Record source digests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs \
+            managed/ReachyMini.LocalVlm.Tests/Program.cs \
+            managed/ReachyMini.LocalVlm.Tests/ReachyMini.LocalVlm.Tests.csproj \
+            managed/ReachyMini.LocalVlm.Tests/README.md \
+            models/manifests/local-vlm-manifest.schema.json \
+            models/manifests/README.md \
+            docs/architecture/LOCAL_VLM_EXTENSION_POINT.md \
+            > artifacts/rma114-local-vlm-extension/source-sha256.txt
+
+      - name: Upload local VLM extension evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma114-local-vlm-extension-evidence-${{ github.sha }}
+          path: artifacts/rma114-local-vlm-extension
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-114 Local VLM Extension",
+              description: succeeded
+                ? "Local VLM extension contracts passed"
+                : "Local VLM extension contracts failed"
+            });

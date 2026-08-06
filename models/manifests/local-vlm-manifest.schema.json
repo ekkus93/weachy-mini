@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ekkus93/weachy-mini/models/manifests/local-vlm-manifest.schema.json",
+  "title": "Reachy Mini local VLM manifest",
+  "description": "Schema version 1 describes an optional, manually supplied or bundled on-device VLM package. It does not authorize downloads, network inference, provider fallback, or first-release dependence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "identity",
+    "runtime",
+    "limits",
+    "distribution",
+    "capabilities",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_id",
+        "model_id",
+        "display_name",
+        "model_version",
+        "source_uri",
+        "source_revision",
+        "license_id"
+      ],
+      "properties": {
+        "manifest_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "model_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "model_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_uri": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "source_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "license_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime_id",
+        "runtime_version",
+        "architecture",
+        "quantization",
+        "parameter_count",
+        "requires_network_access"
+      ],
+      "properties": {
+        "runtime_id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "runtime_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "architecture": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "quantization": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "parameter_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requires_network_access": {
+          "const": false
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "context_window_tokens",
+        "maximum_output_tokens",
+        "maximum_prompt_characters",
+        "maximum_image_width",
+        "maximum_image_height",
+        "minimum_ram_bytes",
+        "minimum_storage_bytes"
+      ],
+      "properties": {
+        "context_window_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_prompt_characters": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_image_width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_image_height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum_ram_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "minimum_storage_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_source",
+        "required_for_first_release",
+        "automatic_download_allowed"
+      ],
+      "properties": {
+        "artifact_source": {
+          "enum": [
+            "bundled",
+            "user_provided",
+            "developer_provided"
+          ]
+        },
+        "required_for_first_release": {
+          "const": false
+        },
+        "automatic_download_allowed": {
+          "const": false
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "supports_visual_questions",
+        "supports_scene_description",
+        "supports_cancellation",
+        "maximum_concurrent_operations"
+      ],
+      "properties": {
+        "supports_visual_questions": {
+          "type": "boolean"
+        },
+        "supports_scene_description": {
+          "type": "boolean"
+        },
+        "supports_cancellation": {
+          "const": true
+        },
+        "maximum_concurrent_operations": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "supports_visual_questions": {
+              "const": true
+            }
+          }
+        },
+        {
+          "properties": {
+            "supports_scene_description": {
+              "const": true
+            }
+          }
+        }
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "relative_path",
+          "sha256",
+          "size_bytes"
+        ],
+        "properties": {
+          "relative_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\\\)(?!.*:)[^/]+(?:/[^/]+)*$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    }
+  }
+}
