@@ -5,14 +5,14 @@ from pathlib import Path
 ROOT = Path.cwd()
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 HOSTED_WORKFLOW = ROOT / ".github/workflows/rma090-camera-discovery.yml"
+PENDING_WORKFLOW = ROOT / ".github/rma090-camera-discovery.yml.pending"
 
 
-def replace_once(path: Path, old: str, new: str) -> None:
-    source = path.read_text(encoding="utf-8")
+def replace_once(source: str, old: str, new: str, label: str) -> str:
     count = source.count(old)
     if count != 1:
-        raise SystemExit(f"Expected one target in {path}; found {count}.")
-    path.write_text(source.replace(old, new), encoding="utf-8")
+        raise SystemExit(f"Expected one target in {label}; found {count}.")
+    return source.replace(old, new)
 
 
 old_section = '''## RMA-111 — Implement on-device lightweight tracking
@@ -61,7 +61,11 @@ new_section = '''## RMA-111 — Implement on-device lightweight tracking
   `docs/validation/RMA_111_LIGHTWEIGHT_TRACKING_VALIDATION_2026-08-05.md`.
 '''
 
-replace_once(TODO, old_section, new_section)
+todo_source = TODO.read_text(encoding="utf-8")
+TODO.write_text(
+    replace_once(todo_source, old_section, new_section, str(TODO)),
+    encoding="utf-8",
+)
 
 old_paths = '''      - 'docs/validation/RMA_090_CAMERA_CAPABILITY_DISCOVERY_VALIDATION_2026-08-03.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
@@ -70,5 +74,9 @@ new_paths = '''      - 'docs/validation/RMA_090_CAMERA_CAPABILITY_DISCOVERY_VALI
       - 'docs/validation/RMA_111_LIGHTWEIGHT_TRACKING_VALIDATION_2026-08-05.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
 '''
-replace_once(HOSTED_WORKFLOW, old_paths, new_paths)
-print("RMA-111 completion metadata applied.")
+workflow_source = HOSTED_WORKFLOW.read_text(encoding="utf-8")
+PENDING_WORKFLOW.write_text(
+    replace_once(workflow_source, old_paths, new_paths, str(HOSTED_WORKFLOW)),
+    encoding="utf-8",
+)
+print("RMA-111 completion metadata and pending hosted workflow applied.")
