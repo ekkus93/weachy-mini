@@ -8,6 +8,13 @@ on:
       - ".github/rma115-bootstrap/finalize.py"
       - ".github/rma115-bootstrap/test-tail.gz.b64"
       - ".github/workflows/rma115-bootstrap-finalize.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/rma115-bootstrap/finalize.py"
+      - ".github/rma115-bootstrap/test-tail.gz.b64"
+      - ".github/workflows/rma115-bootstrap-finalize.yml"
   workflow_dispatch:
 
 permissions:
@@ -15,13 +22,14 @@ permissions:
 
 jobs:
   finalize-and-test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Check out exact branch commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up .NET 8
