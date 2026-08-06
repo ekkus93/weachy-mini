@@ -18,6 +18,13 @@ def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def replace_exact(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"expected one {label} replacement target, found {count}")
+    return text.replace(old, new, 1)
+
+
 def prepare() -> None:
     program = Path("managed/ReachyMini.RemoteVlm.Tests/Program.cs")
     prefix = program.read_bytes()
@@ -35,6 +42,62 @@ def prepare() -> None:
     if len(complete) != 70630 or digest(complete) != PROGRAM_SHA:
         raise SystemExit("completed RMA-115 test program digest mismatch")
     program.write_bytes(complete)
+
+    source_path = Path(
+        "Assets/ReachyMini/Runtime/Core/Perception/"
+        "ReachyOpenAiVisionLanguageAdapters.cs"
+    )
+    source = source_path.read_text(encoding="utf-8")
+    source = replace_exact(
+        source,
+        "        public bool RequireValidityMask => true;",
+        "        public bool RequireValidityMask { get; } = true;",
+        "RequireValidityMask auto-property",
+    )
+    source = replace_exact(
+        source,
+        "        public bool ApplyValidityBeforeResize => true;",
+        "        public bool ApplyValidityBeforeResize { get; } = true;",
+        "ApplyValidityBeforeResize auto-property",
+    )
+    source = replace_exact(
+        source,
+        "        public bool StoreResponse => false;",
+        "        public bool StoreResponse { get; }",
+        "StoreResponse auto-property",
+    )
+    source = replace_exact(
+        source,
+        "        public bool Stream => false;",
+        "        public bool Stream { get; }",
+        "Stream auto-property",
+    )
+    source = replace_exact(
+        source,
+        "                if (value.IndexOf(\n"
+        "                        ForbiddenDetailFragments[index],\n"
+        "                        StringComparison.OrdinalIgnoreCase) >= 0)",
+        "                if (value.Contains(\n"
+        "                        ForbiddenDetailFragments[index],\n"
+        "                        StringComparison.OrdinalIgnoreCase))",
+        "case-insensitive forbidden-detail Contains",
+    )
+    source = replace_exact(
+        source,
+        "        public ValueTask DisposeAsync()\n"
+        "        {\n"
+        "            _ = Interlocked.Exchange(ref disposed, 1);\n"
+        "            return default;\n"
+        "        }",
+        "        public ValueTask DisposeAsync()\n"
+        "        {\n"
+        "            _ = Interlocked.Exchange(ref disposed, 1);\n"
+        "            GC.SuppressFinalize(this);\n"
+        "            return default;\n"
+        "        }",
+        "DisposeAsync finalizer suppression",
+    )
+    source_path.write_text(source, encoding="utf-8")
 
     project = """<Project Sdk=\"Microsoft.NET.Sdk\">
   <PropertyGroup>
