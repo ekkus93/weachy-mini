@@ -25,3 +25,7 @@ Local artifact roots are fail-closed: only absolute local filesystem paths,
 hostless file URIs, and authority-bearing Android content URIs are accepted.
 Relative paths, UNC/network shares, remote-host file URIs, and network schemes
 are rejected before an adapter can create a provider.
+
+The user-authored documentation commit following the clean RMA-114 closeout is
+the final exact-SHA validation boundary for the dedicated, hosted, Unity, APK,
+and physical Android gates.
