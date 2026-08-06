@@ -69,17 +69,44 @@ def verify_and_extract() -> None:
     )
 
 
-def correct_fixture_dimension() -> None:
+def correct_payload_preconditions() -> None:
     path = ROOT / "scripts/rma111_apply.py"
     source = path.read_text(encoding="utf-8")
-    old = "if (width, height) != (250, 313):"
-    new = "if (width, height) != (250, 312):"
-    count = source.count(old)
-    if count != 1:
+
+    old_dimension = "if (width, height) != (250, 313):"
+    new_dimension = "if (width, height) != (250, 312):"
+    dimension_count = source.count(old_dimension)
+    if dimension_count != 1:
         raise SystemExit(
-            f"Unexpected RMA-111 fixture-dimension precondition count: {count}"
+            "Unexpected RMA-111 fixture-dimension precondition count: "
+            f"{dimension_count}"
         )
-    path.write_text(source.replace(old, new), encoding="utf-8")
+    source = source.replace(old_dimension, new_dimension)
+
+    old_dependencies = '''        """    implementation 'androidx.camera:camera-lifecycle:1.6.1'
+    implementation 'androidx.annotation:annotation:1.9.1'
+""",
+        """    implementation 'androidx.camera:camera-lifecycle:1.6.1'
+    implementation 'com.google.mlkit:face-detection:16.1.7'
+    implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
+    implementation 'androidx.annotation:annotation:1.9.1'
+""",
+'''
+    new_dependencies = '''        """    implementation "androidx.camera:camera-lifecycle:${cameraxVersion}"
+""",
+        """    implementation "androidx.camera:camera-lifecycle:${cameraxVersion}"
+    implementation 'com.google.mlkit:face-detection:16.1.7'
+    implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta6'
+""",
+'''
+    dependency_count = source.count(old_dependencies)
+    if dependency_count != 1:
+        raise SystemExit(
+            "Unexpected RMA-111 dependency-patch precondition count: "
+            f"{dependency_count}"
+        )
+    source = source.replace(old_dependencies, new_dependencies)
+    path.write_text(source, encoding="utf-8")
 
 
 def apply_repository_edits() -> None:
@@ -284,7 +311,7 @@ def commit() -> None:
 
 def main() -> None:
     verify_and_extract()
-    correct_fixture_dimension()
+    correct_payload_preconditions()
     apply_repository_edits()
     run_managed_contracts()
     install_android_sdk()
