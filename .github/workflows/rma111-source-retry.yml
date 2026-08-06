@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 5 keeps all analyzers enabled and fixes test ownership/usage.
+# Attempt 6 supplies the pinned Unity Gradle properties to the standalone harness.
