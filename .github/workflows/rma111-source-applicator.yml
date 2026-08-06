@@ -1,0 +1,284 @@
+name: RMA-111 Source Applicator
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma111-source-applicator.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma111-source-applicator
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+
+      - name: Decode and verify immutable RMA-111 payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import tarfile
+          import zlib
+          from pathlib import Path
+
+          root = Path('.').resolve()
+          chunks = sorted((root / 'scripts').glob('.rma111_payload_*'))
+          expected_names = [
+              '.rma111_payload_00',
+              '.rma111_payload_01',
+              '.rma111_payload_10',
+              '.rma111_payload_11',
+          ]
+          if [path.name for path in chunks] != expected_names:
+              raise SystemExit(
+                  'Unexpected RMA-111 payload chunks: ' +
+                  ', '.join(path.name for path in chunks)
+              )
+          payload = ''.join(path.read_text(encoding='utf-8') for path in chunks)
+          expected_payload_sha = (
+              '5e6f318c823e5116313b81d3611a9c1d3d316bde0d0ae5c2585c52ddfe3ba055'
+          )
+          actual_payload_sha = hashlib.sha256(payload.encode('utf-8')).hexdigest()
+          if actual_payload_sha != expected_payload_sha:
+              raise SystemExit(
+                  f'RMA-111 payload hash mismatch: {actual_payload_sha}'
+              )
+          archive_bytes = zlib.decompress(base64.b85decode(payload.encode('ascii')))
+          expected_archive_sha = (
+              '666ae5da4e7ef6aa17b873ee5b50506f6d1f9441569a1abe979ccc88a9932d51'
+          )
+          actual_archive_sha = hashlib.sha256(archive_bytes).hexdigest()
+          if actual_archive_sha != expected_archive_sha:
+              raise SystemExit(
+                  f'RMA-111 archive hash mismatch: {actual_archive_sha}'
+              )
+          with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode='r:') as archive:
+              members = archive.getmembers()
+              if len(members) != 16:
+                  raise SystemExit(
+                      f'Unexpected RMA-111 archive entry count: {len(members)}'
+                  )
+              for member in members:
+                  target = (root / member.name).resolve()
+                  try:
+                      target.relative_to(root)
+                  except ValueError as exc:
+                      raise SystemExit(
+                          f'Unsafe RMA-111 archive path: {member.name}'
+                      ) from exc
+                  if not member.isfile():
+                      raise SystemExit(
+                          f'Non-file RMA-111 archive entry: {member.name}'
+                      )
+              archive.extractall(root)
+          for chunk in chunks:
+              chunk.unlink()
+          print(
+              'RMA-111 payload verified: '
+              f'payload={actual_payload_sha} archive={actual_archive_sha}'
+          )
+          PY
+
+      - name: Apply deterministic RMA-111 repository edits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/rma111_apply.py
+          test ! -e scripts/rma111_apply.py
+          test -x scripts/run_rma111_lightweight_tracking_acceptance_android.sh
+
+      - name: Run managed camera and tracking contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          timeout --signal=TERM --kill-after=15s 180s \
+            dotnet run \
+              --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+              --configuration Release \
+              --no-restore
+
+      - name: Install pinned Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_ENV}"
+          import json
+          from pathlib import Path
+          android = json.loads(
+              Path('toolchain.lock.json').read_text(encoding='utf-8')
+          )['android']
+          print(f"ANDROID_BUILD_TOOLS={android['build_tools']}")
+          print(f"ANDROID_COMPILE_SDK_PACKAGE={android['compile_sdk_package']}")
+          PY
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" \
+            --channel=3 \
+            --install \
+            "platform-tools" \
+            "platforms;android-${ANDROID_COMPILE_SDK_PACKAGE}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}"
+
+      - name: Compile and lint actual Unity Android library
+        shell: bash
+        run: |
+          set -euo pipefail
+          harness="${RUNNER_TEMP}/rma111-android-harness"
+          mkdir -p "${harness}"
+          cp -R \
+            Assets/Plugins/Android/ReachyCameraDiscovery.androidlib \
+            "${harness}/library"
+          cat > "${harness}/settings.gradle" <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = 'rma111-android-harness'
+          include ':library'
+          EOF
+          cat > "${harness}/build.gradle" <<'EOF'
+          plugins {
+              id 'com.android.library' version '9.3.1' apply false
+          }
+          EOF
+          printf 'sdk.dir=%s\n' "${ANDROID_HOME}" > "${harness}/local.properties"
+          gradle --no-daemon -p "${harness}" \
+            :library:compileDebugJavaWithJavac \
+            :library:lintDebug
+
+      - name: Verify source boundary and repository cleanliness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          required = {
+              'core tracker': (
+                  root / 'Assets/ReachyMini/Runtime/Core/Perception/'
+                  'ReachyLightweightTracking.cs'
+              ),
+              'Unity staging': (
+                  root / 'Assets/ReachyMini/Runtime/Application/'
+                  'ReachyUnityTrackingFrameResources.cs'
+              ),
+              'Android backend': (
+                  root / 'Assets/ReachyMini/Runtime/Application/'
+                  'ReachyAndroidMlKitTrackingBackend.cs'
+              ),
+              'Java bridge': (
+                  root / 'Assets/Plugins/Android/'
+                  'ReachyCameraDiscovery.androidlib/src/main/java/'
+                  'com/ekkus93/weachy/camera/ReachyMlKitTrackingBridge.java'
+              ),
+              'managed contracts': (
+                  root / 'managed/ReachyMini.Camera.Tests/'
+                  'Rma111LightweightTrackingContracts.cs'
+              ),
+              'Unity contracts': (
+                  root / 'Assets/ReachyMini/Tests/Editor/'
+                  'ReachyLightweightTrackingTests.cs'
+              ),
+              'fixture': (
+                  root / 'Assets/ReachyMini/Runtime/Application/'
+                  'ReachyRma111Fixture.generated.cs'
+              ),
+          }
+          for label, path in required.items():
+              if not path.is_file():
+                  raise SystemExit(f'Missing RMA-111 {label}: {path}')
+          combined = '\n'.join(
+              path.read_text(encoding='utf-8') for path in required.values()
+          )
+          for token in (
+              'ReachyOnDeviceLightweightTracker',
+              'ReachyStableTrackStore',
+              'AsyncGPUReadback',
+              'IsDetectionCenterValid',
+              'face-000001',
+              'invalid_center_suppressed',
+              'vlm_invocation_count',
+              'com.google.mlkit:face-detection:16.1.7',
+              'com.google.mlkit:segmentation-selfie:16.0.0-beta6',
+          ):
+              if token not in combined and token not in (
+                  root / 'Assets/Plugins/Android/'
+                  'ReachyCameraDiscovery.androidlib/build.gradle'
+              ).read_text(encoding='utf-8'):
+                  raise SystemExit(f'Missing RMA-111 token: {token}')
+          for token in (
+              'play-services-mlkit',
+              'ReadPixels(',
+              'fallbackProvider',
+              '|| true',
+          ):
+              if token in combined:
+                  raise SystemExit(f'Forbidden RMA-111 pattern: {token}')
+          PY
+          if git diff --name-only | grep -E '^\.github/workflows/'; then
+            echo 'Source applicator changed a workflow file.' >&2
+            exit 1
+          fi
+          if git ls-files | grep -E '^managed/[^/]+/(bin|obj)/'; then
+            echo 'Generated managed output is tracked.' >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Commit validated RMA-111 source implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add -A
+          if git diff --cached --name-only | grep -E '^\.github/workflows/'; then
+            echo 'Refusing to commit a workflow file from GITHUB_TOKEN.' >&2
+            exit 1
+          fi
+          git commit -m 'RMA-111: implement on-device lightweight tracking'
+          git push origin HEAD:master
