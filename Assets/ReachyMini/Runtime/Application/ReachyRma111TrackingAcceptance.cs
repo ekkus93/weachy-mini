@@ -139,6 +139,14 @@ namespace ReachyMini.AppState
                         StringComparison.Ordinal)) ??
                 throw new InvalidOperationException(
                     "Bundled ML Kit did not detect a face in the pinned public-domain fixture.");
+            TrackedObject firstPerson = first.Objects
+                .FirstOrDefault(item =>
+                    string.Equals(
+                        item.Classification,
+                        "person",
+                        StringComparison.Ordinal)) ??
+                throw new InvalidOperationException(
+                    "Bundled ML Kit did not detect a person in the pinned public-domain fixture.");
 
             TrackingResult second = await TrackFixtureAsync(
                 tracker,
@@ -157,6 +165,14 @@ namespace ReachyMini.AppState
                         StringComparison.Ordinal)) ??
                 throw new InvalidOperationException(
                     "Bundled ML Kit did not detect the fixture face on the second frame.");
+            TrackedObject secondPerson = second.Objects
+                .FirstOrDefault(item =>
+                    string.Equals(
+                        item.Classification,
+                        "person",
+                        StringComparison.Ordinal)) ??
+                throw new InvalidOperationException(
+                    "Bundled ML Kit did not detect the fixture person on the second frame.");
             if (!string.Equals(
                     firstFace.LocalId,
                     secondFace.LocalId,
@@ -164,6 +180,14 @@ namespace ReachyMini.AppState
             {
                 throw new InvalidOperationException(
                     "The managed stable face identifier changed across equivalent frames.");
+            }
+            if (!string.Equals(
+                    firstPerson.LocalId,
+                    secondPerson.LocalId,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The managed stable person identifier changed across equivalent frames.");
             }
 
             byte[] invalidCenter = CreateValidity(
@@ -202,8 +226,12 @@ namespace ReachyMini.AppState
                     item.Classification == "face"),
                 first.Objects.Count(item =>
                     item.Classification == "person"),
+                second.Objects.Count(item =>
+                    item.Classification == "person"),
                 firstFace.LocalId,
                 secondFace.LocalId,
+                firstPerson.LocalId,
+                secondPerson.LocalId,
                 invalidFaceSuppressed);
 #else
             await Task.Yield();
@@ -508,9 +536,13 @@ namespace ReachyMini.AppState
             public string fixture_sha256 = string.Empty;
             public int first_face_count;
             public int first_person_count;
+            public int second_person_count;
             public string first_face_id = string.Empty;
             public string second_face_id = string.Empty;
             public bool stable_face_id;
+            public string first_person_id = string.Empty;
+            public string second_person_id = string.Empty;
+            public bool stable_person_id;
             public bool invalid_center_suppressed;
             public bool object_tracking_enabled;
             public bool motion_tracking_enabled;
@@ -523,9 +555,12 @@ namespace ReachyMini.AppState
                 string backendVersion,
                 string fixtureSha256,
                 int faceCount,
-                int personCount,
+                int firstPersonCount,
+                int secondPersonCount,
                 string firstFaceId,
                 string secondFaceId,
+                string firstPersonId,
+                string secondPersonId,
                 bool invalidCenterSuppressed)
             {
                 return new Report
@@ -536,12 +571,19 @@ namespace ReachyMini.AppState
                     backend_version = backendVersion,
                     fixture_sha256 = fixtureSha256,
                     first_face_count = faceCount,
-                    first_person_count = personCount,
+                    first_person_count = firstPersonCount,
+                    second_person_count = secondPersonCount,
                     first_face_id = firstFaceId,
                     second_face_id = secondFaceId,
                     stable_face_id = string.Equals(
                         firstFaceId,
                         secondFaceId,
+                        StringComparison.Ordinal),
+                    first_person_id = firstPersonId,
+                    second_person_id = secondPersonId,
+                    stable_person_id = string.Equals(
+                        firstPersonId,
+                        secondPersonId,
                         StringComparison.Ordinal),
                     invalid_center_suppressed =
                         invalidCenterSuppressed,

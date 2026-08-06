@@ -97,7 +97,14 @@ public final class ReachyMlKitTrackingBridge implements AutoCloseable {
             activeRequest = state;
         }
 
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        InputImage image;
+        try {
+            image = InputImage.fromBitmap(bitmap, 0);
+        } catch (Exception error) {
+            failImmediately(state, "input_image_failed", error);
+            return;
+        }
+
         Task<List<Face>> faceTask;
         try {
             faceTask = faceDetector.process(image);
@@ -158,11 +165,18 @@ public final class ReachyMlKitTrackingBridge implements AutoCloseable {
     }
 
     private void completePerson(RequestState state, SegmentationMask mask) {
+        PersonDetection person;
+        try {
+            person = personDetection(mask);
+        } catch (Exception error) {
+            failPart(state, "person_segmentation_result_failed", error);
+            return;
+        }
         synchronized (lock) {
             if (!isCurrent(state)) {
                 return;
             }
-            state.person = personDetection(mask);
+            state.person = person;
             state.completedParts++;
             finishIfCompleteLocked(state);
         }

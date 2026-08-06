@@ -15,6 +15,7 @@ namespace ReachyMini.Camera.Tests
             TrackingPixelsRequireExactColorAndValidityLengths();
             Rma111AndroidBridgeSourceContracts.Run();
             StableIdsSurviveMotionAndProviderIdDrift();
+            PersonIdsSurviveEquivalentFrames();
             ExpiryAndOrderingAreDeterministic();
             CameraContinuityResetDoesNotReuseIds();
             await InvalidCenterDetectionsAreRejectedAsync().ConfigureAwait(false);
@@ -125,6 +126,43 @@ namespace ReachyMini.Camera.Tests
             Equal(first[0].LocalId, second[0].LocalId, "stable ID after native ID loss");
             Equal(first[0].LocalId, third[0].LocalId, "stable ID after native ID change");
             Equal("face-000001", first[0].LocalId, "deterministic face ID");
+        }
+
+        private static void PersonIdsSurviveEquivalentFrames()
+        {
+            var store = new ReachyStableTrackStore();
+            IReadOnlyList<TrackedObject> first = store.Update(
+                Identity(1UL, 1_000_000_000L),
+                new[]
+                {
+                    Detection(
+                        ReachyTrackingDetectionClass.Person,
+                        null,
+                        0.80,
+                        0.10,
+                        0.05,
+                        0.70,
+                        0.90),
+                });
+            IReadOnlyList<TrackedObject> second = store.Update(
+                Identity(2UL, 1_050_000_000L),
+                new[]
+                {
+                    Detection(
+                        ReachyTrackingDetectionClass.Person,
+                        null,
+                        0.82,
+                        0.11,
+                        0.05,
+                        0.70,
+                        0.90),
+                });
+
+            Equal("person-000001", first[0].LocalId, "deterministic person ID");
+            Equal(
+                first[0].LocalId,
+                second[0].LocalId,
+                "stable person ID across equivalent frames");
         }
 
         private static void ExpiryAndOrderingAreDeterministic()

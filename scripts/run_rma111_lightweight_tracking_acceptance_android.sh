@@ -158,6 +158,7 @@ report = json.loads(path.read_text(encoding="utf-8"))
 required_true = (
     "acceptance_enabled",
     "stable_face_id",
+    "stable_person_id",
     "invalid_center_suppressed",
 )
 if report.get("status") != "passed":
@@ -166,8 +167,16 @@ if any(report.get(field) is not True for field in required_true):
     raise SystemExit(f"RMA-111 required truth fields failed: {report}")
 if int(report.get("first_face_count", 0)) < 1:
     raise SystemExit(f"RMA-111 detected no face: {report}")
+if int(report.get("first_person_count", 0)) < 1:
+    raise SystemExit(f"RMA-111 detected no person on the first frame: {report}")
+if int(report.get("second_person_count", 0)) < 1:
+    raise SystemExit(f"RMA-111 detected no person on the second frame: {report}")
 if report.get("first_face_id") != report.get("second_face_id"):
-    raise SystemExit(f"RMA-111 stable ID mismatch: {report}")
+    raise SystemExit(f"RMA-111 stable face ID mismatch: {report}")
+if not str(report.get("first_person_id", "")):
+    raise SystemExit(f"RMA-111 first person ID is empty: {report}")
+if report.get("first_person_id") != report.get("second_person_id"):
+    raise SystemExit(f"RMA-111 stable person ID mismatch: {report}")
 if not str(report.get("backend_id", "")).startswith("google-mlkit-bundled"):
     raise SystemExit(f"RMA-111 backend identity is not bundled ML Kit: {report}")
 if report.get("network_model_download_used") is not False:
