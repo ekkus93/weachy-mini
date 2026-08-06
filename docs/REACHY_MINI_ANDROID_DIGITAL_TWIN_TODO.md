@@ -1909,10 +1909,53 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 ## RMA-114 — Implement local VLM extension point
 
-- [ ] Define a local VLM adapter interface and model manifest fields.
-- [ ] Do not require a local VLM for the first release.
-- [ ] Add a stub/unavailable implementation that reports capability honestly.
-- [ ] Benchmark candidate sub-1B-class VLMs only after core physics and LLM performance is stable.
+**Status:** Complete (2026-08-06)
+
+- [x] Define a local VLM adapter interface and model manifest fields.
+- [x] Do not require a local VLM for the first release.
+- [x] Add a stub/unavailable implementation that reports capability honestly.
+- [x] Benchmark candidate sub-1B-class VLMs only after core physics and LLM performance is stable.
+
+**Completion evidence**
+
+- `ILocalVisionLanguageAdapter` is a Unity-independent extension boundary over
+  the existing RMA-110 `IVisionLanguageProvider` contract. An adapter may
+  create only the exact on-device provider described by a validated manifest;
+  it cannot download a model, open a network fallback, or substitute another
+  provider.
+- Schema version 1 records bounded identity, runtime, execution limits,
+  provenance/distribution, capabilities, and per-artifact path, SHA-256, and
+  size fields. The C# contract and Draft 2020-12 JSON Schema reject missing,
+  duplicate, malformed, oversized, or network-dependent definitions.
+- Local artifact roots fail closed. Only absolute local filesystem paths,
+  hostless and credential-free file URIs, and authority-bearing Android
+  content URIs are accepted. Relative paths, UNC/network shares, remote file
+  URIs, credentials, ports, and network schemes are rejected before adapter
+  creation.
+- `UnavailableLocalVisionLanguageAdapter` advertises no operational capability
+  and returns typed `Unavailable`, `Cancelled`, or disposed failures. It does
+  not claim success, read image data, invoke a runtime, download a model, or
+  fall back to a cloud provider.
+- `LocalVlmReleasePolicy` keeps a local VLM optional for the first release,
+  disables automatic model download and provider fallback, and explicitly
+  defers sub-1B-class candidate benchmarking until physics and LLM performance
+  are stable. No model payload or runtime was added in RMA-114.
+- Permanent run `31100461712`, job `92612496688`, passed the warnings-as-errors
+  managed-core build, all 45 local-VLM contracts, schema parsing, evidence
+  generation, and status publication on implementation SHA
+  `1a1488229526cb5abfa03e321bf05bfb0d798ed9`.
+- RMA-114 artifact `8967238772` has digest
+  `sha256:788c17c20cce1f55f1ca05bccc86651620b4ebcb4efdead4cb059b94ddcb60bf`.
+- Hosted CI run `31100461578` passed static, managed, native/sanitizer, Android,
+  and pinned Reachy-model jobs on the same SHA.
+- Self-hosted run `31100461740`, job `92612565252`, passed `129/129` EditMode
+  and `1/1` PlayMode tests, ARM64/API-26 APK build and verification, physical
+  RMA-090, RMA-091, RMA-092, RMA-111, RMA-022 lifecycle, authoritative
+  rendering, every evidence upload, APK upload, and final status publication
+  on an LG-H872.
+- Detailed architecture, rejected-candidate history, exact source and artifact
+  digests, and physical evidence are in
+  `docs/validation/RMA_114_LOCAL_VLM_EXTENSION_VALIDATION_2026-08-06.md`.
 
 ## RMA-115 — Implement OpenAI and compatible VLM adapters
 
