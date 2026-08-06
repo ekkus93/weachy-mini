@@ -500,7 +500,7 @@ namespace ReachyMini.WorldModel.Tests
             double confidence,
             double left)
         {
-            return new TrackedTracked(
+            return new TrackedObject(
                 localId,
                 classification,
                 confidence,
@@ -580,7 +580,7 @@ namespace ReachyMini.WorldModel.Tests
 
         private static void Contains(string value, string expected, string name)
         {
-            if (value.IndexOf(expected, StringComparison.Ordinal) < 0)
+            if (!value.Contains(expected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     name + " missing '" + expected + "'.");
@@ -589,7 +589,7 @@ namespace ReachyMini.WorldModel.Tests
 
         private static void DoesNotContain(string value, string unexpected, string name)
         {
-            if (value.IndexOf(unexpected, StringComparison.Ordinal) >= 0)
+            if (value.Contains(unexpected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     name + " unexpectedly contained '" + unexpected + "'.");
