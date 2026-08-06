@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     internal static class ReachyRma111Fixture
     {

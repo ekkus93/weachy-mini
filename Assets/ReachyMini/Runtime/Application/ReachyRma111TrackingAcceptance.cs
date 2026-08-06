@@ -11,7 +11,7 @@ using ReachyMini.Perception;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public static class ReachyRma111TrackingAcceptanceBootstrap
     {

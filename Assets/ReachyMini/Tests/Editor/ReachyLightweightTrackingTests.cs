@@ -5,7 +5,7 @@ using System.Collections;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
-using ReachyMini.Application;
+using ReachyMini.AppState;
 using ReachyMini.Perception;
 using UnityEngine;
 using UnityEngine.TestTools;

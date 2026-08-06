@@ -11,7 +11,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public static class ReachyUnityVisionFrameFactory
     {

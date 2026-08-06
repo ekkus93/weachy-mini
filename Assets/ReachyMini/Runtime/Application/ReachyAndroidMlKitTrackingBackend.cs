@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using ReachyMini.Perception;
 using UnityEngine;
 
-namespace ReachyMini.Application
+namespace ReachyMini.AppState
 {
     public sealed class ReachyAndroidMlKitTrackingBackend :
         IReachyTrackingDetectionBackend
@@ -21,7 +21,9 @@ namespace ReachyMini.Application
         private AndroidJavaObject? bridge;
 #endif
         private string? activeRequestId;
+#if UNITY_ANDROID && !UNITY_EDITOR
         private bool disposed;
+#endif
 
         public ReachyAndroidMlKitTrackingBackend()
         {
@@ -173,8 +175,6 @@ namespace ReachyMini.Application
                     value.Dispose();
                 }
             }
-#else
-            disposed = true;
 #endif
             return default;
         }
