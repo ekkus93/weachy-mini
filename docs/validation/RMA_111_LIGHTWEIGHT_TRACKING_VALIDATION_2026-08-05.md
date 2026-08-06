@@ -105,6 +105,16 @@ must still hash exactly to the candidate before launch.
   uninstall and added exact installed-APK digest verification. Clean baseline
   `7a050598766ae7a1742e863b5865a377249ae29c` crossed every permanent physical
   acceptance boundary.
+- Evidence candidate `50db48909f8fee2b56c43a2470f4f5019d46368c` was rejected by hosted run
+  `31079434227`, job `92544635569`, before physical signoff. Warnings-as-errors
+  found `CA1865` in the source-contract helper, and the managed executable then
+  exposed two stale literal assertions that did not match the production
+  script's dynamic installed-APK digest filename and quoted equality gate.
+- Repair `e8f1c02c97c5210fbb3bec5387615e5e01ef5066` changed the one-character
+  prefix check to the analyzer-approved char overload and aligned both source
+  assertions with the actual fail-closed shell expressions. One-use repair run
+  `31079835614`, job `92545898672`, passed the complete managed executable and
+  its one-file scoped-diff gate before pushing the repair.
 
 ## Exact physical validation
 
