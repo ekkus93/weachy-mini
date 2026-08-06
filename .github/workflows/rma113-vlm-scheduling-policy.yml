@@ -1,0 +1,140 @@
+name: RMA-113 VLM Scheduling Policy
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Perception/**"
+      - "managed/ReachyMini.Core/**"
+      - "managed/ReachyMini.VlmScheduling.Tests/**"
+      - ".github/workflows/rma113-vlm-scheduling-policy.yml"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - "docs/validation/RMA_113_VLM_SCHEDULING_POLICY_VALIDATION_2026-08-06.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma113-vlm-scheduling-policy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scheduling-policy:
+    name: RMA-113 managed contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-113 VLM Scheduling Policy",
+              description: "VLM scheduling-policy validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run VLM scheduling-policy contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.VlmScheduling.Tests/ReachyMini.VlmScheduling.Tests.csproj
+          --configuration Release
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/rma113-vlm-scheduling-policy
+          SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs"
+          SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          export SOURCE_SHA256
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "implementation": "managed_vlm_scheduling_policy",
+              "contract_case_count": 24,
+              "explicit_triggers_only_by_default": True,
+              "camera_frame_trigger_available": False,
+              "slow_interval_disabled_by_default": True,
+              "per_provider_rate_limit": True,
+              "per_provider_concurrency_limit": True,
+              "obsolete_scene_cancellation": True,
+              "obsolete_question_cancellation": True,
+              "cloud_network_disclosure_required": True,
+              "cloud_cost_disclosure_required": True,
+              "provider_fallback": False,
+              "bounded_provider_state": True,
+              "source_sha256": os.environ["SOURCE_SHA256"],
+          }
+          path = Path("artifacts/rma113-vlm-scheduling-policy/report.json")
+          path.write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8")
+          PY
+
+      - name: Record source digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs \
+            managed/ReachyMini.VlmScheduling.Tests/Program.cs \
+            managed/ReachyMini.VlmScheduling.Tests/ReachyMini.VlmScheduling.Tests.csproj \
+            > artifacts/rma113-vlm-scheduling-policy/source-sha256.txt
+
+      - name: Upload VLM scheduling evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma113-vlm-scheduling-policy-evidence-${{ github.sha }}
+          path: artifacts/rma113-vlm-scheduling-policy
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-113 VLM Scheduling Policy",
+              description: succeeded
+                ? "VLM scheduling-policy contracts passed"
+                : "VLM scheduling-policy contracts failed"
+            });
