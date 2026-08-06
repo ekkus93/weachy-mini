@@ -1,5 +1,5 @@
 name: RMA-111 CA1865 Repair
-# Retry with dynamic installed-APK digest source-contract repair.
+# Retry with quoted installed-APK digest equality source contract.
 
 on:
   push:
