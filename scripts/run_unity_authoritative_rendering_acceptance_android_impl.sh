@@ -10,13 +10,20 @@ LAUNCH_EXTRA_NAME="weachy_physical_acceptance"
 RESULT_FILE_NAME="weachy-authoritative-acceptance.json"
 REMOTE_RESULT_PATH="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE_NAME}"
 TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_TIMEOUT_SECONDS:-120}"
+INSTALL_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS:-180}"
 LAUNCH_READY_FILE="${REPORT_DIR}/launch-issued"
 
 if [[ ! -s "${APK_PATH}" ]]; then
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2
     exit 1
 fi
+if [[ ! "${INSTALL_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || (( INSTALL_TIMEOUT_SECONDS <= 0 )); then
+    printf 'Authoritative install timeout must be a positive integer: %s\n' \
+        "${INSTALL_TIMEOUT_SECONDS}" >&2
+    exit 1
+fi
 command -v "${ADB_BIN}" >/dev/null
+command -v timeout >/dev/null
 
 select_device_serial()
 {
@@ -232,15 +239,25 @@ if grep -q '^package:' "${REPORT_DIR}/package-path-after-uninstall.txt"; then
     exit 1
 fi
 
+# Do not use `adb install --no-streaming` here. On the physical API-28
+# acceptance phone it completed the APK push but hung in Package Manager.
+# Normal ADB streaming is already exercised successfully by the preceding
+# RMA-090, RMA-091, RMA-092, RMA-111, and RMA-022 gates.
 set +e
-"${ADB[@]}" install --no-streaming "${APK_PATH}" 2>&1 \
+timeout --kill-after=15s "${INSTALL_TIMEOUT_SECONDS}s" \
+    "${ADB[@]}" install -g "${APK_PATH}" 2>&1 \
     | tee "${REPORT_DIR}/install.txt"
 install_status=${PIPESTATUS[0]}
 set -e
 printf '%s\n' "${install_status}" > "${REPORT_DIR}/install-status.txt"
 if (( install_status != 0 )); then
     capture_install_diagnostics
-    printf 'APK installation failed with status %s.\n' "${install_status}" >&2
+    if (( install_status == 124 )); then
+        printf 'APK installation timed out after %s seconds.\n' \
+            "${INSTALL_TIMEOUT_SECONDS}" >&2
+    else
+        printf 'APK installation failed with status %s.\n' "${install_status}" >&2
+    fi
     exit "${install_status}"
 fi
 

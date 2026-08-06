@@ -150,8 +150,16 @@ namespace ReachyMini.Camera.Tests
                 "post-uninstall package verification evidence");
             RequireText(
                 implementation,
-                "install --no-streaming",
-                "non-streaming API-26 installation");
+                "UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS",
+                "bounded install timeout configuration");
+            RequireText(
+                implementation,
+                "timeout --kill-after=15s \"${INSTALL_TIMEOUT_SECONDS}s\"",
+                "bounded streaming ADB installation");
+            RequireText(
+                implementation,
+                "\"${ADB[@]}\" install -g \"${APK_PATH}\"",
+                "proven streaming install path");
             RequireText(
                 implementation,
                 "2>&1 \\\n    | tee \"${REPORT_DIR}/install.txt\"",
@@ -159,7 +167,11 @@ namespace ReachyMini.Camera.Tests
             RequireText(
                 implementation,
                 "install_status=${PIPESTATUS[0]}",
-                "real adb install exit status");
+                "real bounded install exit status");
+            RequireText(
+                implementation,
+                "install_status == 124",
+                "explicit install timeout diagnosis");
             RequireText(
                 implementation,
                 "capture_install_diagnostics",
@@ -172,7 +184,11 @@ namespace ReachyMini.Camera.Tests
                 implementation,
                 "apk-sha256.txt",
                 "APK digest evidence");
-            RejectText(
+            RejectExecutableText(
+                implementation,
+                "install --no-streaming",
+                "hanging non-streaming installation");
+            RejectExecutableText(
                 implementation,
                 "install -r",
                 "state-contaminating replacement install");
@@ -303,6 +319,25 @@ namespace ReachyMini.Camera.Tests
             {
                 throw new InvalidOperationException(
                     $"Managed RMA-111 source contract failed: {contract}.");
+            }
+        }
+
+        private static void RejectExecutableText(
+            string source,
+            string rejected,
+            string contract)
+        {
+            foreach (string line in source.Split('\n'))
+            {
+                if (line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (line.Contains(rejected, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Managed RMA-111 source contract failed: {contract}.");
+                }
             }
         }
 
