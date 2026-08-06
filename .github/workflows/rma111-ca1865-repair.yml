@@ -1,0 +1,56 @@
+name: RMA-111 CA1865 Repair
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma111-ca1865-repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma111-ca1865-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact staging commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Apply and validate analyzer repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/rma111_ca1865_repair.py
+          git diff --check
+          dotnet restore managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs)
+          if [[ "${changed[*]}" != "${expected[*]}" ]]; then
+            printf 'Unexpected analyzer-repair scope.\nExpected: %s\nActual: %s\n' \
+              "${expected[*]}" "${changed[*]}" >&2
+            exit 1
+          fi
+
+      - name: Commit repair to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add managed/ReachyMini.Camera.Tests/Rma111AndroidBridgeSourceContracts.cs
+          git commit -m 'fix: satisfy RMA-111 source contract analyzer'
+          git push origin HEAD:master
