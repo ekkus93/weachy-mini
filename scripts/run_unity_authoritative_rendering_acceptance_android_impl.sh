@@ -238,17 +238,45 @@ package_absence_status=$?
 set -e
 printf '%s\n' "${package_absence_status}" \
     > "${REPORT_DIR}/package-path-after-uninstall-status.txt"
-if (( package_absence_status != 0 )); then
+if (( package_absence_status == 0 )); then
+    if grep -q '^package:' "${REPORT_DIR}/package-path-after-uninstall.txt"; then
+        capture_install_diagnostics
+        printf '%s\n' \
+            'Package remained installed after authoritative acceptance cleanup.' >&2
+        exit 1
+    fi
+    capture_install_diagnostics
+    printf '%s\n' \
+        'Package Manager reported success without an installed-package path.' >&2
+    exit 1
+fi
+if (( package_absence_status != 1 )) || \
+        [[ -s "${REPORT_DIR}/package-path-after-uninstall.txt" ]]; then
     capture_install_diagnostics
     printf 'Package absence verification failed with status %s.\n' \
         "${package_absence_status}" >&2
-    exit "${package_absence_status}"
-fi
-if grep -q '^package:' "${REPORT_DIR}/package-path-after-uninstall.txt"; then
-    capture_install_diagnostics
-    printf '%s\n' 'Package remained installed after authoritative acceptance cleanup.' >&2
     exit 1
 fi
+
+set +e
+"${ADB[@]}" get-state \
+    > "${REPORT_DIR}/package-absence-adb-state.txt" 2>&1
+package_absence_state_status=$?
+set -e
+printf '%s\n' "${package_absence_state_status}" \
+    > "${REPORT_DIR}/package-absence-adb-state-status.txt"
+package_absence_state="$(
+    tr -d '\r\n' < "${REPORT_DIR}/package-absence-adb-state.txt"
+)"
+if (( package_absence_state_status != 0 )) || \
+        [[ "${package_absence_state}" != "device" ]]; then
+    capture_install_diagnostics
+    printf 'ADB transport was not healthy after package absence verification: %s.\n' \
+        "${package_absence_state:-missing}" >&2
+    exit 1
+fi
+printf '%s\n' 'package_absent=true' \
+    > "${REPORT_DIR}/package-absence.txt"
 
 # Do not use `adb install --no-streaming` here. On the physical API-28
 # acceptance phone it completed the APK push but hung in Package Manager.

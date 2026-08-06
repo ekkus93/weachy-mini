@@ -154,6 +154,18 @@ namespace ReachyMini.Camera.Tests
                 "fail-closed package absence verification");
             RequireText(
                 implementation,
+                "package_absence_status != 1",
+                "Android Package Manager absent-package status contract");
+            RequireText(
+                implementation,
+                "package_absence_state_status=$?",
+                "ADB transport verification after package absence");
+            RequireText(
+                implementation,
+                "package-absence-adb-state-status.txt",
+                "package-absence transport status evidence");
+            RequireText(
+                implementation,
                 "UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS",
                 "bounded install timeout configuration");
             RequireText(
