@@ -146,32 +146,48 @@ namespace ReachyMini.Camera.Tests
                 "clean authoritative package uninstall");
             RequireText(
                 implementation,
-                "package-path-after-uninstall.txt",
-                "post-uninstall package verification evidence");
+                "package-path-after-uninstall-status.txt",
+                "post-uninstall package probe status evidence");
+            RequireText(
+                implementation,
+                "package_absence_status=$?",
+                "fail-closed package absence verification");
             RequireText(
                 implementation,
                 "UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS",
                 "bounded install timeout configuration");
             RequireText(
                 implementation,
-                "timeout --kill-after=15s \"${INSTALL_TIMEOUT_SECONDS}s\"",
+                "timeout --signal=TERM --kill-after=15s",
                 "bounded streaming ADB installation");
+            RequireText(
+                implementation,
+                "\"${INSTALL_TIMEOUT_SECONDS}s\"",
+                "configured physical install deadline");
             RequireText(
                 implementation,
                 "\"${ADB[@]}\" install -g \"${APK_PATH}\"",
                 "proven streaming install path");
             RequireText(
                 implementation,
-                "2>&1 \\\n    | tee \"${REPORT_DIR}/install.txt\"",
-                "complete install output capture");
+                "> \"${REPORT_DIR}/install.txt\" 2>&1",
+                "direct complete install output capture");
             RequireText(
                 implementation,
-                "install_status=${PIPESTATUS[0]}",
+                "install_status=$?",
                 "real bounded install exit status");
             RequireText(
                 implementation,
-                "install_status == 124",
-                "explicit install timeout diagnosis");
+                "cat \"${REPORT_DIR}/install.txt\"",
+                "post-install console evidence publication");
+            RequireText(
+                implementation,
+                "install_status == 124 || install_status == 137",
+                "explicit TERM/KILL install timeout diagnosis");
+            RequireText(
+                implementation,
+                "package_presence_status=$?",
+                "fail-closed installed-package verification");
             RequireText(
                 implementation,
                 "capture_install_diagnostics",
@@ -192,6 +208,10 @@ namespace ReachyMini.Camera.Tests
                 implementation,
                 "install -r",
                 "state-contaminating replacement install");
+            RejectExecutableText(
+                implementation,
+                "| tee \"${REPORT_DIR}/install.txt\"",
+                "live install pipeline that can outlive timeout");
 
             int launch = RequireAfter(
                 implementation,
@@ -221,9 +241,22 @@ namespace ReachyMini.Camera.Tests
                 "early implementation failure guard");
             _ = RequireAfter(
                 wrapper,
+                "if [[ -s \"${LAUNCH_READY_FILE}\" ]]; then",
+                processGuard,
+                "launch readiness race recheck");
+            _ = RequireAfter(
+                wrapper,
                 "wait-focus",
                 processGuard,
                 "foreground wait after launch readiness");
+            RequireText(
+                wrapper,
+                "LAUNCH_READY_TIMEOUT_SECONDS <= INSTALL_TIMEOUT_SECONDS + 20",
+                "outer watchdog cannot preempt install evidence");
+            RequireText(
+                wrapper,
+                "kill \"${implementation_pid}\"",
+                "background implementation cleanup");
         }
 
         private static void VerifyPinnedDeviceWorkflow(

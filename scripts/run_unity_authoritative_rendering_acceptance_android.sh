@@ -6,7 +6,8 @@ ADB_BIN="${ADB_BIN:-adb}"
 PACKAGE_NAME="com.ekkus.weachymini"
 REPORT_DIR="${UNITY_AUTHORITATIVE_REPORT_DIR:-${ROOT_DIR}/build/unity-authoritative-device-report}"
 LAUNCH_READY_FILE="${REPORT_DIR}/launch-issued"
-LAUNCH_READY_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_LAUNCH_READY_TIMEOUT_SECONDS:-180}"
+INSTALL_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_INSTALL_TIMEOUT_SECONDS:-180}"
+LAUNCH_READY_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_LAUNCH_READY_TIMEOUT_SECONDS:-240}"
 FOCUS_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_FOCUS_TIMEOUT_SECONDS:-60}"
 FOREGROUND_HELPER="${ROOT_DIR}/scripts/android_device_acceptance_foreground.sh"
 IMPLEMENTATION="${ROOT_DIR}/scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh"
@@ -17,6 +18,17 @@ if [[ ! -s "${FOREGROUND_HELPER}" ]]; then
 fi
 if [[ ! -s "${IMPLEMENTATION}" ]]; then
     printf 'Authoritative acceptance implementation is missing: %s\n' "${IMPLEMENTATION}" >&2
+    exit 1
+fi
+if [[ ! "${INSTALL_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || (( INSTALL_TIMEOUT_SECONDS <= 0 )); then
+    printf 'Authoritative install timeout must be a positive integer: %s\n' \
+        "${INSTALL_TIMEOUT_SECONDS}" >&2
+    exit 1
+fi
+if [[ ! "${LAUNCH_READY_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] ||
+        (( LAUNCH_READY_TIMEOUT_SECONDS <= INSTALL_TIMEOUT_SECONDS + 20 )); then
+    printf 'Launch-readiness timeout must exceed install timeout by more than 20 seconds: install=%s launch=%s\n' \
+        "${INSTALL_TIMEOUT_SECONDS}" "${LAUNCH_READY_TIMEOUT_SECONDS}" >&2
     exit 1
 fi
 command -v "${ADB_BIN}" >/dev/null
@@ -62,6 +74,12 @@ on_exit()
 {
     local exit_code=$?
     trap - EXIT
+    set +e
+    if [[ -n "${implementation_pid}" ]] && \
+            kill -0 "${implementation_pid}" >/dev/null 2>&1; then
+        kill "${implementation_pid}" >/dev/null 2>&1
+        wait "${implementation_pid}" >/dev/null 2>&1
+    fi
     restore_device
     exit "${exit_code}"
 }
@@ -81,6 +99,9 @@ implementation_pid=$!
 launch_ready_deadline=$(( $(date +%s) + LAUNCH_READY_TIMEOUT_SECONDS ))
 while [[ ! -s "${LAUNCH_READY_FILE}" ]]; do
     if ! kill -0 "${implementation_pid}" >/dev/null 2>&1; then
+        if [[ -s "${LAUNCH_READY_FILE}" ]]; then
+            break
+        fi
         set +e
         wait "${implementation_pid}"
         implementation_status=$?

@@ -231,8 +231,19 @@ uninstall_status=$?
 set -e
 printf '%s\n' "${uninstall_status}" > "${REPORT_DIR}/uninstall-status.txt"
 
+set +e
 "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
-    > "${REPORT_DIR}/package-path-after-uninstall.txt" 2>&1 || true
+    > "${REPORT_DIR}/package-path-after-uninstall.txt" 2>&1
+package_absence_status=$?
+set -e
+printf '%s\n' "${package_absence_status}" \
+    > "${REPORT_DIR}/package-path-after-uninstall-status.txt"
+if (( package_absence_status != 0 )); then
+    capture_install_diagnostics
+    printf 'Package absence verification failed with status %s.\n' \
+        "${package_absence_status}" >&2
+    exit "${package_absence_status}"
+fi
 if grep -q '^package:' "${REPORT_DIR}/package-path-after-uninstall.txt"; then
     capture_install_diagnostics
     printf '%s\n' 'Package remained installed after authoritative acceptance cleanup.' >&2
@@ -241,18 +252,20 @@ fi
 
 # Do not use `adb install --no-streaming` here. On the physical API-28
 # acceptance phone it completed the APK push but hung in Package Manager.
-# Normal ADB streaming is already exercised successfully by the preceding
-# RMA-090, RMA-091, RMA-092, RMA-111, and RMA-022 gates.
+# Do not pipe the live install through tee either: an orphaned writer can keep
+# the pipeline open after timeout has terminated adb. Capture directly, then
+# publish the bounded result after the command has returned.
 set +e
-timeout --kill-after=15s "${INSTALL_TIMEOUT_SECONDS}s" \
-    "${ADB[@]}" install -g "${APK_PATH}" 2>&1 \
-    | tee "${REPORT_DIR}/install.txt"
-install_status=${PIPESTATUS[0]}
+timeout --signal=TERM --kill-after=15s "${INSTALL_TIMEOUT_SECONDS}s" \
+    "${ADB[@]}" install -g "${APK_PATH}" \
+    > "${REPORT_DIR}/install.txt" 2>&1
+install_status=$?
 set -e
+cat "${REPORT_DIR}/install.txt"
 printf '%s\n' "${install_status}" > "${REPORT_DIR}/install-status.txt"
 if (( install_status != 0 )); then
     capture_install_diagnostics
-    if (( install_status == 124 )); then
+    if (( install_status == 124 || install_status == 137 )); then
         printf 'APK installation timed out after %s seconds.\n' \
             "${INSTALL_TIMEOUT_SECONDS}" >&2
     else
@@ -261,8 +274,19 @@ if (( install_status != 0 )); then
     exit "${install_status}"
 fi
 
+set +e
 "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
     > "${REPORT_DIR}/package-path.txt" 2>&1
+package_presence_status=$?
+set -e
+printf '%s\n' "${package_presence_status}" \
+    > "${REPORT_DIR}/package-path-status.txt"
+if (( package_presence_status != 0 )); then
+    capture_install_diagnostics
+    printf 'Installed-package verification failed with status %s.\n' \
+        "${package_presence_status}" >&2
+    exit "${package_presence_status}"
+fi
 if ! grep -q '^package:' "${REPORT_DIR}/package-path.txt"; then
     capture_install_diagnostics
     printf '%s\n' 'Package Manager did not report the package after installation.' >&2
