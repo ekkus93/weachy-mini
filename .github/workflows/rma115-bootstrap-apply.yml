@@ -7,18 +7,27 @@ on:
     paths:
       - ".github/rma115-bootstrap/**"
       - ".github/workflows/rma115-bootstrap-apply.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/rma115-bootstrap/**"
+      - ".github/workflows/rma115-bootstrap-apply.yml"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: rma115-bootstrap-apply
+  group: rma115-bootstrap-apply-${{ github.event.pull_request.head.ref || github.ref }}
   cancel-in-progress: false
 
 jobs:
   apply-validated-archive:
     name: Decode, validate, test, and commit RMA-115
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -26,7 +35,7 @@ jobs:
       - name: Check out exact bootstrap commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up .NET 8
