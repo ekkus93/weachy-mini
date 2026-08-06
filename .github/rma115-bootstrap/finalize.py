@@ -25,6 +25,21 @@ def replace_exact(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def replace_exact_count(
+    text: str,
+    old: str,
+    new: str,
+    expected_count: int,
+    label: str,
+) -> str:
+    count = text.count(old)
+    if count != expected_count:
+        raise SystemExit(
+            f"expected {expected_count} {label} replacement targets, found {count}"
+        )
+    return text.replace(old, new)
+
+
 def prepare() -> None:
     program = Path("managed/ReachyMini.RemoteVlm.Tests/Program.cs")
     prefix = program.read_bytes()
@@ -41,7 +56,190 @@ def prepare() -> None:
     complete = prefix[:-OVERLAP_BYTES] + tail
     if len(complete) != 70630 or digest(complete) != PROGRAM_SHA:
         raise SystemExit("completed RMA-115 test program digest mismatch")
-    program.write_bytes(complete)
+
+    program_text = complete.decode("utf-8")
+    program_text = replace_exact(
+        program_text,
+        """        private static ReachyVisionFrame Frame(
+            VisionCoverageState state = VisionCoverageState.Normal,
+            long validPixelCount = 100L,
+            long totalPixelCount = 100L,
+            bool shouldStopVisionDrivenTurning = false,
+            ulong sourceSequence = 1UL)
+        {
+            var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: true);
+            var coverage = new ReachyVisionCoverage(
+                state,
+                validPixelCount,
+                totalPixelCount,
+                hasValidityMask: true,
+                shouldStopVisionDrivenTurning,
+                diagnostic: "synthetic transformed coverage");
+            return new ReachyVisionFrame(
+                VisionFrameOrigin.TransformedReachyEye,
+                Identity(sourceSequence),
+                coverage,
+                resources);
+        }
+""",
+        """        private static ReachyVisionFrame Frame(
+            VisionCoverageState state = VisionCoverageState.Normal,
+            long validPixelCount = 100L,
+            long totalPixelCount = 100L,
+            bool shouldStopVisionDrivenTurning = false,
+            ulong sourceSequence = 1UL)
+        {
+            using var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: true);
+            var coverage = new ReachyVisionCoverage(
+                state,
+                validPixelCount,
+                totalPixelCount,
+                hasValidityMask: true,
+                shouldStopVisionDrivenTurning,
+                diagnostic: "synthetic transformed coverage");
+            var frame = new ReachyVisionFrame(
+                VisionFrameOrigin.TransformedReachyEye,
+                Identity(sourceSequence),
+                coverage,
+                resources);
+            resources.TransferOwnershipToFrame();
+            return frame;
+        }
+""",
+        "transformed-frame resource ownership",
+    )
+    program_text = replace_exact(
+        program_text,
+        """        private static ReachyVisionFrame RawFrame()
+        {
+            var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: false);
+            var coverage = new ReachyVisionCoverage(
+                VisionCoverageState.Unavailable,
+                validPixelCount: 0L,
+                totalPixelCount: 0L,
+                hasValidityMask: false,
+                shouldStopVisionDrivenTurning: true,
+                diagnostic: "raw debug coverage unavailable");
+            return new ReachyVisionFrame(
+                VisionFrameOrigin.RawPhoneDebug,
+                Identity(),
+                coverage,
+                resources);
+        }
+""",
+        """        private static ReachyVisionFrame RawFrame()
+        {
+            using var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: false);
+            var coverage = new ReachyVisionCoverage(
+                VisionCoverageState.Unavailable,
+                validPixelCount: 0L,
+                totalPixelCount: 0L,
+                hasValidityMask: false,
+                shouldStopVisionDrivenTurning: true,
+                diagnostic: "raw debug coverage unavailable");
+            var frame = new ReachyVisionFrame(
+                VisionFrameOrigin.RawPhoneDebug,
+                Identity(),
+                coverage,
+                resources);
+            resources.TransferOwnershipToFrame();
+            return frame;
+        }
+""",
+        "raw-frame resource ownership",
+    )
+    program_text = replace_exact(
+        program_text,
+        """            if (provider == null)
+            {
+                throw new ArgumentNullException(nameof(provider));
+            }
+""",
+        "            ArgumentNullException.ThrowIfNull(provider);\n",
+        "provider null guard",
+    )
+    program_text = replace_exact_count(
+        program_text,
+        """                if (request == null)
+                {
+                    throw new ArgumentNullException(nameof(request));
+                }
+""",
+        "                ArgumentNullException.ThrowIfNull(request);\n",
+        2,
+        "request null guards",
+    )
+    program_text = replace_exact(
+        program_text,
+        "        private sealed class FakeResources : IReachyVisionFrameResources\n",
+        "        private sealed class FakeResources : IReachyVisionFrameResources, IDisposable\n",
+        "FakeResources IDisposable contract",
+    )
+    program_text = replace_exact(
+        program_text,
+        """            private readonly object color = new object();
+            private readonly object? validityMask;
+            private int disposed;
+""",
+        """            private readonly object color = new object();
+            private readonly object? validityMask;
+            private int disposed;
+            private int ownershipTransferred;
+""",
+        "FakeResources ownership state",
+    )
+    program_text = replace_exact(
+        program_text,
+        """            public ValueTask DisposeAsync()
+            {
+                _ = Interlocked.Exchange(ref disposed, 1);
+                return default;
+            }
+""",
+        """            public void TransferOwnershipToFrame()
+            {
+                if (IsDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(FakeResources));
+                }
+                if (Interlocked.Exchange(ref ownershipTransferred, 1) != 0)
+                {
+                    throw new InvalidOperationException(
+                        "Fake resource ownership was already transferred.");
+                }
+            }
+
+            public void Dispose()
+            {
+                if (Volatile.Read(ref ownershipTransferred) == 0)
+                {
+                    _ = Interlocked.Exchange(ref disposed, 1);
+                }
+                GC.SuppressFinalize(this);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _ = Interlocked.Exchange(ref disposed, 1);
+                GC.SuppressFinalize(this);
+                return default;
+            }
+""",
+        "FakeResources ownership-aware disposal",
+    )
+    program.write_text(program_text, encoding="utf-8")
 
     source_path = Path(
         "Assets/ReachyMini/Runtime/Core/Perception/"
