@@ -135,10 +135,14 @@ def run_managed_contracts() -> None:
     )
 
 
-def install_android_sdk() -> None:
-    android = json.loads(
+def android_toolchain() -> dict[str, object]:
+    return json.loads(
         (ROOT / "toolchain.lock.json").read_text(encoding="utf-8")
     )["android"]
+
+
+def install_android_sdk() -> None:
+    android = android_toolchain()
     android_home = Path(os.environ["ANDROID_HOME"])
     sdkmanager = android_home / "cmdline-tools/latest/bin/sdkmanager"
     if not sdkmanager.is_file():
@@ -158,6 +162,7 @@ def install_android_sdk() -> None:
 
 
 def compile_android_library() -> None:
+    android = android_toolchain()
     runner_temp = Path(os.environ["RUNNER_TEMP"])
     harness = runner_temp / "rma111-android-harness"
     if harness.exists():
@@ -195,6 +200,22 @@ include ':library'
     )
     (harness / "local.properties").write_text(
         f"sdk.dir={os.environ['ANDROID_HOME']}\n",
+        encoding="utf-8",
+    )
+    (harness / "gradle.properties").write_text(
+        "\n".join(
+            (
+                f"unity.compileSdkVersion={android['compile_sdk']}",
+                f"unity.buildToolsVersion={android['build_tools']}",
+                "unity.javaCompatabilityVersion=VERSION_17",
+                f"unity.minSdkVersion={android['unity_device_feasibility_min_sdk']}",
+                f"unity.targetSdkVersion={android['target_sdk']}",
+                "unity.versionCode=1",
+                "unity.versionName=1.0.0",
+                "android.useAndroidX=true",
+                "",
+            )
+        ),
         encoding="utf-8",
     )
     subprocess.run(
