@@ -275,6 +275,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Install and run RMA-111 lightweight tracking acceptance
+        id: lightweight_tracking_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA111_TRACKING_REPORT_DIR: ${{ runner.temp }}/rma111-lightweight-tracking-report
+        run: bash scripts/run_rma111_lightweight_tracking_acceptance_android.sh
+
+      - name: Upload RMA-111 lightweight tracking evidence
+        if: ${{ always() && steps.lightweight_tracking_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma111-lightweight-tracking-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma111-lightweight-tracking-report
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Install and run RMA-022 lifecycle acceptance
         id: lifecycle_acceptance
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
