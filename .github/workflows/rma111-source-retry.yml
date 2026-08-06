@@ -45,4 +45,4 @@ jobs:
           set -euo pipefail
           python3 scripts/rma111_retry_wrapper.py
 
-# Attempt 4 aligns the RMA-110 ProviderDescriptor constructor contract.
+# Attempt 5 keeps all analyzers enabled and fixes test ownership/usage.
