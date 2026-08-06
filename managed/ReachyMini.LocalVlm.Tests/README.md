@@ -26,6 +26,7 @@ hostless file URIs, and authority-bearing Android content URIs are accepted.
 Relative paths, UNC/network shares, remote-host file URIs, and network schemes
 are rejected before an adapter can create a provider.
 
-The user-authored documentation commit following the clean RMA-114 closeout is
-the final exact-SHA validation boundary for the dedicated, hosted, Unity, APK,
+The final evidence addendum is committed at
+`7cb3fe2fbaa9b108ea27c3231f93255cab6f64e0`. This user-authored successor is the
+exact post-addendum validation boundary for the dedicated, hosted, Unity, APK,
 and physical Android gates.
