@@ -16,9 +16,11 @@ on:
       - 'scripts/run_rma133_device_benchmark.sh'
       - 'scripts/score_rma133_benchmark.py'
       - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+      - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   pull_request:
     paths:
       - '.github/workflows/rma133-local-llm-benchmark.yml'
@@ -32,9 +34,11 @@ on:
       - 'scripts/run_rma133_device_benchmark.sh'
       - 'scripts/score_rma133_benchmark.py'
       - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+      - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   workflow_dispatch:
 
 permissions:
@@ -62,7 +66,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m unittest scripts.tests.test_rma133_benchmark_contract -v
+          python3 -m unittest -v \
+            scripts.tests.test_rma133_benchmark_contract \
+            scripts.tests.test_rma133_device_runner_loop
           python3 -m compileall -q scripts
           bash -n scripts/build_rma133_android_benchmark.sh
           bash -n scripts/run_rma133_device_benchmark.sh
