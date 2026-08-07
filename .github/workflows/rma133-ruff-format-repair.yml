@@ -1,0 +1,54 @@
+name: RMA-133 Ruff format repair
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma133-ruff-format-repair.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply exact Ruff diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/temporary_rma133_ruff_format.py
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff check scripts
+          ruff format --check --diff scripts
+          python3 -m unittest -v \
+            scripts.tests.test_rma133_benchmark_contract \
+            scripts.tests.test_rma133_candidate_set_v2 \
+            scripts.tests.test_rma133_device_runner_loop
+          git diff --check
+
+      - name: Commit formatter-only repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py
+          git diff --cached --exit-code --quiet && {
+            printf '%s\n' 'RMA-133 formatter repair produced no changes.' >&2
+            exit 1
+          }
+          git commit -m 'RMA-133: format UTF-8 evidence contract'
+          git push origin HEAD:master
