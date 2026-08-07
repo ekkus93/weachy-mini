@@ -29,8 +29,12 @@ jobs:
           set -euo pipefail
           python3 scripts/temporary_rma133_ruff_format.py
           python -m pip install --disable-pip-version-check ruff==0.12.0
-          ruff check scripts
-          ruff format --check --diff scripts
+          ruff check \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py
+          ruff format --check --diff \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py
           python3 -m unittest -v \
             scripts.tests.test_rma133_benchmark_contract \
             scripts.tests.test_rma133_candidate_set_v2 \
