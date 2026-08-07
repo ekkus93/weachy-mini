@@ -138,8 +138,10 @@ def _validate_config(config: dict[str, Any]) -> None:
         if license_id not in allowed:
             raise ValueError(f"candidate {candidate_id} is outside the frozen license policy")
         revision = candidate.get("source_revision")
-        if not isinstance(revision, str) or len(revision) != 40 or any(
-            char not in "0123456789abcdef" for char in revision
+        if (
+            not isinstance(revision, str)
+            or len(revision) != 40
+            or any(char not in "0123456789abcdef" for char in revision)
         ):
             raise ValueError(f"candidate {candidate_id} does not use an immutable Git revision")
         artifact = candidate.get("artifact")
@@ -161,8 +163,10 @@ def _validate_config(config: dict[str, Any]) -> None:
         quantization = artifact.get("quantization")
         if not isinstance(url, str) or not url.startswith("https://") or revision not in url:
             raise ValueError(f"candidate {candidate_id} artifact URL is not revision-pinned HTTPS")
-        if not isinstance(sha256, str) or len(sha256) != 64 or any(
-            char not in "0123456789abcdef" for char in sha256
+        if (
+            not isinstance(sha256, str)
+            or len(sha256) != 64
+            or any(char not in "0123456789abcdef" for char in sha256)
         ):
             raise ValueError(f"candidate {candidate_id} artifact SHA-256 is invalid")
         if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
@@ -371,9 +375,7 @@ def _score_case(expectation: CaseExpectation, record: dict[str, Any]) -> dict[st
 
 def _candidate_config(config: dict[str, Any], candidate_id: str) -> dict[str, Any]:
     matches = [
-        candidate
-        for candidate in config["candidates"]
-        if candidate["candidate_id"] == candidate_id
+        candidate for candidate in config["candidates"] if candidate["candidate_id"] == candidate_id
     ]
     if len(matches) != 1:
         raise ValueError(f"candidate {candidate_id!r} is missing or duplicated")
