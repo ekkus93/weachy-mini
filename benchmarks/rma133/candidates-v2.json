@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "rma133-initial-sub1b-v1",
+  "experiment_id": "rma133-candidate-set-v2",
+  "license_policy": {
+    "allowed_spdx_ids": [
+      "Apache-2.0"
+    ]
+  },
+  "runtime_profile": {
+    "context_tokens": 2048,
+    "batch_tokens": 256,
+    "micro_batch_tokens": 64,
+    "max_generated_tokens": 128,
+    "threads": 4,
+    "batch_threads": 4,
+    "temperature": 0.0,
+    "min_p": 0.0,
+    "seed": 133,
+    "stream_queue_capacity": 64
+  },
+  "selection_policy": {
+    "required_completed_cases": 12,
+    "minimum_schema_reliability": 1.0,
+    "minimum_semantic_quality_score": 85.0,
+    "minimum_mean_decode_tokens_per_second": 1.0,
+    "maximum_peak_rss_bytes": 1500000000,
+    "maximum_battery_temperature_c": 45.0,
+    "maximum_battery_temperature_rise_c": 10.0,
+    "ranking": [
+      "semantic_quality_score_desc",
+      "schema_reliability_desc",
+      "mean_decode_tokens_per_second_desc",
+      "peak_rss_bytes_asc",
+      "load_time_ms_asc",
+      "candidate_id_asc"
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "qwen3-0.6b-q4-k-m",
+      "model_id": "qwen3-0.6b",
+      "display_name": "Qwen3 0.6B Q4_K_M",
+      "model_class": "qwen3-0.6b-class",
+      "source_uri": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+      "license_id": "Apache-2.0",
+      "artifact": {
+        "filename": "Qwen3-0.6B-Q4_K_M.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/8e42d41f70cb6c571f58c3f31bd9287b372d97cc/Qwen3-0.6B-Q4_K_M.gguf",
+        "file_size_bytes": 396704416,
+        "sha256": "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e",
+        "quantization": "Q4_K_M"
+      },
+      "user_prompt_suffix": "/no_think",
+      "prompt_suffix_reason": "Qwen3 exposes an explicit no-thinking control; structured robot intent should not spend output budget on hidden reasoning text."
+    },
+    {
+      "candidate_id": "qwen2.5-0.5b-instruct-q4-k-m",
+      "model_id": "qwen2.5-0.5b-instruct",
+      "display_name": "Qwen2.5 0.5B Instruct Q4_K_M",
+      "model_class": "alternative-sub1b",
+      "source_uri": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+      "source_revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+      "license_id": "Apache-2.0",
+      "artifact": {
+        "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+        "file_size_bytes": 491400032,
+        "sha256": "74a4da8c46207a33d60ac5d1278f84911c3ee20c78959a364e94ffae45d7a9db",
+        "quantization": "Q4_K_M"
+      },
+      "user_prompt_suffix": "",
+      "prompt_suffix_reason": "No model-specific suffix is used; the embedded GGUF chat template and frozen benchmark system prompt define the structured-output request."
+    }
+  ]
+}

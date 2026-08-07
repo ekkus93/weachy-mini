@@ -16,10 +16,12 @@ on:
       - 'scripts/run_rma133_device_benchmark.sh'
       - 'scripts/score_rma133_benchmark.py'
       - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'scripts/tests/test_rma133_candidate_set_v2.py'
       - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+      - 'docs/validation/RMA_133_CANDIDATE_SET_V1_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   pull_request:
     paths:
@@ -34,10 +36,12 @@ on:
       - 'scripts/run_rma133_device_benchmark.sh'
       - 'scripts/score_rma133_benchmark.py'
       - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'scripts/tests/test_rma133_candidate_set_v2.py'
       - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+      - 'docs/validation/RMA_133_CANDIDATE_SET_V1_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   workflow_dispatch:
 
@@ -68,8 +72,11 @@ jobs:
           set -euo pipefail
           python3 -m unittest -v \
             scripts.tests.test_rma133_benchmark_contract \
+            scripts.tests.test_rma133_candidate_set_v2 \
             scripts.tests.test_rma133_device_runner_loop
           python3 -m compileall -q scripts
+          python3 scripts/score_rma133_benchmark.py validate \
+            --config benchmarks/rma133/candidates-v2.json
           bash -n scripts/build_rma133_android_benchmark.sh
           bash -n scripts/run_rma133_device_benchmark.sh
 
@@ -197,9 +204,10 @@ jobs:
           RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
         run: bash scripts/build_rma133_android_benchmark.sh
 
-      - name: Benchmark every frozen candidate and select only if gates pass
+      - name: Benchmark candidate-set v2 and select only if gates pass
         shell: bash
         env:
+          RMA133_CONFIG: ${{ github.workspace }}/benchmarks/rma133/candidates-v2.json
           RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
           RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
           RMA133_RESULTS_DIR: ${{ github.workspace }}/build/rma133/results
@@ -209,9 +217,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rma133-local-llm-benchmark-${{ github.sha }}
+          name: rma133-local-llm-benchmark-v2-${{ github.sha }}
           path: |
             benchmarks/rma133/candidates.json
+            benchmarks/rma133/candidates-v2.json
             benchmarks/rma133/behavior_cases.tsv
             benchmarks/rma133/system_prompt.txt
             build/rma133/runtime/LLAMA_BUILD_INFO.txt
