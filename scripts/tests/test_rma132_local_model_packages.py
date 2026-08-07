@@ -49,16 +49,26 @@ def main() -> None:
         "            Stream source,\n"
         "            CancellationToken cancellationToken)"
     )
+    import_string_signature = (
+        "ImportAsync(\n"
+        "            LocalModelManifest manifest,\n"
+        "            string "
+    )
+    download_string_signature = (
+        "DownloadAsync(\n"
+        "            LocalModelManifest manifest,\n"
+        "            string "
+    )
     require(
         import_signature in manager,
         "imports must consume a caller-opened stream rather than arbitrary paths",
     )
     require(
-        "ImportAsync(\n            LocalModelManifest manifest,\n            string " not in manager,
+        import_string_signature not in manager,
         "ImportAsync must not accept an arbitrary filesystem path",
     )
     require(
-        "DownloadAsync(\n            LocalModelManifest manifest,\n            string " not in manager,
+        download_string_signature not in manager,
         "DownloadAsync must not accept an unvalidated path string",
     )
     require(
