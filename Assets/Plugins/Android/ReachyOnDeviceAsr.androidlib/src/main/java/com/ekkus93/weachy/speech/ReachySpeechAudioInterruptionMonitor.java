@@ -98,7 +98,8 @@ final class ReachySpeechAudioInterruptionMonitor {
                     listener.onInterrupted(
                             "audio_becoming_noisy",
                             "Android reported an imminent headphone or Bluetooth output-route change; speech was stopped before audio can unexpectedly move to the speaker.");
-                } else if (AudioManager.ACTION_MICROPHONE_MUTE_CHANGED.equals(action)
+                } else if (Build.VERSION.SDK_INT >= 28
+                        && MicrophoneMuteApi28.isMuteChangedAction(action)
                         && listening
                         && manager.isMicrophoneMute()) {
                     listener.onInterrupted(
@@ -109,7 +110,9 @@ final class ReachySpeechAudioInterruptionMonitor {
         };
         IntentFilter filter = new IntentFilter();
         filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
+        if (Build.VERSION.SDK_INT >= 28) {
+            MicrophoneMuteApi28.addMuteChangedAction(filter);
+        }
         registerReceiverCompat(context, receiver, filter);
         receiverRegistered = true;
 
@@ -181,7 +184,7 @@ final class ReachySpeechAudioInterruptionMonitor {
                 || mode == AudioManager.MODE_IN_CALL
                 || mode == AudioManager.MODE_IN_COMMUNICATION
                 || (Build.VERSION.SDK_INT >= 30
-                    && mode == AudioManager.MODE_CALL_SCREENING);
+                    && CallScreeningApi30.isCallScreeningMode(mode));
     }
 
     private static String routeCategory(AudioDeviceInfo device) {
@@ -218,6 +221,30 @@ final class ReachySpeechAudioInterruptionMonitor {
 
     private interface ModeObserver {
         void onModeChanged(int mode);
+    }
+
+    @TargetApi(28)
+    private static final class MicrophoneMuteApi28 {
+        private MicrophoneMuteApi28() {
+        }
+
+        static void addMuteChangedAction(IntentFilter filter) {
+            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
+        }
+
+        static boolean isMuteChangedAction(String action) {
+            return AudioManager.ACTION_MICROPHONE_MUTE_CHANGED.equals(action);
+        }
+    }
+
+    @TargetApi(30)
+    private static final class CallScreeningApi30 {
+        private CallScreeningApi30() {
+        }
+
+        static boolean isCallScreeningMode(int mode) {
+            return mode == AudioManager.MODE_CALL_SCREENING;
+        }
     }
 
     @TargetApi(31)

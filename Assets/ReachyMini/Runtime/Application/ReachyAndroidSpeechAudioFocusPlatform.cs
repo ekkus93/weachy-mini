@@ -12,6 +12,8 @@ namespace ReachyMini.Speech
         public const string JavaClassName =
             "com.ekkus93.weachy.speech.ReachySpeechAudioFocusBridge";
 
+        private EventHandler<SpeechAudioPlatformInterruptionEventArgs>? interrupted;
+
 #if UNITY_ANDROID && !UNITY_EDITOR
         private readonly object sync = new object();
         private AndroidJavaObject? bridge;
@@ -28,7 +30,11 @@ namespace ReachyMini.Speech
 #endif
         }
 
-        public event EventHandler<SpeechAudioPlatformInterruptionEventArgs>? Interrupted;
+        public event EventHandler<SpeechAudioPlatformInterruptionEventArgs>? Interrupted
+        {
+            add => interrupted += value;
+            remove => interrupted -= value;
+        }
 
         public async ValueTask<SpeechAudioFocusRequestResult> RequestFocusAsync(
             string sessionId,
@@ -192,7 +198,7 @@ namespace ReachyMini.Speech
             string code,
             string diagnostic)
         {
-            Interrupted?.Invoke(
+            interrupted?.Invoke(
                 this,
                 new SpeechAudioPlatformInterruptionEventArgs(
                     sessionId,
