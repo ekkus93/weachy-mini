@@ -1,0 +1,47 @@
+name: RMA-125 speech audio-focus state machine
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
+      - 'docs/architecture/SPEECH_AUDIO_FOCUS_STATE_MACHINE.md'
+      - 'docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md'
+      - '.github/workflows/rma125-speech-audio-focus.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
+      - '.github/workflows/rma125-speech-audio-focus.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Validate RMA-125 contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+      - name: Run deterministic speech audio-focus contracts
+        run: dotnet run --project managed/ReachyMini.SpeechAudioFocus.Tests/ReachyMini.SpeechAudioFocus.Tests.csproj --configuration Release
