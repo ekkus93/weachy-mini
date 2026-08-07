@@ -179,7 +179,7 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
             raw = self._write_raw(
                 directory,
                 candidate_id,
-                response_bytes_override={case_id: b"{\"speech\":\"\xf0\x9f"},
+                response_bytes_override={case_id: b'{"speech":"\xf0\x9f'},
             )
             report = scorer.score_candidate(
                 config_path=CONFIG,

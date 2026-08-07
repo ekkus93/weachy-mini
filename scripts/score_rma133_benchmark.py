@@ -308,7 +308,6 @@ def _validate_behavior_object(response: str) -> tuple[dict[str, Any] | None, lis
     return value, reasons
 
 
-
 def _response_text_from_record(record: dict[str, Any]) -> tuple[str | None, list[str]]:
     response_hex = record.get("response_bytes_hex")
     if response_hex is not None:
