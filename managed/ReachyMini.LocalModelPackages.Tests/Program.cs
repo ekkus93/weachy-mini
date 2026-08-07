@@ -326,6 +326,27 @@ namespace ReachyMini.LocalModelPackages.Tests
                     context.Root, "staging", "orphan", new string('2', 64));
                 Directory.CreateDirectory(staging);
                 File.WriteAllText(Path.Combine(staging, "junk"), "junk", Encoding.UTF8);
+                string stagingRootOrphan = Path.Combine(
+                    context.Root, "staging", "root-orphan.tmp");
+                File.WriteAllText(stagingRootOrphan, "junk", Encoding.UTF8);
+                string stagingManifestOrphan = Path.Combine(
+                    context.Root, "staging", "loose-manifest", "loose.tmp");
+                string? stagingManifestParent = Path.GetDirectoryName(stagingManifestOrphan);
+                if (stagingManifestParent == null)
+                {
+                    throw new InvalidOperationException("staging manifest orphan has no parent");
+                }
+                Directory.CreateDirectory(stagingManifestParent);
+                File.WriteAllText(stagingManifestOrphan, "junk", Encoding.UTF8);
+                string knownStagingJunk = Path.Combine(
+                    StagingDirectory(context.Root, manifest), "unexpected.tmp");
+                string? knownStagingParent = Path.GetDirectoryName(knownStagingJunk);
+                if (knownStagingParent == null)
+                {
+                    throw new InvalidOperationException("known staging junk has no parent");
+                }
+                Directory.CreateDirectory(knownStagingParent);
+                File.WriteAllText(knownStagingJunk, "junk", Encoding.UTF8);
                 string quarantine = Path.Combine(context.Root, "quarantine", "old");
                 Directory.CreateDirectory(quarantine);
                 File.WriteAllText(Path.Combine(quarantine, "junk"), "junk", Encoding.UTF8);
@@ -336,9 +357,12 @@ namespace ReachyMini.LocalModelPackages.Tests
                     .ConfigureAwait(false);
                 Require(report.Succeeded, report.Detail);
                 Require(report.RemovedInstalledOrphans >= 1, "installed orphan not removed");
-                Require(report.RemovedStagingEntries >= 1, "staging orphan not removed");
+                Require(report.RemovedStagingEntries >= 4, "staging orphans not removed");
                 Require(report.RemovedQuarantineEntries >= 1, "quarantine not cleaned");
                 Require(!File.Exists(installed), "installed orphan remains");
+                Require(!File.Exists(stagingRootOrphan), "root staging orphan remains");
+                Require(!File.Exists(stagingManifestOrphan), "manifest staging orphan remains");
+                Require(!File.Exists(knownStagingJunk), "known staging junk remains");
             }).ConfigureAwait(false);
         }
 

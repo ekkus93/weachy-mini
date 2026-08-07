@@ -555,7 +555,7 @@ namespace ReachyMini.LocalModels
                     }
                 }
 
-                int stagingRemoved = RemoveUnknownHashDirectories(
+                int stagingRemoved = RemoveStagingOrphans(
                     stagingRoot,
                     expectedStagingRoots,
                     cancellationToken);
@@ -1657,35 +1657,103 @@ namespace ReachyMini.LocalModels
             }
         }
 
-        private int RemoveUnknownHashDirectories(
+        private int RemoveStagingOrphans(
             string managedRoot,
             HashSet<string> expectedDirectories,
             CancellationToken cancellationToken)
         {
             int removed = 0;
-            string[] manifestDirectories = Directory.GetDirectories(managedRoot);
-            for (int index = 0; index < manifestDirectories.Length; ++index)
+            string[] rootEntries = Directory.GetFileSystemEntries(managedRoot);
+            for (int index = 0; index < rootEntries.Length; ++index)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string manifestDirectory = RequireContainedPath(manifestDirectories[index]);
-                if (IsReparsePoint(manifestDirectory))
+                string manifestEntry = RequireContainedPath(rootEntries[index]);
+                if (IsReparsePoint(manifestEntry))
                 {
-                    DeleteEntryNoFollow(manifestDirectory);
+                    DeleteEntryNoFollow(manifestEntry);
+                    ++removed;
+                    continue;
+                }
+                if (File.Exists(manifestEntry))
+                {
+                    File.Delete(manifestEntry);
+                    ++removed;
+                    continue;
+                }
+                if (!Directory.Exists(manifestEntry))
+                {
+                    continue;
+                }
+
+                string[] manifestEntries = Directory.GetFileSystemEntries(manifestEntry);
+                for (int entryIndex = 0; entryIndex < manifestEntries.Length; ++entryIndex)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string hashEntry = RequireContainedPath(manifestEntries[entryIndex]);
+                    if (IsReparsePoint(hashEntry))
+                    {
+                        DeleteEntryNoFollow(hashEntry);
+                        ++removed;
+                    }
+                    else if (File.Exists(hashEntry))
+                    {
+                        File.Delete(hashEntry);
+                        ++removed;
+                    }
+                    else if (Directory.Exists(hashEntry))
+                    {
+                        if (!expectedDirectories.Contains(hashEntry))
+                        {
+                            DeleteTreeNoFollow(hashEntry);
+                            ++removed;
+                        }
+                        else
+                        {
+                            removed += RemoveUnexpectedStagingChildren(
+                                hashEntry,
+                                cancellationToken);
+                        }
+                    }
+                }
+                DeleteEmptyParents(manifestEntry, managedRoot);
+            }
+            return removed;
+        }
+
+        private int RemoveUnexpectedStagingChildren(
+            string stagingDirectory,
+            CancellationToken cancellationToken)
+        {
+            int removed = 0;
+            string[] entries = Directory.GetFileSystemEntries(stagingDirectory);
+            for (int index = 0; index < entries.Length; ++index)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string entry = RequireContainedPath(entries[index]);
+                if (IsReparsePoint(entry) || Directory.Exists(entry))
+                {
+                    if (Directory.Exists(entry) && !IsReparsePoint(entry))
+                    {
+                        DeleteTreeNoFollow(entry);
+                    }
+                    else
+                    {
+                        DeleteEntryNoFollow(entry);
+                    }
                     ++removed;
                     continue;
                 }
 
-                string[] hashDirectories = Directory.GetDirectories(manifestDirectory);
-                for (int hashIndex = 0; hashIndex < hashDirectories.Length; ++hashIndex)
+                string fileName = Path.GetFileName(entry);
+                bool expectedFile =
+                    string.Equals(fileName, DownloadPartFileName, StringComparison.Ordinal) ||
+                    string.Equals(fileName, DownloadMetadataFileName, StringComparison.Ordinal) ||
+                    string.Equals(fileName, ImportPartFileName, StringComparison.Ordinal);
+                if (!expectedFile)
                 {
-                    string hashDirectory = RequireContainedPath(hashDirectories[hashIndex]);
-                    if (!expectedDirectories.Contains(hashDirectory))
-                    {
-                        DeleteTreeNoFollow(hashDirectory);
-                        ++removed;
-                    }
+                    File.Delete(entry);
+                    ++removed;
                 }
-                DeleteEmptyParents(manifestDirectory, managedRoot);
             }
             return removed;
         }
