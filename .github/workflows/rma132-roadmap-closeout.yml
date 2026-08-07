@@ -1,0 +1,55 @@
+name: RMA-132 roadmap closeout
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma132-roadmap-closeout.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  closeout:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Replace exact RMA-132 roadmap block
+        shell: bash
+        env:
+          OLD_B64: IyMgUk1BLTEzMiDigJQgSW1wbGVtZW50IHNhZmUgbW9kZWwgZG93bmxvYWQvaW1wb3J0CgotIFsgXSBDaGVjayBmcmVlIHN0b3JhZ2UgYmVmb3JlIGRvd25sb2FkL2ltcG9ydC4KLSBbIF0gRG93bmxvYWQgdG8gYSB0ZW1wb3JhcnkgcGF0aC4KLSBbIF0gU3VwcG9ydCBzYWZlIHJlc3VtZSBvciBjbGVhbiByZXN0YXJ0LgotIFsgXSBWZXJpZnkgU0hBLTI1NiBiZWZvcmUgYXRvbWljIGluc3RhbGxhdGlvbi4KLSBbIF0gUmVjb3ZlciBmcm9tIGFwcCB0ZXJtaW5hdGlvbiBhbmQgcGFydGlhbCBmaWxlcy4KLSBbIF0gQWxsb3cgZGVsZXRpb24gYW5kIG9ycGhhbiBjbGVhbnVwLgotIFsgXSBEbyBub3QgbG9hZCBhcmJpdHJhcnkgcGF0aHMgd2l0aG91dCB2YWxpZGF0aW9uLgo=
+          NEW_B64: IyMgUk1BLTEzMiDigJQgSW1wbGVtZW50IHNhZmUgbW9kZWwgZG93bmxvYWQvaW1wb3J0CgoqKlN0YXR1czoqKiBDb21wbGV0ZSAoMjAyNi0wOC0wNykKCi0gW3hdIENoZWNrIGZyZWUgc3RvcmFnZSBiZWZvcmUgZG93bmxvYWQvaW1wb3J0LgotIFt4XSBEb3dubG9hZCB0byBhIHRlbXBvcmFyeSBwYXRoLgotIFt4XSBTdXBwb3J0IHNhZmUgcmVzdW1lIG9yIGNsZWFuIHJlc3RhcnQuCi0gW3hdIFZlcmlmeSBTSEEtMjU2IGJlZm9yZSBhdG9taWMgaW5zdGFsbGF0aW9uLgotIFt4XSBSZWNvdmVyIGZyb20gYXBwIHRlcm1pbmF0aW9uIGFuZCBwYXJ0aWFsIGZpbGVzLgotIFt4XSBBbGxvdyBkZWxldGlvbiBhbmQgb3JwaGFuIGNsZWFudXAuCi0gW3hdIERvIG5vdCBsb2FkIGFyYml0cmFyeSBwYXRocyB3aXRob3V0IHZhbGlkYXRpb24uCgoqKkNvbXBsZXRpb24gZXZpZGVuY2UqKgoKLSBgTG9jYWxNb2RlbFBhY2thZ2VNYW5hZ2VyYCBvd25zIGEgbWFya2VyLWJvdW5kIG1hbmFnZWQgc3RvcmUgYW5kIHN0YWdlcyBhbGwgYWNxdWlzaXRpb24gdW5kZXIgaXQuIEltcG9ydHMgYWNjZXB0IGEgY2FsbGVyLW9wZW5lZCBgU3RyZWFtYCwgZG93bmxvYWRzIHVzZSBvbmUgZXhwbGljaXQgSFRUUFMgc291cmNlLCBhbmQgb25seSByZXZhbGlkYXRlZCBtYW5pZmVzdC1kZXJpdmVkIGluc3RhbGxlZCBmaWxlcyBjYW4gcHJvZHVjZSBhIGBMb2NhbE1vZGVsQXBwcm92ZWRBcnRpZmFjdGAuCi0gRnJlZS1zcGFjZSBwcmVmbGlnaHQgcmVxdWlyZXMgdGhlIHJlbWFpbmluZyBhcnRpZmFjdCBieXRlcyBwbHVzIGEgY29uZmlndXJlZCByZXNlcnZlLiBEb3dubG9hZCBwYXJ0aWFscyBhcmUgcmVzdW1hYmxlIG9ubHkgd2hlbiB0aGVpciBzaWRlY2FyIHN0aWxsIGJpbmRzIHRoZSBleGFjdCBzb3VyY2UgVVJJIGZpbmdlcnByaW50LCBtYW5pZmVzdCBzaXplLCBhbmQgU0hBLTI1NjsgcmFuZ2UgbWlzbWF0Y2hlcyBmYWlsIHZpc2libHkgYW5kIHVuc3VwcG9ydGVkIHJlc3VtZSBwZXJmb3JtcyBhIGNsZWFuIHJlc3RhcnQuCi0gRXhhY3QgYnl0ZSBjb3VudCwgbm8gZXh0cmEgYnl0ZSwgYW5kIFNIQS0yNTYgdmVyaWZpY2F0aW9uIGFyZSByZXF1aXJlZCBiZWZvcmUgc2FtZS1zdG9yZSBhdG9taWMgcHVibGljYXRpb24uIENvcnJ1cHQgaW5zdGFsbGVkIGZpbGVzIG5ldmVyIHJlY2VpdmUgYW4gYXBwcm92ZWQgcGF0aDsgdmVyaWZpZWQgcmVwbGFjZW1lbnRzIHF1YXJhbnRpbmUgdGhlbSBiZWZvcmUgcHVibGljYXRpb24gYW5kIGZpbmFsIGZpbGVzIGFyZSByZWhhc2hlZC4KLSBSZWNvdmVyeSByZW1vdmVzIGFiYW5kb25lZCBub24tcmVzdW1hYmxlIGltcG9ydHMgYW5kIG1hbGZvcm1lZCBkb3dubG9hZCBzdGF0ZSB3aGlsZSByZXRhaW5pbmcgb25seSB2YWxpZCBtYW5pZmVzdC1ib3VuZCByZXN1bWFibGUgZG93bmxvYWRzLiBNYW5pZmVzdC1kZXJpdmVkIGRlbGV0aW9uIGFuZCBtYXJrZXItY29uZmluZWQgb3JwaGFuIGNsZWFudXAgcmVtb3ZlIGxvb3NlL3Vua25vd24gc3RhZ2luZywgcXVhcmFudGluZSwgYW5kIGluc3RhbGxlZCBvcnBoYW4gZW50cmllcyB3aXRob3V0IGZvbGxvd2luZyByZXBhcnNlLXBvaW50IGRpcmVjdG9yaWVzLgotIFRoZSBSYWxwaCBsb29wIGZpeGVkIHN0cmljdCBhc3luYy1zdHJlYW0vc3RhdGljIGFuYWx5emVyIGZpbmRpbmdzIGFuZCB0ZXN0LWhhcm5lc3MgYW5hbHl6ZXIgZmluZGluZ3Mgd2l0aG91dCBzdXBwcmVzc2lvbiwgY29ycmVjdGVkIGFuIG92ZXItYnJvYWQgc3RhdGljIHBhdGggYXNzZXJ0aW9uLCBhbmQgaGFyZGVuZWQgYSByZWFsIHN0YWdpbmctb3JwaGFuIGNsZWFudXAgZWRnZSBiZWZvcmUgYWNjZXB0YW5jZS4gTm8gZmFsbGJhY2sgb3IgaW50ZWdyaXR5IHJlbGF4YXRpb24gd2FzIGludHJvZHVjZWQuCi0gRGVkaWNhdGVkIHJ1biBgMzEyMTIyOTY0MDlgLCBqb2IgYDkyOTc3NzA0NDA3YCwgcGFzc2VkIHRoZSB3YXJuaW5ncy1hcy1lcnJvcnMgY29yZSBidWlsZCwgYWxsIDE1IG1hbmFnZWQgcGFja2FnZSBiZWhhdmlvcnMsIHN0YXRpYyBjb250cmFjdHMsIFB5dGhvbiBjb21waWxhdGlvbiwgZXhhY3QtU0hBIGV2aWRlbmNlIGdlbmVyYXRpb24sIGFuZCBhcnRpZmFjdCB1cGxvYWQgb24gYWNjZXB0ZWQgaW1wbGVtZW50YXRpb24gU0hBIGBkNTBlNDRkODNiMTRlMWUxNDIwZGMzNDcxNjQ2NzFkYjY1OTNkNzNjYC4KLSBBcnRpZmFjdCBgOTAwNzE1NDk1NWAgaGFzIGRpZ2VzdCBgc2hhMjU2OjNiYWJlOGVlYTUwODhkZTllNmI0ZjQ1ZGE4MTE1ZjU2MmYwM2IwNTFjMjMzY2IzMWVjZWRkMzMxMGYzNmY3YzNgLiBIb3N0ZWQgQ0kgcnVuIGAzMTIxMjI5NjE3N2AgcGFzc2VkIHN0YXRpYywgbWFuYWdlZCwgbmF0aXZlL3Nhbml0aXplciwgQW5kcm9pZCwgYW5kIHBpbm5lZCBSZWFjaHktbW9kZWwgam9icyBvbiB0aGUgc2FtZSBTSEEuCi0gTm8gcmVhbCBtb2RlbCB3YXMgZG93bmxvYWRlZCwgc2VsZWN0ZWQsIHJlY29tbWVuZGVkLCBvciBidW5kbGVkOyBSTUEtMTMzIHN0aWxsIG93bnMgYmVuY2htYXJrLWJhY2tlZCBtb2RlbCBzZWxlY3Rpb24gYW5kIFJNQS0xMzQgb3ducyBpbmZlcmVuY2UuIERldGFpbGVkIGRlc2lnbiBhbmQgZXZpZGVuY2UgYXJlIGluIGBkb2NzL2FyY2hpdGVjdHVyZS9MT0NBTF9NT0RFTF9QQUNLQUdFX01BTkFHRU1FTlQubWRgIGFuZCBgZG9jcy92YWxpZGF0aW9uL1JNQV8xMzJfTE9DQUxfTU9ERUxfUEFDS0FHRV9WQUxJREFUSU9OXzIwMjYtMDgtMDcubWRgLgo=
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          path = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          text = path.read_text(encoding='utf-8')
+          old = base64.b64decode(os.environ['OLD_B64']).decode('utf-8')
+          new = base64.b64decode(os.environ['NEW_B64']).decode('utf-8')
+          if text.count(old) != 1:
+              raise SystemExit('RMA-132 roadmap block drifted; refusing broad rewrite')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+
+      - name: Commit exact roadmap closeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git diff --cached --quiet && { echo "expected roadmap closeout produced no diff" >&2; exit 1; }
+          git commit -m "RMA-132: close roadmap task"
+          git push origin HEAD:master
