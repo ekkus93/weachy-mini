@@ -1,6 +1,6 @@
 # RMA-131 local model manifest validation
 
-**Status:** Implementation accepted on `94145dda69f6ee3f886a78be9728ea6ddc355bb8`; final roadmap evidence SHA pending  
+**Status:** Complete (2026-08-07); implementation accepted on `94145dda69f6ee3f886a78be9728ea6ddc355bb8`  
 **Date:** 2026-08-07
 
 ## Accepted contract
@@ -86,6 +86,10 @@ No manifest field was removed, no validation bound was weakened, no warning/anal
 The managed constructors and developer validator reject malformed state rather than silently filling it. Rejections cover unknown schema/runtime ABI, non-HTTPS or credentialed provenance, contradictory experimental labeling, unsafe paths, malformed hashes/sizes, missing GGUF/tokenizer metadata, invalid chat/stop metadata, impossible context/batch memory assumptions, unsupported Android declarations, duplicate CPU features, understated RAM, duplicate catalog identities, and missing exact model lookup.
 
 A missing catalog lookup returns no model or throws `KeyNotFoundException`; it does not select a neighboring, prefix-matching, default, cloud, or otherwise alternate model. The manifest source URI is provenance metadata only and does not authorize a fetch.
+
+## Roadmap closeout
+
+The authoritative roadmap now marks all three RMA-131 work items complete and records the implementation run, job, artifact, digest, no-fallback guarantees, and links to this validation record and the architecture document. The one-shot helper used to patch only that exact roadmap block was removed before this completion record was finalized.
 
 ## Scope boundary
 
