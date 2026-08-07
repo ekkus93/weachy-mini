@@ -1,0 +1,58 @@
+name: RMA-132 test analyzer repair
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma132-test-analyzer-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Apply exact test analyzer repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("managed/ReachyMini.LocalModelPackages.Tests/Program.cs")
+          text = path.read_text(encoding="utf-8")
+          old = "        private static readonly byte[] ModelBytes =\n            Encoding.UTF8.GetBytes(\"synthetic-rma132-model-payload-v1\");\n"
+          new = old + "\n        private static readonly string[] Arm64AndroidAbis = { \"arm64-v8a\" };\n"
+          if text.count(old) != 1:
+              raise SystemExit("model-bytes anchor drifted")
+          text = text.replace(old, new)
+          old = "                    new[] { \"arm64-v8a\" },\n"
+          new = "                    Arm64AndroidAbis,\n"
+          if text.count(old) != 1:
+              raise SystemExit("ABI array anchor drifted")
+          text = text.replace(old, new)
+          old = "            using SHA256 hash = SHA256.Create();\n            byte[] digest = hash.ComputeHash(bytes);\n"
+          new = "            byte[] digest = SHA256.HashData(bytes);\n"
+          if text.count(old) != 1:
+              raise SystemExit("SHA helper anchor drifted")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "managed/ReachyMini.LocalModelPackages.Tests/Program.cs"
+
+      - name: Commit test analyzer repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add managed/ReachyMini.LocalModelPackages.Tests/Program.cs
+          git diff --cached --quiet && { echo "expected test repair produced no diff" >&2; exit 1; }
+          git commit -m "RMA-132: satisfy managed test analyzers"
+          git push origin HEAD:master
