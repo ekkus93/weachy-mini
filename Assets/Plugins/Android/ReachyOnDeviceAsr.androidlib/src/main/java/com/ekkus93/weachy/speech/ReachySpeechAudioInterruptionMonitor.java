@@ -1,6 +1,5 @@
 package com.ekkus93.weachy.speech;
 
-import android.annotation.RequiresApi;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -234,7 +233,6 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @RequiresApi(28)
     private static final class ReceiverApi28 {
         private ReceiverApi28() {
         }
@@ -242,6 +240,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         static void register(
                 Context context,
                 BroadcastReceiver receiver) {
+            requireSdkAtLeast(28, "microphone-mute receiver registration");
             IntentFilter filter =
                     new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
@@ -249,27 +248,26 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @RequiresApi(28)
     private static final class MicrophoneMuteApi28 {
         private MicrophoneMuteApi28() {
         }
 
         static boolean isMuteChangedAction(String action) {
+            requireSdkAtLeast(28, "microphone-mute broadcast inspection");
             return AudioManager.ACTION_MICROPHONE_MUTE_CHANGED.equals(action);
         }
     }
 
-    @RequiresApi(30)
     private static final class CallScreeningApi30 {
         private CallScreeningApi30() {
         }
 
         static boolean isCallScreeningMode(int mode) {
+            requireSdkAtLeast(30, "call-screening audio-mode inspection");
             return mode == AudioManager.MODE_CALL_SCREENING;
         }
     }
 
-    @RequiresApi(31)
     private static final class ModeMonitorApi31 {
         private ModeMonitorApi31() {
         }
@@ -278,18 +276,19 @@ final class ReachySpeechAudioInterruptionMonitor {
                 AudioManager manager,
                 Context context,
                 ModeObserver observer) {
+            requireSdkAtLeast(31, "audio-mode listener registration");
             AudioManager.OnModeChangedListener value = observer::onModeChanged;
             manager.addOnModeChangedListener(context.getMainExecutor(), value);
             return value;
         }
 
         static void unregister(AudioManager manager, Object value) {
+            requireSdkAtLeast(31, "audio-mode listener removal");
             manager.removeOnModeChangedListener(
                     (AudioManager.OnModeChangedListener) value);
         }
     }
 
-    @RequiresApi(33)
     private static final class ReceiverApi33 {
         private ReceiverApi33() {
         }
@@ -297,6 +296,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         static void register(
                 Context context,
                 BroadcastReceiver receiver) {
+            requireSdkAtLeast(33, "non-exported receiver registration");
             IntentFilter filter =
                     new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
@@ -304,6 +304,15 @@ final class ReachySpeechAudioInterruptionMonitor {
                     receiver,
                     filter,
                     Context.RECEIVER_NOT_EXPORTED);
+        }
+    }
+
+    private static void requireSdkAtLeast(int required, String operation) {
+        if (Build.VERSION.SDK_INT < required) {
+            throw new IllegalStateException(
+                    operation + " requires Android API " + required
+                            + ", but the current device reports API "
+                            + Build.VERSION.SDK_INT + ".");
         }
     }
 }
