@@ -49,6 +49,7 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
         candidate_id: str,
         *,
         response_override: dict[str, str] | None = None,
+        response_bytes_override: dict[str, bytes] | None = None,
         battery_before: float | None = 30.0,
         battery_after: float | None = 32.0,
     ) -> Path:
@@ -72,6 +73,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
             response = self._response_for_case(case)
             if response_override and case.case_id in response_override:
                 response = response_override[case.case_id]
+            response_bytes = response.encode("utf-8")
+            if response_bytes_override and case.case_id in response_bytes_override:
+                response_bytes = response_bytes_override[case.case_id]
             records.append(
                 {
                     "record": "case",
@@ -86,7 +90,7 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
                     "peak_rss_bytes": 600_000_000,
                     "battery_temp_before_c": 30.0 + index * 0.1,
                     "battery_temp_c": 30.1 + index * 0.1,
-                    "response": response,
+                    "response_bytes_hex": response_bytes.hex(),
                 }
             )
         records.append(
@@ -166,6 +170,29 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
         self.assertTrue(
             any("schema reliability" in reason for reason in report["rejection_reasons"])
         )
+
+    def test_invalid_utf8_response_fails_schema_gate_without_crashing_scorer(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            candidate_id = self.config["candidates"][0]["candidate_id"]
+            case_id = self.cases[0].case_id
+            raw = self._write_raw(
+                directory,
+                candidate_id,
+                response_bytes_override={case_id: b"{\"speech\":\"\xf0\x9f"},
+            )
+            report = scorer.score_candidate(
+                config_path=CONFIG,
+                cases_path=CASES,
+                raw_path=raw,
+                candidate_id=candidate_id,
+                output_path=directory / "report.json",
+            )
+        score = next(item for item in report["case_scores"] if item["case_id"] == case_id)
+        self.assertFalse(score["schema_valid"])
+        self.assertEqual(score["semantic_score"], 0.0)
+        self.assertIn("response is not valid UTF-8", score["reasons"])
+        self.assertFalse(report["eligible"])
 
     def test_invented_gaze_entity_reduces_quality(self) -> None:
         target_case = next(case for case in self.cases if case.gaze_entity is not None)
@@ -253,6 +280,8 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
         self.assertNotIn("fallback", source.casefold())
         self.assertIn("artifact integrity failure", runner)
         self.assertIn("thermal safety", source.casefold())
+        self.assertIn("response_bytes_hex", source)
+        self.assertIn("json_hex_bytes(stdout, response, response_length);", source)
         self.assertIn("Never emit joint angles", prompt)
         self.assertNotIn("cloud", source.casefold())
 

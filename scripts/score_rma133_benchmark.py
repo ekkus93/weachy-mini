@@ -308,14 +308,35 @@ def _validate_behavior_object(response: str) -> tuple[dict[str, Any] | None, lis
     return value, reasons
 
 
-def _score_case(expectation: CaseExpectation, record: dict[str, Any]) -> dict[str, Any]:
+
+def _response_text_from_record(record: dict[str, Any]) -> tuple[str | None, list[str]]:
+    response_hex = record.get("response_bytes_hex")
+    if response_hex is not None:
+        if not isinstance(response_hex, str) or len(response_hex) % 2 != 0:
+            return None, ["benchmark response byte encoding is invalid"]
+        try:
+            response_bytes = bytes.fromhex(response_hex)
+        except ValueError:
+            return None, ["benchmark response byte encoding is invalid"]
+        try:
+            return response_bytes.decode("utf-8"), []
+        except UnicodeDecodeError:
+            return None, ["response is not valid UTF-8"]
+
     response = record.get("response")
     if not isinstance(response, str):
+        return None, ["benchmark record has no response bytes"]
+    return response, []
+
+
+def _score_case(expectation: CaseExpectation, record: dict[str, Any]) -> dict[str, Any]:
+    response, response_reasons = _response_text_from_record(record)
+    if response is None:
         return {
             "case_id": expectation.case_id,
             "schema_valid": False,
             "semantic_score": 0.0,
-            "reasons": ["benchmark record has no response string"],
+            "reasons": response_reasons,
         }
 
     value, reasons = _validate_behavior_object(response)

@@ -195,6 +195,19 @@ static void json_string(FILE * output, const char * text)
     fputc('"', output);
 }
 
+static void json_hex_bytes(FILE * output, const char * bytes, size_t byte_count)
+{
+    static const char hex_digits[] = "0123456789abcdef";
+    fputc('"', output);
+    for (size_t index = 0U; index < byte_count; ++index)
+    {
+        const unsigned int value = (unsigned int)(unsigned char)bytes[index];
+        fputc((int)hex_digits[value >> 4U], output);
+        fputc((int)hex_digits[value & 0x0fU], output);
+    }
+    fputc('"', output);
+}
+
 static void init_error(reachy_llama_error_info * error)
 {
     memset(error, 0, sizeof(*error));
@@ -604,7 +617,7 @@ static bool run_case(
         ",\"generated_tokens\":%" PRIu64
         ",\"time_to_first_text_ms\":%.3f,\"total_time_ms\":%.3f"
         ",\"decode_tokens_per_second\":%.6f,\"peak_rss_bytes\":%" PRIu64
-        ",\"battery_temp_before_c\":%.3f,\"battery_temp_c\":%.3f,\"response\":",
+        ",\"battery_temp_before_c\":%.3f,\"battery_temp_c\":%.3f,\"response_bytes_hex\":",
         completed ? "true" : "false",
         metrics.prompt_tokens,
         metrics.generated_tokens,
@@ -614,7 +627,7 @@ static bool run_case(
         peak_rss,
         battery_before,
         battery_after);
-    json_string(stdout, response);
+    json_hex_bytes(stdout, response, response_length);
     fputs("}\n", stdout);
     fflush(stdout);
     free(response);
