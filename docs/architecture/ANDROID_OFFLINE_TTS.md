@@ -1,7 +1,7 @@
 # Android offline TTS architecture
 
 **RMA:** 123  
-**Status:** Implementation candidate  
+**Status:** Implementation validated  
 **Date:** 2026-08-07
 
 ## Scope
@@ -73,6 +73,8 @@ The Java bridge uses `UtteranceProgressListener` and maps:
 - `onStop` => cancelled;
 - `onError` => structured failure.
 
+The API-26-compatible legacy `onError(String)` override remains implemented and is explicitly annotated deprecated because Android deprecates that abstract callback. The modern `onError(String, int)` callback remains the error-code-bearing path. This preserves the API-26 floor while keeping Java 17 `-Xlint:all -Werror` clean without suppressing warnings.
+
 The Unity bridge marshals callbacks through a bounded queue. Request-ID mismatch and queue overflow become visible terminal failures. A platform stream that ends without a terminal callback is also a failure; no completion is fabricated.
 
 Cancellation removes pre-initialization work or stops the exact active utterance. Provider disposal cancels the managed lifetime, calls Java `close()`, stops active speech, and calls `TextToSpeech.shutdown()`.
@@ -103,6 +105,17 @@ The TTS Java bridge is packaged in the existing speech Android library that alre
 The first-party `android-plugin` build compiles the bridge with Java 17 `-Xlint:all -Werror`, Android lint warnings-as-errors, and the repository's API-26 deployment floor.
 
 A dedicated deterministic managed suite validates offline locality, voice filtering/installation state, preference semantics, lifecycle/error behavior, exact request/provider identity, cancellation/timeout/disposal, and source-level no-fallback constraints without requiring an Android TTS engine or network connection.
+
+## Accepted implementation evidence
+
+Accepted implementation SHA: `19d19a7f42a10475a7ce7650b96999bc61a9f86b`.
+
+- Permanent RMA-123 run `31181367570`, job `92875183823`: success. `ReachyMini.Core` built with 0 warnings and 0 errors, and all 38 deterministic RMA-123 contracts passed.
+- Hosted CI run `31181367627`: success. Android job `92875184242` compiled the production Java bridge and passed Android lint/test under the pinned Android/JDK toolchain; managed, native/sanitizer, static, and pinned Reachy-model jobs also passed.
+- Self-hosted Local Unity Android Validation run `31181367510`, job `92875183724`: success. Unity tests, ARM64/API-26 APK build/verification, physical RMA-090/RMA-091/RMA-092/RMA-111/RMA-022 and authoritative rendering all passed, including every evidence upload and final commit-status publication.
+- APK artifact `8995275033`, `local-unity-device-apk-19d19a7f42a10475a7ce7650b96999bc61a9f86b`, has digest `sha256:42018cc017ec02427e70290e868addad3c5e7cc8883e8c92775d880e12e2bf20`.
+
+Detailed exact-SHA evidence is recorded in `docs/validation/RMA_123_ANDROID_OFFLINE_TTS_VALIDATION_2026-08-07.md`.
 
 ## Physical-validation boundary
 
