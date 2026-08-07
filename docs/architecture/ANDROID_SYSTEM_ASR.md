@@ -1,7 +1,7 @@
 # Android system ASR architecture
 
 **RMA:** 122  
-**Status:** Implementation candidate  
+**Status:** Implementation validated  
 **Date:** 2026-08-07
 
 ## Scope
