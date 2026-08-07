@@ -51,7 +51,7 @@ The blocker is cleared only when one physical Android device is available that m
 5. An exact-locale RMA-123 TTS voice is installed and reports that it does not require a network connection.
 6. The device can run the acceptance with Wi-Fi and cellular data unavailable/disabled and with the offline state captured as evidence.
 
-Passing `scripts/run_rma125_speech_device_preflight.sh` proves only items 1 and physical-device/ABI suitability. The application-level provider probes remain authoritative for items 2-5.
+Running `bash scripts/run_rma125_speech_device_preflight.sh` proves only item 1 and physical-device/ABI suitability. The application-level provider probes remain authoritative for items 2-5.
 
 ## Required physical acceptance sequence
 
@@ -74,7 +74,7 @@ Only after those checks pass should the RMA-125 implementation and offline-speec
 Attach or provision one physical ARM64 Android API-31+ device to the `weachy-mini-android-device` self-hosted runner, then run:
 
 ```bash
-scripts/run_rma125_speech_device_preflight.sh
+bash scripts/run_rma125_speech_device_preflight.sh
 ```
 
 If the preflight passes, implement/run the application-level RMA-125 offline conversation acceptance on that device. If the explicit recognizer or exact-locale offline voice is unavailable, preserve the resulting setup-required evidence and configure/install the required local service/model/voice; do not change providers automatically.
