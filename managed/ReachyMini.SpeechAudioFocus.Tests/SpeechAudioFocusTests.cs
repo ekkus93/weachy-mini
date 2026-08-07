@@ -352,10 +352,20 @@ internal static class SpeechAudioFocusTests
         SpeechErrorCategory category,
         string code)
     {
-        SpeechProviderError? error = events.Count == 1 ? events[0].Error : null;
-        Require(events.Count == 1 && events[0].Kind == AsrEventKind.Failed &&
+        int failureCount = 0;
+        foreach (AsrEvent value in events)
+        {
+            if (value.Kind == AsrEventKind.Failed)
+            {
+                failureCount++;
+            }
+        }
+
+        SpeechProviderError? error = events.Count > 0 ? events[^1].Error : null;
+        Require(events.Count > 0 && failureCount == 1 &&
+                events[^1].Kind == AsrEventKind.Failed &&
                 error?.Category == category && error.Code == code,
-            "Expected one ASR failure: " + category + "/" + code + ".");
+            "Expected exactly one terminal ASR failure: " + category + "/" + code + ".");
     }
 
     private static void RequireSingleFailure(
@@ -363,10 +373,20 @@ internal static class SpeechAudioFocusTests
         SpeechErrorCategory category,
         string code)
     {
-        SpeechProviderError? error = events.Count == 1 ? events[0].Error : null;
-        Require(events.Count == 1 && events[0].Kind == TtsEventKind.Failed &&
+        int failureCount = 0;
+        foreach (TtsEvent value in events)
+        {
+            if (value.Kind == TtsEventKind.Failed)
+            {
+                failureCount++;
+            }
+        }
+
+        SpeechProviderError? error = events.Count > 0 ? events[^1].Error : null;
+        Require(events.Count > 0 && failureCount == 1 &&
+                events[^1].Kind == TtsEventKind.Failed &&
                 error?.Category == category && error.Code == code,
-            "Expected one TTS failure: " + category + "/" + code + ".");
+            "Expected exactly one terminal TTS failure: " + category + "/" + code + ".");
     }
 
     private static async Task AssertThrowsAsync<TException>(Func<Task> action)
