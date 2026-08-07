@@ -173,7 +173,9 @@ def _validate_config(config: dict[str, Any]) -> None:
         suffix = candidate.get("user_prompt_suffix")
         expected_suffix = "/no_think" if model_class == "qwen3-0.6b-class" else ""
         if suffix != expected_suffix:
-            raise ValueError(f"candidate {candidate_id} prompt suffix changed from the frozen v1 contract")
+            raise ValueError(
+                f"candidate {candidate_id} prompt suffix changed from the frozen v1 contract"
+            )
     if not has_qwen or not has_alternative:
         raise ValueError("RMA-133 candidate set must include Qwen3-0.6B-class and an alternative")
     if len(quantizations) != 1:
@@ -238,7 +240,7 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def _is_finite_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _unsafe_key_present(value: Any) -> bool:
@@ -324,7 +326,9 @@ def _score_case(expectation: CaseExpectation, record: dict[str, Any]) -> dict[st
     score = 10.0
     semantic_reasons: list[str] = []
     speech = str(value["speech"]).casefold()
-    if expectation.speech_any_terms and any(term in speech for term in expectation.speech_any_terms):
+    if expectation.speech_any_terms and any(
+        term in speech for term in expectation.speech_any_terms
+    ):
         score += 25.0
     else:
         semantic_reasons.append("speech did not contain an expected semantic term")
@@ -366,7 +370,11 @@ def _score_case(expectation: CaseExpectation, record: dict[str, Any]) -> dict[st
 
 
 def _candidate_config(config: dict[str, Any], candidate_id: str) -> dict[str, Any]:
-    matches = [candidate for candidate in config["candidates"] if candidate["candidate_id"] == candidate_id]
+    matches = [
+        candidate
+        for candidate in config["candidates"]
+        if candidate["candidate_id"] == candidate_id
+    ]
     if len(matches) != 1:
         raise ValueError(f"candidate {candidate_id!r} is missing or duplicated")
     return matches[0]
@@ -543,7 +551,9 @@ def select_candidate(
     actual_ids = {report.get("candidate_id") for report in reports}
     if len(reports) != len(config["candidates"]) or actual_ids != expected_ids:
         raise ValueError("selection requires exactly one report for every frozen candidate")
-    eligible = sorted((report for report in reports if report.get("eligible") is True), key=_ranking_key)
+    eligible = sorted(
+        (report for report in reports if report.get("eligible") is True), key=_ranking_key
+    )
     if not eligible:
         selection = {
             "schema_version": 1,
@@ -552,7 +562,9 @@ def select_candidate(
             "status": "no_candidate_passed",
             "candidate_reports": reports,
         }
-        output_path.write_text(json.dumps(selection, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(selection, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         return selection
 
     winner = eligible[0]

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -151,7 +151,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
             directory = Path(temp)
             candidate_id = self.config["candidates"][0]["candidate_id"]
             case_id = self.cases[0].case_id
-            raw = self._write_raw(directory, candidate_id, response_override={case_id: "```json {} ```"})
+            raw = self._write_raw(
+                directory, candidate_id, response_override={case_id: "```json {} ```"}
+            )
             report = scorer.score_candidate(
                 config_path=CONFIG,
                 cases_path=CASES,
@@ -161,7 +163,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
             )
         self.assertFalse(report["eligible"])
         self.assertLess(report["measurements"]["schema_reliability"], 1.0)
-        self.assertTrue(any("schema reliability" in reason for reason in report["rejection_reasons"]))
+        self.assertTrue(
+            any("schema reliability" in reason for reason in report["rejection_reasons"])
+        )
 
     def test_invented_gaze_entity_reduces_quality(self) -> None:
         target_case = next(case for case in self.cases if case.gaze_entity is not None)
@@ -182,7 +186,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
                 candidate_id=candidate_id,
                 output_path=directory / "report.json",
             )
-        score = next(item for item in report["case_scores"] if item["case_id"] == target_case.case_id)
+        score = next(
+            item for item in report["case_scores"] if item["case_id"] == target_case.case_id
+        )
         self.assertTrue(score["schema_valid"])
         self.assertLess(score["semantic_score"], 100.0)
 
@@ -212,7 +218,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
                 output_path=directory / "report.json",
             )
         self.assertFalse(report["eligible"])
-        self.assertIn("battery temperature was not measurable on the device", report["rejection_reasons"])
+        self.assertIn(
+            "battery temperature was not measurable on the device", report["rejection_reasons"]
+        )
 
     def test_selection_requires_every_candidate_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -227,7 +235,9 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
                 candidate_id=candidate_id,
                 output_path=report_path,
             )
-            with self.assertRaisesRegex(ValueError, "exactly one report for every frozen candidate"):
+            with self.assertRaisesRegex(
+                ValueError, "exactly one report for every frozen candidate"
+            ):
                 scorer.select_candidate(
                     config_path=CONFIG,
                     report_paths=[report_path],
