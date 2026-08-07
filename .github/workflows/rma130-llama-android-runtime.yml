@@ -1,0 +1,187 @@
+name: RMA-130 llama.cpp Android runtime
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma130-llama-android-runtime.yml'
+      - 'CMakeLists.txt'
+      - 'native/llama_runtime/**'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/run_rma130_hosted_gate.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma130_llama_runtime.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'third_party/inventory.json'
+      - 'third_party/THIRD_PARTY_NOTICES.md'
+      - 'docs/architecture/LLAMA_CPP_ANDROID_RUNTIME.md'
+      - 'docs/validation/RMA_130_LLAMA_CPP_ANDROID_RUNTIME_VALIDATION_2026-08-07.md'
+      - 'toolchain.lock.json'
+  pull_request:
+    paths:
+      - '.github/workflows/rma130-llama-android-runtime.yml'
+      - 'CMakeLists.txt'
+      - 'native/llama_runtime/**'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/run_rma130_hosted_gate.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma130_llama_runtime.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'third_party/inventory.json'
+      - 'third_party/THIRD_PARTY_NOTICES.md'
+      - 'docs/architecture/LLAMA_CPP_ANDROID_RUNTIME.md'
+      - 'docs/validation/RMA_130_LLAMA_CPP_ANDROID_RUNTIME_VALIDATION_2026-08-07.md'
+      - 'toolchain.lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma130-llama-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-runtime:
+    name: Validate pinned llama.cpp runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Read pinned source and Android toolchain
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          llama = json.loads(
+              Path("third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8")
+          )
+          toolchain = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))
+          android = toolchain["android"]
+          repository = urlparse(llama["repository"]).path.removesuffix(".git").strip("/")
+          if repository.count("/") != 1:
+              raise SystemExit(f"Invalid pinned llama.cpp repository: {repository!r}")
+          values = {
+              "repository": repository,
+              "commit": llama["commit"],
+              "version": llama["version"],
+              "ndk": android["ndk"],
+              "cmake": android["cmake"],
+              "platform": f"android-{android['native_feasibility_min_sdk']}",
+          }
+          for key, value in values.items():
+              print(f"{key}={value}")
+          PY
+
+      - name: Check out exact llama.cpp source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.repository }}
+          ref: ${{ steps.pins.outputs.commit }}
+          path: upstream/llama.cpp
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: false
+
+      - name: Verify source pin and static contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_source_checkout.py \
+            --source upstream/llama.cpp \
+            --lock third_party/llama-cpp-source.lock.json
+          python3 -m unittest scripts.tests.test_rma130_llama_runtime -v
+
+      - name: Build and run native contracts
+        shell: bash
+        env:
+          LLAMA_CPP_SOURCE_DIR: ${{ github.workspace }}/upstream/llama.cpp
+        run: bash scripts/run_rma130_hosted_gate.sh
+
+      - name: Run first-party sanitizer stress contracts
+        shell: bash
+        env:
+          LLAMA_CPP_SOURCE_DIR: ${{ github.workspace }}/upstream/llama.cpp
+          REACHY_ENABLE_SANITIZERS: 'ON'
+          RMA130_HOST_BUILD_DIR: ${{ github.workspace }}/build/rma130-llama-host-sanitized
+        run: bash scripts/run_rma130_hosted_gate.sh
+
+      - name: Install pinned Android NDK and CMake
+        shell: bash
+        env:
+          ANDROID_NDK_VERSION: ${{ steps.pins.outputs.ndk }}
+          ANDROID_CMAKE_VERSION: ${{ steps.pins.outputs.cmake }}
+        run: |
+          set -euo pipefail
+          sdkmanager="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager)"
+          fi
+          "${sdkmanager}" --install \
+            "ndk;${ANDROID_NDK_VERSION}" \
+            "cmake;${ANDROID_CMAKE_VERSION}"
+          ndk_root="${ANDROID_HOME}/ndk/${ANDROID_NDK_VERSION}"
+          cmake_bin="${ANDROID_HOME}/cmake/${ANDROID_CMAKE_VERSION}/bin"
+          test -f "${ndk_root}/source.properties"
+          test -x "${cmake_bin}/cmake"
+          test -x "${cmake_bin}/ninja"
+          {
+            printf 'ANDROID_NDK_HOME=%s\n' "${ndk_root}"
+            printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${cmake_bin}" >> "${GITHUB_PATH}"
+
+      - name: Cross-compile and inspect Android ARM64 runtime
+        shell: bash
+        env:
+          LLAMA_CPP_SOURCE_DIR: ${{ github.workspace }}/upstream/llama.cpp
+          LLAMA_ANDROID_PLATFORM: ${{ steps.pins.outputs.platform }}
+          LLAMA_ANDROID_BUILD_DIR: ${{ github.workspace }}/build/rma130-llama-android
+          LLAMA_ANDROID_OUTPUT_DIR: ${{ github.workspace }}/build/rma130-llama-android-evidence
+        run: bash scripts/build_llama_android.sh
+
+      - name: Verify Android evidence boundary
+        shell: bash
+        env:
+          EXPECTED_COMMIT: ${{ steps.pins.outputs.commit }}
+          EXPECTED_VERSION: ${{ steps.pins.outputs.version }}
+          EXPECTED_PLATFORM: ${{ steps.pins.outputs.platform }}
+        run: |
+          set -euo pipefail
+          evidence=build/rma130-llama-android-evidence
+          grep -F "llama.cpp release: ${EXPECTED_VERSION}" "${evidence}/LLAMA_BUILD_INFO.txt"
+          grep -F "llama.cpp commit: ${EXPECTED_COMMIT}" "${evidence}/LLAMA_BUILD_INFO.txt"
+          grep -F "Android platform: ${EXPECTED_PLATFORM}" "${evidence}/LLAMA_BUILD_INFO.txt"
+          grep -F 'CPU baseline: armv8-a' "${evidence}/LLAMA_BUILD_INFO.txt"
+          grep -F 'Model bundled: no' "${evidence}/LLAMA_BUILD_INFO.txt"
+          test -s "${evidence}/LLAMA_CPP_LICENSE.txt"
+          test -s "${evidence}/libreachy_llama.dynamic.txt"
+          test -s "${evidence}/libreachy_llama.exports.txt"
+          test -s "${evidence}/libreachy_llama.imports.txt"
+
+      - name: Upload RMA-130 Android evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma130-llama-android-${{ github.sha }}
+          path: build/rma130-llama-android-evidence
+          if-no-files-found: error
+          retention-days: 14

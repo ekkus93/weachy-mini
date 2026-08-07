@@ -1,0 +1,6 @@
+REACHY_LLAMA_1 {
+    global:
+        reachy_llama_*;
+    local:
+        *;
+};

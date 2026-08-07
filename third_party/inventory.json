@@ -55,11 +55,11 @@
       "owner": "ggml-org contributors",
       "license": "MIT",
       "source_url": "https://github.com/ggml-org/llama.cpp",
-      "source_revision": null,
-      "status": "planned",
-      "modification_status": "not_imported",
+      "source_revision": "dff15d4ac95de1a3c73e8b784d4c436f5e5e36eb",
+      "status": "packaged_dependency",
+      "modification_status": "unmodified_build_source",
       "redistribution_status": "allowed_with_notice",
-      "required_notice": "MIT license text after revision is pinned."
+      "required_notice": "Retain the MIT license from pinned release b10313; source is fetched unmodified and statically linked into the generated Android runtime."
     },
     {
       "id": "local-llm-candidate",
@@ -107,7 +107,7 @@
       "status": "packaged_beta_dependency",
       "modification_status": "unmodified",
       "redistribution_status": "subject_to_google_terms",
-      "required_notice": "Bundled beta on-device model; retain Google ML Kit terms and generated dependency notices."
+      "required_notice": "Bundled beta on-device model; retain Google ML Kit terms and generated dependency notices. This beta model is included in the APK and isolated behind the RMA-111 backend contract."
     },
     {
       "id": "rma111-public-domain-face-fixture",

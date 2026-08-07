@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/ggml-org/llama.cpp.git",
+  "version": "b10313",
+  "commit": "dff15d4ac95de1a3c73e8b784d4c436f5e5e36eb",
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "license_git_blob": "e7dca554bcb802f98408383a864404e3aa4eacca",
+  "upstream_android_arm64_asset": "llama-b10313-bin-android-arm64.tar.gz",
+  "upstream_android_arm64_sha256": "4918f7e83c5c30c217de09849f9a4ed132b3e0967f1852b9ab58eacd578a715d"
+}
