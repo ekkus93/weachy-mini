@@ -1,6 +1,6 @@
 # RMA-120 speech provider contracts
 
-**Status:** Implementation candidate  
+**Status:** Complete  
 **Date:** 2026-08-06
 
 ## Scope
@@ -55,8 +55,14 @@ Every potentially blocking provider operation accepts a `CancellationToken`. Bot
 
 RMA-121 through RMA-125 remain responsible for Android lifecycle ownership, microphone permission, recognizer/engine destruction, audio focus, route changes, service death, and callback marshaling.
 
-## Validation
+## Accepted implementation evidence
 
-The permanent RMA-120 gate builds the shared managed core with warnings treated as errors and runs an in-process deterministic contract executable. The suite uses fake providers only; it does not request microphone permission, contact Android speech services, play audio, open a network connection, or use credentials.
+Accepted implementation SHA: `c26f1bf4a373b7b3060eeee325d6831ee9c25eb4`.
 
-The suite validates interface separation, provider/network truthfulness, language and voice metadata, availability, structured failures, selection epochs, timeout bounds, provider/event origin checks, no-fallback defaults, cancellation signatures and propagation, and explicit disposal.
+Permanent RMA-120 workflow run `31154981121`, job `92792408530`, built the shared managed core with warnings treated as errors and completed with `0 Warning(s)` and `0 Error(s)`. The deterministic executable then passed all 36 speech-provider contract cases, including interface separation, locality/network truthfulness, provider-selection epochs, stale-operation rejection, timeout bounds, structured failures, provider/event-origin checks, no-fallback defaults, cancellation propagation, and explicit disposal.
+
+Hosted CI run `31154981202` completed successfully on the same exact SHA.
+
+Self-hosted Local Unity Android Validation run `31154981088`, job `92792471791`, completed successfully on the same SHA. It passed Unity tests, ARM64 API-26 APK build and verification, physical RMA-090 camera discovery, RMA-091 acquisition, RMA-092 GPU texture acceptance, RMA-111 lightweight tracking, RMA-022 lifecycle acceptance, authoritative rendering, evidence uploads, APK upload, and final status publication on `kawa`.
+
+That device run is regression evidence only for RMA-120. It does **not** claim that Android ASR/TTS works yet. Physical speech-service implementation and validation remain RMA-121 through RMA-125.
