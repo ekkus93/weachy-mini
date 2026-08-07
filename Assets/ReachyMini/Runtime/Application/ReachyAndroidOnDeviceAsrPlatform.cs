@@ -14,12 +14,12 @@ namespace ReachyMini.Speech
         public const string JavaClassName =
             "com.ekkus93.weachy.speech.ReachyOnDeviceAsrBridge";
 
-        private readonly object sync = new object();
 #if UNITY_ANDROID && !UNITY_EDITOR
+        private readonly object sync = new object();
         private AndroidJavaObject? bridge;
-#endif
         private string? activeRecognitionRequestId;
         private bool disposed;
+#endif
 
         public ReachyAndroidOnDeviceAsrPlatform()
         {
@@ -259,15 +259,24 @@ namespace ReachyMini.Speech
                     value.Dispose();
                 }
             }
-#else
-            lock (sync)
-            {
-                disposed = true;
-                activeRecognitionRequestId = null;
-            }
 #endif
             GC.SuppressFinalize(this);
             return default;
+        }
+
+        private static AndroidOnDeviceAsrPlatformEvent Failure(
+            string requestId,
+            AndroidOnDeviceAsrFailureKind kind,
+            string code,
+            string diagnostic)
+        {
+            return new AndroidOnDeviceAsrPlatformEvent(
+                requestId,
+                AndroidOnDeviceAsrPlatformEventKind.Failed,
+                failure: new AndroidOnDeviceAsrPlatformFailure(
+                    kind,
+                    code,
+                    diagnostic));
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -338,21 +347,6 @@ namespace ReachyMini.Speech
                     AndroidOnDeviceAsrFailureKind.UnexpectedNetworkFailure,
                 _ => AndroidOnDeviceAsrFailureKind.Unknown,
             };
-        }
-
-        private static AndroidOnDeviceAsrPlatformEvent Failure(
-            string requestId,
-            AndroidOnDeviceAsrFailureKind kind,
-            string code,
-            string diagnostic)
-        {
-            return new AndroidOnDeviceAsrPlatformEvent(
-                requestId,
-                AndroidOnDeviceAsrPlatformEventKind.Failed,
-                failure: new AndroidOnDeviceAsrPlatformFailure(
-                    kind,
-                    code,
-                    diagnostic));
         }
 
         private sealed class ProbeCallback : AndroidJavaProxy
