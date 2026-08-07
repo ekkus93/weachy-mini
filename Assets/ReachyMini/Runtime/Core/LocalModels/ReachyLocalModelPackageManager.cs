@@ -1016,7 +1016,7 @@ namespace ReachyMini.LocalModels
             return null;
         }
 
-        private LocalModelPackageResult? ValidateDownloadUri(
+        private static LocalModelPackageResult? ValidateDownloadUri(
             LocalModelManifest manifest,
             Uri artifactUri)
         {
@@ -1223,7 +1223,7 @@ namespace ReachyMini.LocalModels
             return null;
         }
 
-        private long PrepareDownloadPartial(
+        private static long PrepareDownloadPartial(
             LocalModelManifest manifest,
             string partPath,
             string metadataPath,
@@ -1338,7 +1338,7 @@ namespace ReachyMini.LocalModels
             return true;
         }
 
-        private async Task<LocalModelPackageResult?> VerifyHashAsync(
+        private static async Task<LocalModelPackageResult?> VerifyHashAsync(
             LocalModelManifest manifest,
             string path,
             CancellationToken cancellationToken)
@@ -1598,9 +1598,7 @@ namespace ReachyMini.LocalModels
                         buffer.Length,
                         maximumBytes - written);
                     int read = await source.ReadAsync(
-                            buffer,
-                            0,
-                            requestSize,
+                            buffer.AsMemory(0, requestSize),
                             cancellationToken)
                         .ConfigureAwait(false);
                     if (read == 0)
@@ -1608,9 +1606,7 @@ namespace ReachyMini.LocalModels
                         break;
                     }
                     await destination.WriteAsync(
-                            buffer,
-                            0,
-                            read,
+                            buffer.AsMemory(0, read),
                             cancellationToken)
                         .ConfigureAwait(false);
                     written += read;
@@ -1620,9 +1616,7 @@ namespace ReachyMini.LocalModels
                 if (written == maximumBytes)
                 {
                     hasExtra = await source.ReadAsync(
-                            buffer,
-                            0,
-                            1,
+                            buffer.AsMemory(0, 1),
                             cancellationToken)
                         .ConfigureAwait(false) != 0;
                 }
@@ -1650,9 +1644,7 @@ namespace ReachyMini.LocalModels
                 while (true)
                 {
                     int read = await stream.ReadAsync(
-                            buffer,
-                            0,
-                            buffer.Length,
+                            buffer.AsMemory(0, buffer.Length),
                             cancellationToken)
                         .ConfigureAwait(false);
                     if (read == 0)

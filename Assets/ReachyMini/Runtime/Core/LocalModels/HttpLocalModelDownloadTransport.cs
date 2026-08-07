@@ -228,6 +228,13 @@ namespace ReachyMini.LocalModels
                     cancellationToken);
             }
 
+            public override ValueTask<int> ReadAsync(
+                Memory<byte> buffer,
+                CancellationToken cancellationToken)
+            {
+                return RequireInner().ReadAsync(buffer, cancellationToken);
+            }
+
             public override long Seek(long offset, SeekOrigin origin)
             {
                 return RequireInner().Seek(offset, origin);
