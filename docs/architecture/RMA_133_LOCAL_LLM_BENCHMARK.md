@@ -18,6 +18,8 @@ RMA-133 v1 compares the same `Q4_K_M` quantization class:
 
 The device runner downloads only the exact revision-pinned HTTPS artifact URL. It verifies exact byte size and SHA-256 before accepting a host cache entry or pushing a file to the device. It never tries another revision, mirror, quantization, model, or cloud provider when acquisition or integrity fails.
 
+Candidate-set iterations do not rewrite a completed experiment. V1 is retained as a negative result after both Qwen3 0.6B and SmolLM2 360M failed the frozen structured-output gate. `benchmarks/rma133/candidates-v2.json` keeps the same corpus, runtime profile, thresholds, ranking, Qwen3 control, and quantization while replacing the alternative with Qwen2.5 0.5B Instruct. A later candidate-set iteration must follow the same rule rather than changing a threshold after observing results.
+
 ## Runtime profile
 
 Every candidate uses the same RMA-130 settings:
@@ -60,7 +62,9 @@ The first-party C benchmark uses only the public RMA-130 C ABI and Android/Linux
 - time to first streamed text, which is the available RMA-130 measurement of prompt processing plus first-token latency;
 - generated token count and post-first-token decode rate;
 - battery temperature before the model, around every case, and after the candidate; and
-- raw response text for deterministic offline scoring in the CI artifact.
+- the exact generated response bytes, hex-encoded in the JSONL artifact for deterministic offline scoring.
+
+Response bytes are not sanitized, replacement-decoded, or truncated to a Unicode boundary. The scorer decodes `response_bytes_hex` with strict UTF-8. If generation stops in the middle of a UTF-8 code point, that case receives a visible schema failure and zero semantic score; malformed response bytes cannot crash the candidate scorer and cannot be repaired into an eligible response.
 
 RMA-130 ABI v1 does not expose pure prefill duration separately, so RMA-133 does not mislabel time-to-first-text as isolated prefill time. A future ABI may add that finer metric without rewriting this evidence.
 
@@ -86,10 +90,10 @@ Eligible candidates are ranked, in order, by higher semantic quality, higher sch
 
 The dedicated workflow runs candidate inference only on the project's physical ARM64 Android runner. Emulator evidence is rejected. The runner builds the exact pinned RMA-130 llama.cpp source for the exact pinned Android NDK/API baseline, then builds the benchmark executable with first-party warnings-as-errors and links it only through `libreachy_llama.so`.
 
-Models are staged one at a time under `/data/local/tmp` and removed after each candidate. They are not committed, bundled into the application, or uploaded as CI artifacts. Benchmark result artifacts contain configuration, responses, scores, runtime/build identity, and selection evidence only.
+Models are staged one at a time under `/data/local/tmp` and removed after each candidate. They are not committed, bundled into the application, or uploaded as CI artifacts. Benchmark result artifacts contain configuration, response bytes, scores, runtime/build identity, and selection evidence only.
 
 ## Failure policy and downstream boundary
 
-There is no model fallback in the native benchmark and no provider fallback anywhere in RMA-133. Acquisition/integrity failure, model-load failure, missing thermal evidence, runtime error, incomplete corpus, malformed structured output, or no eligible candidate is visible and prevents selection.
+There is no model fallback in the native benchmark and no provider fallback anywhere in RMA-133. Acquisition/integrity failure, model-load failure, missing thermal evidence, runtime error, incomplete corpus, malformed structured output, invalid UTF-8, or no eligible candidate is visible and prevents selection.
 
 RMA-133 does not implement the production local LLM provider. After a winner is measured, the repository can record that recommendation and a real validated model manifest from the exact selected artifact. RMA-134 must still stream/cancel through the worker-thread runtime, enforce context/output limits, validate production behavior intent, and report local unavailable state instead of silently calling a cloud model. RMA-135 owns runtime resource and thermal governance.
