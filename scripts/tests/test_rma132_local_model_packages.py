@@ -50,14 +50,10 @@ def main() -> None:
         "            CancellationToken cancellationToken)"
     )
     import_string_signature = (
-        "ImportAsync(\n"
-        "            LocalModelManifest manifest,\n"
-        "            string "
+        "ImportAsync(\n            LocalModelManifest manifest,\n            string "
     )
     download_string_signature = (
-        "DownloadAsync(\n"
-        "            LocalModelManifest manifest,\n"
-        "            string "
+        "DownloadAsync(\n            LocalModelManifest manifest,\n            string "
     )
     require(
         import_signature in manager,
