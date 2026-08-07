@@ -1,5 +1,9 @@
 apply plugin: 'com.android.library'
 
+dependencies {
+    compileOnly 'androidx.annotation:annotation:1.9.1'
+}
+
 android {
     namespace "com.ekkus93.weachy.speech"
     compileSdk getProperty("unity.compileSdkVersion") as int

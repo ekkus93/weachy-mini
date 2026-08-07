@@ -36,6 +36,10 @@ android {
     }
 }
 
+dependencies {
+    compileOnly("androidx.annotation:annotation:1.9.1")
+}
+
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
 }

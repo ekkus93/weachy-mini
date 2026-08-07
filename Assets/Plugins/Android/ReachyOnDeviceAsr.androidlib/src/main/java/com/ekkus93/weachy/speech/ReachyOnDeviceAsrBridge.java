@@ -1,7 +1,6 @@
 package com.ekkus93.weachy.speech;
 
 import android.Manifest;
-import android.annotation.TargetApi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -15,6 +14,8 @@ import android.speech.RecognitionSupport;
 import android.speech.RecognitionSupportCallback;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+
+import androidx.annotation.RequiresApi;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -475,7 +476,7 @@ public final class ReachyOnDeviceAsrBridge {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.TIRAMISU)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private final class SupportCallback implements RecognitionSupportCallback {
         private final String requestId;
         private final String languageTag;
@@ -546,7 +547,7 @@ public final class ReachyOnDeviceAsrBridge {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.S)
+    @RequiresApi(Build.VERSION_CODES.S)
     private static final class Api31 {
         private Api31() {
         }
@@ -560,7 +561,7 @@ public final class ReachyOnDeviceAsrBridge {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.TIRAMISU)
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private static final class Api33 {
         private Api33() {
         }
