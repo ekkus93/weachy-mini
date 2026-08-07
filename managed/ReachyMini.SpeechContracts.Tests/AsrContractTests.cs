@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,33 +9,39 @@ using ReachyMini.Speech;
 
 internal static class AsrContractTests
 {
+    private static readonly string[] SingleLanguage = { "en-US" };
+    private static readonly string[] DuplicateLanguages = { "en-US", "EN-us" };
+
     public static Task RequiresLanguages()
     {
-        AssertEx.Throws<ArgumentException>(() => new AsrCapabilities(
-            Array.Empty<string>(),
-            true,
-            true,
-            TimeSpan.FromMinutes(1)));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrCapabilities(
+                Array.Empty<string>(),
+                true,
+                true,
+                TimeSpan.FromMinutes(1)));
         return Task.CompletedTask;
     }
 
     public static Task LanguagesAreUnique()
     {
-        AssertEx.Throws<ArgumentException>(() => new AsrCapabilities(
-            new[] { "en-US", "EN-us" },
-            true,
-            true,
-            TimeSpan.FromMinutes(1)));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrCapabilities(
+                DuplicateLanguages,
+                true,
+                true,
+                TimeSpan.FromMinutes(1)));
         return Task.CompletedTask;
     }
 
     public static Task RequiresCancellation()
     {
-        AssertEx.Throws<ArgumentException>(() => new AsrCapabilities(
-            new[] { "en-US" },
-            true,
-            false,
-            TimeSpan.FromMinutes(1)));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrCapabilities(
+                SingleLanguage,
+                true,
+                false,
+                TimeSpan.FromMinutes(1)));
         return Task.CompletedTask;
     }
 
@@ -46,9 +53,10 @@ internal static class AsrContractTests
                 "tts",
                 SpeechProviderLocation.OnDevice,
                 SpeechNetworkRequirement.None));
-        AssertEx.Throws<ArgumentException>(() => new AsrRequest(
-            context,
-            new AsrOptions("en-US", true)));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrRequest(
+                context,
+                new AsrOptions("en-US", true)));
         return Task.CompletedTask;
     }
 
@@ -60,17 +68,19 @@ internal static class AsrContractTests
             1UL,
             AsrEventKind.FinalResult,
             "hello");
-        AssertEx.Throws<ArgumentException>(() => new AsrEvent(
-            "asr",
-            "request",
-            1UL,
-            AsrEventKind.Started,
-            "not allowed"));
-        AssertEx.Throws<ArgumentException>(() => new AsrEvent(
-            "asr",
-            "request",
-            1UL,
-            AsrEventKind.PartialResult));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrEvent(
+                "asr",
+                "request",
+                1UL,
+                AsrEventKind.Started,
+                "not allowed"));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrEvent(
+                "asr",
+                "request",
+                1UL,
+                AsrEventKind.PartialResult));
         return Task.CompletedTask;
     }
 
@@ -83,17 +93,19 @@ internal static class AsrContractTests
             1UL,
             AsrEventKind.Failed,
             error: error);
-        AssertEx.Throws<ArgumentException>(() => new AsrEvent(
-            "asr",
-            "request",
-            1UL,
-            AsrEventKind.Failed));
-        AssertEx.Throws<ArgumentException>(() => new AsrEvent(
-            "asr",
-            "request",
-            1UL,
-            AsrEventKind.NoMatch,
-            error: error));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrEvent(
+                "asr",
+                "request",
+                1UL,
+                AsrEventKind.Failed));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new AsrEvent(
+                "asr",
+                "request",
+                1UL,
+                AsrEventKind.NoMatch,
+                error: error));
         return Task.CompletedTask;
     }
 

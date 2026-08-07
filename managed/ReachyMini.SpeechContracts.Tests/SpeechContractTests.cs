@@ -65,21 +65,23 @@ internal static class SpeechContractTests
 
     private static Task OnDeviceNetworkContract()
     {
-        AssertEx.Throws<ArgumentException>(() => SpeechContractFixtures.CreateDescriptor(
-            SpeechProviderKind.AutomaticSpeechRecognition,
-            "asr-on-device",
-            SpeechProviderLocation.OnDevice,
-            SpeechNetworkRequirement.ProviderControlled));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = SpeechContractFixtures.CreateDescriptor(
+                SpeechProviderKind.AutomaticSpeechRecognition,
+                "asr-on-device",
+                SpeechProviderLocation.OnDevice,
+                SpeechNetworkRequirement.ProviderControlled));
         return Task.CompletedTask;
     }
 
     private static Task CloudNetworkContract()
     {
-        AssertEx.Throws<ArgumentException>(() => SpeechContractFixtures.CreateDescriptor(
-            SpeechProviderKind.AutomaticSpeechRecognition,
-            "asr-cloud",
-            SpeechProviderLocation.Cloud,
-            SpeechNetworkRequirement.None));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = SpeechContractFixtures.CreateDescriptor(
+                SpeechProviderKind.AutomaticSpeechRecognition,
+                "asr-cloud",
+                SpeechProviderLocation.Cloud,
+                SpeechNetworkRequirement.None));
         SpeechProviderDescriptor descriptor = SpeechContractFixtures.CreateDescriptor(
             SpeechProviderKind.AutomaticSpeechRecognition,
             "asr-cloud",
@@ -93,11 +95,12 @@ internal static class SpeechContractTests
 
     private static Task LocalNetworkContract()
     {
-        AssertEx.Throws<ArgumentException>(() => SpeechContractFixtures.CreateDescriptor(
-            SpeechProviderKind.TextToSpeech,
-            "tts-lan",
-            SpeechProviderLocation.LocalNetwork,
-            SpeechNetworkRequirement.ProviderControlled));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = SpeechContractFixtures.CreateDescriptor(
+                SpeechProviderKind.TextToSpeech,
+                "tts-lan",
+                SpeechProviderLocation.LocalNetwork,
+                SpeechNetworkRequirement.ProviderControlled));
         return Task.CompletedTask;
     }
 
@@ -116,14 +119,15 @@ internal static class SpeechContractTests
 
     private static Task DescriptorRejectsEmptyIdentity()
     {
-        AssertEx.Throws<ArgumentException>(() => new SpeechProviderDescriptor(
-            SpeechProviderKind.TextToSpeech,
-            string.Empty,
-            "instance",
-            "display",
-            "1",
-            SpeechProviderLocation.OnDevice,
-            SpeechNetworkRequirement.None));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new SpeechProviderDescriptor(
+                SpeechProviderKind.TextToSpeech,
+                string.Empty,
+                "instance",
+                "display",
+                "1",
+                SpeechProviderLocation.OnDevice,
+                SpeechNetworkRequirement.None));
         return Task.CompletedTask;
     }
 
@@ -158,16 +162,18 @@ internal static class SpeechContractTests
 
     private static Task StructuredErrorIsBounded()
     {
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new SpeechProviderError(
-            SpeechErrorCategory.Unknown,
-            new string('c', SpeechProviderError.MaximumCodeCharacters + 1),
-            "detail",
-            false));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new SpeechProviderError(
-            SpeechErrorCategory.Unknown,
-            "code",
-            new string('d', SpeechProviderError.MaximumDiagnosticCharacters + 1),
-            false));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() =>
+            _ = new SpeechProviderError(
+                SpeechErrorCategory.Unknown,
+                new string('c', SpeechProviderError.MaximumCodeCharacters + 1),
+                "detail",
+                false));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() =>
+            _ = new SpeechProviderError(
+                SpeechErrorCategory.Unknown,
+                "code",
+                new string('d', SpeechProviderError.MaximumDiagnosticCharacters + 1),
+                false));
         return Task.CompletedTask;
     }
 
@@ -179,12 +185,13 @@ internal static class SpeechContractTests
                 "asr-a",
                 SpeechProviderLocation.OnDevice,
                 SpeechNetworkRequirement.None));
-        AssertEx.Throws<ArgumentException>(() => selection.Select(
-            SpeechContractFixtures.CreateDescriptor(
-                SpeechProviderKind.TextToSpeech,
-                "tts-a",
-                SpeechProviderLocation.OnDevice,
-                SpeechNetworkRequirement.None)));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = selection.Select(
+                SpeechContractFixtures.CreateDescriptor(
+                    SpeechProviderKind.TextToSpeech,
+                    "tts-a",
+                    SpeechProviderLocation.OnDevice,
+                    SpeechNetworkRequirement.None)));
         return Task.CompletedTask;
     }
 
@@ -239,14 +246,16 @@ internal static class SpeechContractTests
                 "asr",
                 SpeechProviderLocation.OnDevice,
                 SpeechNetworkRequirement.None)).Current;
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new SpeechOperationContext(
-            "request",
-            snapshot,
-            TimeSpan.Zero));
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => new SpeechOperationContext(
-            "request",
-            snapshot,
-            SpeechOperationContext.MaximumTimeout + TimeSpan.FromTicks(1)));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() =>
+            _ = new SpeechOperationContext(
+                "request",
+                snapshot,
+                TimeSpan.Zero));
+        AssertEx.Throws<ArgumentOutOfRangeException>(() =>
+            _ = new SpeechOperationContext(
+                "request",
+                snapshot,
+                SpeechOperationContext.MaximumTimeout + TimeSpan.FromTicks(1)));
         return Task.CompletedTask;
     }
 

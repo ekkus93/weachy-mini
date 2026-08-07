@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,16 +11,17 @@ internal static class TtsContractTests
 {
     public static Task RequiresCancellation()
     {
-        AssertEx.Throws<ArgumentException>(() => new TtsCapabilities(false, 1000));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new TtsCapabilities(false, 1000));
         return Task.CompletedTask;
     }
 
     public static Task InputLimitIsBounded()
     {
         AssertEx.Throws<ArgumentOutOfRangeException>(() =>
-            new TtsCapabilities(true, 0));
+            _ = new TtsCapabilities(true, 0));
         AssertEx.Throws<ArgumentOutOfRangeException>(() =>
-            new TtsCapabilities(true, 1_000_001));
+            _ = new TtsCapabilities(true, 1_000_001));
         return Task.CompletedTask;
     }
 
@@ -32,7 +34,7 @@ internal static class TtsContractTests
                 SpeechProviderLocation.OnDevice,
                 SpeechNetworkRequirement.None));
         AssertEx.Throws<ArgumentException>(() =>
-            new TtsRequest(context, "hello", "voice"));
+            _ = new TtsRequest(context, "hello", "voice"));
         return Task.CompletedTask;
     }
 
@@ -45,17 +47,19 @@ internal static class TtsContractTests
             1UL,
             TtsEventKind.Failed,
             error);
-        AssertEx.Throws<ArgumentException>(() => new TtsEvent(
-            "tts",
-            "request",
-            1UL,
-            TtsEventKind.Failed));
-        AssertEx.Throws<ArgumentException>(() => new TtsEvent(
-            "tts",
-            "request",
-            1UL,
-            TtsEventKind.Completed,
-            error));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new TtsEvent(
+                "tts",
+                "request",
+                1UL,
+                TtsEventKind.Failed));
+        AssertEx.Throws<ArgumentException>(() =>
+            _ = new TtsEvent(
+                "tts",
+                "request",
+                1UL,
+                TtsEventKind.Completed,
+                error));
         return Task.CompletedTask;
     }
 

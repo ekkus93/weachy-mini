@@ -69,11 +69,7 @@ internal sealed class FakeAsrProvider : IAsrProvider
         AsrOptions options,
         CancellationToken cancellationToken)
     {
-        if (options == null)
-        {
-            throw new ArgumentNullException(nameof(options));
-        }
-
+        ArgumentNullException.ThrowIfNull(options);
         cancellationToken.ThrowIfCancellationRequested();
         return new ValueTask<SpeechProviderAvailability>(
             new SpeechProviderAvailability(
@@ -85,11 +81,7 @@ internal sealed class FakeAsrProvider : IAsrProvider
         AsrRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
+        ArgumentNullException.ThrowIfNull(request);
         SpeechProviderContract.ValidateProviderForOperation(
             Descriptor,
             request.Context);
@@ -158,11 +150,7 @@ internal sealed class FakeTtsProvider : ITtsProvider
         TtsRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
+        ArgumentNullException.ThrowIfNull(request);
         SpeechProviderContract.ValidateProviderForOperation(
             Descriptor,
             request.Context);
