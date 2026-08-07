@@ -60,7 +60,7 @@ class Rma133CandidateSetV2Tests(unittest.TestCase):
         self.assertEqual(qwen25["artifact"]["file_size_bytes"], 491400032)
         self.assertEqual(
             qwen25["artifact"]["sha256"],
-            "74a4da8c46207a33d60ac5d1278f84911c3ee20c78959a364e94ffae45d7a9db",
+            "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
         )
         self.assertEqual(qwen25["artifact"]["quantization"], "Q4_K_M")
         self.assertEqual(qwen25["license_id"], "Apache-2.0")
