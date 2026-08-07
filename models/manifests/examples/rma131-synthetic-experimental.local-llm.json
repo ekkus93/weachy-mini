@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "manifest_id": "rma131.synthetic.experimental.v1",
+    "model_id": "rma131-synthetic-decoder",
+    "display_name": "RMA-131 Synthetic Decoder Fixture",
+    "model_version": "synthetic-v1",
+    "source_uri": "https://example.invalid/weachy-mini/rma131-synthetic-decoder",
+    "source_revision": "synthetic-revision-not-a-model",
+    "license_id": "LicenseRef-Synthetic-Test-Only",
+    "experimental": true,
+    "experimental_reason": "Synthetic contract fixture only; no language model is selected, approved, downloaded, or bundled."
+  },
+  "runtime": {
+    "runtime_id": "reachy_llama",
+    "abi_version": 1,
+    "requires_network_access": false
+  },
+  "artifact": {
+    "relative_path": "synthetic/rma131-synthetic-decoder-q4.gguf",
+    "file_size_bytes": 123456789,
+    "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "gguf_metadata": {
+    "gguf_version": 3,
+    "architecture": "synthetic-decoder",
+    "quantization": "SYNTHETIC_Q4",
+    "parameter_count": 600000000,
+    "tokenizer_model": "synthetic-tokenizer",
+    "tokenizer_pre": "synthetic-pre"
+  },
+  "inference": {
+    "context_limit_tokens": 4096,
+    "chat_template": "{% for message in messages %}{{ message['role'] }}: {{ message['content'] }}\\n{% endfor %}",
+    "stop_tokens": [
+      "<|synthetic_eos|>"
+    ],
+    "memory_estimate": {
+      "peak_ram_bytes": 1073741824,
+      "basis_context_tokens": 4096,
+      "basis_batch_tokens": 512
+    },
+    "recommended_threads": 4
+  },
+  "device_compatibility": {
+    "android_abis": [
+      "arm64-v8a"
+    ],
+    "minimum_android_api": 26,
+    "required_cpu_features": [],
+    "minimum_ram_bytes": 2147483648,
+    "reachy_llama_abi_version": 1
+  }
+}
