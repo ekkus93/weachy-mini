@@ -110,12 +110,7 @@ final class ReachySpeechAudioInterruptionMonitor {
                 }
             }
         };
-        IntentFilter filter = new IntentFilter();
-        filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
-        if (Build.VERSION.SDK_INT >= 28) {
-            MicrophoneMuteApi28.addMuteChangedAction(filter);
-        }
-        registerReceiverCompat(context, receiver, filter);
+        registerReceiverCompat(context, receiver);
         receiverRegistered = true;
 
         if (Build.VERSION.SDK_INT >= 31) {
@@ -205,12 +200,13 @@ final class ReachySpeechAudioInterruptionMonitor {
 
     private static void registerReceiverCompat(
             Context context,
-            BroadcastReceiver receiver,
-            IntentFilter filter) {
+            BroadcastReceiver receiver) {
         if (Build.VERSION.SDK_INT >= 33) {
-            ReceiverApi33.register(context, receiver, filter);
+            ReceiverApi33.register(context, receiver);
+        } else if (Build.VERSION.SDK_INT >= 28) {
+            ReceiverApi28.register(context, receiver);
         } else {
-            context.registerReceiver(receiver, filter);
+            ReceiverApi26.register(context, receiver);
         }
     }
 
@@ -225,13 +221,38 @@ final class ReachySpeechAudioInterruptionMonitor {
         void onModeChanged(int mode);
     }
 
+    @TargetApi(26)
+    private static final class ReceiverApi26 {
+        private ReceiverApi26() {
+        }
+
+        static void register(
+                Context context,
+                BroadcastReceiver receiver) {
+            context.registerReceiver(
+                    receiver,
+                    new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+        }
+    }
+
+    @TargetApi(28)
+    private static final class ReceiverApi28 {
+        private ReceiverApi28() {
+        }
+
+        static void register(
+                Context context,
+                BroadcastReceiver receiver) {
+            IntentFilter filter =
+                    new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
+            context.registerReceiver(receiver, filter);
+        }
+    }
+
     @TargetApi(28)
     private static final class MicrophoneMuteApi28 {
         private MicrophoneMuteApi28() {
-        }
-
-        static void addMuteChangedAction(IntentFilter filter) {
-            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
         }
 
         static boolean isMuteChangedAction(String action) {
@@ -276,8 +297,10 @@ final class ReachySpeechAudioInterruptionMonitor {
 
         static void register(
                 Context context,
-                BroadcastReceiver receiver,
-                IntentFilter filter) {
+                BroadcastReceiver receiver) {
+            IntentFilter filter =
+                    new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
             context.registerReceiver(
                     receiver,
                     filter,
