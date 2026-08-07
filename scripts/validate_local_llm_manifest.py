@@ -139,11 +139,10 @@ def _validate_identity(identity: Any, errors: list[str]) -> None:
     reason = identity.get("experimental_reason")
     if experimental is True:
         _require_text(reason, "identity.experimental_reason", errors, 512)
-    elif experimental is False:
-        if reason != "":
-            errors.append(
-                "identity.experimental_reason: non-experimental manifests require empty reason"
-            )
+    elif experimental is False and reason != "":
+        errors.append(
+            "identity.experimental_reason: non-experimental manifests require empty reason"
+        )
 
 
 def _validate_runtime(runtime: Any, errors: list[str]) -> None:

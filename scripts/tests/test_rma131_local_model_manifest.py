@@ -6,9 +6,10 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_PATH = ROOT / "scripts/validate_local_llm_manifest.py"
