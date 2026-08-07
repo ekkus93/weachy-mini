@@ -13,9 +13,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_PATH = ROOT / "scripts/validate_local_llm_manifest.py"
-FIXTURE_PATH = (
-    ROOT / "models/manifests/examples/rma131-synthetic-experimental.local-llm.json"
-)
+FIXTURE_PATH = ROOT / "models/manifests/examples/rma131-synthetic-experimental.local-llm.json"
 SCHEMA_PATH = ROOT / "models/manifests/local-llm-manifest.schema.json"
 
 
@@ -225,16 +223,12 @@ def test_device_compatibility_rejections() -> None:
         "duplicate CPU feature",
     )
     require_invalid(
-        lambda doc: doc["device_compatibility"].__setitem__(
-            "reachy_llama_abi_version", 2
-        ),
+        lambda doc: doc["device_compatibility"].__setitem__("reachy_llama_abi_version", 2),
         "must equal ABI 1",
         "runtime ABI mismatch",
     )
     require_invalid(
-        lambda doc: doc["device_compatibility"].__setitem__(
-            "minimum_ram_bytes", 536870912
-        ),
+        lambda doc: doc["device_compatibility"].__setitem__("minimum_ram_bytes", 536870912),
         "smaller than peak-RAM estimate",
         "RAM compatibility understates estimate",
     )

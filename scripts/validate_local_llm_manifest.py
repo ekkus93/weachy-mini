@@ -218,13 +218,9 @@ def _validate_inference(inference: Any, errors: list[str]) -> None:
             errors,
         )
         if _is_int(basis_context) and _is_int(context_limit) and basis_context > context_limit:
-            errors.append(
-                "inference.memory_estimate.basis_context_tokens: exceeds context limit"
-            )
+            errors.append("inference.memory_estimate.basis_context_tokens: exceeds context limit")
         if _is_int(basis_batch) and _is_int(basis_context) and basis_batch > basis_context:
-            errors.append(
-                "inference.memory_estimate.basis_batch_tokens: exceeds basis context"
-            )
+            errors.append("inference.memory_estimate.basis_batch_tokens: exceeds basis context")
 
     threads = inference.get("recommended_threads")
     if not _is_int(threads) or not 1 <= threads <= 64:
