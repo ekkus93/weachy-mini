@@ -94,7 +94,7 @@ mkdir -p "${OUTPUT_DIR}"
     "${SOURCE_FILE}" \
     -L"${RUNTIME_DIR}" \
     -Wl,--no-undefined \
-    -Wl,-rpath,'$ORIGIN' \
+    -Wl,-rpath,\$ORIGIN \
     -lreachy_llama \
     -lm \
     -ldl \
