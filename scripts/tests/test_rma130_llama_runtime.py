@@ -28,9 +28,7 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertNotEqual(llama["status"], "planned")
 
     def test_public_abi_is_versioned_and_async_only(self) -> None:
-        header = (ROOT / "native/llama_runtime/include/reachy_llama.h").read_text(
-            encoding="utf-8"
-        )
+        header = (ROOT / "native/llama_runtime/include/reachy_llama.h").read_text(encoding="utf-8")
         required = (
             "REACHY_LLAMA_ABI_VERSION 1u",
             "reachy_llama_model_load(",
@@ -49,9 +47,7 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertNotIn("reachy_llama_generation_wait(", header)
 
     def test_first_party_wrapper_has_no_network_or_provider_fallback(self) -> None:
-        source = (ROOT / "native/llama_runtime/src/reachy_llama.cpp").read_text(
-            encoding="utf-8"
-        )
+        source = (ROOT / "native/llama_runtime/src/reachy_llama.cpp").read_text(encoding="utf-8")
         lowered = source.lower()
         for prohibited in (
             "http://",
@@ -83,14 +79,14 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         ):
             self.assertIn(setting, cmake)
         self.assertIn("reachy_enable_strict_warnings(reachy_llama)", cmake)
-        upstream_start = cmake.index("add_subdirectory(\n    \"${REACHY_LLAMA_CPP_SOURCE_DIR}\"")
+        upstream_start = cmake.index('add_subdirectory(\n    "${REACHY_LLAMA_CPP_SOURCE_DIR}"')
         strict_start = cmake.index("reachy_enable_strict_warnings(reachy_llama)")
         self.assertLess(upstream_start, strict_start)
 
     def test_android_build_fails_closed_and_exports_only_wrapper(self) -> None:
         build_script = (ROOT / "scripts/build_llama_android.sh").read_text(encoding="utf-8")
-        self.assertIn('ANDROID_STL=c++_static', build_script)
-        self.assertIn('native_feasibility_min_sdk', build_script)
+        self.assertIn("ANDROID_STL=c++_static", build_script)
+        self.assertIn("native_feasibility_min_sdk", build_script)
         self.assertIn("verify_source_checkout.py", build_script)
         self.assertIn("license blob mismatch", build_script)
         self.assertIn("prohibited dynamic dependency", build_script)
@@ -99,18 +95,16 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertIn("Model bundled: no", build_script)
 
     def test_unity_staging_includes_runtime_without_model_payload(self) -> None:
-        stage = (ROOT / "scripts/stage_reachy_unity_android_runtime.sh").read_text(
-            encoding="utf-8"
-        )
+        stage = (ROOT / "scripts/stage_reachy_unity_android_runtime.sh").read_text(encoding="utf-8")
         self.assertIn("third_party/llama-cpp-source.lock.json", stage)
         self.assertIn("build_llama_android.sh", stage)
-        self.assertIn('libreachy_llama.so', stage)
+        self.assertIn("libreachy_llama.so", stage)
         self.assertNotIn(".gguf", stage.lower())
 
     def test_stress_contract_uses_real_bounded_queue_and_cancellation(self) -> None:
-        tests = (
-            ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp"
-        ).read_text(encoding="utf-8")
+        tests = (ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("TestBoundedQueueOrderingAndAllocationStress", tests)
         self.assertIn("TestCancellationUnblocksBackpressureWithoutSilentDrain", tests)
         self.assertIn("256U", tests)
