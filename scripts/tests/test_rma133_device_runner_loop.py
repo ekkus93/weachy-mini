@@ -27,12 +27,12 @@ class Rma133DeviceRunnerLoopTests(unittest.TestCase):
             '"${ADB[@]}" shell \\\n        "cd \'${REMOTE_ROOT}\' && LD_LIBRARY_PATH=.',
             source,
         )
-        self.assertIn('</dev/null | tr -d \'\\r\' > "${raw_path}"', source)
+        self.assertIn("</dev/null | tr -d '\\r' > \"${raw_path}\"", source)
 
     def test_all_frozen_candidate_reports_are_required_before_selection(self) -> None:
         source = RUNNER.read_text(encoding="utf-8")
-        self.assertIn('if (( ${#report_args[@]} != ${#candidate_rows[@]} * 2 )); then', source)
-        self.assertIn('RMA-133 report count mismatch', source)
+        self.assertIn("if (( ${#report_args[@]} != ${#candidate_rows[@]} * 2 )); then", source)
+        self.assertIn("RMA-133 report count mismatch", source)
 
 
 if __name__ == "__main__":
