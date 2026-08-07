@@ -1,0 +1,52 @@
+name: RMA-120 speech provider contracts
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Speech/**"
+      - "managed/ReachyMini.SpeechContracts.Tests/**"
+      - "docs/architecture/SPEECH_PROVIDER_CONTRACTS.md"
+      - "docs/validation/RMA_120_SPEECH_PROVIDER_CONTRACTS_VALIDATION_2026-08-06.md"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - ".github/workflows/rma120-speech-provider-contracts.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Speech/**"
+      - "managed/ReachyMini.SpeechContracts.Tests/**"
+      - "docs/architecture/SPEECH_PROVIDER_CONTRACTS.md"
+      - "docs/validation/RMA_120_SPEECH_PROVIDER_CONTRACTS_VALIDATION_2026-08-06.md"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - ".github/workflows/rma120-speech-provider-contracts.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma120-speech-provider-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  managed-contracts:
+    name: Validate RMA-120 managed contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+
+      - name: Run all RMA-120 contracts
+        run: dotnet run --project managed/ReachyMini.SpeechContracts.Tests/ReachyMini.SpeechContracts.Tests.csproj --configuration Release
