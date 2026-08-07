@@ -342,6 +342,7 @@ public final class ReachyOfflineTtsBridge {
             }
 
             @Override
+            @Deprecated
             public void onError(String utteranceId) {
                 failSession(utteranceId, TextToSpeech.ERROR, "synthesis_failure");
             }
