@@ -1,0 +1,214 @@
+name: RMA-132 orphan cleanup hardening
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma132-orphan-cleanup-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+
+      - name: Harden staging orphan cleanup and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          manager_path = Path("Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs")
+          manager = manager_path.read_text(encoding="utf-8")
+          old_call = '''                int stagingRemoved = RemoveUnknownHashDirectories(
+                    stagingRoot,
+                    expectedStagingRoots,
+                    cancellationToken);
+'''
+          new_call = '''                int stagingRemoved = RemoveStagingOrphans(
+                    stagingRoot,
+                    expectedStagingRoots,
+                    cancellationToken);
+'''
+          if manager.count(old_call) != 1:
+              raise SystemExit("staging cleanup call anchor drifted")
+          manager = manager.replace(old_call, new_call)
+
+          start = manager.index("        private int RemoveUnknownHashDirectories(\n")
+          end = manager.index("        private int RemoveInstalledOrphans(\n", start)
+          new_function = '''        private int RemoveStagingOrphans(
+            string managedRoot,
+            HashSet<string> expectedDirectories,
+            CancellationToken cancellationToken)
+        {
+            int removed = 0;
+            string[] rootEntries = Directory.GetFileSystemEntries(managedRoot);
+            for (int index = 0; index < rootEntries.Length; ++index)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string manifestEntry = RequireContainedPath(rootEntries[index]);
+                if (IsReparsePoint(manifestEntry))
+                {
+                    DeleteEntryNoFollow(manifestEntry);
+                    ++removed;
+                    continue;
+                }
+                if (File.Exists(manifestEntry))
+                {
+                    File.Delete(manifestEntry);
+                    ++removed;
+                    continue;
+                }
+                if (!Directory.Exists(manifestEntry))
+                {
+                    continue;
+                }
+
+                string[] manifestEntries = Directory.GetFileSystemEntries(manifestEntry);
+                for (int entryIndex = 0; entryIndex < manifestEntries.Length; ++entryIndex)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string hashEntry = RequireContainedPath(manifestEntries[entryIndex]);
+                    if (IsReparsePoint(hashEntry))
+                    {
+                        DeleteEntryNoFollow(hashEntry);
+                        ++removed;
+                    }
+                    else if (File.Exists(hashEntry))
+                    {
+                        File.Delete(hashEntry);
+                        ++removed;
+                    }
+                    else if (Directory.Exists(hashEntry))
+                    {
+                        if (!expectedDirectories.Contains(hashEntry))
+                        {
+                            DeleteTreeNoFollow(hashEntry);
+                            ++removed;
+                        }
+                        else
+                        {
+                            removed += RemoveUnexpectedStagingChildren(
+                                hashEntry,
+                                cancellationToken);
+                        }
+                    }
+                }
+                DeleteEmptyParents(manifestEntry, managedRoot);
+            }
+            return removed;
+        }
+
+        private int RemoveUnexpectedStagingChildren(
+            string stagingDirectory,
+            CancellationToken cancellationToken)
+        {
+            int removed = 0;
+            string[] entries = Directory.GetFileSystemEntries(stagingDirectory);
+            for (int index = 0; index < entries.Length; ++index)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string entry = RequireContainedPath(entries[index]);
+                if (IsReparsePoint(entry) || Directory.Exists(entry))
+                {
+                    if (Directory.Exists(entry) && !IsReparsePoint(entry))
+                    {
+                        DeleteTreeNoFollow(entry);
+                    }
+                    else
+                    {
+                        DeleteEntryNoFollow(entry);
+                    }
+                    ++removed;
+                    continue;
+                }
+
+                string fileName = Path.GetFileName(entry);
+                bool expectedFile =
+                    string.Equals(fileName, DownloadPartFileName, StringComparison.Ordinal) ||
+                    string.Equals(fileName, DownloadMetadataFileName, StringComparison.Ordinal) ||
+                    string.Equals(fileName, ImportPartFileName, StringComparison.Ordinal);
+                if (!expectedFile)
+                {
+                    File.Delete(entry);
+                    ++removed;
+                }
+            }
+            return removed;
+        }
+
+'''
+          manager = manager[:start] + new_function + manager[end:]
+          manager_path.write_text(manager, encoding="utf-8")
+
+          test_path = Path("managed/ReachyMini.LocalModelPackages.Tests/Program.cs")
+          test = test_path.read_text(encoding="utf-8")
+          anchor = '''                string staging = Path.Combine(
+                    context.Root, "staging", "orphan", new string('2', 64));
+                Directory.CreateDirectory(staging);
+                File.WriteAllText(Path.Combine(staging, "junk"), "junk", Encoding.UTF8);
+'''
+          replacement = anchor + '''                string stagingRootOrphan = Path.Combine(
+                    context.Root, "staging", "root-orphan.tmp");
+                File.WriteAllText(stagingRootOrphan, "junk", Encoding.UTF8);
+                string stagingManifestOrphan = Path.Combine(
+                    context.Root, "staging", "loose-manifest", "loose.tmp");
+                string? stagingManifestParent = Path.GetDirectoryName(stagingManifestOrphan);
+                if (stagingManifestParent == null)
+                {
+                    throw new InvalidOperationException("staging manifest orphan has no parent");
+                }
+                Directory.CreateDirectory(stagingManifestParent);
+                File.WriteAllText(stagingManifestOrphan, "junk", Encoding.UTF8);
+                string knownStagingJunk = Path.Combine(
+                    StagingDirectory(context.Root, manifest), "unexpected.tmp");
+                string? knownStagingParent = Path.GetDirectoryName(knownStagingJunk);
+                if (knownStagingParent == null)
+                {
+                    throw new InvalidOperationException("known staging junk has no parent");
+                }
+                Directory.CreateDirectory(knownStagingParent);
+                File.WriteAllText(knownStagingJunk, "junk", Encoding.UTF8);
+'''
+          if test.count(anchor) != 1:
+              raise SystemExit("cleanup test setup anchor drifted")
+          test = test.replace(anchor, replacement)
+          old_asserts = '''                Require(report.RemovedStagingEntries >= 1, "staging orphan not removed");
+                Require(report.RemovedQuarantineEntries >= 1, "quarantine not cleaned");
+                Require(!File.Exists(installed), "installed orphan remains");
+'''
+          new_asserts = '''                Require(report.RemovedStagingEntries >= 4, "staging orphans not removed");
+                Require(report.RemovedQuarantineEntries >= 1, "quarantine not cleaned");
+                Require(!File.Exists(installed), "installed orphan remains");
+                Require(!File.Exists(stagingRootOrphan), "root staging orphan remains");
+                Require(!File.Exists(stagingManifestOrphan), "manifest staging orphan remains");
+                Require(!File.Exists(knownStagingJunk), "known staging junk remains");
+'''
+          if test.count(old_asserts) != 1:
+              raise SystemExit("cleanup test assertion anchor drifted")
+          test_path.write_text(test.replace(old_asserts, new_asserts), encoding="utf-8")
+          PY
+          git diff --check
+          changed="$(git diff --name-only)"
+          test "$changed" = $'Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs\nmanaged/ReachyMini.LocalModelPackages.Tests/Program.cs'
+
+      - name: Commit cleanup hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs \
+            managed/ReachyMini.LocalModelPackages.Tests/Program.cs
+          git diff --cached --quiet && { echo "expected cleanup hardening produced no diff" >&2; exit 1; }
+          git commit -m "RMA-132: harden staging orphan cleanup"
+          git push origin HEAD:master
