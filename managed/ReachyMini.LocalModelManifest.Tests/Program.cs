@@ -11,6 +11,21 @@ namespace ReachyMini.LocalModels.Tests
         private const string ValidSha =
             "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+        private static readonly string[] Arm64AndroidAbis = { "arm64-v8a" };
+        private static readonly string[] X64AndroidAbis = { "x86_64" };
+        private static readonly string[] DuplicateCpuFeatures = { "dotprod", "dotprod" };
+        private static readonly string[] DuplicateStopTokens = { "same", "same" };
+        private static readonly string[] SyntheticStopTokens = { "<|synthetic_eos|>" };
+        private static readonly string[] UnsafeArtifactPaths =
+        {
+            "/absolute/model.gguf",
+            "../escape.gguf",
+            "nested/../escape.gguf",
+            "nested\\model.gguf",
+            "C:/model.gguf",
+            "model.GGUF",
+        };
+
         private static int checks;
 
         private static int Main()
@@ -42,10 +57,7 @@ namespace ReachyMini.LocalModels.Tests
             Equal("synthetic-revision", manifest.Identity.SourceRevision, "source revision");
             Equal("LicenseRef-Synthetic", manifest.Identity.LicenseId, "license ID");
             True(manifest.Identity.Experimental, "experimental marker");
-            Contains(
-                manifest.Identity.ExperimentalReason,
-                "Synthetic",
-                "experimental reason");
+            Contains(manifest.Identity.ExperimentalReason, "Synthetic", "experimental reason");
             Equal("reachy_llama", manifest.Runtime.RuntimeId, "runtime ID");
             Equal(1, manifest.Runtime.AbiVersion, "runtime ABI");
             False(manifest.Runtime.RequiresNetworkAccess, "local runtime network requirement");
@@ -106,62 +118,29 @@ namespace ReachyMini.LocalModels.Tests
                 () => CreateIdentity("manifest.alpha", "Model.Alpha"),
                 "uppercase model ID");
             Throws<ArgumentException>(
-                () => new LocalModelIdentity(
-                    "manifest.alpha",
-                    "model.alpha",
-                    "Synthetic Model",
-                    "synthetic-v1",
-                    new Uri("http://example.invalid/model", UriKind.Absolute),
-                    "synthetic-revision",
-                    "LicenseRef-Synthetic",
-                    true,
-                    "Synthetic test model."),
+                () => CreateIdentityWithUri("http://example.invalid/model", true, "Synthetic."),
                 "non-HTTPS provenance");
             Throws<ArgumentException>(
-                () => new LocalModelIdentity(
-                    "manifest.alpha",
-                    "model.alpha",
-                    "Synthetic Model",
-                    "synthetic-v1",
-                    new Uri("https://user:secret@example.invalid/model", UriKind.Absolute),
-                    "synthetic-revision",
-                    "LicenseRef-Synthetic",
+                () => CreateIdentityWithUri(
+                    "https://user:secret@example.invalid/model",
                     true,
-                    "Synthetic test model."),
+                    "Synthetic."),
                 "credentialed provenance");
             Throws<ArgumentException>(
-                () => new LocalModelIdentity(
-                    "manifest.alpha",
-                    "model.alpha",
-                    "Synthetic Model",
-                    "synthetic-v1",
-                    new Uri("https://example.invalid/model#fragment", UriKind.Absolute),
-                    "synthetic-revision",
-                    "LicenseRef-Synthetic",
+                () => CreateIdentityWithUri(
+                    "https://example.invalid/model#fragment",
                     true,
-                    "Synthetic test model."),
+                    "Synthetic."),
                 "fragment provenance");
             Throws<ArgumentException>(
-                () => new LocalModelIdentity(
-                    "manifest.alpha",
-                    "model.alpha",
-                    "Synthetic Model",
-                    "synthetic-v1",
-                    new Uri("https://example.invalid/model", UriKind.Absolute),
-                    "synthetic-revision",
-                    "LicenseRef-Synthetic",
+                () => CreateIdentityWithUri(
+                    "https://example.invalid/model",
                     true,
                     string.Empty),
                 "experimental reason required");
             Throws<ArgumentException>(
-                () => new LocalModelIdentity(
-                    "manifest.alpha",
-                    "model.alpha",
-                    "Synthetic Model",
-                    "synthetic-v1",
-                    new Uri("https://example.invalid/model", UriKind.Absolute),
-                    "synthetic-revision",
-                    "LicenseRef-Synthetic",
+                () => CreateIdentityWithUri(
+                    "https://example.invalid/model",
                     false,
                     "contradictory reason"),
                 "non-experimental contradiction");
@@ -169,18 +148,9 @@ namespace ReachyMini.LocalModels.Tests
 
         private static void ArtifactMetadataRejectsUnsafeOrUnverifiableValues()
         {
-            string[] unsafePaths =
+            for (int index = 0; index < UnsafeArtifactPaths.Length; ++index)
             {
-                "/absolute/model.gguf",
-                "../escape.gguf",
-                "nested/../escape.gguf",
-                "nested\\model.gguf",
-                "C:/model.gguf",
-                "model.GGUF",
-            };
-            for (int index = 0; index < unsafePaths.Length; ++index)
-            {
-                string path = unsafePaths[index];
+                string path = UnsafeArtifactPaths[index];
                 Throws<ArgumentException>(
                     () => new LocalModelArtifact(path, 1L, ValidSha),
                     $"unsafe artifact path {path}");
@@ -228,7 +198,7 @@ namespace ReachyMini.LocalModels.Tests
                 () => new LocalModelInferenceProfile(
                     4096,
                     "template",
-                    new[] { "same", "same" },
+                    DuplicateStopTokens,
                     CreateMemoryEstimate(),
                     4),
                 "duplicate stop tokens");
@@ -265,7 +235,7 @@ namespace ReachyMini.LocalModels.Tests
         {
             Throws<ArgumentException>(
                 () => new LocalModelDeviceCompatibility(
-                    new[] { "x86_64" },
+                    X64AndroidAbis,
                     26,
                     Array.Empty<string>(),
                     2147483648L,
@@ -273,7 +243,7 @@ namespace ReachyMini.LocalModels.Tests
                 "wrong Android ABI");
             Throws<ArgumentOutOfRangeException>(
                 () => new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    Arm64AndroidAbis,
                     25,
                     Array.Empty<string>(),
                     2147483648L,
@@ -281,15 +251,15 @@ namespace ReachyMini.LocalModels.Tests
                 "API below native floor");
             Throws<ArgumentException>(
                 () => new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    Arm64AndroidAbis,
                     26,
-                    new[] { "dotprod", "dotprod" },
+                    DuplicateCpuFeatures,
                     2147483648L,
                     1),
                 "duplicate CPU feature");
             Throws<ArgumentOutOfRangeException>(
                 () => new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    Arm64AndroidAbis,
                     26,
                     Array.Empty<string>(),
                     2147483648L,
@@ -304,7 +274,7 @@ namespace ReachyMini.LocalModels.Tests
                     CreateGguf(),
                     CreateInference(),
                     new LocalModelDeviceCompatibility(
-                        new[] { "arm64-v8a" },
+                        Arm64AndroidAbis,
                         26,
                         Array.Empty<string>(),
                         536870912L,
@@ -316,10 +286,13 @@ namespace ReachyMini.LocalModels.Tests
         {
             LocalModelManifest alpha = CreateManifest("manifest.alpha", "model.alpha");
             LocalModelManifest beta = CreateManifest("manifest.beta", "model.beta");
-            var catalog = new LocalModelManifestCatalog(new[] { alpha, beta });
+            var catalog = new LocalModelManifestCatalog(
+                new List<LocalModelManifest> { alpha, beta });
 
             Equal(2, catalog.Manifests.Count, "catalog count");
-            True(catalog.TryGetByModelId("model.beta", out LocalModelManifest? found), "exact lookup");
+            True(
+                catalog.TryGetByModelId("model.beta", out LocalModelManifest? found),
+                "exact lookup");
             Same(beta, found, "exact lookup identity");
             False(
                 catalog.TryGetByModelId("model.bet", out LocalModelManifest? fuzzy),
@@ -330,7 +303,7 @@ namespace ReachyMini.LocalModels.Tests
                 "missing model has no default fallback");
             Throws<ArgumentException>(
                 () => new LocalModelManifestCatalog(
-                    new[]
+                    new List<LocalModelManifest>
                     {
                         alpha,
                         CreateManifest("manifest.alpha", "model.other"),
@@ -338,7 +311,7 @@ namespace ReachyMini.LocalModels.Tests
                 "duplicate manifest ID");
             Throws<ArgumentException>(
                 () => new LocalModelManifestCatalog(
-                    new[]
+                    new List<LocalModelManifest>
                     {
                         alpha,
                         CreateManifest("manifest.other", "model.alpha"),
@@ -372,6 +345,23 @@ namespace ReachyMini.LocalModels.Tests
                 "Synthetic test model; not approved or bundled.");
         }
 
+        private static LocalModelIdentity CreateIdentityWithUri(
+            string uri,
+            bool experimental,
+            string experimentalReason)
+        {
+            return new LocalModelIdentity(
+                "manifest.alpha",
+                "model.alpha",
+                "Synthetic Model",
+                "synthetic-v1",
+                new Uri(uri, UriKind.Absolute),
+                "synthetic-revision",
+                "LicenseRef-Synthetic",
+                experimental,
+                experimentalReason);
+        }
+
         private static LocalModelRuntimeRequirement CreateRuntime()
         {
             return new LocalModelRuntimeRequirement("reachy_llama", 1, false);
@@ -403,7 +393,7 @@ namespace ReachyMini.LocalModels.Tests
             return new LocalModelInferenceProfile(
                 4096,
                 "{{ messages }}",
-                new[] { "<|synthetic_eos|>" },
+                SyntheticStopTokens,
                 CreateMemoryEstimate(),
                 4);
         }
@@ -411,7 +401,7 @@ namespace ReachyMini.LocalModels.Tests
         private static LocalModelDeviceCompatibility CreateCompatibility()
         {
             return new LocalModelDeviceCompatibility(
-                new[] { "arm64-v8a" },
+                Arm64AndroidAbis,
                 26,
                 Array.Empty<string>(),
                 2147483648L,
@@ -478,13 +468,14 @@ namespace ReachyMini.LocalModels.Tests
             }
         }
 
-        private static void Throws<TException>(Action action, string label)
+        private static void Throws<TException>(Func<object?> action, string label)
             where TException : Exception
         {
             ++checks;
             try
             {
-                action();
+                object? result = action();
+                GC.KeepAlive(result);
             }
             catch (TException)
             {
