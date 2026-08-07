@@ -1,0 +1,43 @@
+name: RMA-124 Android system/network TTS
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemTtsPlatform.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemTtsPlatform.cs.meta'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidSystemTts.Tests/**'
+      - 'docs/architecture/ANDROID_SYSTEM_NETWORK_TTS.md'
+      - 'docs/validation/RMA_124_ANDROID_SYSTEM_NETWORK_TTS_VALIDATION_2026-08-07.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma124-android-system-tts.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemTtsPlatform.cs'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidSystemTts.Tests/**'
+      - '.github/workflows/rma124-android-system-tts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Validate RMA-124 contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+      - name: Run deterministic Android system/network TTS contracts
+        run: dotnet run --project managed/ReachyMini.AndroidSystemTts.Tests/ReachyMini.AndroidSystemTts.Tests.csproj --configuration Release
