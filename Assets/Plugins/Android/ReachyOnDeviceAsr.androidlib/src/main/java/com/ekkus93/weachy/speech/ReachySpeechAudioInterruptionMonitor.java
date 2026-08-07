@@ -240,7 +240,10 @@ final class ReachySpeechAudioInterruptionMonitor {
         static void register(
                 Context context,
                 BroadcastReceiver receiver) {
-            requireSdkAtLeast(28, "microphone-mute receiver registration");
+            if (Build.VERSION.SDK_INT < 28) {
+                throw new IllegalStateException(
+                        "Microphone-mute receiver registration requires Android API 28 or newer.");
+            }
             IntentFilter filter =
                     new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
@@ -253,7 +256,10 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
 
         static boolean isMuteChangedAction(String action) {
-            requireSdkAtLeast(28, "microphone-mute broadcast inspection");
+            if (Build.VERSION.SDK_INT < 28) {
+                throw new IllegalStateException(
+                        "Microphone-mute broadcast inspection requires Android API 28 or newer.");
+            }
             return AudioManager.ACTION_MICROPHONE_MUTE_CHANGED.equals(action);
         }
     }
@@ -263,7 +269,10 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
 
         static boolean isCallScreeningMode(int mode) {
-            requireSdkAtLeast(30, "call-screening audio-mode inspection");
+            if (Build.VERSION.SDK_INT < 30) {
+                throw new IllegalStateException(
+                        "Call-screening audio-mode inspection requires Android API 30 or newer.");
+            }
             return mode == AudioManager.MODE_CALL_SCREENING;
         }
     }
@@ -276,14 +285,20 @@ final class ReachySpeechAudioInterruptionMonitor {
                 AudioManager manager,
                 Context context,
                 ModeObserver observer) {
-            requireSdkAtLeast(31, "audio-mode listener registration");
+            if (Build.VERSION.SDK_INT < 31) {
+                throw new IllegalStateException(
+                        "Audio-mode listener registration requires Android API 31 or newer.");
+            }
             AudioManager.OnModeChangedListener value = observer::onModeChanged;
             manager.addOnModeChangedListener(context.getMainExecutor(), value);
             return value;
         }
 
         static void unregister(AudioManager manager, Object value) {
-            requireSdkAtLeast(31, "audio-mode listener removal");
+            if (Build.VERSION.SDK_INT < 31) {
+                throw new IllegalStateException(
+                        "Audio-mode listener removal requires Android API 31 or newer.");
+            }
             manager.removeOnModeChangedListener(
                     (AudioManager.OnModeChangedListener) value);
         }
@@ -296,7 +311,10 @@ final class ReachySpeechAudioInterruptionMonitor {
         static void register(
                 Context context,
                 BroadcastReceiver receiver) {
-            requireSdkAtLeast(33, "non-exported receiver registration");
+            if (Build.VERSION.SDK_INT < 33) {
+                throw new IllegalStateException(
+                        "Non-exported receiver registration requires Android API 33 or newer.");
+            }
             IntentFilter filter =
                     new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
             filter.addAction(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED);
@@ -304,15 +322,6 @@ final class ReachySpeechAudioInterruptionMonitor {
                     receiver,
                     filter,
                     Context.RECEIVER_NOT_EXPORTED);
-        }
-    }
-
-    private static void requireSdkAtLeast(int required, String operation) {
-        if (Build.VERSION.SDK_INT < required) {
-            throw new IllegalStateException(
-                    operation + " requires Android API " + required
-                            + ", but the current device reports API "
-                            + Build.VERSION.SDK_INT + ".");
         }
     }
 }
