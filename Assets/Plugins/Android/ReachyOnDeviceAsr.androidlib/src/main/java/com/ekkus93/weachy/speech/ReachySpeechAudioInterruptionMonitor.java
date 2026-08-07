@@ -46,7 +46,9 @@ final class ReachySpeechAudioInterruptionMonitor {
     }
 
     void start() {
-        for (AudioDeviceInfo device : manager.getDevices(AudioManager.GET_DEVICES_ALL)) {
+        int deviceDirections =
+                AudioManager.GET_DEVICES_INPUTS | AudioManager.GET_DEVICES_OUTPUTS;
+        for (AudioDeviceInfo device : manager.getDevices(deviceDirections)) {
             knownDeviceIds.add(device.getId());
         }
 
