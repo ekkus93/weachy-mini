@@ -29,6 +29,11 @@ android {
     buildFeatures {
         buildConfig = false
     }
+
+    sourceSets {
+        getByName("main").java.srcDir(
+            "../Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/src/main/java")
+    }
 }
 
 tasks.withType<JavaCompile>().configureEach {
