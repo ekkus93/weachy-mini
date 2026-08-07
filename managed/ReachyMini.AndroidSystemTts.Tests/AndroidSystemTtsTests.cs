@@ -73,41 +73,32 @@ internal static class AndroidSystemTtsTests
 
     private static Task AutomaticSelectionPrefersOffline()
     {
-        TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(
-            Catalog(), Language, null, "network-en");
-        Require(selected?.VoiceId == "offline-en",
-            "Automatic selection must prefer installed offline TTS.");
+        TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(Catalog(), Language, null, "network-en");
+        Require(selected?.VoiceId == "offline-en", "Automatic selection must prefer installed offline TTS.");
         return Task.CompletedTask;
     }
 
     private static Task AutomaticSelectionNeverUsesNetworkOnly()
     {
-        var voices = new[]
-        {
-            new TtsVoice(
-                "network-en", "Network English", Language,
-                SpeechNetworkRequirement.Required, true),
-        };
         TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(
-            voices, Language, null, "network-en");
-        Require(selected == null,
-            "Network-required TTS must never be selected automatically.");
+            new[] { new TtsVoice("network-en", "Network English", Language, SpeechNetworkRequirement.Required, true) },
+            Language,
+            null,
+            "network-en");
+        Require(selected == null, "Network-required TTS must never be selected automatically.");
         return Task.CompletedTask;
     }
 
     private static Task PreferredNetworkVoiceRequiresExplicitSelection()
     {
-        TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(
-            Catalog(), Language, "network-en", null);
-        Require(selected == null,
+        Require(AndroidSystemTtsProvider.SelectVoice(Catalog(), Language, "network-en", null) == null,
             "A network voice requires explicit selection for the provider instance.");
         return Task.CompletedTask;
     }
 
     private static Task PreferredNetworkVoiceAllowedAfterExplicitSelection()
     {
-        TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(
-            Catalog(), Language, "network-en", "network-en");
+        TtsVoice? selected = AndroidSystemTtsProvider.SelectVoice(Catalog(), Language, "network-en", "network-en");
         Require(selected?.VoiceId == "network-en" && selected.MayUseNetwork,
             "The exact explicitly selected network voice should be selectable.");
         return Task.CompletedTask;
@@ -115,33 +106,19 @@ internal static class AndroidSystemTtsTests
 
     private static async Task NetworkOnlyAvailabilityRequiresExplicitSelection()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            Probe = new AndroidSystemTtsProbe(
-                26, true, 1, 0, 1,
-                AndroidSystemTtsProvider.DefaultMaximumInputCharacters,
-                "Network only."),
-        };
+        await using var platform = NetworkOnlyPlatform();
         await using var provider = CreateProvider(platform);
-        SpeechProviderAvailability availability = await provider.CheckAvailabilityAsync(
-            CancellationToken.None).ConfigureAwait(false);
-        Require(availability.State == SpeechAvailabilityState.SetupRequired,
+        SpeechProviderAvailability value = await provider.CheckAvailabilityAsync(CancellationToken.None).ConfigureAwait(false);
+        Require(value.State == SpeechAvailabilityState.SetupRequired,
             "Network-only TTS must require explicit network-voice selection.");
     }
 
     private static async Task ExplicitNetworkSelectionMakesAvailable()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            Probe = new AndroidSystemTtsProbe(
-                26, true, 1, 0, 1,
-                AndroidSystemTtsProvider.DefaultMaximumInputCharacters,
-                "Network only."),
-        };
+        await using var platform = NetworkOnlyPlatform();
         await using var provider = CreateProvider(platform, "network-en");
-        SpeechProviderAvailability availability = await provider.CheckAvailabilityAsync(
-            CancellationToken.None).ConfigureAwait(false);
-        Require(availability.State == SpeechAvailabilityState.Available,
+        SpeechProviderAvailability value = await provider.CheckAvailabilityAsync(CancellationToken.None).ConfigureAwait(false);
+        Require(value.State == SpeechAvailabilityState.Available,
             "Explicit network selection may make RMA-124 available.");
     }
 
@@ -150,11 +127,9 @@ internal static class AndroidSystemTtsTests
         await using var platform = new FakeAndroidSystemTtsPlatform();
         await using var provider = CreateProvider(platform);
         List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "network-not-approved", voiceId: "network-en"),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "network-not-approved", voiceId: "network-en"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.ContractViolation);
-        Require(platform.SpeakCalls == 0,
-            "Unapproved network voice must fail before Android synthesis starts.");
+        Require(platform.SpeakCalls == 0, "Unapproved network voice must fail before Android synthesis starts.");
     }
 
     private static async Task ExplicitNetworkRequestPassesApprovalBit()
@@ -162,8 +137,7 @@ internal static class AndroidSystemTtsTests
         await using var platform = new FakeAndroidSystemTtsPlatform();
         await using var provider = CreateProvider(platform, "network-en");
         List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "network-approved", voiceId: "network-en"),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "network-approved", voiceId: "network-en"), CancellationToken.None)).ConfigureAwait(false);
         Require(events.Count == 2 && events[1].Kind == TtsEventKind.Completed,
             "Explicit network voice should synthesize through RMA-124.");
         Require(platform.LastNetworkVoiceApproved == true,
@@ -174,39 +148,28 @@ internal static class AndroidSystemTtsTests
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
         await using var provider = CreateProvider(platform, "network-en");
-        _ = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "offline-selected"),
-            CancellationToken.None)).ConfigureAwait(false);
-        Require(platform.LastNetworkVoiceApproved == false,
-            "Offline synthesis must not carry network approval.");
+        _ = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "offline-selected"), CancellationToken.None)).ConfigureAwait(false);
+        Require(platform.LastNetworkVoiceApproved == false, "Offline synthesis must not carry network approval.");
     }
 
     private static async Task UninstalledOfflineVoiceFails()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
-        platform.SetVoices(FakeAndroidSystemTtsPlatform.OfflineVoice(
-            "offline-en", "Offline English", false));
+        platform.SetVoices(FakeAndroidSystemTtsPlatform.OfflineVoice("offline-en", "Offline English", false));
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "offline-missing"),
-            CancellationToken.None)).ConfigureAwait(false);
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "offline-missing"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.MissingVoiceData);
-        Require(platform.SpeakCalls == 0,
-            "Missing offline data must not trigger network synthesis.");
+        Require(platform.SpeakCalls == 0, "Missing offline data must not trigger network synthesis.");
     }
 
     private static async Task WrongLocaleVoiceFails()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
-        platform.SetVoices(FakeAndroidSystemTtsPlatform.OfflineVoice(
-            "offline-en", "Offline English", true, "fr-FR"));
+        platform.SetVoices(FakeAndroidSystemTtsPlatform.OfflineVoice("offline-en", "Offline English", true, "fr-FR"));
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "wrong-locale"),
-            CancellationToken.None)).ConfigureAwait(false);
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "wrong-locale"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.UnsupportedLanguage);
-        Require(platform.SpeakCalls == 0,
-            "Wrong-locale voice must fail before synthesis.");
+        Require(platform.SpeakCalls == 0, "Wrong-locale voice must fail before synthesis.");
     }
 
     private static async Task DuplicateVoiceIdFails()
@@ -217,127 +180,85 @@ internal static class AndroidSystemTtsTests
             FakeAndroidSystemTtsPlatform.NetworkVoice("duplicate", "B"));
         await using var provider = CreateProvider(platform, "duplicate");
         List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "duplicate", voiceId: "duplicate"),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "duplicate", voiceId: "duplicate"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.ContractViolation);
-        Require(platform.SpeakCalls == 0,
-            "Duplicate voice identity must fail before synthesis.");
+        Require(platform.SpeakCalls == 0, "Duplicate voice identity must fail before synthesis.");
     }
 
     private static async Task StartAndDoneCallbacksMap()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "callbacks"),
-            CancellationToken.None)).ConfigureAwait(false);
-        Require(events.Count == 2 &&
-                events[0].Kind == TtsEventKind.Started &&
-                events[1].Kind == TtsEventKind.Completed,
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "callbacks"), CancellationToken.None)).ConfigureAwait(false);
+        Require(events.Count == 2 && events[0].Kind == TtsEventKind.Started && events[1].Kind == TtsEventKind.Completed,
             "Android start/done callbacks must map deterministically.");
     }
 
     private static async Task NetworkErrorMapsToNetworkCategory()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
-        platform.SetEvents(FailureEvent(
-            "network-failure",
-            AndroidSystemTtsFailureKind.NetworkFailure,
-            "network_failure"));
+        platform.SetEvents(FailureEvent("network-failure", AndroidSystemTtsFailureKind.NetworkFailure, "network_failure"));
         await using var provider = CreateProvider(platform, "network-en");
         List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "network-failure", voiceId: "network-en"),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "network-failure", voiceId: "network-en"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.Network);
     }
 
     private static async Task CallbackIdentityMismatchFails()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
-        platform.SetEvents(new AndroidSystemTtsPlatformEvent(
-            "different-request",
-            AndroidSystemTtsPlatformEventKind.Completed));
+        platform.SetEvents(new AndroidSystemTtsPlatformEvent("different-request", AndroidSystemTtsPlatformEventKind.Completed));
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "expected-request"),
-            CancellationToken.None)).ConfigureAwait(false);
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "expected-request"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.ContractViolation);
     }
 
     private static async Task MissingTerminalCallbackIsVisible()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            EndWithoutTerminal = true,
-        };
-        platform.SetEvents(new AndroidSystemTtsPlatformEvent(
-            "unterminated",
-            AndroidSystemTtsPlatformEventKind.Started));
+        await using var platform = new FakeAndroidSystemTtsPlatform { EndWithoutTerminal = true };
+        platform.SetEvents(new AndroidSystemTtsPlatformEvent("unterminated", AndroidSystemTtsPlatformEventKind.Started));
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "unterminated"),
-            CancellationToken.None)).ConfigureAwait(false);
-        Require(events.Count == 2 && events[1].Kind == TtsEventKind.Failed,
-            "Missing terminal callback must become a visible failure.");
-        Require(events[1].Error?.Category == SpeechErrorCategory.ServiceFailure,
-            "Missing terminal callback must map to service failure.");
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "unterminated"), CancellationToken.None)).ConfigureAwait(false);
+        Require(events.Count == 2 && events[1].Kind == TtsEventKind.Failed &&
+                events[1].Error?.Category == SpeechErrorCategory.ServiceFailure,
+            "Missing terminal callback must become a visible service failure.");
     }
 
     private static async Task CallerCancellationReachesPlatform()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            BlockSpeechUntilCancellation = true,
-        };
+        await using var platform = new FakeAndroidSystemTtsPlatform { BlockSpeechUntilCancellation = true };
         await using var provider = CreateProvider(platform);
         using var cancellation = new CancellationTokenSource();
         Task<List<TtsEvent>> active = CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "caller-cancel", timeout: TimeSpan.FromSeconds(5)),
-            cancellation.Token));
-        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2))
-            .ConfigureAwait(false);
+            CreateRequest(provider, "caller-cancel", timeout: TimeSpan.FromSeconds(5)), cancellation.Token));
+        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         cancellation.Cancel();
         List<TtsEvent> events = await active.ConfigureAwait(false);
-        Require(events.Count == 1 && events[0].Kind == TtsEventKind.Cancelled,
-            "Caller cancellation must surface explicitly.");
-        Require(platform.CancellationObservations == 1,
-            "Caller cancellation must reach the platform token.");
+        Require(events.Count == 1 && events[0].Kind == TtsEventKind.Cancelled && platform.CancellationObservations == 1,
+            "Caller cancellation must reach the platform and surface explicitly.");
     }
 
     private static async Task OperationTimeoutReachesPlatform()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            BlockSpeechUntilCancellation = true,
-        };
+        await using var platform = new FakeAndroidSystemTtsPlatform { BlockSpeechUntilCancellation = true };
         await using var provider = CreateProvider(platform);
         List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "timeout", timeout: TimeSpan.FromMilliseconds(40)),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "timeout", timeout: TimeSpan.FromMilliseconds(40)), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.Timeout);
-        Require(platform.CancellationObservations == 1,
-            "RMA-124 timeout must cancel the platform token.");
+        Require(platform.CancellationObservations == 1, "RMA-124 timeout must cancel the platform token.");
     }
 
     private static async Task ConcurrentOperationIsBusy()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            BlockSpeechUntilCancellation = true,
-        };
+        await using var platform = new FakeAndroidSystemTtsPlatform { BlockSpeechUntilCancellation = true };
         await using var provider = CreateProvider(platform);
         using var cancellation = new CancellationTokenSource();
         Task<List<TtsEvent>> active = CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "busy-active", timeout: TimeSpan.FromSeconds(5)),
-            cancellation.Token));
-        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2))
-            .ConfigureAwait(false);
-        List<TtsEvent> competing = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "busy-second"),
-            CancellationToken.None)).ConfigureAwait(false);
+            CreateRequest(provider, "busy-active", timeout: TimeSpan.FromSeconds(5)), cancellation.Token));
+        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        List<TtsEvent> competing = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "busy-second"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(competing, SpeechErrorCategory.Busy);
-        Require(platform.SpeakCalls == 1,
-            "RMA-124 must not queue a second utterance.");
+        Require(platform.SpeakCalls == 1, "RMA-124 must not queue a second utterance.");
         cancellation.Cancel();
         _ = await active.ConfigureAwait(false);
     }
@@ -347,22 +268,13 @@ internal static class AndroidSystemTtsTests
         await using var platform = new FakeAndroidSystemTtsPlatform();
         await using var provider = CreateProvider(platform);
         var other = new SpeechProviderDescriptor(
-            SpeechProviderKind.TextToSpeech,
-            "other-tts",
-            "other-instance",
-            "Other TTS",
-            "1",
-            SpeechProviderLocation.DeviceService,
-            SpeechNetworkRequirement.ProviderControlled);
-        var selection = new SpeechProviderSelection(other);
-        var context = new SpeechOperationContext(
-            "redirect",
-            selection.Current,
-            TimeSpan.FromSeconds(1));
-        var request = new TtsRequest(context, "hello", "offline-en");
+            SpeechProviderKind.TextToSpeech, "other-tts", "other-instance", "Other TTS", "1",
+            SpeechProviderLocation.DeviceService, SpeechNetworkRequirement.ProviderControlled);
+        var request = new TtsRequest(
+            new SpeechOperationContext("redirect", new SpeechProviderSelection(other).Current, TimeSpan.FromSeconds(1)),
+            "hello", "offline-en");
         await AssertThrowsAsync<InvalidOperationException>(
-            () => CollectAsync(provider.SpeakAsync(request, CancellationToken.None)))
-            .ConfigureAwait(false);
+            () => CollectAsync(provider.SpeakAsync(request, CancellationToken.None))).ConfigureAwait(false);
         Require(platform.ProbeCalls == 0 && platform.VoiceCalls == 0 && platform.SpeakCalls == 0,
             "Provider identity mismatch must fail before Android TTS.");
     }
@@ -370,46 +282,31 @@ internal static class AndroidSystemTtsTests
     private static async Task FailedUtteranceIsNotRetried()
     {
         await using var platform = new FakeAndroidSystemTtsPlatform();
-        platform.SetEvents(FailureEvent(
-            "no-retry",
-            AndroidSystemTtsFailureKind.ServiceFailure,
-            "service_failure"));
+        platform.SetEvents(FailureEvent("no-retry", AndroidSystemTtsFailureKind.ServiceFailure, "service_failure"));
         await using var provider = CreateProvider(platform);
-        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "no-retry"),
-            CancellationToken.None)).ConfigureAwait(false);
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(CreateRequest(provider, "no-retry"), CancellationToken.None)).ConfigureAwait(false);
         RequireSingleFailure(events, SpeechErrorCategory.ServiceFailure);
-        Require(platform.SpeakCalls == 1,
-            "RMA-124 must not retry a failed utterance automatically.");
+        Require(platform.SpeakCalls == 1, "RMA-124 must not retry failed utterances automatically.");
     }
 
     private static async Task DisposalCancelsAndReleasesPlatform()
     {
-        await using var platform = new FakeAndroidSystemTtsPlatform
-        {
-            BlockSpeechUntilCancellation = true,
-        };
+        await using var platform = new FakeAndroidSystemTtsPlatform { BlockSpeechUntilCancellation = true };
         await using var provider = CreateProvider(platform);
         Task<List<TtsEvent>> active = CollectAsync(provider.SpeakAsync(
-            CreateRequest(provider, "dispose-active", timeout: TimeSpan.FromSeconds(5)),
-            CancellationToken.None));
-        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2))
-            .ConfigureAwait(false);
+            CreateRequest(provider, "dispose-active", timeout: TimeSpan.FromSeconds(5)), CancellationToken.None));
+        await platform.SpeechStarted.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
         await provider.DisposeAsync().ConfigureAwait(false);
         List<TtsEvent> events = await active.ConfigureAwait(false);
         Require(events.Count == 1 && events[0].Kind == TtsEventKind.Cancelled,
             "Provider disposal must cancel active synthesis.");
-        Require(platform.CancellationObservations == 1,
-            "Provider disposal must cancel the platform token.");
-        Require(platform.DisposeCalls == 1,
-            "Provider disposal must release its platform exactly once.");
+        Require(platform.CancellationObservations == 1 && platform.DisposeCalls == 1,
+            "Provider disposal must cancel and release its Android platform exactly once.");
     }
 
     private static Task JavaBridgeSourceContract()
     {
-        string source = Read(
-            "Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/src/main/java/" +
-            "com/ekkus93/weachy/speech/ReachySystemTtsBridge.java");
+        string source = Read("Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/src/main/java/com/ekkus93/weachy/speech/ReachySystemTtsBridge.java");
         RequireSource(source, "voice.isNetworkConnectionRequired()", "per-voice network classification");
         RequireSource(source, "boolean networkVoiceApproved", "explicit network approval input");
         RequireSource(source, "networkRequired && !networkVoiceApproved", "network approval enforcement");
@@ -428,8 +325,7 @@ internal static class AndroidSystemTtsTests
 
     private static Task UnityBridgeSourceContract()
     {
-        string source = Read(
-            "Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemTtsPlatform.cs");
+        string source = Read("Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemTtsPlatform.cs");
         RequireSource(source, "ReachySystemTtsBridge", "dedicated Java bridge");
         RequireSource(source, "networkVoiceApproved", "network approval marshalling");
         RequireSource(source, "callback_queue_overflow", "visible callback queue overflow");
@@ -442,22 +338,25 @@ internal static class AndroidSystemTtsTests
 
     private static Task Rma123BoundaryRemainsStrict()
     {
-        string source = Read(
-            "Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/src/main/java/" +
-            "com/ekkus93/weachy/speech/ReachyOfflineTtsBridge.java");
+        string source = Read("Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/src/main/java/com/ekkus93/weachy/speech/ReachyOfflineTtsBridge.java");
         RequireSource(source, "voice.isNetworkConnectionRequired()", "RMA-123 network check");
         RequireSource(source, "prohibited by RMA-123", "RMA-123 network rejection");
         return Task.CompletedTask;
     }
 
+    private static FakeAndroidSystemTtsPlatform NetworkOnlyPlatform() =>
+        new FakeAndroidSystemTtsPlatform
+        {
+            Probe = new AndroidSystemTtsProbe(
+                26, true, 1, 0, 1,
+                AndroidSystemTtsProvider.DefaultMaximumInputCharacters,
+                "Network only."),
+        };
+
     private static AndroidSystemTtsProvider CreateProvider(
         FakeAndroidSystemTtsPlatform platform,
         string? explicitlySelectedNetworkVoiceId = null) =>
-        new AndroidSystemTtsProvider(
-            platform,
-            "android-system-default",
-            Language,
-            explicitlySelectedNetworkVoiceId);
+        new AndroidSystemTtsProvider(platform, "android-system-default", Language, explicitlySelectedNetworkVoiceId);
 
     private static TtsRequest CreateRequest(
         AndroidSystemTtsProvider provider,
@@ -467,22 +366,16 @@ internal static class AndroidSystemTtsTests
         TimeSpan? timeout = null)
     {
         var selection = new SpeechProviderSelection(provider.Descriptor);
-        var context = new SpeechOperationContext(
-            requestId,
-            selection.Current,
-            timeout ?? TimeSpan.FromSeconds(2));
+        var context = new SpeechOperationContext(requestId, selection.Current, timeout ?? TimeSpan.FromSeconds(2));
         return new TtsRequest(context, text, voiceId);
     }
 
-    private static IReadOnlyList<TtsVoice> Catalog() => new[]
-    {
-        new TtsVoice(
-            "offline-en", "Offline English", Language,
-            SpeechNetworkRequirement.None, true),
-        new TtsVoice(
-            "network-en", "Network English", Language,
-            SpeechNetworkRequirement.Required, true),
-    };
+    private static TtsVoice[] Catalog() =>
+        new[]
+        {
+            new TtsVoice("offline-en", "Offline English", Language, SpeechNetworkRequirement.None, true),
+            new TtsVoice("network-en", "Network English", Language, SpeechNetworkRequirement.Required, true),
+        };
 
     private static AndroidSystemTtsPlatformEvent FailureEvent(
         string requestId,
@@ -491,13 +384,9 @@ internal static class AndroidSystemTtsTests
         new AndroidSystemTtsPlatformEvent(
             requestId,
             AndroidSystemTtsPlatformEventKind.Failed,
-            new AndroidSystemTtsPlatformFailure(
-                kind,
-                code,
-                "Synthetic RMA-124 failure."));
+            new AndroidSystemTtsPlatformFailure(kind, code, "Synthetic RMA-124 failure."));
 
-    private static async Task<List<TtsEvent>> CollectAsync(
-        IAsyncEnumerable<TtsEvent> source)
+    private static async Task<List<TtsEvent>> CollectAsync(IAsyncEnumerable<TtsEvent> source)
     {
         ArgumentNullException.ThrowIfNull(source);
         var result = new List<TtsEvent>();
@@ -508,13 +397,11 @@ internal static class AndroidSystemTtsTests
         return result;
     }
 
-    private static void RequireSingleFailure(
-        List<TtsEvent> events,
-        SpeechErrorCategory category)
+    private static void RequireSingleFailure(List<TtsEvent> events, SpeechErrorCategory category)
     {
         ArgumentNullException.ThrowIfNull(events);
-        Require(events.Count == 1, "Expected exactly one TTS failure event.");
-        Require(events[0].Kind == TtsEventKind.Failed, "Expected a failed TTS event.");
+        Require(events.Count == 1 && events[0].Kind == TtsEventKind.Failed,
+            "Expected exactly one terminal TTS failure event.");
         Require(events[0].Error?.Category == category,
             "TTS failure category did not match the expected contract.");
     }
@@ -531,16 +418,13 @@ internal static class AndroidSystemTtsTests
         {
             return;
         }
-        throw new InvalidOperationException(
-            "Expected exception " + typeof(TException).Name + ".");
+        throw new InvalidOperationException("Expected exception " + typeof(TException).Name + ".");
     }
 
     private static string Read(string relativePath)
     {
         string root = FindRepositoryRoot();
-        return File.ReadAllText(Path.Combine(
-            root,
-            relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        return File.ReadAllText(Path.Combine(root, relativePath.Replace('/', Path.DirectorySeparatorChar)));
     }
 
     private static string FindRepositoryRoot()
@@ -548,25 +432,20 @@ internal static class AndroidSystemTtsTests
         DirectoryInfo? current = new DirectoryInfo(Directory.GetCurrentDirectory());
         while (current != null)
         {
-            if (File.Exists(Path.Combine(
-                current.FullName,
-                "ProjectSettings",
-                "ProjectVersion.txt")))
+            if (File.Exists(Path.Combine(current.FullName, "ProjectSettings", "ProjectVersion.txt")))
             {
                 return current.FullName;
             }
             current = current.Parent;
         }
-        throw new InvalidOperationException(
-            "Could not locate the repository root for RMA-124 source contracts.");
+        throw new InvalidOperationException("Could not locate the repository root for RMA-124 source contracts.");
     }
 
     private static void RequireSource(string source, string expected, string description)
     {
         if (!source.Contains(expected, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                "RMA-124 source contract is missing " + description + ".");
+            throw new InvalidOperationException("RMA-124 source contract is missing " + description + ".");
         }
     }
 
@@ -574,8 +453,7 @@ internal static class AndroidSystemTtsTests
     {
         if (source.Contains(rejected, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                "RMA-124 source contract found prohibited " + description + ".");
+            throw new InvalidOperationException("RMA-124 source contract found prohibited " + description + ".");
         }
     }
 
