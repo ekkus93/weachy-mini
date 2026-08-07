@@ -1,6 +1,6 @@
 # RMA-132 safe local-model package validation
 
-**Status:** Implementation accepted on `d50e44d83b14e1e1420dc347164671db6593d73c`; final roadmap evidence SHA pending  
+**Status:** Complete (2026-08-07); implementation accepted on `d50e44d83b14e1e1420dc347164671db6593d73c`  
 **Date:** 2026-08-07
 
 ## Accepted contract
@@ -64,6 +64,10 @@ Artifact `9007154955`, `rma132-local-model-packages-d50e44d83b14e1e1420dc3471646
 Hosted CI run `31212296177` also completed successfully on the same exact SHA. Static policy, managed warnings-as-errors/native lifecycle, native warnings/sanitizers, Android lint/Java/tests, and pinned Reachy-model validation all passed.
 
 The managed suite uses only tiny synthetic bytes and temporary directories. No real GGUF, model download, API key, benchmark result, model selection, or model inference was required or performed for RMA-132.
+
+## Roadmap closeout
+
+The authoritative roadmap now marks all seven RMA-132 work items complete and records the implementation run, job, artifact, digest, fail-closed package semantics, and links to this validation record and the architecture document. The one-shot helper used to replace only that exact roadmap block was removed before this completion record was finalized.
 
 ## Scope boundary
 
