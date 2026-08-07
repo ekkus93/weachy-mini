@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using ReachyMini.LocalModels;
 
-namespace ReachyMini.LocalModelManifest.Tests
+namespace ReachyMini.LocalModels.Tests
 {
     internal static class Program
     {
