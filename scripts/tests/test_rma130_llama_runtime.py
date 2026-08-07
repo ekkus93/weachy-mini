@@ -79,6 +79,7 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         ):
             self.assertIn(setting, cmake)
         self.assertIn("reachy_enable_strict_warnings(reachy_llama)", cmake)
+        self.assertIn("EXCLUDE_FROM_ALL\n    SYSTEM", cmake)
         upstream_start = cmake.index('add_subdirectory(\n    "${REACHY_LLAMA_CPP_SOURCE_DIR}"')
         strict_start = cmake.index("reachy_enable_strict_warnings(reachy_llama)")
         self.assertLess(upstream_start, strict_start)

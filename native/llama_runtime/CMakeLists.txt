@@ -35,10 +35,13 @@ if(ANDROID)
     set(GGML_CPU_ARM_ARCH "armv8-a" CACHE STRING "" FORCE)
 endif()
 
+# SYSTEM applies only to the imported upstream subtree. It keeps declarations in
+# llama.cpp/ggml headers from being judged by Weachy's first-party -Werror policy.
 add_subdirectory(
     "${REACHY_LLAMA_CPP_SOURCE_DIR}"
     "${CMAKE_CURRENT_BINARY_DIR}/upstream-llama-cpp"
     EXCLUDE_FROM_ALL
+    SYSTEM
 )
 
 find_package(Threads REQUIRED)
@@ -48,9 +51,7 @@ target_compile_features(reachy_llama PRIVATE cxx_std_17)
 target_include_directories(
     reachy_llama
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/src"
-        "${REACHY_LLAMA_CPP_SOURCE_DIR}/include"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_link_libraries(reachy_llama PRIVATE llama Threads::Threads)
 set_target_properties(
