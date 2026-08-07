@@ -41,8 +41,16 @@ The first strict build identified only analyzer-level async-stream and static-me
 were repaired directly in source with memory-based async stream operations and static helpers; no
 analyzer was disabled and no package-integrity rule was weakened. The following managed-test build
 then identified only test-harness allocation/hash API findings; those were likewise repaired in the
-harness without changing production behavior. The resulting exact candidate is being revalidated
-before acceptance is recorded.
+harness without changing production behavior.
+
+The first executable package suite then passed all 15 behaviors. Its independent static contract
+exposed an over-broad text assertion: a local recovery variable named `importPath` was incorrectly
+being treated as an `ImportAsync` path parameter. The static contract now inspects the public method
+signature specifically and requires `Stream source`. Separately, pre-acceptance review found that
+orphan cleanup enumerated only hash directories. The manager and cleanup test were hardened so
+loose files at the staging root, loose manifest-level files, unknown hash trees, and unexpected
+children inside a known hash staging directory are removed while the three defined staging files
+remain eligible. The resulting exact candidate is being revalidated before acceptance is recorded.
 
 No real GGUF, model download, API key, benchmark result, model selection, or model inference is
 required for RMA-132.
