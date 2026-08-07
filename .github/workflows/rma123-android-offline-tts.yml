@@ -1,0 +1,43 @@
+name: RMA-123 Android offline TTS
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidOfflineTtsPlatform.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidOfflineTtsPlatform.cs.meta'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidOfflineTts.Tests/**'
+      - 'docs/architecture/ANDROID_OFFLINE_TTS.md'
+      - 'docs/validation/RMA_123_ANDROID_OFFLINE_TTS_VALIDATION_2026-08-07.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma123-android-offline-tts.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidOfflineTtsPlatform.cs'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidOfflineTts.Tests/**'
+      - '.github/workflows/rma123-android-offline-tts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Validate RMA-123 contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+      - name: Run deterministic Android offline TTS contracts
+        run: dotnet run --project managed/ReachyMini.AndroidOfflineTts.Tests/ReachyMini.AndroidOfflineTts.Tests.csproj --configuration Release
