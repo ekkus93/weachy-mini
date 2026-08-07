@@ -62,9 +62,9 @@ jobs:
           git add \
             Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs \
             managed/ReachyMini.RemoteVlm.Tests/Program.cs \
-            managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj \
             managed/ReachyMini.RemoteVlm.Tests/README.md \
             docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
             docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md
+          git add -f managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj
           git commit -m "feat: complete RMA-115 managed contracts"
           git push origin HEAD:agent/rma115-bootstrap
