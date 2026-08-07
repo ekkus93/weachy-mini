@@ -13,7 +13,10 @@ on:
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
+      - 'scripts/run_rma125_speech_device_preflight.sh'
+      - 'scripts/test_rma125_speech_device_preflight.sh'
       - 'docs/architecture/SPEECH_AUDIO_FOCUS_STATE_MACHINE.md'
+      - 'docs/blockers/RMA-125_PHYSICAL_OFFLINE_SPEECH_BLOCKER.md'
       - 'docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md'
       - '.github/workflows/rma125-speech-audio-focus.yml'
   pull_request:
@@ -26,6 +29,11 @@ on:
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
+      - 'scripts/run_rma125_speech_device_preflight.sh'
+      - 'scripts/test_rma125_speech_device_preflight.sh'
+      - 'docs/architecture/SPEECH_AUDIO_FOCUS_STATE_MACHINE.md'
+      - 'docs/blockers/RMA-125_PHYSICAL_OFFLINE_SPEECH_BLOCKER.md'
+      - 'docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md'
       - '.github/workflows/rma125-speech-audio-focus.yml'
   workflow_dispatch:
 
@@ -45,3 +53,5 @@ jobs:
         run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
       - name: Run deterministic speech audio-focus contracts
         run: dotnet run --project managed/ReachyMini.SpeechAudioFocus.Tests/ReachyMini.SpeechAudioFocus.Tests.csproj --configuration Release
+      - name: Run deterministic physical-device preflight contracts
+        run: bash scripts/test_rma125_speech_device_preflight.sh
