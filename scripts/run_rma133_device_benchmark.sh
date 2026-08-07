@@ -46,10 +46,10 @@ if [[ "$("${ADB[@]}" get-state)" != "device" ]]; then
     printf 'RMA-133 Android device is not ready: %s\n' "${DEVICE_SERIAL}" >&2
     exit 1
 fi
-DEVICE_ABI="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
-DEVICE_API="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
-DEVICE_QEMU="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')"
-DEVICE_MODEL="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"
+DEVICE_ABI="$("${ADB[@]}" shell getprop ro.product.cpu.abi </dev/null | tr -d '\r')"
+DEVICE_API="$("${ADB[@]}" shell getprop ro.build.version.sdk </dev/null | tr -d '\r')"
+DEVICE_QEMU="$("${ADB[@]}" shell getprop ro.kernel.qemu </dev/null | tr -d '\r')"
+DEVICE_MODEL="$("${ADB[@]}" shell getprop ro.product.model </dev/null | tr -d '\r')"
 if [[ "${DEVICE_ABI}" != "arm64-v8a" || ! "${DEVICE_API}" =~ ^[0-9]+$ || "${DEVICE_API}" -lt 26 ]]; then
     printf 'RMA-133 requires physical ARM64 Android API 26+; found ABI=%s API=%s.\n' \
         "${DEVICE_ABI}" "${DEVICE_API}" >&2
@@ -63,15 +63,15 @@ fi
 mkdir -p "${RESULTS_DIR}" "${MODEL_CACHE_DIR}"
 rm -rf -- "${RESULTS_DIR:?}"/*
 cleanup() {
-    "${ADB[@]}" shell rm -rf -- "${REMOTE_ROOT}" >/dev/null 2>&1 || true
+    "${ADB[@]}" shell rm -rf -- "${REMOTE_ROOT}" </dev/null >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
-"${ADB[@]}" shell mkdir -p "${REMOTE_ROOT}"
+"${ADB[@]}" shell mkdir -p "${REMOTE_ROOT}" </dev/null
 "${ADB[@]}" push "${RUNTIME_DIR}/libreachy_llama.so" "${REMOTE_ROOT}/libreachy_llama.so" >/dev/null
 "${ADB[@]}" push "${BENCHMARK_DIR}/rma133_benchmark" "${REMOTE_ROOT}/rma133_benchmark" >/dev/null
 "${ADB[@]}" push "${CASES}" "${REMOTE_ROOT}/behavior_cases.tsv" >/dev/null
 "${ADB[@]}" push "${SYSTEM_PROMPT}" "${REMOTE_ROOT}/system_prompt.txt" >/dev/null
-"${ADB[@]}" shell chmod 0755 "${REMOTE_ROOT}/rma133_benchmark"
+"${ADB[@]}" shell chmod 0755 "${REMOTE_ROOT}/rma133_benchmark" </dev/null
 
 python3 - "${CONFIG}" > "${RESULTS_DIR}/candidate_rows.tsv" <<'PY'
 import json
@@ -107,17 +107,28 @@ for candidate in config["candidates"]:
     print("\t".join(values))
 PY
 
+mapfile -t candidate_rows < "${RESULTS_DIR}/candidate_rows.tsv"
+if (( ${#candidate_rows[@]} < 2 )); then
+    printf 'RMA-133 expected at least two frozen candidate rows; found %d.\n' \
+        "${#candidate_rows[@]}" >&2
+    exit 1
+fi
+
 printf 'RMA-133 device: serial=%s model=%s ABI=%s API=%s\n' \
     "${DEVICE_SERIAL}" "${DEVICE_MODEL}" "${DEVICE_ABI}" "${DEVICE_API}" \
     | tee "${RESULTS_DIR}/device.txt"
 
 report_args=()
-while IFS=$'\t' read -r \
-    candidate_id artifact_url artifact_filename expected_size expected_sha suffix \
-    context batch ubatch max_gen threads batch_threads temperature min_p seed queue thermal_abort; do
-    if [[ -z "${candidate_id}" ]]; then
-        continue
+for candidate_row in "${candidate_rows[@]}"; do
+    IFS=$'\t' read -r \
+        candidate_id artifact_url artifact_filename expected_size expected_sha suffix \
+        context batch ubatch max_gen threads batch_threads temperature min_p seed queue thermal_abort \
+        <<< "${candidate_row}"
+    if [[ -z "${candidate_id}" || -z "${thermal_abort}" ]]; then
+        printf '%s\n' 'RMA-133 encountered an incomplete frozen candidate row.' >&2
+        exit 1
     fi
+
     cache_path="${MODEL_CACHE_DIR}/${expected_sha}-${artifact_filename}"
     valid_cache=false
     if [[ -f "${cache_path}" ]]; then
@@ -155,7 +166,7 @@ while IFS=$'\t' read -r \
         mv -- "${tmp_path}" "${cache_path}"
     fi
 
-    free_kib="$("${ADB[@]}" shell df -Pk /data/local/tmp | awk 'END {print $4}' | tr -d '\r')"
+    free_kib="$("${ADB[@]}" shell df -Pk /data/local/tmp </dev/null | awk 'END {print $4}' | tr -d '\r')"
     if [[ ! "${free_kib}" =~ ^[0-9]+$ ]]; then
         printf '%s\n' 'RMA-133 could not determine free device storage.' >&2
         exit 1
@@ -167,14 +178,14 @@ while IFS=$'\t' read -r \
         exit 1
     fi
 
-    "${ADB[@]}" shell rm -f -- "${REMOTE_ROOT}/model.gguf"
+    "${ADB[@]}" shell rm -f -- "${REMOTE_ROOT}/model.gguf" </dev/null
     "${ADB[@]}" push "${cache_path}" "${REMOTE_ROOT}/model.gguf" >/dev/null
-    remote_size="$("${ADB[@]}" shell stat -c '%s' "${REMOTE_ROOT}/model.gguf" | tr -d '\r')"
+    remote_size="$("${ADB[@]}" shell stat -c '%s' "${REMOTE_ROOT}/model.gguf" </dev/null | tr -d '\r')"
     if [[ "${remote_size}" != "${expected_size}" ]]; then
         printf 'RMA-133 device copy size mismatch for %s.\n' "${candidate_id}" >&2
         exit 1
     fi
-    remote_sha="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_ROOT}/model.gguf'" \
+    remote_sha="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_ROOT}/model.gguf'" </dev/null \
         | tr -d '\r' | awk '{print $1}')"
     if [[ "${remote_sha}" != "${expected_sha}" ]]; then
         printf 'RMA-133 device copy SHA-256 mismatch for %s: %s.\n' \
@@ -186,8 +197,8 @@ while IFS=$'\t' read -r \
     printf 'RMA-133 benchmarking %s on %s.\n' "${candidate_id}" "${DEVICE_MODEL}"
     "${ADB[@]}" shell \
         "cd '${REMOTE_ROOT}' && LD_LIBRARY_PATH=. ./rma133_benchmark ./model.gguf '${candidate_id}' ./behavior_cases.tsv ./system_prompt.txt '${suffix}' '${context}' '${batch}' '${ubatch}' '${max_gen}' '${threads}' '${batch_threads}' '${temperature}' '${min_p}' '${seed}' '${queue}' '${thermal_abort}'" \
-        | tr -d '\r' > "${raw_path}"
-    "${ADB[@]}" shell rm -f -- "${REMOTE_ROOT}/model.gguf"
+        </dev/null | tr -d '\r' > "${raw_path}"
+    "${ADB[@]}" shell rm -f -- "${REMOTE_ROOT}/model.gguf" </dev/null
 
     report_path="${RESULTS_DIR}/${candidate_id}.report.json"
     python3 "${SCRIPT_DIR}/score_rma133_benchmark.py" score \
@@ -197,7 +208,13 @@ while IFS=$'\t' read -r \
         --candidate-id "${candidate_id}" \
         --output "${report_path}"
     report_args+=(--report "${report_path}")
-done < "${RESULTS_DIR}/candidate_rows.tsv"
+done
+
+if (( ${#report_args[@]} != ${#candidate_rows[@]} * 2 )); then
+    printf 'RMA-133 report count mismatch: expected %d reports, collected %d.\n' \
+        "${#candidate_rows[@]}" "$(( ${#report_args[@]} / 2 ))" >&2
+    exit 1
+fi
 
 python3 "${SCRIPT_DIR}/score_rma133_benchmark.py" select \
     --config "${CONFIG}" \
