@@ -16,6 +16,8 @@ namespace ReachyMini.LocalModelPackages.Tests
         private static readonly byte[] ModelBytes =
             Encoding.UTF8.GetBytes("synthetic-rma132-model-payload-v1");
 
+        private static readonly string[] Arm64AndroidAbis = { "arm64-v8a" };
+
         public static async Task<int> Main()
         {
             var tests = new (string Name, Func<Task> Run)[]
@@ -487,7 +489,7 @@ namespace ReachyMini.LocalModelPackages.Tests
                     new LocalModelMemoryEstimate(1024L * 1024L, 1024, 128),
                     1),
                 new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    Arm64AndroidAbis,
                     26,
                     Array.Empty<string>(),
                     1024L * 1024L,
@@ -496,8 +498,7 @@ namespace ReachyMini.LocalModelPackages.Tests
 
         private static string Sha256(byte[] bytes)
         {
-            using SHA256 hash = SHA256.Create();
-            byte[] digest = hash.ComputeHash(bytes);
+            byte[] digest = SHA256.HashData(bytes);
             var builder = new StringBuilder(digest.Length * 2);
             for (int index = 0; index < digest.Length; ++index)
             {
