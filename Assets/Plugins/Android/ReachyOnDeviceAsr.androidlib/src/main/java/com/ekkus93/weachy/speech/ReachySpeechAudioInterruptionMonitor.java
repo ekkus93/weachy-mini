@@ -1,6 +1,6 @@
 package com.ekkus93.weachy.speech;
 
-import android.annotation.TargetApi;
+import android.annotation.RequiresApi;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -221,7 +221,6 @@ final class ReachySpeechAudioInterruptionMonitor {
         void onModeChanged(int mode);
     }
 
-    @TargetApi(26)
     private static final class ReceiverApi26 {
         private ReceiverApi26() {
         }
@@ -235,7 +234,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @TargetApi(28)
+    @RequiresApi(28)
     private static final class ReceiverApi28 {
         private ReceiverApi28() {
         }
@@ -250,7 +249,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @TargetApi(28)
+    @RequiresApi(28)
     private static final class MicrophoneMuteApi28 {
         private MicrophoneMuteApi28() {
         }
@@ -260,7 +259,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @TargetApi(30)
+    @RequiresApi(30)
     private static final class CallScreeningApi30 {
         private CallScreeningApi30() {
         }
@@ -270,7 +269,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @TargetApi(31)
+    @RequiresApi(31)
     private static final class ModeMonitorApi31 {
         private ModeMonitorApi31() {
         }
@@ -290,7 +289,7 @@ final class ReachySpeechAudioInterruptionMonitor {
         }
     }
 
-    @TargetApi(33)
+    @RequiresApi(33)
     private static final class ReceiverApi33 {
         private ReceiverApi33() {
         }
