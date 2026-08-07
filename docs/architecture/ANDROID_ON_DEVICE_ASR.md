@@ -1,7 +1,7 @@
 # Android explicit on-device ASR architecture
 
 **RMA:** 121  
-**Status:** Implementation candidate  
+**Status:** Implemented and validated  
 **Date:** 2026-08-07
 
 ## Scope
@@ -105,7 +105,9 @@ feature optional, and declares package visibility for
 
 The same production Java source is also compiled by the first-party
 `android-plugin` hosted lint/test project under Java `-Xlint:all -Werror`, so
-the checked-in bridge is not merely source-inspected.
+the checked-in bridge is not merely source-inspected. The hosted harness uses
+the repository's API-26 deployment floor so API-31 runtime guards are evaluated
+under the same compatibility range as the Unity Android build.
 
 ## Validation boundary
 
@@ -116,9 +118,15 @@ language-model absence, request identity, disposal, unexpected network errors,
 and the no-retry boundary. Source contracts enforce the prohibited system
 factory, `EXTRA_PREFER_OFFLINE`, and automatic model-download paths.
 
+The validated implementation SHA is
+`3ecbb7841e42b1d39f4afcffd333d978134a516c`. Its permanent RMA-121 contract
+gate, full hosted repository CI, and self-hosted Unity/API-26 regression all
+passed. Exact run and job identifiers are recorded in
+`docs/validation/RMA_121_ANDROID_ON_DEVICE_ASR_VALIDATION_2026-08-07.md`.
+
 The current physical regression device is an LG-H872 running Android 8.0/API
 26. It cannot positively exercise the API-31 explicit on-device recognizer. The
-physical gate can prove that adding RMA-121 does not regress the supported
+physical gate proves that adding RMA-121 does not regress the supported
 Unity/APK/camera/lifecycle/rendering path, but positive microphone recognition
 must not be claimed from that device. An API-31+ device with an installed
 on-device recognition service is required for later end-to-end offline speech
