@@ -183,6 +183,18 @@ def prepare() -> None:
     )
     program_text = replace_exact(
         program_text,
+        '"StoreResponse => false"',
+        '"public bool StoreResponse { get; }"',
+        "StoreResponse source declaration assertion",
+    )
+    program_text = replace_exact(
+        program_text,
+        '"Stream => false"',
+        '"public bool Stream { get; }"',
+        "Stream source declaration assertion",
+    )
+    program_text = replace_exact(
+        program_text,
         "        private sealed class FakeResources : IReachyVisionFrameResources\n",
         "        private sealed class FakeResources : IReachyVisionFrameResources, IDisposable\n",
         "FakeResources IDisposable contract",
