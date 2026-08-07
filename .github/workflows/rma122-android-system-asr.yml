@@ -1,0 +1,43 @@
+name: RMA-122 Android system ASR
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemAsrPlatform.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemAsrPlatform.cs.meta'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidSystemAsr.Tests/**'
+      - 'docs/architecture/ANDROID_SYSTEM_ASR.md'
+      - 'docs/validation/RMA_122_ANDROID_SYSTEM_ASR_VALIDATION_2026-08-07.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma122-android-system-asr.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Speech/**'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSystemAsrPlatform.cs'
+      - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
+      - 'android-plugin/**'
+      - 'managed/ReachyMini.AndroidSystemAsr.Tests/**'
+      - '.github/workflows/rma122-android-system-asr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Validate RMA-122 contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+      - name: Run deterministic Android system ASR contracts
+        run: dotnet run --project managed/ReachyMini.AndroidSystemAsr.Tests/ReachyMini.AndroidSystemAsr.Tests.csproj --configuration Release
