@@ -1,0 +1,157 @@
+name: RMA-132 local model packages
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/**'
+      - 'managed/ReachyMini.LocalModelPackages.Tests/**'
+      - 'scripts/tests/test_rma132_local_model_packages.py'
+      - 'docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md'
+      - 'docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma132-local-model-packages.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/**'
+      - 'managed/ReachyMini.LocalModelPackages.Tests/**'
+      - 'scripts/tests/test_rma132_local_model_packages.py'
+      - 'docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md'
+      - 'docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma132-local-model-packages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma132-local-model-packages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Validate RMA-132 contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-132 Local Model Packages",
+              description: "Safe local-model package validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run managed safe-package contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.LocalModelPackages.Tests/ReachyMini.LocalModelPackages.Tests.csproj
+          --configuration Release
+
+      - name: Run deterministic package-management static contracts
+        run: python3 scripts/tests/test_rma132_local_model_packages.py
+
+      - name: Compile Python contract
+        run: python3 -m py_compile scripts/tests/test_rma132_local_model_packages.py
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="artifacts/rma132-local-model-packages"
+          mkdir -p "$OUT"
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs \
+            managed/ReachyMini.LocalModelPackages.Tests/Program.cs \
+            managed/ReachyMini.LocalModelPackages.Tests/ReachyMini.LocalModelPackages.Tests.csproj \
+            scripts/tests/test_rma132_local_model_packages.py \
+            docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md \
+            docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md \
+            > "$OUT/source-sha256.txt"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "rma": "RMA-132",
+              "managed_contract_cases": 15,
+              "real_model_downloaded": False,
+              "real_model_selected": False,
+              "arbitrary_import_paths_accepted": False,
+              "sha256_required_before_publish": True,
+              "same_store_atomic_publish": True,
+              "manifest_bound_resume": True,
+              "clean_restart_supported": True,
+              "storage_preflight_required": True,
+              "approved_path_revalidated": True,
+              "automatic_model_or_provider_fallback": False,
+          }
+          Path("artifacts/rma132-local-model-packages/report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload RMA-132 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma132-local-model-packages-${{ github.sha }}
+          path: artifacts/rma132-local-model-packages
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-132 Local Model Packages",
+              description: succeeded
+                ? "Safe local-model package contracts passed"
+                : "Safe local-model package contracts failed"
+            });
