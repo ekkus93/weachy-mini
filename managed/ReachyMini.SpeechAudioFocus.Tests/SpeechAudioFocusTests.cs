@@ -315,7 +315,7 @@ internal static class SpeechAudioFocusTests
     }
 
     private static AsrRequest CreateAsrRequest(
-        IAsrProvider provider,
+        AudioCoordinatedAsrProvider provider,
         string requestId,
         TimeSpan? timeout = null) =>
         new AsrRequest(
@@ -326,7 +326,7 @@ internal static class SpeechAudioFocusTests
             new AsrOptions("en-US", requestPartialResults: true));
 
     private static TtsRequest CreateTtsRequest(
-        ITtsProvider provider,
+        AudioCoordinatedTtsProvider provider,
         string requestId,
         TimeSpan? timeout = null) =>
         new TtsRequest(
@@ -348,7 +348,7 @@ internal static class SpeechAudioFocusTests
     }
 
     private static void RequireSingleFailure(
-        IReadOnlyList<AsrEvent> events,
+        List<AsrEvent> events,
         SpeechErrorCategory category,
         string code)
     {
@@ -359,7 +359,7 @@ internal static class SpeechAudioFocusTests
     }
 
     private static void RequireSingleFailure(
-        IReadOnlyList<TtsEvent> events,
+        List<TtsEvent> events,
         SpeechErrorCategory category,
         string code)
     {
@@ -430,10 +430,7 @@ internal static class SpeechAudioFocusTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (disposed)
-            {
-                throw new ObjectDisposedException(nameof(FakeAudioPlatform));
-            }
+            ObjectDisposedException.ThrowIf(disposed, this);
             RequestCalls++;
             LastRole = role;
             if (DenyFocus)
@@ -496,6 +493,8 @@ internal static class SpeechAudioFocusTests
 
     private sealed class FakeAsrProvider : IAsrProvider
     {
+        private static readonly string[] SupportedLanguages = { "en-US" };
+
         public FakeAsrProvider()
         {
             Descriptor = new SpeechProviderDescriptor(
@@ -507,7 +506,7 @@ internal static class SpeechAudioFocusTests
                 SpeechProviderLocation.OnDevice,
                 SpeechNetworkRequirement.None);
             Capabilities = new AsrCapabilities(
-                new[] { "en-US" },
+                SupportedLanguages,
                 supportsPartialResults: true,
                 supportsCancellation: true,
                 TimeSpan.FromMinutes(1));
