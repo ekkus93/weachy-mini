@@ -210,10 +210,7 @@ def prepare() -> None:
 """,
         """            public void TransferOwnershipToFrame()
             {
-                if (IsDisposed)
-                {
-                    throw new ObjectDisposedException(nameof(FakeResources));
-                }
+                ObjectDisposedException.ThrowIf(IsDisposed, this);
                 if (Interlocked.Exchange(ref ownershipTransferred, 1) != 0)
                 {
                     throw new InvalidOperationException(
