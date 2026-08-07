@@ -1,0 +1,54 @@
+name: RMA-115 OpenAI-compatible VLM adapters
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta"
+      - "managed/ReachyMini.RemoteVlm.Tests/**"
+      - "docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - "docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md"
+      - ".github/workflows/rma115-openai-vlm-adapters.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta"
+      - "managed/ReachyMini.RemoteVlm.Tests/**"
+      - "docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md"
+      - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+      - "docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md"
+      - ".github/workflows/rma115-openai-vlm-adapters.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma115-openai-vlm-adapters-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  managed-contracts:
+    name: Validate RMA-115 managed contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build managed core with warnings as errors
+        run: dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+
+      - name: Run all RMA-115 contracts
+        run: dotnet run --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj --configuration Release
