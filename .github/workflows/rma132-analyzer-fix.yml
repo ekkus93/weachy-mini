@@ -25,61 +25,34 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           manager_path = Path("Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs")
           manager = manager_path.read_text(encoding="utf-8")
-          replacements = {
-              "        private LocalModelPackageResult? ValidateDownloadUri(\n":
-                  "        private static LocalModelPackageResult? ValidateDownloadUri(\n",
-              "        private long PrepareDownloadPartial(\n":
-                  "        private static long PrepareDownloadPartial(\n",
-              "        private async Task<LocalModelPackageResult?> VerifyHashAsync(\n":
-                  "        private static async Task<LocalModelPackageResult?> VerifyHashAsync(\n",
-              "                    int read = await source.ReadAsync(\n                            buffer,\n                            0,\n                            requestSize,\n                            cancellationToken)\n":
-                  "                    int read = await source.ReadAsync(\n                            buffer.AsMemory(0, requestSize),\n                            cancellationToken)\n",
-              "                    await destination.WriteAsync(\n                            buffer,\n                            0,\n                            read,\n                            cancellationToken)\n":
-                  "                    await destination.WriteAsync(\n                            buffer.AsMemory(0, read),\n                            cancellationToken)\n",
-              "                    hasExtra = await source.ReadAsync(\n                            buffer,\n                            0,\n                            1,\n                            cancellationToken)\n":
-                  "                    hasExtra = await source.ReadAsync(\n                            buffer.AsMemory(0, 1),\n                            cancellationToken)\n",
-              "                    int read = await stream.ReadAsync(\n                            buffer,\n                            0,\n                            buffer.Length,\n                            cancellationToken)\n":
-                  "                    int read = await stream.ReadAsync(\n                            buffer.AsMemory(0, buffer.Length),\n                            cancellationToken)\n",
-          }
-          for old, new in replacements.items():
+          replacements = [
+              ("        private LocalModelPackageResult? ValidateDownloadUri(\n", "        private static LocalModelPackageResult? ValidateDownloadUri(\n"),
+              ("        private long PrepareDownloadPartial(\n", "        private static long PrepareDownloadPartial(\n"),
+              ("        private async Task<LocalModelPackageResult?> VerifyHashAsync(\n", "        private static async Task<LocalModelPackageResult?> VerifyHashAsync(\n"),
+              ("                    int read = await source.ReadAsync(\n                            buffer,\n                            0,\n                            requestSize,\n                            cancellationToken)\n", "                    int read = await source.ReadAsync(\n                            buffer.AsMemory(0, requestSize),\n                            cancellationToken)\n"),
+              ("                    await destination.WriteAsync(\n                            buffer,\n                            0,\n                            read,\n                            cancellationToken)\n", "                    await destination.WriteAsync(\n                            buffer.AsMemory(0, read),\n                            cancellationToken)\n"),
+              ("                    hasExtra = await source.ReadAsync(\n                            buffer,\n                            0,\n                            1,\n                            cancellationToken)\n", "                    hasExtra = await source.ReadAsync(\n                            buffer.AsMemory(0, 1),\n                            cancellationToken)\n"),
+              ("                    int read = await stream.ReadAsync(\n                            buffer,\n                            0,\n                            buffer.Length,\n                            cancellationToken)\n", "                    int read = await stream.ReadAsync(\n                            buffer.AsMemory(0, buffer.Length),\n                            cancellationToken)\n"),
+          ]
+          for old, new in replacements:
               if manager.count(old) != 1:
-                  raise SystemExit(f"manager repair contract drifted for: {old!r}")
+                  raise SystemExit("manager analyzer repair anchor drifted")
               manager = manager.replace(old, new)
           manager_path.write_text(manager, encoding="utf-8")
 
           http_path = Path("Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs")
           http = http_path.read_text(encoding="utf-8")
-          anchor = '''            public override Task<int> ReadAsync(
-                byte[] buffer,
-                int offset,
-                int count,
-                CancellationToken cancellationToken)
-            {
-                return RequireInner().ReadAsync(
-                    buffer,
-                    offset,
-                    count,
-                    cancellationToken);
-            }
-'''
-          replacement = anchor + '''
-            public override ValueTask<int> ReadAsync(
-                Memory<byte> buffer,
-                CancellationToken cancellationToken)
-            {
-                return RequireInner().ReadAsync(buffer, cancellationToken);
-            }
-'''
-          if http.count(anchor) != 1:
+          anchor = "            public override long Seek(long offset, SeekOrigin origin)\n"
+          addition = "            public override ValueTask<int> ReadAsync(\n                Memory<byte> buffer,\n                CancellationToken cancellationToken)\n            {\n                return RequireInner().ReadAsync(buffer, cancellationToken);\n            }\n\n"
+          if http.count(anchor) != 1 or addition in http:
               raise SystemExit("HTTP stream analyzer repair anchor drifted")
-          http_path.write_text(http.replace(anchor, replacement), encoding="utf-8")
+          http_path.write_text(http.replace(anchor, addition + anchor), encoding="utf-8")
           PY
-
           git diff --check
-          git diff --exit-code -- . ':!Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs' ':!Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs'
+          changed="$(git diff --name-only)"
+          test "$changed" = $'Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs\nAssets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs'
 
       - name: Commit analyzer repairs
         shell: bash
