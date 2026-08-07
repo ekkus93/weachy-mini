@@ -179,7 +179,7 @@ internal static partial class AndroidSystemAsrTests
         {
             BlockRecognitionUntilCancellation = true,
         };
-        var provider = CreateProvider(platform, TimeSpan.FromSeconds(5));
+        await using var provider = CreateProvider(platform, TimeSpan.FromSeconds(5));
         Task<List<AsrEvent>> active = CollectAsync(provider.RecognizeAsync(
             CreateRequest(provider, "dispose-active", timeout: TimeSpan.FromSeconds(5)),
             CancellationToken.None));
@@ -289,7 +289,7 @@ internal static partial class AndroidSystemAsrTests
     }
 
     private static void RequireSingleFailure(
-        IReadOnlyList<AsrEvent> events,
+        List<AsrEvent> events,
         SpeechErrorCategory category)
     {
         Require(events.Count == 1, "Expected exactly one terminal failure event.");
