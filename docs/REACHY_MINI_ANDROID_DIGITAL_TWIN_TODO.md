@@ -2081,9 +2081,21 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-131 — Define local model manifest
 
-- [ ] Add fields for model ID, source, revision, license, file size, SHA-256, GGUF metadata, context limit, chat template, stop tokens, memory estimate, recommended threads, and device compatibility.
-- [ ] Mark experimental models clearly.
-- [ ] Keep model IDs/configuration out of hard-coded UI logic.
+**Status:** Complete (2026-08-07)
+
+- [x] Add fields for model ID, source, revision, license, file size, SHA-256, GGUF metadata, context limit, chat template, stop tokens, memory estimate, recommended threads, and device compatibility.
+- [x] Mark experimental models clearly.
+- [x] Keep model IDs/configuration out of hard-coded UI logic.
+
+**Completion evidence**
+
+- Schema version 1 and the immutable managed mirror define exact model/provenance/license identity, one verified GGUF artifact, normalized GGUF/tokenizer metadata, context/chat/stop metadata, context-and-batch-qualified peak RAM, recommended threads, and explicit Android/runtime compatibility.
+- Experimental state is mandatory and internally consistent. The only committed example is a synthetic experimental fixture on the reserved `.invalid` domain; RMA-131 selects, downloads, recommends, and bundles no real model.
+- `LocalModelManifestCatalog` uses unique data-driven IDs and ordinal exact lookup only. Missing IDs return no model or throw; no default, fuzzy, prefix, provider, or cloud fallback exists, and permanent tests reject candidate IDs hard-coded into settings/UI logic.
+- Artifact paths are bounded package-relative lowercase `.gguf` paths. Absolute paths, traversal, drive prefixes, backslashes, invalid sizes/hashes, incompatible runtime/device metadata, and understated RAM fail visibly rather than receiving defaults.
+- Dedicated run `31208746428`, job `92966163017`, passed the warnings-as-errors managed build, managed contract suite, JSON mutation suite, zero-network fixture validation, schema parsing, exact-SHA evidence generation, and artifact upload on accepted implementation SHA `94145dda69f6ee3f886a78be9728ea6ddc355bb8`.
+- Artifact `9005805295` has digest `sha256:aefdd64431c6d3b9c730b5b08fa902cb2a5edeb7b67b9bfeb0a25caae726100f`. Hosted CI run `31208746388` passed static, managed, native/sanitizer, Android, and pinned Reachy-model jobs on the same SHA.
+- Detailed design and accepted evidence are in `docs/architecture/LOCAL_LLM_MODEL_MANIFEST.md` and `docs/validation/RMA_131_LOCAL_MODEL_MANIFEST_VALIDATION_2026-08-07.md`.
 
 ## RMA-132 — Implement safe model download/import
 
