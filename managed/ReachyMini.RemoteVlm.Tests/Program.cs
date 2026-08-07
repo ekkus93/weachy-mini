@@ -1049,4 +1049,611 @@ namespace ReachyMini.RemoteVlm.Tests
                 CancellationToken.None).ConfigureAwait(false);
             Equal(
                 VisionOperationStatus.ProviderFailure,
-    
+                result.Status,
+                "transport exception status");
+            Contains(
+                nameof(InvalidOperationException),
+                result.Diagnostic,
+                "exception type retained");
+            False(
+                result.Diagnostic.Contains(
+                    "sk-do-not-leak",
+                    StringComparison.Ordinal),
+                "exception secret absent");
+            False(
+                result.Diagnostic.Contains(
+                    "Authorization:",
+                    StringComparison.Ordinal),
+                "exception header absent");
+        }
+
+        private static void SourceAndDocumentationDeclareFailClosedBoundary()
+        {
+            string root = RepoRoot();
+            string source = File.ReadAllText(Path.Combine(
+                root,
+                "Assets",
+                "ReachyMini",
+                "Runtime",
+                "Core",
+                "Perception",
+                "ReachyOpenAiVisionLanguageAdapters.cs"));
+            string architecture = File.ReadAllText(Path.Combine(
+                root,
+                "docs",
+                "architecture",
+                "OPENAI_COMPATIBLE_VLM_ADAPTERS.md"));
+
+            Contains(
+                "AutomaticProviderFallbackEnabled => false",
+                source,
+                "automatic fallback disabled");
+            Contains(
+                "AutomaticRetryEnabled => false",
+                source,
+                "automatic retry disabled");
+            Contains("public bool StoreResponse { get; }", source, "response storage disabled");
+            Contains("public bool Stream { get; }", source, "streaming disabled");
+            Contains(
+                "VisionFrameOrigin.TransformedReachyEye",
+                source,
+                "transformed-frame boundary");
+            Contains(
+                "No world-model entity history",
+                source,
+                "stale entity exclusion");
+            False(source.Contains("HttpClient", StringComparison.Ordinal), "no HTTP client");
+            False(source.Contains("WebRequest", StringComparison.Ordinal), "no web request");
+            False(source.Contains("Process.Start", StringComparison.Ordinal), "no subprocess");
+
+            Contains("Responses", architecture, "Responses documentation");
+            Contains("Chat Completions", architecture, "Chat documentation");
+            Contains("validity mask", architecture, "validity documentation");
+            Contains("coverage", architecture, "coverage documentation");
+            Contains("fallback", architecture, "fallback documentation");
+            Contains("stale", architecture, "stale evidence documentation");
+        }
+
+        private static RemoteVlmImagePolicy Policy(
+            int maximumWidth = 1024,
+            int maximumHeight = 1024,
+            int maximumEncodedBytes = 4 * 1024 * 1024,
+            RemoteVlmImageFormat preferredFormat = RemoteVlmImageFormat.Jpeg,
+            int lossyQuality = 85,
+            RemoteVlmImageDetail detail = RemoteVlmImageDetail.Auto,
+            RemoteVlmInvalidPixelPolicy invalidPixelPolicy =
+                RemoteVlmInvalidPixelPolicy.ReplaceWithOpaqueBlack,
+            bool allowUpscaling = false)
+        {
+            return new RemoteVlmImagePolicy(
+                maximumWidth,
+                maximumHeight,
+                maximumEncodedBytes,
+                preferredFormat,
+                lossyQuality,
+                detail,
+                invalidPixelPolicy,
+                allowUpscaling);
+        }
+
+        private static OpenAiVisionProviderConfiguration Configuration(
+            OpenAiVisionEndpointStyle endpointStyle =
+                OpenAiVisionEndpointStyle.Responses,
+            string modelId = "configured-model",
+            VisionProviderLocation location = VisionProviderLocation.Cloud,
+            bool supportsVisualQuestions = true,
+            bool supportsSceneDescription = true,
+            int maximumConcurrentOperations = 1,
+            int maximumPromptCharacters = 4096,
+            int maximumOutputTokens = 256,
+            int maximumResponseCharacters = 4096,
+            RemoteVlmImagePolicy? policy = null)
+        {
+            return new OpenAiVisionProviderConfiguration(
+                endpointStyle,
+                providerId: "openai-compatible-vlm",
+                providerInstanceId: "remote-vlm-instance",
+                displayName: "Remote VLM",
+                version: "1",
+                modelId,
+                location,
+                supportsVisualQuestions,
+                supportsSceneDescription,
+                maximumConcurrentOperations,
+                maximumPromptCharacters,
+                maximumOutputTokens,
+                maximumResponseCharacters,
+                policy ?? Policy());
+        }
+
+        private static IVisionLanguageProvider Provider(
+            OpenAiVisionEndpointStyle endpointStyle,
+            FakeTransport transport,
+            FakeEncoder encoder,
+            OpenAiVisionProviderConfiguration? configuration = null)
+        {
+            OpenAiVisionProviderConfiguration selected =
+                configuration ?? Configuration(endpointStyle);
+            return endpointStyle == OpenAiVisionEndpointStyle.Responses
+                ? new OpenAiResponsesVisionLanguageProvider(
+                    selected,
+                    transport,
+                    encoder)
+                : new OpenAiChatCompletionsVisionLanguageProvider(
+                    selected,
+                    transport,
+                    encoder);
+        }
+
+        private static ReachyVisionFrameIdentity Identity(
+            ulong sourceSequence = 1UL)
+        {
+            return new ReachyVisionFrameIdentity(
+                cameraId: "camera-0",
+                sourceSessionId: 1UL,
+                sourceSequence,
+                sourceTimestampNanoseconds: checked((long)sourceSequence * 1_000L),
+                authoritativeSequence: sourceSequence,
+                continuityId: 1U);
+        }
+
+        private static RemoteVlmEncodedImage EncodedImage(
+            ReachyVisionFrameIdentity identity,
+            VisionFrameOrigin sourceOrigin =
+                VisionFrameOrigin.TransformedReachyEye,
+            int sourceWidth = 10,
+            int sourceHeight = 10,
+            int width = 10,
+            int height = 10,
+            RemoteVlmImageFormat format = RemoteVlmImageFormat.Jpeg,
+            RemoteVlmInvalidPixelPolicy invalidPixelPolicy =
+                RemoteVlmInvalidPixelPolicy.ReplaceWithOpaqueBlack,
+            bool validityMaskApplied = true,
+            bool containsOnlyValidPixels = true,
+            bool upscaled = false,
+            byte[]? bytes = null)
+        {
+            return new RemoteVlmEncodedImage(
+                identity,
+                sourceOrigin,
+                sourceWidth,
+                sourceHeight,
+                width,
+                height,
+                format,
+                invalidPixelPolicy,
+                validityMaskApplied,
+                containsOnlyValidPixels,
+                upscaled,
+                bytes ?? new byte[] { 1, 2, 3 });
+        }
+
+        private static ReachyVisionFrame Frame(
+            VisionCoverageState state = VisionCoverageState.Normal,
+            long validPixelCount = 100L,
+            long totalPixelCount = 100L,
+            bool shouldStopVisionDrivenTurning = false,
+            ulong sourceSequence = 1UL)
+        {
+            using var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: true);
+            var coverage = new ReachyVisionCoverage(
+                state,
+                validPixelCount,
+                totalPixelCount,
+                hasValidityMask: true,
+                shouldStopVisionDrivenTurning,
+                diagnostic: "synthetic transformed coverage");
+            var frame = new ReachyVisionFrame(
+                VisionFrameOrigin.TransformedReachyEye,
+                Identity(sourceSequence),
+                coverage,
+                resources);
+            resources.TransferOwnershipToFrame();
+            return frame;
+        }
+
+        private static ReachyVisionFrame RawFrame()
+        {
+            using var resources = new FakeResources(
+                width: 10,
+                height: 10,
+                includeValidityMask: false);
+            var coverage = new ReachyVisionCoverage(
+                VisionCoverageState.Unavailable,
+                validPixelCount: 0L,
+                totalPixelCount: 0L,
+                hasValidityMask: false,
+                shouldStopVisionDrivenTurning: true,
+                diagnostic: "raw debug coverage unavailable");
+            var frame = new ReachyVisionFrame(
+                VisionFrameOrigin.RawPhoneDebug,
+                Identity(),
+                coverage,
+                resources);
+            resources.TransferOwnershipToFrame();
+            return frame;
+        }
+
+        private static VisionLanguageRequest Request(
+            IVisionLanguageProvider provider,
+            ReachyVisionFrame frame,
+            string prompt = "What is visible?",
+            bool networkAcknowledged = true,
+            string requestId = "request-1",
+            VisionProviderSelection? selection = null)
+        {
+            ArgumentNullException.ThrowIfNull(provider);
+            VisionProviderSelection selected =
+                selection ?? new VisionProviderSelection(provider.Descriptor);
+            var context = new VisionRequestContext(
+                requestId,
+                selected.Current,
+                TimeSpan.FromSeconds(5.0));
+            return new VisionLanguageRequest(
+                frame,
+                prompt,
+                context,
+                networkAcknowledged);
+        }
+
+        private static async Task InvokeSuccessfulProvider(
+            OpenAiVisionEndpointStyle endpointStyle,
+            FakeTransport transport,
+            OpenAiVisionProviderConfiguration? configuration = null)
+        {
+            await using IVisionLanguageProvider provider = Provider(
+                endpointStyle,
+                transport,
+                new FakeEncoder(),
+                configuration);
+            await using ReachyVisionFrame frame = Frame();
+            VisionLanguageResult result = await provider.AnalyzeAsync(
+                Request(provider, frame),
+                CancellationToken.None).ConfigureAwait(false);
+            True(result.Succeeded, "successful provider invocation");
+        }
+
+        private static async Task AssertEncodingFailure(
+            RemoteVlmImageEncodingStatus encoderStatus,
+            VisionOperationStatus expectedStatus,
+            string code)
+        {
+            var encoder = new FakeEncoder
+            {
+                Handler = (request, token) =>
+                    new ValueTask<RemoteVlmImageEncodingResult>(
+                        RemoteVlmImageEncodingResult.Failure(
+                            encoderStatus,
+                            code,
+                            requiresEncoderReset: false)),
+            };
+            var transport = new FakeTransport(OpenAiVisionEndpointStyle.Responses);
+            await using IVisionLanguageProvider provider = Provider(
+                OpenAiVisionEndpointStyle.Responses,
+                transport,
+                encoder);
+            await using ReachyVisionFrame frame = Frame();
+            VisionLanguageResult result = await provider.AnalyzeAsync(
+                Request(provider, frame),
+                CancellationToken.None).ConfigureAwait(false);
+            Equal(expectedStatus, result.Status, "encoding failure mapping");
+            Equal(0, transport.CallCount, "encoding failure transport calls");
+        }
+
+        private static async Task AssertTransportFailure(
+            OpenAiVisionTransportStatus transportStatus,
+            VisionOperationStatus expectedStatus,
+            OpenAiVisionProviderError error)
+        {
+            var transport = new FakeTransport(OpenAiVisionEndpointStyle.Responses)
+            {
+                Handler = (request, token) =>
+                    new ValueTask<OpenAiVisionTransportResult>(
+                        OpenAiVisionTransportResult.Failure(
+                            transportStatus,
+                            error,
+                            requiresTransportReset: false)),
+            };
+            await using IVisionLanguageProvider provider = Provider(
+                OpenAiVisionEndpointStyle.Responses,
+                transport,
+                new FakeEncoder());
+            await using ReachyVisionFrame frame = Frame();
+            VisionLanguageResult result = await provider.AnalyzeAsync(
+                Request(provider, frame),
+                CancellationToken.None).ConfigureAwait(false);
+            Equal(expectedStatus, result.Status, "transport failure mapping");
+        }
+
+        private static OpenAiVisionProviderError Error(
+            OpenAiVisionProviderErrorCategory category,
+            string code)
+        {
+            return new OpenAiVisionProviderError(
+                category,
+                code,
+                httpStatusCode: null,
+                providerRequestId: null,
+                detail: "Synthetic provider failure.");
+        }
+
+        private static void Run(Action test)
+        {
+            test();
+            caseCount = checked(caseCount + 1);
+        }
+
+        private static async Task RunAsync(Func<Task> test)
+        {
+            await test().ConfigureAwait(false);
+            caseCount = checked(caseCount + 1);
+        }
+
+        private static void True(bool value, string name)
+        {
+            if (!value)
+            {
+                throw new InvalidOperationException(name + " expected true.");
+            }
+        }
+
+        private static void False(bool value, string name)
+        {
+            if (value)
+            {
+                throw new InvalidOperationException(name + " expected false.");
+            }
+        }
+
+        private static void Equal<T>(T expected, T actual, string name)
+            where T : notnull
+        {
+            if (!EqualityComparer<T>.Default.Equals(expected, actual))
+            {
+                throw new InvalidOperationException(
+                    name + " expected '" + expected +
+                    "' but received '" + actual + "'.");
+            }
+        }
+
+        private static void Contains(
+            string expected,
+            string actual,
+            string name)
+        {
+            if (!actual.Contains(expected, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    name + " expected text '" + expected + "'.");
+            }
+        }
+
+        private static void Throws<TException>(
+            Func<object?> action,
+            string name)
+            where TException : Exception
+        {
+            try
+            {
+                _ = action();
+            }
+            catch (TException)
+            {
+                return;
+            }
+            throw new InvalidOperationException(
+                name + " expected " + typeof(TException).Name + ".");
+        }
+
+        private static string RepoRoot()
+        {
+            DirectoryInfo? directory = new DirectoryInfo(AppContext.BaseDirectory);
+            while (directory != null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "README.md")) &&
+                    Directory.Exists(Path.Combine(directory.FullName, "Assets")) &&
+                    Directory.Exists(Path.Combine(directory.FullName, "docs")))
+                {
+                    return directory.FullName;
+                }
+                directory = directory.Parent;
+            }
+            throw new InvalidOperationException("Unable to locate repository root.");
+        }
+
+        private sealed class FakeTransport : IOpenAiVisionTransport
+        {
+            public FakeTransport(OpenAiVisionEndpointStyle endpointStyle)
+            {
+                EndpointStyle = endpointStyle;
+            }
+
+            public OpenAiVisionEndpointStyle EndpointStyle { get; }
+
+            public int CallCount { get; private set; }
+
+            public OpenAiVisionTransportRequest? LastRequest { get; private set; }
+
+            public Func<
+                OpenAiVisionTransportRequest,
+                CancellationToken,
+                ValueTask<OpenAiVisionTransportResult>>? Handler { get; set; }
+
+            public ValueTask<OpenAiVisionTransportResult> SendAsync(
+                OpenAiVisionTransportRequest request,
+                CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(request);
+                CallCount = checked(CallCount + 1);
+                LastRequest = request;
+                if (Handler != null)
+                {
+                    return Handler(request, cancellationToken);
+                }
+                return new ValueTask<OpenAiVisionTransportResult>(
+                    OpenAiVisionTransportResult.Success(
+                        "Synthetic semantic result.",
+                        providerRequestId: "req_synthetic",
+                        finishReason: "stop",
+                        inputTokens: 10L,
+                        outputTokens: 4L));
+            }
+        }
+
+        private sealed class FakeEncoder : IRemoteVlmImageEncoder
+        {
+            public int CallCount { get; private set; }
+
+            public RemoteVlmEncodedImage? LastImage { get; private set; }
+
+            public Func<
+                RemoteVlmImageEncodingRequest,
+                CancellationToken,
+                ValueTask<RemoteVlmImageEncodingResult>>? Handler { get; set; }
+
+            public ValueTask<RemoteVlmImageEncodingResult> EncodeAsync(
+                RemoteVlmImageEncodingRequest request,
+                CancellationToken cancellationToken)
+            {
+                ArgumentNullException.ThrowIfNull(request);
+                CallCount = checked(CallCount + 1);
+                ValueTask<RemoteVlmImageEncodingResult> result;
+                if (Handler != null)
+                {
+                    result = Handler(request, cancellationToken);
+                }
+                else if (cancellationToken.IsCancellationRequested)
+                {
+                    result = new ValueTask<RemoteVlmImageEncodingResult>(
+                        RemoteVlmImageEncodingResult.Failure(
+                            RemoteVlmImageEncodingStatus.Cancelled,
+                            "cancelled",
+                            requiresEncoderReset: false));
+                }
+                else
+                {
+                    RemoteVlmImageDimensions target =
+                        request.Policy.ComputeTargetDimensions(
+                            request.Frame.Width,
+                            request.Frame.Height);
+                    LastImage = EncodedImage(
+                        request.Frame.Identity,
+                        sourceWidth: request.Frame.Width,
+                        sourceHeight: request.Frame.Height,
+                        width: target.Width,
+                        height: target.Height,
+                        format: request.Policy.PreferredFormat,
+                        invalidPixelPolicy:
+                            request.Policy.InvalidPixelPolicy);
+                    result = new ValueTask<RemoteVlmImageEncodingResult>(
+                        RemoteVlmImageEncodingResult.Success(LastImage));
+                }
+                return TrackImageAsync(result);
+            }
+
+            private async ValueTask<RemoteVlmImageEncodingResult> TrackImageAsync(
+                ValueTask<RemoteVlmImageEncodingResult> pending)
+            {
+                RemoteVlmImageEncodingResult result =
+                    await pending.ConfigureAwait(false);
+                if (result.Image != null)
+                {
+                    LastImage = result.Image;
+                }
+                return result;
+            }
+        }
+
+        private sealed class FakeResources : IReachyVisionFrameResources, IDisposable
+        {
+            private readonly object color = new object();
+            private readonly object? validityMask;
+            private int disposed;
+            private int ownershipTransferred;
+
+            public FakeResources(
+                int width,
+                int height,
+                bool includeValidityMask)
+            {
+                Width = width;
+                Height = height;
+                validityMask = includeValidityMask ? new object() : null;
+            }
+
+            public string OwnerId => "remote-vlm-tests";
+
+            public ulong Generation => 1UL;
+
+            public int Width { get; }
+
+            public int Height { get; }
+
+            public bool IsDisposed => Volatile.Read(ref disposed) != 0;
+
+            public bool HasResource(VisionResourceKind kind)
+            {
+                return kind == VisionResourceKind.Color ||
+                    (kind == VisionResourceKind.ValidityMask &&
+                        validityMask != null);
+            }
+
+            public VisionPixelEncoding GetEncoding(VisionResourceKind kind)
+            {
+                if (kind == VisionResourceKind.Color)
+                {
+                    return VisionPixelEncoding.Rgba8;
+                }
+                if (kind == VisionResourceKind.ValidityMask &&
+                    validityMask != null)
+                {
+                    return VisionPixelEncoding.ValidityMask8;
+                }
+                throw new InvalidOperationException("Resource is unavailable.");
+            }
+
+            public bool TryGetResource<TResource>(
+                VisionResourceKind kind,
+                out TResource? resource)
+                where TResource : class
+            {
+                object? value = kind == VisionResourceKind.Color
+                    ? color
+                    : kind == VisionResourceKind.ValidityMask
+                        ? validityMask
+                        : null;
+                resource = value as TResource;
+                return resource != null;
+            }
+
+            public void TransferOwnershipToFrame()
+            {
+                ObjectDisposedException.ThrowIf(IsDisposed, this);
+                if (Interlocked.Exchange(ref ownershipTransferred, 1) != 0)
+                {
+                    throw new InvalidOperationException(
+                        "Fake resource ownership was already transferred.");
+                }
+            }
+
+            public void Dispose()
+            {
+                if (Volatile.Read(ref ownershipTransferred) == 0)
+                {
+                    _ = Interlocked.Exchange(ref disposed, 1);
+                }
+                GC.SuppressFinalize(this);
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _ = Interlocked.Exchange(ref disposed, 1);
+                GC.SuppressFinalize(this);
+                return default;
+            }
+        }
+    }
+}

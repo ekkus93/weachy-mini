@@ -240,9 +240,9 @@ namespace ReachyMini.Perception
 
         public RemoteVlmImagePolicy Policy { get; }
 
-        public bool RequireValidityMask => true;
+        public bool RequireValidityMask { get; } = true;
 
-        public bool ApplyValidityBeforeResize => true;
+        public bool ApplyValidityBeforeResize { get; } = true;
     }
 
     public sealed class RemoteVlmEncodedImage : IDisposable
@@ -753,9 +753,9 @@ namespace ReachyMini.Perception
         {
             for (int index = 0; index < ForbiddenDetailFragments.Length; ++index)
             {
-                if (value.IndexOf(
+                if (value.Contains(
                         ForbiddenDetailFragments[index],
-                        StringComparison.OrdinalIgnoreCase) >= 0)
+                        StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -852,9 +852,9 @@ namespace ReachyMini.Perception
 
         public int MaximumOutputTokens { get; }
 
-        public bool StoreResponse => false;
+        public bool StoreResponse { get; }
 
-        public bool Stream => false;
+        public bool Stream { get; }
     }
 
     public sealed class OpenAiVisionTransportResult
@@ -1224,6 +1224,7 @@ namespace ReachyMini.Perception
         public ValueTask DisposeAsync()
         {
             _ = Interlocked.Exchange(ref disposed, 1);
+            GC.SuppressFinalize(this);
             return default;
         }
 

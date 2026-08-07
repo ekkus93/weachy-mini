@@ -1959,17 +1959,30 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 ## RMA-115 — Implement OpenAI and compatible VLM adapters
 
-- [ ] Reuse the selected Responses- or Chat-style provider transport.
-- [ ] Encode only transformed valid image content.
-- [ ] Define image resizing and quality policy.
-- [ ] Include prompt context stating coverage limitations where relevant.
-- [ ] Validate structured results and preserve provider error detail without secrets.
+**Status:** Complete (2026-08-06)
+
+- [x] Reuse the selected Responses- or Chat-style provider transport.
+- [x] Encode only transformed valid image content.
+- [x] Define image resizing and quality policy.
+- [x] Include prompt context stating coverage limitations where relevant.
+- [x] Validate structured results and preserve provider error detail without secrets.
 
 **Acceptance criteria**
 
-- [ ] Basic face tracking works without a VLM.
-- [ ] VLM requests are selective and cancellable.
-- [ ] Stale entities are not presented to the LLM as currently visible.
+- [x] Basic face tracking works without a VLM.
+- [x] VLM requests are selective and cancellable.
+- [x] Stale entities are not presented to the LLM as currently visible.
+
+**Completion evidence**
+
+- Responses-style and Chat Completions-style providers share one explicit transport boundary. Endpoint style, model ID, output limit, image policy, and provider identity are configuration values; mismatches fail construction rather than trying another protocol.
+- Only observation-eligible transformed Reachy-eye frames with validity masks reach the encoder. Encoded results must prove identity, mask application before resize, valid-only content, exact policy application, bounded dimensions and bytes, and no upscaling before one transport call is permitted.
+- The default policy is aspect-preserving 1024x1024 maximum, 4 MiB maximum, JPEG quality 85, automatic detail, black replacement for invalid pixels, and no upscaling. The owned encoded payload is copied and zeroed on disposal.
+- Coverage context states normal or degraded coverage and the valid-pixel fraction, prohibits inference outside valid regions, and explicitly excludes world-model history and stale entities from current visual evidence.
+- Structured outcomes retain safe category, code, HTTP status, provider request ID, and bounded detail. Credential-, data-URL-, payload-, and opaque-token-like detail is redacted; uncaught exceptions expose only their type.
+- Automatic retry, provider fallback, response storage, and streaming are disabled. Concurrency overflow and cancellation are typed and visible; no request is silently queued or rerouted.
+- RMA-111 face/person tracking remains independent and bundled on device. RMA-113 remains the selective admission policy; these adapters contain no frame-rate loop, timer, or automatic invocation path.
+- The permanent 60-case suite and exact-SHA gate are documented in `docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md` and `docs/validation/RMA_115_OPENAI_COMPATIBLE_VLM_ADAPTERS_VALIDATION_2026-08-06.md`.
 
 ---
 
