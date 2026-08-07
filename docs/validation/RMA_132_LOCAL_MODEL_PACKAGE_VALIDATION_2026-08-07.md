@@ -39,8 +39,10 @@ cleanup, store ownership, provenance-origin enforcement, and source-change resta
 
 The first strict build identified only analyzer-level async-stream and static-member findings. Those
 were repaired directly in source with memory-based async stream operations and static helpers; no
-analyzer was disabled and no package-integrity rule was weakened. The exact repaired candidate is
-being revalidated before acceptance is recorded.
+analyzer was disabled and no package-integrity rule was weakened. The following managed-test build
+then identified only test-harness allocation/hash API findings; those were likewise repaired in the
+harness without changing production behavior. The resulting exact candidate is being revalidated
+before acceptance is recorded.
 
 No real GGUF, model download, API key, benchmark result, model selection, or model inference is
 required for RMA-132.
