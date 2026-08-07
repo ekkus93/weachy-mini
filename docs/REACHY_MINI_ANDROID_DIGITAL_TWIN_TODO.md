@@ -2099,13 +2099,26 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-132 — Implement safe model download/import
 
-- [ ] Check free storage before download/import.
-- [ ] Download to a temporary path.
-- [ ] Support safe resume or clean restart.
-- [ ] Verify SHA-256 before atomic installation.
-- [ ] Recover from app termination and partial files.
-- [ ] Allow deletion and orphan cleanup.
-- [ ] Do not load arbitrary paths without validation.
+**Status:** Complete (2026-08-07)
+
+- [x] Check free storage before download/import.
+- [x] Download to a temporary path.
+- [x] Support safe resume or clean restart.
+- [x] Verify SHA-256 before atomic installation.
+- [x] Recover from app termination and partial files.
+- [x] Allow deletion and orphan cleanup.
+- [x] Do not load arbitrary paths without validation.
+
+**Completion evidence**
+
+- `LocalModelPackageManager` owns a marker-bound managed store and stages all acquisition under it. Imports accept a caller-opened `Stream`, downloads use one explicit HTTPS source, and only revalidated manifest-derived installed files can produce a `LocalModelApprovedArtifact`.
+- Free-space preflight requires the remaining artifact bytes plus a configured reserve. Download partials are resumable only when their sidecar still binds the exact source URI fingerprint, manifest size, and SHA-256; range mismatches fail visibly and unsupported resume performs a clean restart.
+- Exact byte count, no extra byte, and SHA-256 verification are required before same-store atomic publication. Corrupt installed files never receive an approved path; verified replacements quarantine them before publication and final files are rehashed.
+- Recovery removes abandoned non-resumable imports and malformed download state while retaining only valid manifest-bound resumable downloads. Manifest-derived deletion and marker-confined orphan cleanup remove loose/unknown staging, quarantine, and installed orphan entries without following reparse-point directories.
+- The Ralph loop fixed strict async-stream/static analyzer findings and test-harness analyzer findings without suppression, corrected an over-broad static path assertion, and hardened a real staging-orphan cleanup edge before acceptance. No fallback or integrity relaxation was introduced.
+- Dedicated run `31212296409`, job `92977704407`, passed the warnings-as-errors core build, all 15 managed package behaviors, static contracts, Python compilation, exact-SHA evidence generation, and artifact upload on accepted implementation SHA `d50e44d83b14e1e1420dc347164671db6593d73c`.
+- Artifact `9007154955` has digest `sha256:3babe8eea5088de9e6b4f45da8115f562f03b051c233cb31ecedd3310f36f7c3`. Hosted CI run `31212296177` passed static, managed, native/sanitizer, Android, and pinned Reachy-model jobs on the same SHA.
+- No real model was downloaded, selected, recommended, or bundled; RMA-133 still owns benchmark-backed model selection and RMA-134 owns inference. Detailed design and evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.
 
 ## RMA-133 — Benchmark and select initial sub-1B model
 
