@@ -42,13 +42,24 @@ def main() -> None:
     require("RecoverAsync(" in manager, "termination recovery entry point missing")
     require("CleanupOrphansAsync(" in manager, "orphan cleanup entry point missing")
     require("DeleteAsync(" in manager, "exact model deletion missing")
+
+    import_signature = (
+        "ImportAsync(\n"
+        "            LocalModelManifest manifest,\n"
+        "            Stream source,\n"
+        "            CancellationToken cancellationToken)"
+    )
     require(
-        "ImportAsync(\n            LocalModelManifest manifest,\n            Stream source" in manager,
+        import_signature in manager,
         "imports must consume a caller-opened stream rather than arbitrary paths",
     )
     require(
-        "string sourcePath" not in manager and "string importPath" not in manager,
-        "package manager must not accept arbitrary import paths",
+        "ImportAsync(\n            LocalModelManifest manifest,\n            string " not in manager,
+        "ImportAsync must not accept an arbitrary filesystem path",
+    )
+    require(
+        "DownloadAsync(\n            LocalModelManifest manifest,\n            string " not in manager,
+        "DownloadAsync must not accept an unvalidated path string",
     )
     require(
         "provenance.Host" in manager and "artifactUri.Host" in manager,
