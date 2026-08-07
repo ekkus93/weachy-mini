@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -111,7 +112,7 @@ namespace ReachyMini.Speech
             }
         }
 
-        private IReadOnlyList<TtsVoice> BuildOfflineVoiceList(
+        private ReadOnlyCollection<TtsVoice> BuildOfflineVoiceList(
             IReadOnlyList<AndroidOfflineTtsPlatformVoice> platformVoices)
         {
             if (platformVoices == null)
