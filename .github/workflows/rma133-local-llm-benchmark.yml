@@ -1,0 +1,218 @@
+name: RMA-133 local LLM benchmark
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma133-local-llm-benchmark.yml'
+      - 'benchmarks/rma133/**'
+      - 'native/llama_runtime/benchmark/**'
+      - 'native/llama_runtime/include/reachy_llama.h'
+      - 'native/llama_runtime/src/**'
+      - 'native/llama_runtime/CMakeLists.txt'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/build_rma133_android_benchmark.sh'
+      - 'scripts/run_rma133_device_benchmark.sh'
+      - 'scripts/score_rma133_benchmark.py'
+      - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma133-local-llm-benchmark.yml'
+      - 'benchmarks/rma133/**'
+      - 'native/llama_runtime/benchmark/**'
+      - 'native/llama_runtime/include/reachy_llama.h'
+      - 'native/llama_runtime/src/**'
+      - 'native/llama_runtime/CMakeLists.txt'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/build_rma133_android_benchmark.sh'
+      - 'scripts/run_rma133_device_benchmark.sh'
+      - 'scripts/score_rma133_benchmark.py'
+      - 'scripts/tests/test_rma133_benchmark_contract.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma133-local-llm-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate frozen benchmark contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate scorer and frozen candidate contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest scripts.tests.test_rma133_benchmark_contract -v
+          python3 -m compileall -q scripts
+          bash -n scripts/build_rma133_android_benchmark.sh
+          bash -n scripts/run_rma133_device_benchmark.sh
+
+      - name: Strict syntax-check first-party Android benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang \
+            -std=c17 \
+            -fsyntax-only \
+            -Wall \
+            -Wextra \
+            -Wpedantic \
+            -Wconversion \
+            -Wsign-conversion \
+            -Wshadow \
+            -Werror \
+            -Inative/llama_runtime/include \
+            native/llama_runtime/benchmark/rma133_benchmark.c
+
+  device-benchmark:
+    name: Benchmark candidates on physical Android device
+    needs: contract
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 120
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Read exact llama.cpp and Android pins
+        id: pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "${GITHUB_OUTPUT}"
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          llama = json.loads(Path("third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8"))
+          android = json.loads(Path("toolchain.lock.json").read_text(encoding="utf-8"))["android"]
+          repository = urlparse(llama["repository"]).path.removesuffix(".git").strip("/")
+          if repository.count("/") != 1:
+              raise SystemExit("invalid pinned llama.cpp repository")
+          print(f"repository={repository}")
+          print(f"commit={llama['commit']}")
+          print(f"ndk={android['ndk']}")
+          print(f"cmake={android['cmake']}")
+          print(f"min_sdk={android['native_feasibility_min_sdk']}")
+          PY
+
+      - name: Check out exact llama.cpp source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.repository }}
+          ref: ${{ steps.pins.outputs.commit }}
+          path: upstream/llama.cpp
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: false
+
+      - name: Resolve pinned Android toolchain
+        shell: bash
+        env:
+          PINNED_NDK: ${{ steps.pins.outputs.ndk }}
+          PINNED_CMAKE: ${{ steps.pins.outputs.cmake }}
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          sdkmanager="${sdk_root}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager}" ]]; then
+            sdkmanager="$(command -v sdkmanager || true)"
+          fi
+          if [[ -z "${sdkmanager}" || ! -x "${sdkmanager}" ]]; then
+            printf '%s\n' 'Android sdkmanager is unavailable on the RMA-133 device runner.' >&2
+            exit 1
+          fi
+          if [[ ! -f "${sdk_root}/ndk/${PINNED_NDK}/source.properties" || \
+                ! -x "${sdk_root}/cmake/${PINNED_CMAKE}/bin/cmake" ]]; then
+            "${sdkmanager}" --install "ndk;${PINNED_NDK}" "cmake;${PINNED_CMAKE}"
+          fi
+          test -f "${sdk_root}/ndk/${PINNED_NDK}/source.properties"
+          test -x "${sdk_root}/cmake/${PINNED_CMAKE}/bin/cmake"
+          test -x "${sdk_root}/cmake/${PINNED_CMAKE}/bin/ninja"
+          {
+            printf 'ANDROID_SDK_ROOT=%s\n' "${sdk_root}"
+            printf 'ANDROID_HOME=%s\n' "${sdk_root}"
+            printf 'ANDROID_NDK_HOME=%s\n' "${sdk_root}/ndk/${PINNED_NDK}"
+            printf 'ANDROID_NDK_ROOT=%s\n' "${sdk_root}/ndk/${PINNED_NDK}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${sdk_root}/cmake/${PINNED_CMAKE}/bin" >> "${GITHUB_PATH}"
+
+      - name: Verify exact llama.cpp source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_source_checkout.py \
+            --source upstream/llama.cpp \
+            --lock third_party/llama-cpp-source.lock.json
+
+      - name: Build exact RMA-130 Android runtime
+        shell: bash
+        env:
+          LLAMA_CPP_SOURCE_DIR: ${{ github.workspace }}/upstream/llama.cpp
+          LLAMA_ANDROID_PLATFORM: android-${{ steps.pins.outputs.min_sdk }}
+          LLAMA_ANDROID_BUILD_DIR: ${{ github.workspace }}/build/rma133/llama-build
+          LLAMA_ANDROID_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/runtime
+        run: bash scripts/build_llama_android.sh
+
+      - name: Build strict RMA-133 Android benchmark
+        shell: bash
+        env:
+          RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
+          RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
+        run: bash scripts/build_rma133_android_benchmark.sh
+
+      - name: Benchmark every frozen candidate and select only if gates pass
+        shell: bash
+        env:
+          RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
+          RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
+          RMA133_RESULTS_DIR: ${{ github.workspace }}/build/rma133/results
+        run: bash scripts/run_rma133_device_benchmark.sh
+
+      - name: Upload RMA-133 physical benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma133-local-llm-benchmark-${{ github.sha }}
+          path: |
+            benchmarks/rma133/candidates.json
+            benchmarks/rma133/behavior_cases.tsv
+            benchmarks/rma133/system_prompt.txt
+            build/rma133/runtime/LLAMA_BUILD_INFO.txt
+            build/rma133/runtime/libreachy_llama.dynamic.txt
+            build/rma133/runtime/libreachy_llama.exports.txt
+            build/rma133/benchmark/rma133_benchmark.dynamic.txt
+            build/rma133/benchmark/rma133_benchmark.sha256
+            build/rma133/results
+          if-no-files-found: warn
+          retention-days: 30
