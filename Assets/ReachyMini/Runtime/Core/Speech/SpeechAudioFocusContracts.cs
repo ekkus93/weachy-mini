@@ -138,6 +138,10 @@ namespace ReachyMini.Speech
 
     public sealed class SpeechAudioSnapshot
     {
+        private readonly bool singleMicrophoneOnly;
+        private readonly int maximumConcurrentMicrophoneCaptures;
+        private readonly bool supportsSimultaneousListeningAndSpeaking;
+
         internal SpeechAudioSnapshot(
             SpeechAudioState state,
             SpeechAudioRole? activeRole,
@@ -150,6 +154,9 @@ namespace ReachyMini.Speech
             FocusHeld = focusHeld;
             LastInterruption = lastInterruption;
             Fault = fault;
+            singleMicrophoneOnly = true;
+            maximumConcurrentMicrophoneCaptures = 1;
+            supportsSimultaneousListeningAndSpeaking = false;
         }
 
         public SpeechAudioState State { get; }
@@ -157,9 +164,11 @@ namespace ReachyMini.Speech
         public bool FocusHeld { get; }
         public SpeechAudioInterruption? LastInterruption { get; }
         public SpeechProviderError? Fault { get; }
-        public bool SingleMicrophoneOnly => true;
-        public int MaximumConcurrentMicrophoneCaptures => 1;
-        public bool SupportsSimultaneousListeningAndSpeaking => false;
+        public bool SingleMicrophoneOnly => singleMicrophoneOnly;
+        public int MaximumConcurrentMicrophoneCaptures =>
+            maximumConcurrentMicrophoneCaptures;
+        public bool SupportsSimultaneousListeningAndSpeaking =>
+            supportsSimultaneousListeningAndSpeaking;
     }
 
     public sealed class SpeechAudioAcquireResult
@@ -183,7 +192,7 @@ namespace ReachyMini.Speech
         public SpeechProviderError? Error { get; }
     }
 
-    public sealed class SpeechAudioFocusLease : IAsyncDisposable
+    public sealed class SpeechAudioFocusLease
     {
         private readonly SpeechAudioFocusCoordinator owner;
         private readonly SpeechAudioSession session;
@@ -214,7 +223,6 @@ namespace ReachyMini.Speech
         public async ValueTask DisposeAsync()
         {
             _ = await ReleaseAsync().ConfigureAwait(false);
-            GC.SuppressFinalize(this);
         }
     }
 
