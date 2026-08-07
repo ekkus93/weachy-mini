@@ -1,0 +1,67 @@
+name: RMA-133 UTF-8 evidence repair
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma133-utf8-evidence-repair.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply fail-closed UTF-8 evidence repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/temporary_rma133_utf8_evidence_repair.py
+          python3 -m unittest -v \
+            scripts.tests.test_rma133_benchmark_contract \
+            scripts.tests.test_rma133_candidate_set_v2 \
+            scripts.tests.test_rma133_device_runner_loop
+          python3 -m compileall -q scripts
+          clang \
+            -std=c17 \
+            -fsyntax-only \
+            -Wall \
+            -Wextra \
+            -Wpedantic \
+            -Wconversion \
+            -Wsign-conversion \
+            -Wshadow \
+            -Werror \
+            -Inative/llama_runtime/include \
+            native/llama_runtime/benchmark/rma133_benchmark.c
+          git diff --check
+
+      - name: Commit exact repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            native/llama_runtime/benchmark/rma133_benchmark.c \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py
+          git diff --cached --exit-code --quiet && {
+            printf '%s\n' 'RMA-133 UTF-8 repair produced no source changes.' >&2
+            exit 1
+          }
+          git commit -m 'RMA-133: preserve invalid UTF-8 evidence fail-closed'
+          git push origin HEAD:master
