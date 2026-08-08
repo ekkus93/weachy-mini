@@ -1,0 +1,96 @@
+name: RMA-134 staging test fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-test-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+
+      - name: Apply deterministic test ownership fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('managed/ReachyMini.LocalLlm.Tests/Program.cs')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  '''        Require(result.Succeeded && result.Intent != null, "valid constrained JSON was rejected");\n        Require(result.Intent.SchemaVersion == 1, "schema version mismatch");\n        Require(result.Intent.GazeTarget?.EntityId == "entity-3", "gaze entity mismatch");\n        Require(result.Intent.Expression == LocalLlmExpression.Attentive, "expression mismatch");\n        Require(result.Intent.Gesture == LocalLlmGesture.None, "gesture mismatch");\n        Require(result.Intent.Urgency == LocalLlmUrgency.Normal, "urgency mismatch");''',
+                  '''        Require(result.Succeeded, "valid constrained JSON was rejected");\n        LocalLlmBehaviorIntent intent = result.Intent ??\n            throw new InvalidOperationException("Valid parse returned no intent.");\n        Require(intent.SchemaVersion == 1, "schema version mismatch");\n        Require(intent.GazeTarget?.EntityId == "entity-3", "gaze entity mismatch");\n        Require(intent.Expression == LocalLlmExpression.Attentive, "expression mismatch");\n        Require(intent.Gesture == LocalLlmGesture.None, "gesture mismatch");\n        Require(intent.Urgency == LocalLlmUrgency.Normal, "urgency mismatch");'''
+              ),
+              ('        var hold = new FakeGeneration(holdUntilCancelled: true);',
+               '        using var hold = new FakeGeneration(holdUntilCancelled: true);'),
+              (
+                  '        context.Runtime.Session.EnqueueGeneration(FakeGeneration.TerminalError(11));',
+                  '''        using FakeGeneration errorGeneration = FakeGeneration.TerminalError(11);\n        context.Runtime.Session.EnqueueGeneration(errorGeneration);'''
+              ),
+              ('        ILocalLlmProvider provider,', '        ReachyLocalLlmProvider provider,'),
+              (
+                  '''        private readonly string root;\n\n        private TestContext(\n            string root,\n            ReachyLocalLlmProvider provider,\n            FakeRuntimeFactory runtime)\n        {\n            this.root = root;\n            Provider = provider;\n            Runtime = runtime;\n        }\n\n        public ReachyLocalLlmProvider Provider { get; }''',
+                  '''        private static readonly string[] SupportedAbis = { "arm64-v8a" };\n        private readonly string root;\n        private readonly ReachyLocalLlmProvider provider;\n\n        private TestContext(\n            string root,\n            FakeRuntimeFactory runtime,\n            LocalModelApprovedArtifact approved,\n            LocalModelManifest manifest,\n            LocalLlmProviderConfiguration configuration)\n        {\n            this.root = root;\n            Runtime = runtime;\n            provider = new ReachyLocalLlmProvider(\n                runtime,\n                approved,\n                manifest,\n                configuration);\n        }\n\n        public ReachyLocalLlmProvider Provider => provider;'''
+              ),
+              (
+                  '''            var provider = new ReachyLocalLlmProvider(\n                runtime,\n                approved,\n                manifest,\n                config);\n            return new TestContext(root, provider, runtime);''',
+                  '''            return new TestContext(\n                root,\n                runtime,\n                approved,\n                manifest,\n                config);'''
+              ),
+              ('            await Provider.DisposeAsync().ConfigureAwait(false);',
+               '            await provider.DisposeAsync().ConfigureAwait(false);'),
+              ('                    new[] { "arm64-v8a" },',
+               '                    SupportedAbis,'),
+              (
+                  '''        private readonly Queue<FakeGeneration> generations = new Queue<FakeGeneration>();''',
+                  '''        private readonly Queue<Func<FakeGeneration>> generationFactories =\n            new Queue<Func<FakeGeneration>>();'''
+              ),
+              (
+                  '''        public IReadOnlyList<LocalLlmChatMessage> LastMessages { get; private set; } =\n            Array.Empty<LocalLlmChatMessage>();''',
+                  '''        public LocalLlmChatMessage[] LastMessages { get; private set; } =\n            Array.Empty<LocalLlmChatMessage>();'''
+              ),
+              (
+                  '''        public void EnqueueSuccess(string json, int splitAt)\n        {\n            EnqueueGeneration(FakeGeneration.Success(json, splitAt));\n        }\n\n        public void EnqueueGeneration(FakeGeneration generation)\n        {\n            generations.Enqueue(generation ?? throw new ArgumentNullException(nameof(generation)));\n        }''',
+                  '''        public void EnqueueSuccess(string json, int splitAt)\n        {\n            generationFactories.Enqueue(() => FakeGeneration.Success(json, splitAt));\n        }\n\n        public void EnqueueGeneration(FakeGeneration generation)\n        {\n            if (generation == null)\n            {\n                throw new ArgumentNullException(nameof(generation));\n            }\n            generationFactories.Enqueue(() => generation);\n        }'''
+              ),
+              (
+                  '''            if (generations.Count == 0)\n            {\n                throw new InvalidOperationException("Fake runtime has no queued generation.");\n            }\n            FakeGeneration generation = generations.Dequeue();''',
+                  '''            if (generationFactories.Count == 0)\n            {\n                throw new InvalidOperationException("Fake runtime has no queued generation.");\n            }\n            FakeGeneration generation = generationFactories.Dequeue()();'''
+              ),
+          ]
+
+          for old, new in replacements:
+              if old in text:
+                  text = text.replace(old, new)
+              elif new not in text:
+                  raise SystemExit('Expected test analyzer replacement contract is missing.')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+
+      - name: Commit test-only fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- managed/ReachyMini.LocalLlm.Tests/Program.cs; then
+            echo 'Test analyzer fixes already applied.'
+            exit 0
+          fi
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add managed/ReachyMini.LocalLlm.Tests/Program.cs
+          git commit -m 'RMA-134: fix test ownership contracts'
+          git push origin HEAD:rma134-local-llm-provider-stage
