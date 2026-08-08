@@ -81,8 +81,11 @@ printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' "${DEVICE_SERIAL}" "
 sha256sum "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"; sha256sum "${MODEL_CACHE_PATH}" > "${REPORT_DIR}/model-host-sha256.txt"
 
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
-set +e; timeout --signal=TERM --kill-after=15s 180s "${ADB[@]}" install -r -g "${APK_PATH}" > "${REPORT_DIR}/install.txt" 2>&1; install_status=$?; set -e
-cat "${REPORT_DIR}/install.txt"; (( install_status == 0 )) || exit "${install_status}"
+if ! "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt" 2>&1; then
+  cat "${REPORT_DIR}/install.txt" >&2
+  exit 1
+fi
+cat "${REPORT_DIR}/install.txt"
 "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package-before-launch.txt"
 launch_component="$(awk '/android.intent.action.MAIN:/ {main=1; next} main && / filter / {print $2; exit}' "${REPORT_DIR}/package-before-launch.txt")"
 [[ -n "${launch_component}" && "${launch_component}" == */* ]] || { printf '%s\n' 'Could not resolve Unity launcher activity.' >&2; exit 1; }
