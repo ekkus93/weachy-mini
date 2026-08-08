@@ -243,9 +243,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
-        with:
-          # Intentionally omitted; bash step uses env and run only.
-          dummy: unused
         run: |
           set -euo pipefail
           python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
