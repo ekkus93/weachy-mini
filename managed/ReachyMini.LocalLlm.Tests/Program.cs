@@ -199,7 +199,7 @@ internal static class Program
             (await GenerateAsync(context.Provider, "post-reset", "Fresh").ConfigureAwait(false))[^1].Kind ==
                 LocalLlmEventKind.Completed,
             "provider did not recover after reset");
-        Require(context.Runtime.Session.LastMessages.Count == 2, "reset did not clear committed history");
+        Require(context.Runtime.Session.LastMessages.Length == 2, "reset did not clear committed history");
     }
 
     private static async Task RuntimeFaultRequiresReloadAsync()

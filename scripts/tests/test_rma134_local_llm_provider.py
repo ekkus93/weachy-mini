@@ -8,9 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LANGUAGE_DIR = ROOT / "Assets/ReachyMini/Runtime/Core/Language"
 INTEROP_DIR = ROOT / "Assets/ReachyMini/Runtime/Interop"
-PROMPT_RESOURCE = (
-    ROOT / "Assets/ReachyMini/Runtime/Resources/LocalLlm/Rma133SystemPromptV4.txt"
-)
+PROMPT_RESOURCE = ROOT / "Assets/ReachyMini/Runtime/Resources/LocalLlm/Rma133SystemPromptV4.txt"
 GRAMMAR_RESOURCE = (
     ROOT / "Assets/ReachyMini/Runtime/Resources/LocalLlm/Rma133BehaviorOutputV1.gbnf.txt"
 )
@@ -37,9 +35,7 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
         )
 
     def test_selected_profile_is_exact_v6_profile(self) -> None:
-        source = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(encoding="utf-8")
         expected = (
             "contextTokens: 2048U",
             "batchTokens: 256U",
@@ -57,15 +53,9 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
 
     def test_product_runtime_exposes_only_constrained_generation(self) -> None:
         native = (INTEROP_DIR / "NativeReachyLlama.cs").read_text(encoding="utf-8")
-        runtime = (INTEROP_DIR / "ReachyLlamaNativeRuntime.cs").read_text(
-            encoding="utf-8"
-        )
-        contracts = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(
-            encoding="utf-8"
-        )
-        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(
-            encoding="utf-8"
-        )
+        runtime = (INTEROP_DIR / "ReachyLlamaNativeRuntime.cs").read_text(encoding="utf-8")
+        contracts = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(encoding="utf-8")
+        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(encoding="utf-8")
         combined = "\n".join((native, runtime, contracts, provider))
 
         self.assertIn("reachy_llama_generation_start_constrained", combined)
@@ -106,9 +96,7 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
         )
 
     def test_transaction_and_failure_contracts_are_present(self) -> None:
-        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(
-            encoding="utf-8"
-        )
+        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(encoding="utf-8")
         required = (
             "LocalLlmBehaviorIntentParser.Parse",
             "CommitValidatedTurn",
