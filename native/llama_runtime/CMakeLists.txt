@@ -106,4 +106,22 @@ if(BUILD_TESTING AND NOT ANDROID)
     reachy_enable_strict_warnings(reachy_llama_constraint_contract_tests)
     reachy_enable_sanitizers(reachy_llama_constraint_contract_tests)
     add_test(NAME reachy_llama_constraint_contracts COMMAND reachy_llama_constraint_contract_tests)
+
+    add_executable(
+        reachy_llama_constraint_model_tests
+        tests/reachy_llama_constraint_model_tests.cpp
+    )
+    target_compile_features(reachy_llama_constraint_model_tests PRIVATE cxx_std_17)
+    target_include_directories(
+        reachy_llama_constraint_model_tests
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/include"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
+    target_link_libraries(
+        reachy_llama_constraint_model_tests
+        PRIVATE reachy_llama Threads::Threads
+    )
+    reachy_enable_strict_warnings(reachy_llama_constraint_model_tests)
+    reachy_enable_sanitizers(reachy_llama_constraint_model_tests)
 endif()
