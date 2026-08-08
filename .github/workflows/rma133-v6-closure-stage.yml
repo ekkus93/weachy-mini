@@ -1,0 +1,59 @@
+name: RMA-133 V6 closure staging
+
+on:
+  push:
+    branches:
+      - rma133-v6-closure-stage
+    paths:
+      - 'scripts/rma133_closure_stage.py'
+      - '.github/workflows/rma133-v6-closure-stage.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma133-v6-closure-stage
+  cancel-in-progress: true
+
+jobs:
+  transform-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-v6-closure-stage
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Apply closure transformation
+        run: python3 scripts/rma133_closure_stage.py
+      - name: Validate manifest and managed contracts before commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q scripts
+          python3 -m json.tool models/manifests/local-llm-manifest.schema.json >/dev/null
+          python3 -m json.tool models/manifests/examples/rma131-synthetic-experimental.local-llm.json >/dev/null
+          python3 -m json.tool models/manifests/qwen3-0.6b-q4-k-m.local-llm.json >/dev/null
+          python3 scripts/validate_local_llm_manifest.py models/manifests/examples/rma131-synthetic-experimental.local-llm.json
+          python3 scripts/validate_local_llm_manifest.py models/manifests/qwen3-0.6b-q4-k-m.local-llm.json
+          python3 scripts/tests/test_rma131_local_model_manifest.py
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
+          dotnet run --project managed/ReachyMini.LocalModelManifest.Tests/ReachyMini.LocalModelManifest.Tests.csproj --configuration Release
+      - name: Remove staging helpers and commit validated closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm scripts/rma133_closure_stage.py .github/workflows/rma133-v6-closure-stage.yml
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add -A
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'no closure changes produced' >&2; exit 1; }
+          git commit -m 'RMA-133: close V6 model selection'
+          git push origin HEAD:rma133-v6-closure-stage
