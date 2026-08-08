@@ -28,202 +28,38 @@ jobs:
       - name: Install exact Ruff
         run: python -m pip install --disable-pip-version-check ruff==0.12.0
 
-      - name: Add timeout progress diagnostics
+      - name: Patch timeout diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          provider_path = Path(
-              'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs'
-          )
-          provider = provider_path.read_text(encoding='utf-8')
-          old_finally = '''            finally
-            {
-                if (generation != null)
-                {
-                    try
-                    {
-                        generation.Dispose();
-'''
-          new_finally = '''            finally
-            {
-                if (generation != null)
-                {
-                    if (terminal?.Failure == LocalLlmFailure.TimedOut)
-                    {
-                        terminal = AttachTimeoutMetrics(terminal, generation);
-                    }
-                    try
-                    {
-                        generation.Dispose();
-'''
-          if provider.count(old_finally) != 1:
-              raise SystemExit(
-                  f'expected one provider finally insertion point, found {provider.count(old_finally)}'
-              )
-          provider = provider.replace(old_finally, new_finally)
-
-          anchor = '''        private LocalLlmEvent RuntimeCleanupFailure(ulong sequence, string detail)
-        {
-'''
-          method = '''        private static LocalLlmEvent AttachTimeoutMetrics(
-            LocalLlmEvent terminal,
-            ILocalLlmGeneration generation)
-        {
-            try
-            {
-                LocalLlmGenerationMetrics metrics = generation.GetMetrics();
-                return LocalLlmEvent.Failed(
-                    terminal.Sequence,
-                    LocalLlmFailure.TimedOut,
-                    terminal.Detail +
-                    " Native progress: prompt_tokens=" + metrics.PromptTokens +
-                    " generated_tokens=" + metrics.GeneratedTokens +
-                    " time_to_first_token_us=" + metrics.TimeToFirstTokenMicroseconds +
-                    " decode_us=" + metrics.DecodeMicroseconds + ".");
-            }
-            catch (Exception exception)
-            {
-                return LocalLlmEvent.Failed(
-                    terminal.Sequence,
-                    LocalLlmFailure.TimedOut,
-                    terminal.Detail +
-                    " Native progress metrics unavailable explicitly: " +
-                    exception.GetType().Name + ".");
-            }
-        }
-
-'''
-          if provider.count(anchor) != 1:
-              raise SystemExit(
-                  f'expected one provider method anchor, found {provider.count(anchor)}'
-              )
-          if 'AttachTimeoutMetrics(' in provider:
-              raise SystemExit('timeout metric helper already exists unexpectedly')
-          provider = provider.replace(anchor, method + anchor)
-          provider_path.write_text(provider, encoding='utf-8')
-
-          acceptance_path = Path(
-              'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
-          )
-          acceptance = acceptance_path.read_text(encoding='utf-8')
-          old_throw = '''                    throw new InvalidOperationException(
-                        "Local LLM completion request failed: " +
-                        item.Failure + ": " + item.Detail);
-'''
-          new_throw = '''                    throw new InvalidOperationException(
-                        "Local LLM completion request failed after " +
-                        deltas + " streamed delta event(s): " +
-                        item.Failure + ": " + item.Detail);
-'''
-          if acceptance.count(old_throw) != 1:
-              raise SystemExit(
-                  f'expected one completion failure throw, found {acceptance.count(old_throw)}'
-              )
-          acceptance_path.write_text(
-              acceptance.replace(old_throw, new_throw),
-              encoding='utf-8',
-          )
-
-          tests_path = Path('managed/ReachyMini.LocalLlm.Tests/Program.cs')
-          tests = tests_path.read_text(encoding='utf-8')
-          list_anchor = '''            ("second request is rejected instead of queued", BusyRequestIsRejectedAsync),
-            ("reset cancels active generation and clears history", ResetCancelsAndClearsAsync),
-'''
-          list_replacement = '''            ("second request is rejected instead of queued", BusyRequestIsRejectedAsync),
-            ("timeout preserves native progress diagnostics", TimeoutReportsNativeProgressAsync),
-            ("reset cancels active generation and clears history", ResetCancelsAndClearsAsync),
-'''
-          if tests.count(list_anchor) != 1:
-              raise SystemExit('could not find unique timeout test list insertion point')
-          tests = tests.replace(list_anchor, list_replacement)
-
-          method_anchor = '''    private static async Task ResetCancelsAndClearsAsync()
-    {
-'''
-          timeout_test = '''    private static async Task TimeoutReportsNativeProgressAsync()
-    {
-        await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
-        await RequireLoadedAsync(context).ConfigureAwait(false);
-        using var hold = new FakeGeneration(holdUntilCancelled: true);
-        context.Runtime.Session.EnqueueGeneration(hold);
-
-        var events = new List<LocalLlmEvent>();
-        await foreach (LocalLlmEvent item in context.Provider.GenerateAsync(
-            new LocalLlmRequest(
-                "timeout-progress",
-                "Keep generating until the explicit timeout.",
-                TimeSpan.FromMilliseconds(25.0)),
-            CancellationToken.None))
-        {
-            events.Add(item);
-        }
-
-        Require(events.Count > 0, "timeout produced no terminal event");
-        LocalLlmEvent terminal = events[^1];
-        Require(terminal.Failure == LocalLlmFailure.TimedOut, "timeout was not explicit");
-        Require(
-            terminal.Detail.Contains("prompt_tokens=128", StringComparison.Ordinal),
-            "timeout omitted native prompt-token diagnostics");
-        Require(
-            terminal.Detail.Contains("generated_tokens=32", StringComparison.Ordinal),
-            "timeout omitted native generated-token diagnostics");
-        Require(
-            terminal.Detail.Contains("time_to_first_token_us=1000", StringComparison.Ordinal),
-            "timeout omitted native TTFT diagnostics");
-        Require(
-            terminal.Detail.Contains("decode_us=2000", StringComparison.Ordinal),
-            "timeout omitted native decode diagnostics");
-        Require(
-            context.Provider.Availability.State == LocalLlmProviderState.Ready,
-            "an ordinary request timeout faulted the provider");
-    }
-
-'''
-          if tests.count(method_anchor) != 1:
-              raise SystemExit('could not find unique timeout test method insertion point')
-          if 'TimeoutReportsNativeProgressAsync' in tests:
-              raise SystemExit('timeout progress test already exists unexpectedly')
-          tests_path.write_text(
-              tests.replace(method_anchor, timeout_test + method_anchor),
-              encoding='utf-8',
-          )
-          PY
-
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwcm92aWRlcl9wYXRoID0gUGF0aCgiQXNzZXRzL1JlYWNoeU1pbmkvUnVudGltZS9Db3JlL0xhbmd1YWdlL1JlYWNoeUxvY2FsTGxtUHJvdmlkZXIuY3MiKQpwcm92aWRlciA9IHByb3ZpZGVyX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm9sZF9maW5hbGx5ID0gIiIiICAgICAgICAgICAgZmluYWxseQogICAgICAgICAgICB7CiAgICAgICAgICAgICAgICBpZiAoZ2VuZXJhdGlvbiAhPSBudWxsKQogICAgICAgICAgICAgICAgewogICAgICAgICAgICAgICAgICAgIHRyeQogICAgICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgICAgICAgZ2VuZXJhdGlvbi5EaXNwb3NlKCk7CiIiIgpuZXdfZmluYWxseSA9ICIiIiAgICAgICAgICAgIGZpbmFsbHkKICAgICAgICAgICAgewogICAgICAgICAgICAgICAgaWYgKGdlbmVyYXRpb24gIT0gbnVsbCkKICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgICBpZiAodGVybWluYWw/LkZhaWx1cmUgPT0gTG9jYWxMbG1GYWlsdXJlLlRpbWVkT3V0KQogICAgICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgICAgICAgdGVybWluYWwgPSBBdHRhY2hUaW1lb3V0TWV0cmljcyh0ZXJtaW5hbCwgZ2VuZXJhdGlvbik7CiAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgIHRyeQogICAgICAgICAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgICAgICAgICAgZ2VuZXJhdGlvbi5EaXNwb3NlKCk7CiIiIgppZiBwcm92aWRlci5jb3VudChvbGRfZmluYWxseSkgIT0gMToKICAgIHJhaXNlIFN5c3RlbUV4aXQoCiAgICAgICAgZiJleHBlY3RlZCBvbmUgcHJvdmlkZXIgZmluYWxseSBpbnNlcnRpb24gcG9pbnQsIGZvdW5kIHtwcm92aWRlci5jb3VudChvbGRfZmluYWxseSl9IgogICAgKQpwcm92aWRlciA9IHByb3ZpZGVyLnJlcGxhY2Uob2xkX2ZpbmFsbHksIG5ld19maW5hbGx5KQoKYW5jaG9yID0gIiIiICAgICAgICBwcml2YXRlIExvY2FsTGxtRXZlbnQgUnVudGltZUNsZWFudXBGYWlsdXJlKHVsb25nIHNlcXVlbmNlLCBzdHJpbmcgZGV0YWlsKQogICAgICAgIHsKIiIiCm1ldGhvZCA9ICIiIiAgICAgICAgcHJpdmF0ZSBzdGF0aWMgTG9jYWxMbG1FdmVudCBBdHRhY2hUaW1lb3V0TWV0cmljcygKICAgICAgICAgICAgTG9jYWxMbG1FdmVudCB0ZXJtaW5hbCwKICAgICAgICAgICAgSUxvY2FsTGxtR2VuZXJhdGlvbiBnZW5lcmF0aW9uKQogICAgICAgIHsKICAgICAgICAgICAgdHJ5CiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIExvY2FsTGxtR2VuZXJhdGlvbk1ldHJpY3MgbWV0cmljcyA9IGdlbmVyYXRpb24uR2V0TWV0cmljcygpOwogICAgICAgICAgICAgICAgcmV0dXJuIExvY2FsTGxtRXZlbnQuRmFpbGVkKAogICAgICAgICAgICAgICAgICAgIHRlcm1pbmFsLlNlcXVlbmNlLAogICAgICAgICAgICAgICAgICAgIExvY2FsTGxtRmFpbHVyZS5UaW1lZE91dCwKICAgICAgICAgICAgICAgICAgICB0ZXJtaW5hbC5EZXRhaWwgKwogICAgICAgICAgICAgICAgICAgICIgTmF0aXZlIHByb2dyZXNzOiBwcm9tcHRfdG9rZW5zPSIgKyBtZXRyaWNzLlByb21wdFRva2VucyArCiAgICAgICAgICAgICAgICAgICAgIiBnZW5lcmF0ZWRfdG9rZW5zPSIgKyBtZXRyaWNzLkdlbmVyYXRlZFRva2VucyArCiAgICAgICAgICAgICAgICAgICAgIiB0aW1lX3RvX2ZpcnN0X3Rva2VuX3VzPSIgKyBtZXRyaWNzLlRpbWVUb0ZpcnN0VG9rZW5NaWNyb3NlY29uZHMgKwogICAgICAgICAgICAgICAgICAgICIgZGVjb2RlX3VzPSIgKyBtZXRyaWNzLkRlY29kZU1pY3Jvc2Vjb25kcyArICIuIik7CiAgICAgICAgICAgIH0KICAgICAgICAgICAgY2F0Y2ggKEV4Y2VwdGlvbiBleGNlcHRpb24pCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAgIHJldHVybiBMb2NhbExsbUV2ZW50LkZhaWxlZCgKICAgICAgICAgICAgICAgICAgICB0ZXJtaW5hbC5TZXF1ZW5jZSwKICAgICAgICAgICAgICAgICAgICBMb2NhbExsbUZhaWx1cmUuVGltZWRPdXQsCiAgICAgICAgICAgICAgICAgICAgdGVybWluYWwuRGV0YWlsICsKICAgICAgICAgICAgICAgICAgICAiIE5hdGl2ZSBwcm9ncmVzcyBtZXRyaWNzIHVuYXZhaWxhYmxlIGV4cGxpY2l0bHk6ICIgKwogICAgICAgICAgICAgICAgICAgIGV4Y2VwdGlvbi5HZXRUeXBlKCkuTmFtZSArICIuIik7CiAgICAgICAgICAgIH0KICAgICAgICB9CgoiIiIKaWYgcHJvdmlkZXIuY291bnQoYW5jaG9yKSAhPSAxOgogICAgcmFpc2UgU3lzdGVtRXhpdChmImV4cGVjdGVkIG9uZSBwcm92aWRlciBtZXRob2QgYW5jaG9yLCBmb3VuZCB7cHJvdmlkZXIuY291bnQoYW5jaG9yKX0iKQppZiAiQXR0YWNoVGltZW91dE1ldHJpY3MoIiBpbiBwcm92aWRlcjoKICAgIHJhaXNlIFN5c3RlbUV4aXQoInRpbWVvdXQgbWV0cmljIGhlbHBlciBhbHJlYWR5IGV4aXN0cyB1bmV4cGVjdGVkbHkiKQpwcm92aWRlcl9wYXRoLndyaXRlX3RleHQocHJvdmlkZXIucmVwbGFjZShhbmNob3IsIG1ldGhvZCArIGFuY2hvciksIGVuY29kaW5nPSJ1dGYtOCIpCgphY2NlcHRhbmNlX3BhdGggPSBQYXRoKAogICAgIkFzc2V0cy9SZWFjaHlNaW5pL1J1bnRpbWUvQXBwbGljYXRpb24vUmVhY2h5Um1hMTM0TG9jYWxMbG1BY2NlcHRhbmNlLmNzIgopCmFjY2VwdGFuY2UgPSBhY2NlcHRhbmNlX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCm9sZF90aHJvdyA9ICIiIiAgICAgICAgICAgICAgICAgICAgdGhyb3cgbmV3IEludmFsaWRPcGVyYXRpb25FeGNlcHRpb24oCiAgICAgICAgICAgICAgICAgICAgICAgICJMb2NhbCBMTE0gY29tcGxldGlvbiByZXF1ZXN0IGZhaWxlZDogIiArCiAgICAgICAgICAgICAgICAgICAgICAgIGl0ZW0uRmFpbHVyZSArICI6ICIgKyBpdGVtLkRldGFpbCk7CiIiIgpuZXdfdGhyb3cgPSAiIiIgICAgICAgICAgICAgICAgICAgIHRocm93IG5ldyBJbnZhbGlkT3BlcmF0aW9uRXhjZXB0aW9uKAogICAgICAgICAgICAgICAgICAgICAgICAiTG9jYWwgTExNIGNvbXBsZXRpb24gcmVxdWVzdCBmYWlsZWQgYWZ0ZXIgIiArCiAgICAgICAgICAgICAgICAgICAgICAgIGRlbHRhcyArICIgc3RyZWFtZWQgZGVsdGEgZXZlbnQocyk6ICIgKwogICAgICAgICAgICAgICAgICAgICAgICBpdGVtLkZhaWx1cmUgKyAiOiAiICsgaXRlbS5EZXRhaWwpOwoiIiIKaWYgYWNjZXB0YW5jZS5jb3VudChvbGRfdGhyb3cpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KAogICAgICAgIGYiZXhwZWN0ZWQgb25lIGNvbXBsZXRpb24gZmFpbHVyZSB0aHJvdywgZm91bmQge2FjY2VwdGFuY2UuY291bnQob2xkX3Rocm93KX0iCiAgICApCmFjY2VwdGFuY2VfcGF0aC53cml0ZV90ZXh0KGFjY2VwdGFuY2UucmVwbGFjZShvbGRfdGhyb3csIG5ld190aHJvdyksIGVuY29kaW5nPSJ1dGYtOCIpCgp0ZXN0c19wYXRoID0gUGF0aCgibWFuYWdlZC9SZWFjaHlNaW5pLkxvY2FsTGxtLlRlc3RzL1Byb2dyYW0uY3MiKQp0ZXN0cyA9IHRlc3RzX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCmxpc3RfYW5jaG9yID0gIiIiICAgICAgICAgICAgKCJzZWNvbmQgcmVxdWVzdCBpcyByZWplY3RlZCBpbnN0ZWFkIG9mIHF1ZXVlZCIsIEJ1c3lSZXF1ZXN0SXNSZWplY3RlZEFzeW5jKSwKICAgICAgICAgICAgKCJyZXNldCBjYW5jZWxzIGFjdGl2ZSBnZW5lcmF0aW9uIGFuZCBjbGVhcnMgaGlzdG9yeSIsIFJlc2V0Q2FuY2Vsc0FuZENsZWFyc0FzeW5jKSwKIiIiCmxpc3RfcmVwbGFjZW1lbnQgPSAiIiIgICAgICAgICAgICAoInNlY29uZCByZXF1ZXN0IGlzIHJlamVjdGVkIGluc3RlYWQgb2YgcXVldWVkIiwgQnVzeVJlcXVlc3RJc1JlamVjdGVkQXN5bmMpLAogICAgICAgICAgICAoInRpbWVvdXQgcHJlc2VydmVzIG5hdGl2ZSBwcm9ncmVzcyBkaWFnbm9zdGljcyIsIFRpbWVvdXRSZXBvcnRzTmF0aXZlUHJvZ3Jlc3NBc3luYyksCiAgICAgICAgICAgICgicmVzZXQgY2FuY2VscyBhY3RpdmUgZ2VuZXJhdGlvbiBhbmQgY2xlYXJzIGhpc3RvcnkiLCBSZXNldENhbmNlbHNBbmRDbGVhcnNBc3luYyksCiIiIgppZiB0ZXN0cy5jb3VudChsaXN0X2FuY2hvcikgIT0gMToKICAgIHJhaXNlIFN5c3RlbUV4aXQoImNvdWxkIG5vdCBmaW5kIHVuaXF1ZSB0aW1lb3V0IHRlc3QgbGlzdCBpbnNlcnRpb24gcG9pbnQiKQp0ZXN0cyA9IHRlc3RzLnJlcGxhY2UobGlzdF9hbmNob3IsIGxpc3RfcmVwbGFjZW1lbnQpCgptZXRob2RfYW5jaG9yID0gIiIiICAgIHByaXZhdGUgc3RhdGljIGFzeW5jIFRhc2sgUmVzZXRDYW5jZWxzQW5kQ2xlYXJzQXN5bmMoKQogICAgewoiIiIKdGltZW91dF90ZXN0ID0gIiIiICAgIHByaXZhdGUgc3RhdGljIGFzeW5jIFRhc2sgVGltZW91dFJlcG9ydHNOYXRpdmVQcm9ncmVzc0FzeW5jKCkKICAgIHsKICAgICAgICBhd2FpdCB1c2luZyBUZXN0Q29udGV4dCBjb250ZXh0ID0gYXdhaXQgVGVzdENvbnRleHQuQ3JlYXRlQXN5bmMoKS5Db25maWd1cmVBd2FpdChmYWxzZSk7CiAgICAgICAgYXdhaXQgUmVxdWlyZUxvYWRlZEFzeW5jKGNvbnRleHQuQ29uZmlndXJlQXdhaXQoZmFsc2UpOwogICAgICAgIHVzaW5nIHZhciBob2xkID0gbmV3IEZha2VHZW5lcmF0aW9uKGhvbGRVbnRpbENhbmNlbGxlZDogdHJ1ZSk7CiAgICAgICAgY29udGV4dC5SdW50aW1lLlNlc3Npb24uRW5xdWV1ZUdlbmVyYXRpb24oaG9sZCk7CgogICAgICAgIHZhciBldmVudHMgPSBuZXcgTGlzdDxMb2NhbExsbUV2ZW50PigpOwogICAgICAgIGF3YWl0IGZvcmVhY2ggKExvY2FsTGxtRXZlbnQgaXRlbSBpbiBjb250ZXh0LlByb3ZpZGVyLkdlbmVyYXRlQXN5bmMoCiAgICAgICAgICAgIG5ldyBMb2NhbExsbVJlcXVlc3QoCiAgICAgICAgICAgICAgICAidGltZW91dC1wcm9ncmVzcyIsCiAgICAgICAgICAgICAgICAiS2VlcCBnZW5lcmF0aW5nIHVudGlsIHRoZSBleHBsaWNpdCB0aW1lb3V0LiIsCiAgICAgICAgICAgICAgICBUaW1lU3Bhbi5Gcm9tTWlsbGlzZWNvbmRzKDI1LjApKSwKICAgICAgICAgICAgQ2FuY2VsbGF0aW9uVG9rZW4uTm9uZSkpCiAgICAgICAgewogICAgICAgICAgICBldmVudHMuQWRkKGl0ZW0pOwogICAgICAgIH0KCiAgICAgICAgUmVxdWlyZShldmVudHMuQ291bnQgPiAwLCAidGltZW91dCBwcm9kdWNlZCBubyB0ZXJtaW5hbCBldmVudCIpOwogICAgICAgIExvY2FsTGxtRXZlbnQgdGVybWluYWwgPSBldmVudHNbXjFdOwogICAgICAgIFJlcXVpcmUodGVybWluYWwuRmFpbHVyZSA9PSBMb2NhbExsbUZhaWx1cmUuVGltZWRPdXQsICJ0aW1lb3V0IHdhcyBub3QgZXhwbGljaXQiKTsKICAgICAgICBSZXF1aXJlKAogICAgICAgICAgICB0ZXJtaW5hbC5EZXRhaWwuQ29udGFpbnMoInByb21wdF90b2tlbnM9MTI4IiwgU3RyaW5nQ29tcGFyaXNvbi5PcmRpbmFsKSwKICAgICAgICAgICAgInRpbWVvdXQgb21pdHRlZCBuYXRpdmUgcHJvbXB0LXRva2VuIGRpYWdub3N0aWNzIik7CiAgICAgICAgUmVxdWlyZSgKICAgICAgICAgICAgdGVybWluYWwuRGV0YWlsLkNvbnRhaW5zKCJnZW5lcmF0ZWRfdG9rZW5zPTMyIiwgU3RyaW5nQ29tcGFyaXNvbi5PcmRpbmFsKSwKICAgICAgICAgICAgInRpbWVvdXQgb21pdHRlZCBuYXRpdmUgZ2VuZXJhdGVkLXRva2VuIGRpYWdub3N0aWNzIik7CiAgICAgICAgUmVxdWlyZSgKICAgICAgICAgICAgdGVybWluYWwuRGV0YWlsLkNvbnRhaW5zKCJ0aW1lX3RvX2ZpcnN0X3Rva2VuX3VzPTEwMDAiLCBTdHJpbmdDb21wYXJpc29uLk9yZGluYWwpLAogICAgICAgICAgICAidGltZW91dCBvbWl0dGVkIG5hdGl2ZSBUVEZUIGRpYWdub3N0aWNzIik7CiAgICAgICAgUmVxdWlyZSgKICAgICAgICAgICAgdGVybWluYWwuRGV0YWlsLkNvbnRhaW5zKCJkZWNvZGVfdXM9MjAwMCIsIFN0cmluZ0NvbXBhcmlzb24uT3JkaW5hbCksCiAgICAgICAgICAgICJ0aW1lb3V0IG9taXR0ZWQgbmF0aXZlIGRlY29kZSBkaWFnbm9zdGljcyIpOwogICAgICAgIFJlcXVpcmUoCiAgICAgICAgICAgIGNvbnRleHQuUHJvdmlkZXIuQXZhaWxhYmlsaXR5LlN0YXRlID09IExvY2FsTGxtUHJvdmlkZXJTdGF0ZS5SZWFkeSwKICAgICAgICAgICAgImFuIG9yZGluYXJ5IHJlcXVlc3QgdGltZW91dCBmYXVsdGVkIHRoZSBwcm92aWRlciIpOwogICAgfQoKIiIiCmlmIHRlc3RzLmNvdW50KG1ldGhvZF9hbmNob3IpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJjb3VsZCBub3QgZmluZCB1bmlxdWUgdGltZW91dCB0ZXN0IG1ldGhvZCBpbnNlcnRpb24gcG9pbnQiKQppZiAiVGltZW91dFJlcG9ydHNOYXRpdmVQcm9ncmVzc0FzeW5jIiBpbiB0ZXN0czoKICAgIHJhaXNlIFN5c3RlbUV4aXQoInRpbWVvdXQgcHJvZ3Jlc3MgdGVzdCBhbHJlYWR5IGV4aXN0cyB1bmV4cGVjdGVkbHkiKQp0ZXN0c19wYXRoLndyaXRlX3RleHQoCiAgICB0ZXN0cy5yZXBsYWNlKG1ldGhvZF9hbmNob3IsIHRpbWVvdXRfdGVzdCArIG1ldGhvZF9hbmNob3IpLAogICAgZW5jb2Rpbmc9InV0Zi04IiwKKQo=' | base64 --decode > /tmp/rma134-timeout-patch.py
+          python3 /tmp/rma134-timeout-patch.py
           ruff format scripts/tests/test_rma134_local_llm_provider.py
 
-      - name: Validate diagnostics and formatting
+      - name: Validate source changes
         shell: bash
         run: |
           set -euo pipefail
           dotnet restore managed/ReachyMini.Core/ReachyMini.Core.csproj
-          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj \
-            --configuration Release \
-            --no-restore
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --no-restore
           dotnet restore managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
-          dotnet run \
-            --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
-            --configuration Release \
-            --no-restore
+          dotnet run --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj --configuration Release --no-restore
           python3 -m unittest -v scripts.tests.test_rma134_local_llm_provider
           ruff check scripts
           ruff format --check scripts
           python3 -m compileall -q scripts
           git diff --check
 
-      - name: Commit diagnostics
+      - name: Commit source changes
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
-            Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs \
-            managed/ReachyMini.LocalLlm.Tests/Program.cs \
-            scripts/tests/test_rma134_local_llm_provider.py
+          git add Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs
+          git add Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs
+          git add managed/ReachyMini.LocalLlm.Tests/Program.cs
+          git add scripts/tests/test_rma134_local_llm_provider.py
           git diff --cached --check
           git commit -m 'RMA-134: expose timeout progress diagnostics'
           git push origin HEAD:rma134-local-llm-provider-v2
