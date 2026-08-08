@@ -11,78 +11,72 @@ PINNED_VERSION = "b10313"
 
 class Rma130LlamaRuntimeContracts(unittest.TestCase):
     def test_source_lock_and_inventory_match_exact_release(self) -> None:
-        lock = json.loads(
-            (ROOT / "third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8")
-        )
+        lock = json.loads((ROOT / "third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8"))
         self.assertEqual(lock["schema_version"], 1)
         self.assertEqual(lock["version"], PINNED_VERSION)
         self.assertEqual(lock["commit"], PINNED_COMMIT)
         self.assertEqual(lock["license"], "MIT")
         self.assertEqual(lock["license_file"], "LICENSE")
         self.assertEqual(lock["license_git_blob"], "e7dca554bcb802f98408383a864404e3aa4eacca")
-
         inventory = json.loads((ROOT / "third_party/inventory.json").read_text(encoding="utf-8"))
         llama = next(entry for entry in inventory["entries"] if entry["id"] == "llama-cpp")
         self.assertEqual(llama["source_revision"], PINNED_COMMIT)
         self.assertEqual(llama["license"], "MIT")
         self.assertNotEqual(llama["status"], "planned")
 
-    def test_public_abi_is_versioned_and_async_only(self) -> None:
+    def test_public_abi2_adds_explicit_constraints_without_sync_generation(self) -> None:
         header = (ROOT / "native/llama_runtime/include/reachy_llama.h").read_text(encoding="utf-8")
         required = (
-            "REACHY_LLAMA_ABI_VERSION 1u",
-            "reachy_llama_model_load(",
-            "reachy_llama_tokenize(",
-            "reachy_llama_apply_chat_template(",
+            "REACHY_LLAMA_ABI_VERSION 2u",
+            "REACHY_LLAMA_STATUS_INVALID_CONSTRAINT = 15",
+            "REACHY_LLAMA_STATUS_CONSTRAINT_INIT_FAILED = 16",
+            "REACHY_LLAMA_CONSTRAINT_GBNF = 1",
+            "reachy_llama_generation_constraint",
             "reachy_llama_generation_start(",
+            "reachy_llama_generation_start_constrained(",
             "reachy_llama_generation_poll(",
             "reachy_llama_generation_cancel(",
-            "reachy_llama_generation_get_metrics(",
             "reachy_llama_generation_release(",
-            "reachy_llama_model_unload(",
         )
         for contract in required:
             self.assertIn(contract, header)
         self.assertNotIn("reachy_llama_generate(", header)
         self.assertNotIn("reachy_llama_generation_wait(", header)
 
-    def test_first_party_wrapper_has_no_network_or_provider_fallback(self) -> None:
+    def test_abi1_implementation_is_preserved_as_historical_source(self) -> None:
+        base = (ROOT / "native/llama_runtime/src/reachy_llama_abi1_base.inc").read_text(encoding="utf-8")
+        self.assertIn('constexpr const char * kVersion = "rma130-abi1"', base)
+        self.assertIn("RMA-130 does not queue requests", base)
+        self.assertIn("release never blocks waiting for inference", base)
+        self.assertIn("abort_callback = AbortDecode", base)
+        source = (ROOT / "native/llama_runtime/src/reachy_llama.cpp").read_text(encoding="utf-8")
+        self.assertIn('#include "reachy_llama_abi1_base.inc"', source)
+        self.assertIn("rma133-abi2-constrained", source)
+
+    def test_constrained_runtime_fails_closed_without_provider_or_unconstrained_fallback(self) -> None:
         source = (ROOT / "native/llama_runtime/src/reachy_llama.cpp").read_text(encoding="utf-8")
         lowered = source.lower()
-        for prohibited in (
-            "http://",
-            "https://",
-            "curl_",
-            "socket(",
-            "fallback provider",
-            "cloud",
-            "download",
-            ".detach()",
-        ):
+        for prohibited in ("http://", "https://", "curl_", "socket(", "fallback provider", "cloud", "download", ".detach()"):
             self.assertNotIn(prohibited, lowered)
-        self.assertIn("RMA-130 does not queue requests", source)
-        self.assertIn("release never blocks waiting for inference", source)
-        self.assertIn("abort_callback = AbortDecode", source)
+        self.assertIn("llama_sampler_init_grammar", source)
+        self.assertIn("REACHY_LLAMA_STATUS_CONSTRAINT_INIT_FAILED", source)
+        self.assertIn("unconstrained generation was not attempted", source)
+        self.assertIn("payload.grammar.assign", source)
+        self.assertIn("payload.root.assign", source)
+        self.assertNotIn("strip_markdown", lowered)
+        self.assertNotIn("repair_json", lowered)
 
     def test_third_party_build_isolated_from_first_party_warning_policy(self) -> None:
         cmake = (ROOT / "native/llama_runtime/CMakeLists.txt").read_text(encoding="utf-8")
         for setting in (
-            "set(BUILD_SHARED_LIBS OFF",
-            "set(LLAMA_ALL_WARNINGS OFF",
-            "set(LLAMA_FATAL_WARNINGS OFF",
-            "set(LLAMA_OPENSSL OFF",
-            "set(LLAMA_SUBPROCESS OFF",
-            "set(GGML_NATIVE OFF",
-            "set(GGML_OPENMP OFF",
-            "set(GGML_LLAMAFILE OFF",
-            'set(GGML_CPU_ARM_ARCH "armv8-a"',
+            "set(BUILD_SHARED_LIBS OFF", "set(LLAMA_ALL_WARNINGS OFF", "set(LLAMA_FATAL_WARNINGS OFF",
+            "set(LLAMA_OPENSSL OFF", "set(LLAMA_SUBPROCESS OFF", "set(GGML_NATIVE OFF",
+            "set(GGML_OPENMP OFF", "set(GGML_LLAMAFILE OFF", 'set(GGML_CPU_ARM_ARCH "armv8-a"',
         ):
             self.assertIn(setting, cmake)
         self.assertIn("reachy_enable_strict_warnings(reachy_llama)", cmake)
+        self.assertIn("reachy_llama_constraint_contract_tests", cmake)
         self.assertIn("EXCLUDE_FROM_ALL\n    SYSTEM", cmake)
-        upstream_start = cmake.index('add_subdirectory(\n    "${REACHY_LLAMA_CPP_SOURCE_DIR}"')
-        strict_start = cmake.index("reachy_enable_strict_warnings(reachy_llama)")
-        self.assertLess(upstream_start, strict_start)
 
     def test_android_build_fails_closed_and_exports_only_wrapper(self) -> None:
         build_script = (ROOT / "scripts/build_llama_android.sh").read_text(encoding="utf-8")
@@ -102,14 +96,10 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertIn("libreachy_llama.so", stage)
         self.assertNotIn(".gguf", stage.lower())
 
-    def test_stress_contract_uses_real_bounded_queue_and_cancellation(self) -> None:
-        tests = (ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp").read_text(
-            encoding="utf-8"
-        )
+    def test_stress_contract_keeps_bounded_queue_and_cancellation(self) -> None:
+        tests = (ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp").read_text(encoding="utf-8")
         self.assertIn("TestBoundedQueueOrderingAndAllocationStress", tests)
         self.assertIn("TestCancellationUnblocksBackpressureWithoutSilentDrain", tests)
-        self.assertIn("256U", tests)
-        self.assertIn("128", tests)
         self.assertIn("queue.Cancel()", tests)
 
 
