@@ -1,0 +1,51 @@
+name: RMA-134 staging format
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-format.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply deterministic fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('managed/ReachyMini.LocalLlm.Tests/Program.cs')
+          text = path.read_text(encoding='utf-8')
+          old = 'Require(context.Runtime.Session.LastMessages.Count == 2, "reset did not clear committed history");'
+          new = 'Require(context.Runtime.Session.LastMessages.Length == 2, "reset did not clear committed history");'
+          if old not in text:
+              raise SystemExit('Missing reset history assertion contract.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python -m pip install --disable-pip-version-check 'ruff==0.12.0'
+          ruff format scripts/tests/test_rma134_local_llm_provider.py
+          ruff check scripts/tests/test_rma134_local_llm_provider.py
+          git diff --check
+      - name: Commit source-only fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs \
+            scripts/tests/test_rma134_local_llm_provider.py
+          git commit -m 'RMA-134: finish hosted contract cleanup'
+          git push origin HEAD:rma134-local-llm-provider-stage
