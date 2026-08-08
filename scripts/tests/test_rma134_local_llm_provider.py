@@ -77,7 +77,10 @@ def test_no_network_or_provider_fallback() -> None:
         "fallbackProvider",
         "fallbackModel",
     ):
-        require(prohibited not in sources, f"RMA-134 contains prohibited fallback/network token {prohibited!r}.")
+        require(
+            prohibited not in sources,
+            f"RMA-134 contains prohibited fallback/network token {prohibited!r}.",
+        )
 
 
 def test_approved_artifact_boundary() -> None:
@@ -139,7 +142,8 @@ def test_frozen_behavior_lineage() -> None:
     )
     provider = read(PROVIDER)
     require(
-        'content = content + "\\n" + LocalLlmBehaviorContract.UserPromptSuffix;' in provider,
+        'content = content + "\\n" +' in provider
+        and "LocalLlmBehaviorContract.UserPromptSuffix" in provider,
         "Provider does not append the selected suffix using the accepted RMA-133 newline form.",
     )
     require(
@@ -173,6 +177,18 @@ def test_no_repair_or_hidden_retry() -> None:
         "The local LLM provider already has an active generation." in provider,
         "Busy behavior is not explicit in the provider.",
     )
+    require(
+        provider.count("runtime.Cancel(") == 1,
+        "RMA-134 has more than one direct native cancel call site; cleanup could hide retries.",
+    )
+    drain = provider.split(
+        "private async Task<bool> DrainAndReleaseAsync",
+        1,
+    )[1].split("private LocalLlmRuntimePollResult SafePoll", 1)[0]
+    require(
+        "SafeCancel(" not in drain,
+        "Drain-and-release must never issue a second implicit cancel.",
+    )
 
 
 def test_terminal_validation_and_consumer_failures_are_visible() -> None:
@@ -194,7 +210,8 @@ def test_terminal_validation_and_consumer_failures_are_visible() -> None:
         "Terminal consumer notification failures can become silent.",
     )
     require(
-        "IsTrustedExecutableOutput = false" in read(LOCAL_MODELS / "ReachyLocalLlmContracts.cs"),
+        "IsTrustedExecutableOutput = false"
+        in read(LOCAL_MODELS / "ReachyLocalLlmContracts.cs"),
         "Partial stream text is not explicitly marked untrusted.",
     )
 
