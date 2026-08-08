@@ -1,0 +1,391 @@
+name: RMA-133 relaxed-size v5 promotion
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma133-v5-promotion.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Prepare relaxed-size candidate set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          from pathlib import Path
+
+          root = Path('.')
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected exactly one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          scorer = root / 'scripts/score_rma133_benchmark.py'
+          replace_once(
+              scorer,
+              '"""Score and select RMA-133 sub-1B benchmark candidates from device evidence."""',
+              '"""Score and select RMA-133 local-model benchmark candidates from device evidence."""',
+          )
+          replace_once(
+              scorer,
+              '''    benchmark_id = config.get("benchmark_id")
+              if benchmark_id != "rma133-initial-sub1b-v1":
+                  raise ValueError("RMA-133 benchmark_id changed from the frozen v1 contract")
+          ''',
+              '''    benchmark_id = config.get("benchmark_id")
+              allowed_benchmark_ids = {
+                  "rma133-initial-sub1b-v1",
+                  "rma133-initial-local-model-v2",
+              }
+              if benchmark_id not in allowed_benchmark_ids:
+                  raise ValueError("RMA-133 benchmark_id is not an accepted frozen contract lineage")
+              relaxed_size_contract = benchmark_id == "rma133-initial-local-model-v2"
+          ''',
+          )
+          replace_once(
+              scorer,
+              '''    has_qwen = False
+              has_alternative = False
+              quantizations: set[str] = set()
+          ''',
+              '''    has_qwen = False
+              has_sub1b_alternative = False
+              has_relaxed_alternative = False
+              quantizations: set[str] = set()
+          ''',
+          )
+          replace_once(
+              scorer,
+              '''        model_class = candidate.get("model_class")
+                  has_qwen = has_qwen or model_class == "qwen3-0.6b-class"
+                  has_alternative = has_alternative or model_class == "alternative-sub1b"
+                  license_id = candidate.get("license_id")
+          ''',
+              '''        model_class = candidate.get("model_class")
+                  allowed_model_classes = {
+                      "qwen3-0.6b-class",
+                      "alternative-sub1b",
+                      "alternative-local",
+                  }
+                  if model_class not in allowed_model_classes:
+                      raise ValueError(f"candidate {candidate_id} has an unknown model class")
+                  if relaxed_size_contract and model_class == "alternative-sub1b":
+                      raise ValueError("relaxed-size contract cannot label an alternative as sub-1B")
+                  if not relaxed_size_contract and model_class == "alternative-local":
+                      raise ValueError("sub-1B contract cannot include a relaxed-size alternative")
+                  has_qwen = has_qwen or model_class == "qwen3-0.6b-class"
+                  has_sub1b_alternative = (
+                      has_sub1b_alternative or model_class == "alternative-sub1b"
+                  )
+                  has_relaxed_alternative = (
+                      has_relaxed_alternative or model_class == "alternative-local"
+                  )
+                  license_id = candidate.get("license_id")
+          ''',
+          )
+          replace_once(
+              scorer,
+              '''    if not has_qwen or not has_alternative:
+                  raise ValueError("RMA-133 candidate set must include Qwen3-0.6B-class and an alternative")
+              if len(quantizations) != 1:
+          ''',
+              '''    if not has_qwen:
+                  raise ValueError("RMA-133 candidate set must retain the Qwen3-0.6B control")
+              if relaxed_size_contract:
+                  if not has_relaxed_alternative:
+                      raise ValueError("RMA-133 relaxed-size contract requires a larger local alternative")
+              elif not has_sub1b_alternative:
+                  raise ValueError("RMA-133 sub-1B contract requires a sub-1B alternative")
+              if len(quantizations) != 1:
+          ''',
+          )
+
+          v4 = json.loads((root / 'benchmarks/rma133/candidates-v4.json').read_text(encoding='utf-8'))
+          qwen3 = next(
+              candidate
+              for candidate in v4['candidates']
+              if candidate['candidate_id'] == 'qwen3-0.6b-q4-k-m'
+          )
+          v5 = {
+              'schema_version': 1,
+              'benchmark_id': 'rma133-initial-local-model-v2',
+              'experiment_id': 'rma133-candidate-set-v5',
+              'system_prompt_contract': v4['system_prompt_contract'],
+              'model_size_policy': {
+                  'constraint': 'up-to-2B-class',
+                  'relaxed_from': 'sub-1B',
+                  'reason': (
+                      'Candidate-set v4 showed adequate Android memory, speed, and thermal headroom '
+                      'but no sub-1B candidate met the frozen schema and semantic-quality gates.'
+                  ),
+              },
+              'license_policy': v4['license_policy'],
+              'runtime_profile': v4['runtime_profile'],
+              'selection_policy': v4['selection_policy'],
+              'candidates': [
+                  qwen3,
+                  {
+                      'candidate_id': 'qwen2.5-coder-1.5b-instruct-q4-k-m',
+                      'model_id': 'qwen2.5-coder-1.5b-instruct',
+                      'display_name': 'Qwen2.5 Coder 1.5B Instruct Q4_K_M',
+                      'model_class': 'alternative-local',
+                      'source_uri': 'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF',
+                      'source_revision': '2ab9f8f42af02fc212effaef7c4850c885e965f4',
+                      'license_id': 'Apache-2.0',
+                      'artifact': {
+                          'filename': 'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf',
+                          'url': (
+                              'https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/'
+                              'resolve/2ab9f8f42af02fc212effaef7c4850c885e965f4/'
+                              'qwen2.5-coder-1.5b-instruct-q4_k_m.gguf'
+                          ),
+                          'file_size_bytes': 1117320768,
+                          'sha256': 'cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046',
+                          'quantization': 'Q4_K_M',
+                      },
+                      'user_prompt_suffix': '',
+                      'prompt_suffix_reason': (
+                          'No model-specific suffix is used; the embedded GGUF chat template and '
+                          'cryptographically pinned v4 system prompt define the structured-output request.'
+                      ),
+                  },
+              ],
+          }
+          (root / 'benchmarks/rma133/candidates-v5.json').write_text(
+              json.dumps(v5, indent=2) + '\n', encoding='utf-8'
+          )
+
+          test = '''from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+V4_CONFIG = ROOT / "benchmarks" / "rma133" / "candidates-v4.json"
+V5_CONFIG = ROOT / "benchmarks" / "rma133" / "candidates-v5.json"
+SCORER = ROOT / "scripts" / "score_rma133_benchmark.py"
+
+spec = importlib.util.spec_from_file_location("rma133_scorer_v5_contract", SCORER)
+if spec is None or spec.loader is None:
+    raise RuntimeError("could not load RMA-133 scorer")
+scorer = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = scorer
+spec.loader.exec_module(scorer)
+
+
+class Rma133CandidateSetV5Tests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.v4 = json.loads(V4_CONFIG.read_text(encoding="utf-8"))
+        self.v5 = json.loads(V5_CONFIG.read_text(encoding="utf-8"))
+
+    def test_v5_relaxes_only_candidate_size_scope(self) -> None:
+        scorer._validate_config(self.v4)
+        scorer._validate_config(self.v5)
+        self.assertEqual(self.v5["benchmark_id"], "rma133-initial-local-model-v2")
+        self.assertEqual(self.v5["experiment_id"], "rma133-candidate-set-v5")
+        self.assertEqual(self.v5["system_prompt_contract"], self.v4["system_prompt_contract"])
+        self.assertEqual(self.v5["license_policy"], self.v4["license_policy"])
+        self.assertEqual(self.v5["runtime_profile"], self.v4["runtime_profile"])
+        self.assertEqual(self.v5["selection_policy"], self.v4["selection_policy"])
+        self.assertEqual(
+            self.v5["model_size_policy"]["constraint"],
+            "up-to-2B-class",
+        )
+        self.assertEqual(self.v5["model_size_policy"]["relaxed_from"], "sub-1B")
+
+    def test_v5_retains_qwen_control_and_pins_larger_coder(self) -> None:
+        v4_qwen = next(
+            candidate
+            for candidate in self.v4["candidates"]
+            if candidate["candidate_id"] == "qwen3-0.6b-q4-k-m"
+        )
+        v5_qwen = next(
+            candidate
+            for candidate in self.v5["candidates"]
+            if candidate["candidate_id"] == "qwen3-0.6b-q4-k-m"
+        )
+        self.assertEqual(v5_qwen, v4_qwen)
+
+        larger = next(
+            candidate
+            for candidate in self.v5["candidates"]
+            if candidate["candidate_id"] == "qwen2.5-coder-1.5b-instruct-q4-k-m"
+        )
+        self.assertEqual(larger["model_class"], "alternative-local")
+        self.assertEqual(larger["license_id"], "Apache-2.0")
+        self.assertEqual(larger["source_revision"], "2ab9f8f42af02fc212effaef7c4850c885e965f4")
+        self.assertEqual(larger["artifact"]["filename"], "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
+        self.assertEqual(larger["artifact"]["file_size_bytes"], 1_117_320_768)
+        self.assertEqual(
+            larger["artifact"]["sha256"],
+            "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+        )
+        self.assertEqual(larger["artifact"]["quantization"], "Q4_K_M")
+        self.assertEqual(larger["user_prompt_suffix"], "")
+        self.assertGreater(larger["artifact"]["file_size_bytes"], 1_000_000_000)
+
+
+if __name__ == "__main__":
+    unittest.main()
+'''
+          (root / 'scripts/tests/test_rma133_candidate_set_v5.py').write_text(test, encoding='utf-8')
+
+          v4_doc = '''# RMA-133 Candidate-Set V4 Validation — 2026-08-07
+
+## Disposition
+
+Candidate-set v4 completed on the physical LG-H872 and selected no model. The stricter, cryptographically pinned system prompt materially improved Qwen2.5-Coder-0.5B-Instruct structured-output behavior, but neither candidate met the unchanged schema-reliability and semantic-quality gates. No output repair, fallback, retry-to-another-model, or threshold reduction was applied.
+
+## Exact evidence
+
+- Source SHA: `44e5f49d200435787e8bf8463efcf712e893625a`
+- Dedicated workflow run: `31226448507`
+- Physical-device job: `93021656910`
+- Evidence artifact ID: `9012680552`
+- Artifact digest: `sha256:2d517b497f0dd6ce6d5a62b8c36ca29eead362a7a191f0c5635bb7c8464c3222`
+- Device: `LG-H872`, ARM64, Android API 26
+- Hosted CI run on the same SHA: `31226448540`, success
+- Selector: `status=no_candidate_passed`, `selected_candidate_id=null`
+
+## Frozen gates
+
+- 12/12 completed cases
+- schema reliability: 1.0
+- semantic quality: at least 85/100
+- mean decode rate: at least 1 token/s
+- peak RSS: at most 1.5 GB
+- peak battery temperature: below 45 C
+- battery-temperature rise: at most 10 C
+
+## Measured results
+
+### Qwen3 0.6B Q4_K_M
+
+- completed cases: 12/12
+- schema reliability: 0/12 = 0.000
+- semantic quality: 0.00/100
+- load time: 1051.487 ms
+- mean TTFT: 35364.986 ms
+- mean decode: 4.3311 tok/s
+- peak RSS: 675,487,744 bytes
+- battery: 33.2 C before, 38.0 C peak/after, +4.8 C
+- disposition: rejected on schema and semantic gates
+
+### Qwen2.5-Coder 0.5B Instruct Q4_K_M
+
+- completed cases: 12/12
+- schema reliability: 9/12 = 0.750
+- semantic quality: 62.50/100
+- load time: 2301.979 ms
+- mean TTFT: 31472.345 ms
+- mean decode: 8.1184 tok/s
+- peak RSS: 561,270,784 bytes
+- battery: 38.1 C before, 40.0 C peak/after, +1.9 C
+- disposition: rejected on schema and semantic gates
+
+The Coder candidate produced nine schema-valid objects. The remaining failures included two responses that were not exactly one JSON object and one missing/invalid speech field. Several schema-valid cases still lost semantic credit for weak speech semantics or an unexpected gaze decision. The performance, memory, and thermal gates all passed.
+
+## Decision
+
+V1 through V4 establish that the tested Apache-2.0 sub-1B candidates have adequate device resource characteristics but do not satisfy the frozen Reachy behavior-intent reliability/quality contract. The next experiment therefore relaxes the model-size constraint without weakening any behavior, safety, resource, or thermal acceptance gate. Candidate-set v5 retains the Qwen3 control and tests the official Qwen2.5-Coder-1.5B-Instruct Q4_K_M artifact under the same v4 prompt and runtime/scoring policy.
+'''
+          (root / 'docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md').write_text(
+              v4_doc, encoding='utf-8'
+          )
+
+          architecture = root / 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
+          architecture_text = architecture.read_text(encoding='utf-8')
+          marker = '## Candidate-size policy relaxation (2026-08-08)'
+          if marker not in architecture_text:
+              architecture_text += '''\n\n## Candidate-size policy relaxation (2026-08-08)\n\nCandidate sets v1 through v4 evaluated the original sub-1B scope. V4 improved Qwen2.5-Coder-0.5B-Instruct to 75% strict schema reliability and 62.5/100 semantic quality while remaining well inside the memory, decode-rate, and thermal envelopes. Because it still failed the frozen 100% schema and 85/100 semantic gates, RMA-133 now permits an up-to-2B-class follow-up candidate.\n\nThis is a size-scope change only. Candidate-set v5 keeps the v4 system prompt bytes, 12 behavior cases, Q4_K_M quantization, runtime profile, Apache-2.0 license policy, scorer, thresholds, ranking, raw byte evidence, no-repair rule, and fail-closed selector unchanged. The new benchmark lineage ID is `rma133-initial-local-model-v2`; historical `rma133-initial-sub1b-v1` configs remain valid and immutable.\n'''
+              architecture.write_text(architecture_text, encoding='utf-8')
+
+          roadmap = root / 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+          roadmap_text = roadmap.read_text(encoding='utf-8')
+          roadmap_text = roadmap_text.replace(
+              '## RMA-133 — Benchmark and select initial sub-1B model',
+              '## RMA-133 — Benchmark and select initial local model',
+              1,
+          )
+          roadmap_text = roadmap_text.replace(
+              '- [ ] Evaluate Qwen3-0.6B-class and at least one alternative under the selected license constraints.',
+              '- [ ] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.',
+              1,
+          )
+          roadmap.write_text(roadmap_text, encoding='utf-8')
+          PY
+
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff check \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py \
+            scripts/tests/test_rma133_candidate_set_v2.py \
+            scripts/tests/test_rma133_candidate_set_v3.py \
+            scripts/tests/test_rma133_candidate_set_v4.py \
+            scripts/tests/test_rma133_candidate_set_v5.py \
+            scripts/tests/test_rma133_device_runner_loop.py
+          ruff format --check --diff \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_benchmark_contract.py \
+            scripts/tests/test_rma133_candidate_set_v2.py \
+            scripts/tests/test_rma133_candidate_set_v3.py \
+            scripts/tests/test_rma133_candidate_set_v4.py \
+            scripts/tests/test_rma133_candidate_set_v5.py \
+            scripts/tests/test_rma133_device_runner_loop.py
+          python3 -m unittest -v \
+            scripts.tests.test_rma133_benchmark_contract \
+            scripts.tests.test_rma133_candidate_set_v2 \
+            scripts.tests.test_rma133_candidate_set_v3 \
+            scripts.tests.test_rma133_candidate_set_v4 \
+            scripts.tests.test_rma133_candidate_set_v5 \
+            scripts.tests.test_rma133_device_runner_loop
+          python3 scripts/score_rma133_benchmark.py validate --config benchmarks/rma133/candidates-v5.json
+          python3 -m compileall -q scripts
+          git diff --check
+
+      - name: Commit validated relaxed-size experiment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            benchmarks/rma133/candidates-v5.json \
+            scripts/score_rma133_benchmark.py \
+            scripts/tests/test_rma133_candidate_set_v5.py \
+            docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md \
+            docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git diff --cached --exit-code --quiet && {
+            printf '%s\n' 'RMA-133 v5 promotion produced no source changes.' >&2
+            exit 1
+          }
+          git commit -m 'RMA-133: relax local model size constraint'
+          git push origin HEAD:master
