@@ -9,32 +9,40 @@ on:
       - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
       - 'benchmarks/rma133/system_prompt-v4.txt'
       - 'benchmarks/rma133/behavior-output-v1.gbnf'
+      - 'benchmarks/rma133/candidates-v6.json'
       - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md'
       - 'docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md'
       - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
       - '.github/workflows/rma134-local-llm-provider.yml'
+      - '.github/workflows/rma134-local-llm-android.yml'
   pull_request:
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlm*.cs'
       - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
       - 'benchmarks/rma133/system_prompt-v4.txt'
       - 'benchmarks/rma133/behavior-output-v1.gbnf'
+      - 'benchmarks/rma133/candidates-v6.json'
       - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md'
       - 'docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md'
       - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
       - '.github/workflows/rma134-local-llm-provider.yml'
+      - '.github/workflows/rma134-local-llm-android.yml'
   workflow_dispatch:
 
 permissions:
@@ -100,6 +108,9 @@ jobs:
       - name: Compile Python contract
         run: python3 -m py_compile scripts/tests/test_rma134_local_llm_provider.py
 
+      - name: ShellCheck Android acceptance runner
+        run: shellcheck scripts/run_rma134_local_llm_acceptance_android.sh
+
       - name: Create exact-SHA evidence
         shell: bash
         run: |
@@ -114,11 +125,14 @@ jobs:
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs \
             Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
             managed/ReachyMini.LocalLlm.Tests/Program.cs \
             managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
             scripts/tests/test_rma134_local_llm_provider.py \
+            scripts/run_rma134_local_llm_acceptance_android.sh \
             benchmarks/rma133/system_prompt-v4.txt \
             benchmarks/rma133/behavior-output-v1.gbnf \
+            benchmarks/rma133/candidates-v6.json \
             models/manifests/qwen3-0.6b-q4-k-m.local-llm.json \
             docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md \
             docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md \
@@ -132,7 +146,7 @@ jobs:
               "status": "passed",
               "commit_sha": os.environ["GITHUB_SHA"],
               "rma": "RMA-134",
-              "managed_contract_groups": 13,
+              "managed_contract_groups": 17,
               "static_contract_groups": 7,
               "reachy_llama_abi": 2,
               "selected_model_id": "qwen3-0.6b",
