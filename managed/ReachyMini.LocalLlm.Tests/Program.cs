@@ -24,6 +24,7 @@ internal static class Program
         {
             ("strict parser accepts frozen shape", ParserAcceptsFrozenShapeAsync),
             ("strict parser rejects framing and schema drift", ParserRejectsFramingAsync),
+            ("tracked gaze authorization snapshot is immutable", TrackedGazeAuthorizationIsImmutableAsync),
             ("ABI mismatch is explicit and does not load", AbiMismatchFailsClosedAsync),
             ("provider streams and commits only validated turns", StreamsAndCommitsAsync),
             ("invalid intent is not committed", InvalidIntentIsTransactionalAsync),
@@ -95,6 +96,25 @@ internal static class Program
                 NoGazeIntent.Replace("\"gesture\":\"nod\"", "\"gesture\":\"dance\"", StringComparison.Ordinal))
                 .Succeeded,
             "unknown gesture was accepted");
+        return Task.CompletedTask;
+    }
+
+    private static Task TrackedGazeAuthorizationIsImmutableAsync()
+    {
+        string[] source = { "entity-3" };
+        var request = new LocalLlmRequest(
+            "immutable-gaze",
+            "Look at the current entity.",
+            TimeSpan.FromSeconds(30.0),
+            source);
+        source[0] = "entity-99";
+        Require(
+            request.ValidTrackedEntityIds.Count == 1 &&
+            request.ValidTrackedEntityIds[0] == "entity-3",
+            "request did not preserve its tracked-entity authorization snapshot");
+        Require(
+            request.ValidTrackedEntityIds is not string[],
+            "request exposed a mutable tracked-entity authorization array");
         return Task.CompletedTask;
     }
 

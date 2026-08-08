@@ -211,7 +211,7 @@ namespace ReachyMini.Language
             return false;
         }
 
-        private static string[] CopyValidTrackedEntityIds(
+        private static IReadOnlyList<string> CopyValidTrackedEntityIds(
             IEnumerable<string>? validTrackedEntityIds)
         {
             if (validTrackedEntityIds == null)
@@ -242,7 +242,7 @@ namespace ReachyMini.Language
                         "A local LLM request may authorize at most 128 tracked entities.");
                 }
             }
-            return result.ToArray();
+            return Array.AsReadOnly(result.ToArray());
         }
     }
 
