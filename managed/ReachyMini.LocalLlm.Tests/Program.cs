@@ -122,8 +122,8 @@ internal static class Program
         List<LocalLlmEvent> second = await GenerateAsync(context.Provider, "two", "Say hello again.")
             .ConfigureAwait(false);
         Require(second[^1].Kind == LocalLlmEventKind.Completed, "second turn failed");
-        IReadOnlyList<LocalLlmChatMessage> messages = context.Runtime.Session.LastMessages;
-        Require(messages.Count == 4, "validated prior turn was not committed to conversation history");
+        LocalLlmChatMessage[] messages = context.Runtime.Session.LastMessages;
+        Require(messages.Length == 4, "validated prior turn was not committed to conversation history");
         Require(messages[1].Role == "user" && messages[2].Role == "assistant", "history role order is wrong");
         Require(messages[2].Content == ValidIntent, "history did not preserve exact validated JSON");
     }
@@ -143,7 +143,7 @@ internal static class Program
         List<LocalLlmEvent> next = await GenerateAsync(context.Provider, "good", "Good turn")
             .ConfigureAwait(false);
         Require(next[^1].Kind == LocalLlmEventKind.Completed, "provider did not recover after invalid intent");
-        Require(context.Runtime.Session.LastMessages.Count == 2, "invalid turn was committed to history");
+        Require(context.Runtime.Session.LastMessages.Length == 2, "invalid turn was committed to history");
     }
 
     private static async Task ContextLimitFailsClosedAsync()
@@ -447,10 +447,7 @@ internal static class Program
 
         public void EnqueueGeneration(FakeGeneration generation)
         {
-            if (generation == null)
-            {
-                throw new ArgumentNullException(nameof(generation));
-            }
+            ArgumentNullException.ThrowIfNull(generation);
             generationFactories.Enqueue(() => generation);
         }
 
