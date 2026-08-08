@@ -32,6 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          sed -i 's/if "TimeoutReportsNativeProgressAsync" in tests:/if "private static async Task TimeoutReportsNativeProgressAsync()" in tests:/' scripts/.rma134_timeout_diagnostics_patch.py
           python3 scripts/.rma134_timeout_diagnostics_patch.py
           ruff format scripts/tests/test_rma134_local_llm_provider.py
 
