@@ -1,0 +1,196 @@
+name: RMA-134 Local LLM Provider
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma134-local-llm-provider-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Managed provider and fail-closed contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build core with warnings as errors
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Core/ReachyMini.Core.csproj
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Run local LLM provider contracts
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          timeout --signal=TERM --kill-after=15s 120s \
+            dotnet run \
+              --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
+              --configuration Release \
+              --no-restore
+
+      - name: Verify static safety and frozen RMA-133 inputs
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v scripts.tests.test_rma134_local_llm_provider
+          python3 -m compileall -q scripts
+          bash -n scripts/run_rma134_local_llm_acceptance_android.sh
+          bash -n scripts/stage_reachy_unity_android_runtime.sh
+          git diff --check
+
+  physical:
+    name: Validate selected local LLM provider on physical Android
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'rma134-local-llm-provider-stage')
+    needs: contract
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+          unity_candidates=(
+            "${UNITY_EDITOR:-}"
+            "$HOME/Unity/Hub/Editor/6000.3.6f1/Editor/Unity"
+            "$HOME/Unity/Hub/Editor/6000.3.5f1/Editor/Unity"
+          )
+          unity_editor=''
+          for candidate in "${unity_candidates[@]}"; do
+            if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+              unity_editor="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${unity_editor}" ]]; then
+            echo 'Pinned Unity editor was not found on the self-hosted runner.' >&2
+            exit 1
+          fi
+          printf 'UNITY_EDITOR=%s\n' "${unity_editor}" >> "${GITHUB_ENV}"
+
+          android_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
+          if [[ ! -d "${android_root}" ]]; then
+            echo "Android SDK root is missing: ${android_root}" >&2
+            exit 1
+          fi
+          printf 'ANDROID_SDK_ROOT=%s\n' "${android_root}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_HOME=%s\n' "${android_root}" >> "${GITHUB_ENV}"
+
+          ndk_version="$(
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('toolchain.lock.json').read_text(encoding='utf-8'))['android']['ndk'])
+          PY
+          )"
+          ndk_root="${ANDROID_NDK_ROOT:-${android_root}/ndk/${ndk_version}}"
+          if [[ ! -x "${ndk_root}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]]; then
+            echo "Pinned Android NDK is missing: ${ndk_root}" >&2
+            exit 1
+          fi
+          printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}" >> "${GITHUB_ENV}"
+
+          sdk_manager="${android_root}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdk_manager}" ]]; then
+            sdk_manager="$(find "${android_root}/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort | tail -n 1)"
+          fi
+          if [[ -z "${sdk_manager}" || ! -x "${sdk_manager}" ]]; then
+            echo 'Android sdkmanager was not found.' >&2
+            exit 1
+          fi
+          printf 'SDKMANAGER=%s\n' "${sdk_manager}" >> "${GITHUB_ENV}"
+
+      - name: Build production Android player with ABI-2 local LLM runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${SDKMANAGER}" --sdk_root="${ANDROID_SDK_ROOT}" \
+            'platform-tools' \
+            'platforms;android-35' \
+            'build-tools;35.0.0' >/dev/null
+          chmod +x \
+            scripts/prepare_reachy_unity_project.sh \
+            scripts/stage_reachy_unity_android_runtime.sh \
+            scripts/build_unity_android.sh \
+            scripts/run_rma134_local_llm_acceptance_android.sh
+          ./scripts/prepare_reachy_unity_project.sh
+          ./scripts/stage_reachy_unity_android_runtime.sh
+          UNITY_ANDROID_MIN_SDK=26 UNITY_ANDROID_TARGET_SDK=35 \
+            ./scripts/build_unity_android.sh device-arm64
+
+      - name: Run RMA-134 physical provider acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/run_rma134_local_llm_acceptance_android.sh
+
+      - name: Upload RMA-134 physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma134-local-llm-provider-${{ github.sha }}
+          path: build/rma134-local-llm-report/
+          if-no-files-found: error
+          retention-days: 30
