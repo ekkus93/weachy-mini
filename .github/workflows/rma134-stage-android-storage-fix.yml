@@ -1,0 +1,139 @@
+name: RMA-134 staging Android storage fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-v2]
+    paths:
+      - '.github/workflows/rma134-stage-android-storage-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-v2
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Add Android StatFs probe and wire acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs <<'CS'
+          #nullable enable
+
+          using System;
+          using System.IO;
+          using ReachyMini.LocalModels;
+
+          namespace ReachyMini.Interop
+          {
+              public sealed class AndroidStatFsLocalModelStorageProbe : ILocalModelStorageProbe
+              {
+                  public long GetAvailableBytes(string managedStoreRoot)
+                  {
+                      if (managedStoreRoot == null)
+                      {
+                          throw new ArgumentNullException(nameof(managedStoreRoot));
+                      }
+                      if (string.IsNullOrWhiteSpace(managedStoreRoot))
+                      {
+                          throw new ArgumentException(
+                              "The managed local-model store root cannot be empty.",
+                              nameof(managedStoreRoot));
+                      }
+
+                      string fullPath = Path.GetFullPath(managedStoreRoot);
+                      if (!Directory.Exists(fullPath))
+                      {
+                          throw new DirectoryNotFoundException(
+                              "The managed local-model store root does not exist: " + fullPath);
+                      }
+
+          #if UNITY_ANDROID && !UNITY_EDITOR
+                      using var statFs = new UnityEngine.AndroidJavaObject(
+                          "android.os.StatFs",
+                          fullPath);
+                      long availableBytes = statFs.Call<long>("getAvailableBytes");
+                      if (availableBytes < 0L)
+                      {
+                          throw new InvalidOperationException(
+                              "Android StatFs returned a negative available-byte count.");
+                      }
+                      return availableBytes;
+          #else
+                      throw new PlatformNotSupportedException(
+                          "Android StatFs local-model storage probing requires an Android player build.");
+          #endif
+                  }
+              }
+          }
+          CS
+
+          cat > Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs.meta <<'META'
+          fileFormatVersion: 2
+          guid: 7e91c619ae7a44f3a7acb1c94e752ef8
+          META
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          acceptance = Path(
+              'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
+          )
+          text = acceptance.read_text(encoding='utf-8')
+          old = 'new DriveInfoLocalModelStorageProbe()'
+          new = 'new AndroidStatFsLocalModelStorageProbe()'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one acceptance storage probe, found {text.count(old)}')
+          if new in text:
+              raise SystemExit('Android StatFs probe was already wired unexpectedly')
+          acceptance.write_text(text.replace(old, new), encoding='utf-8')
+
+          test_path = Path('scripts/tests/test_rma134_local_llm_provider.py')
+          tests = test_path.read_text(encoding='utf-8')
+          anchor = '\n\nif __name__ == "__main__":\n'
+          if tests.count(anchor) != 1:
+              raise SystemExit('could not find unique unittest main anchor')
+          method = '''\n    def test_android_acceptance_uses_statfs_without_driveinfo_fallback(self) -> None:\n        acceptance = (\n            ROOT\n            / "Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs"\n        ).read_text(encoding="utf-8")\n        storage = (\n            INTEROP_DIR / "AndroidStatFsLocalModelStorageProbe.cs"\n        ).read_text(encoding="utf-8")\n\n        self.assertIn("new AndroidStatFsLocalModelStorageProbe()", acceptance)\n        self.assertNotIn("new DriveInfoLocalModelStorageProbe()", acceptance)\n        self.assertIn("android.os.StatFs", storage)\n        self.assertIn('Call<long>("getAvailableBytes")', storage)\n        self.assertIn("PlatformNotSupportedException", storage)\n        self.assertNotIn("DriveInfo", storage)\n        self.assertNotIn("catch", storage)\n'''
+          if 'test_android_acceptance_uses_statfs_without_driveinfo_fallback' in tests:
+              raise SystemExit('Android storage regression test already exists unexpectedly')
+          test_path.write_text(tests.replace(anchor, method + anchor), encoding='utf-8')
+          PY
+
+      - name: Validate source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Core/ReachyMini.Core.csproj
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj \
+            --configuration Release \
+            --no-restore
+          python3 -m unittest -v scripts.tests.test_rma134_local_llm_provider
+          python3 -m compileall -q scripts
+          git diff --check
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
+            Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs \
+            Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs.meta \
+            scripts/tests/test_rma134_local_llm_provider.py
+          git diff --cached --check
+          git commit -m 'RMA-134: use Android StatFs for package storage'
+          git push origin HEAD:rma134-local-llm-provider-v2
