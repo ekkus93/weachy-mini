@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -163,14 +162,11 @@ namespace ReachyMini.Language
                 }
                 else
                 {
-                    var requestCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                        cancellationToken);
-                    requestCancellation.CancelAfter(request.Timeout);
                     operation = new TurnOperation(
                         conversationEpoch,
                         request,
-                        requestCancellation,
-                        new BoundedEventQueue(configuration.ManagedEventQueueCapacity));
+                        cancellationToken,
+                        configuration.ManagedEventQueueCapacity);
                     activeOperation = operation;
                     SetStateLocked(
                         LocalLlmProviderState.Busy,
@@ -209,7 +205,7 @@ namespace ReachyMini.Language
             }
             finally
             {
-                active.Cancellation.Cancel();
+                active.ProviderCancellation.Cancel();
                 Task worker = active.Worker ?? Task.CompletedTask;
                 await worker.ConfigureAwait(false);
                 active.Dispose();
@@ -228,7 +224,7 @@ namespace ReachyMini.Language
                 {
                     conversationEpoch = checked(conversationEpoch + 1UL);
                     operation = activeOperation;
-                    operation?.Cancellation.Cancel();
+                    operation?.ProviderCancellation.Cancel();
                 }
 
                 if (operation?.Worker != null)
@@ -264,6 +260,7 @@ namespace ReachyMini.Language
             }
 
             await lifecycleGate.WaitAsync().ConfigureAwait(false);
+            Exception? disposalFailure = null;
             try
             {
                 TurnOperation? operation;
@@ -272,7 +269,7 @@ namespace ReachyMini.Language
                 {
                     conversationEpoch = checked(conversationEpoch + 1UL);
                     operation = activeOperation;
-                    operation?.Cancellation.Cancel();
+                    operation?.ProviderCancellation.Cancel();
                     session = modelSession;
                     modelSession = null;
                 }
@@ -280,7 +277,14 @@ namespace ReachyMini.Language
                 {
                     await operation.Worker.ConfigureAwait(false);
                 }
-                session?.Dispose();
+                try
+                {
+                    session?.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    disposalFailure = exception;
+                }
                 lock (stateGate)
                 {
                     history.Clear();
@@ -288,7 +292,9 @@ namespace ReachyMini.Language
                     SetStateLocked(
                         LocalLlmProviderState.Disposed,
                         LocalLlmFailure.Disposed,
-                        "The local LLM provider is disposed.");
+                        disposalFailure == null
+                            ? "The local LLM provider is disposed."
+                            : "The local LLM provider disposed with an explicit native cleanup failure.");
                 }
             }
             finally
@@ -296,12 +302,20 @@ namespace ReachyMini.Language
                 lifecycleGate.Release();
                 lifecycleGate.Dispose();
             }
+
+            if (disposalFailure != null)
+            {
+                throw new InvalidOperationException(
+                    "Local LLM provider disposal could not release the native model cleanly.",
+                    disposalFailure);
+            }
         }
 
         private async Task<LocalLlmOperationResult> LoadCoreAsync(
             bool reload,
             CancellationToken cancellationToken)
         {
+            ILocalLlmModelSession? previous;
             lock (stateGate)
             {
                 if (activeOperation != null)
@@ -331,15 +345,31 @@ namespace ReachyMini.Language
                     reload
                         ? "Explicit local-model reload is in progress."
                         : "Local-model load is in progress.");
-            }
-
-            ILocalLlmModelSession? previous;
-            lock (stateGate)
-            {
                 previous = modelSession;
                 modelSession = null;
             }
-            previous?.Dispose();
+
+            if (previous != null)
+            {
+                try
+                {
+                    previous.Dispose();
+                }
+                catch (Exception exception)
+                {
+                    lock (stateGate)
+                    {
+                        SetStateLocked(
+                            LocalLlmProviderState.Faulted,
+                            LocalLlmFailure.RuntimeFailure,
+                            "The previous local model could not be released before explicit reload: " +
+                            exception.GetType().Name + ".");
+                    }
+                    return LocalLlmOperationResult.Failed(
+                        LocalLlmFailure.RuntimeFailure,
+                        stateDetail);
+                }
+            }
 
             try
             {
@@ -394,6 +424,10 @@ namespace ReachyMini.Language
         private void RunTurn(TurnOperation operation)
         {
             ILocalLlmGeneration? generation = null;
+            LocalLlmBehaviorIntent? validatedIntent = null;
+            string rawValidatedJson = string.Empty;
+            ulong nextSequence = 1UL;
+            LocalLlmEvent? terminal = null;
             try
             {
                 ILocalLlmModelSession session;
@@ -401,7 +435,8 @@ namespace ReachyMini.Language
                 lock (stateGate)
                 {
                     session = modelSession ??
-                        throw new InvalidOperationException("The local model session disappeared before generation.");
+                        throw new InvalidOperationException(
+                            "The local model session disappeared before generation.");
                     historySnapshot = new List<CommittedTurn>(history);
                 }
 
@@ -414,15 +449,14 @@ namespace ReachyMini.Language
                     (ulong)promptTokens + configuration.ExecutionProfile.MaximumGeneratedTokens >
                     configuration.ExecutionProfile.ContextTokens)
                 {
-                    operation.Events.ReplaceWithTerminal(
-                        LocalLlmEvent.Failed(
-                            1UL,
-                            LocalLlmFailure.ContextLimit,
-                            "Rendered conversation plus reserved output exceeds the bounded context; reset is required."));
+                    terminal = LocalLlmEvent.Failed(
+                        nextSequence,
+                        LocalLlmFailure.ContextLimit,
+                        "Rendered conversation plus reserved output exceeds the bounded context; reset is required.");
                     return;
                 }
 
-                operation.Cancellation.Token.ThrowIfCancellationRequested();
+                operation.LinkedCancellation.Token.ThrowIfCancellationRequested();
                 generation = session.StartConstrained(
                     prompt,
                     configuration.ExecutionProfile,
@@ -430,11 +464,10 @@ namespace ReachyMini.Language
                     configuration.GrammarRoot);
 
                 var output = new StringBuilder();
-                ulong nextSequence = 1UL;
                 bool cancellationSent = false;
-                while (true)
+                while (terminal == null && validatedIntent == null)
                 {
-                    if (operation.Cancellation.IsCancellationRequested && !cancellationSent)
+                    if (operation.LinkedCancellation.IsCancellationRequested && !cancellationSent)
                     {
                         generation.Cancel();
                         cancellationSent = true;
@@ -445,61 +478,70 @@ namespace ReachyMini.Language
                     {
                         case LocalLlmRuntimeEventType.None:
                             Thread.Sleep(PollSleepMilliseconds);
-                            continue;
+                            break;
                         case LocalLlmRuntimeEventType.Text:
                             if (cancellationSent)
                             {
-                                continue;
+                                break;
                             }
                             if (nativeEvent.Text.Length >
                                 MaximumRawOutputCharacters - output.Length)
                             {
                                 generation.Cancel();
-                                DrainCancelledGeneration(generation);
-                                operation.Events.ReplaceWithTerminal(
-                                    LocalLlmEvent.Failed(
+                                string? drainFailure = DrainCancelledGeneration(generation);
+                                terminal = drainFailure == null
+                                    ? LocalLlmEvent.Failed(
                                         nextSequence,
                                         LocalLlmFailure.OutputLimit,
-                                        "Local LLM output exceeded the independent managed output bound."));
-                                return;
+                                        "Local LLM output exceeded the independent managed output bound.")
+                                    : RuntimeCleanupFailure(nextSequence, drainFailure);
+                                break;
                             }
                             output.Append(nativeEvent.Text);
-                            if (!operation.Events.TryWrite(
+                            if (!operation.Events.TryWriteDelta(
                                     LocalLlmEvent.Delta(nextSequence++, nativeEvent.Text)))
                             {
                                 generation.Cancel();
-                                DrainCancelledGeneration(generation);
-                                operation.Events.ReplaceWithTerminal(
-                                    LocalLlmEvent.Failed(
+                                string? drainFailure = DrainCancelledGeneration(generation);
+                                terminal = drainFailure == null
+                                    ? LocalLlmEvent.Failed(
                                         nextSequence,
                                         LocalLlmFailure.RuntimeFailure,
-                                        "The bounded managed event queue filled; generation was cancelled."));
-                                return;
+                                        "The bounded managed event queue filled; generation was cancelled.")
+                                    : RuntimeCleanupFailure(nextSequence, drainFailure);
                             }
-                            continue;
+                            break;
                         case LocalLlmRuntimeEventType.Completed:
-                            if (cancellationSent || operation.Cancellation.IsCancellationRequested)
+                            if (cancellationSent || operation.LinkedCancellation.IsCancellationRequested)
                             {
-                                operation.Events.ReplaceWithTerminal(
-                                    CancellationTerminal(operation, nextSequence));
-                                return;
+                                terminal = CancellationTerminal(operation, nextSequence);
+                                break;
                             }
-                            CompleteValidatedTurn(operation, output.ToString(), nextSequence);
-                            return;
-                        case LocalLlmRuntimeEventType.Cancelled:
-                            operation.Events.ReplaceWithTerminal(
-                                CancellationTerminal(operation, nextSequence));
-                            return;
-                        case LocalLlmRuntimeEventType.Error:
-                            MarkRuntimeFault(
-                                "Local LLM generation failed explicitly with runtime status " +
-                                nativeEvent.Status + ".");
-                            operation.Events.ReplaceWithTerminal(
-                                LocalLlmEvent.Failed(
+                            LocalLlmIntentParseResult parsed =
+                                LocalLlmBehaviorIntentParser.Parse(output.ToString());
+                            if (!parsed.Succeeded || parsed.Intent == null)
+                            {
+                                terminal = LocalLlmEvent.Failed(
                                     nextSequence,
-                                    LocalLlmFailure.RuntimeFailure,
-                                    "Local LLM runtime reported a terminal generation failure."));
-                            return;
+                                    LocalLlmFailure.InvalidIntent,
+                                    "Constrained generation completed but independent behavior-intent validation failed: " +
+                                    parsed.Failure + ".");
+                                break;
+                            }
+                            validatedIntent = parsed.Intent;
+                            rawValidatedJson = output.ToString();
+                            break;
+                        case LocalLlmRuntimeEventType.Cancelled:
+                            terminal = CancellationTerminal(operation, nextSequence);
+                            break;
+                        case LocalLlmRuntimeEventType.Error:
+                            terminal = LocalLlmEvent.Failed(
+                                nextSequence,
+                                LocalLlmFailure.RuntimeFailure,
+                                "Local LLM runtime reported terminal status " +
+                                nativeEvent.Status + ".");
+                            MarkRuntimeFault(terminal.Detail);
+                            break;
                         default:
                             throw new InvalidOperationException(
                                 "The local LLM runtime returned an unknown event type.");
@@ -510,29 +552,80 @@ namespace ReachyMini.Language
             {
                 if (generation != null)
                 {
-                    CancelAndDrainBestEffort(generation);
+                    string? cleanupFailure = CancelAndDrain(generation);
+                    terminal = cleanupFailure == null
+                        ? CancellationTerminal(operation, nextSequence)
+                        : RuntimeCleanupFailure(nextSequence, cleanupFailure);
                 }
-                operation.Events.ReplaceWithTerminal(
-                    CancellationTerminal(operation, 1UL));
+                else
+                {
+                    terminal = CancellationTerminal(operation, nextSequence);
+                }
             }
             catch (Exception exception)
             {
+                string cleanupDetail = string.Empty;
                 if (generation != null)
                 {
-                    CancelAndDrainBestEffort(generation);
+                    string? cleanupFailure = CancelAndDrain(generation);
+                    if (cleanupFailure != null)
+                    {
+                        cleanupDetail = " Cleanup also failed: " + cleanupFailure;
+                    }
                 }
-                MarkRuntimeFault(
+                string detail =
                     "Local LLM runtime operation failed explicitly: " +
-                    exception.GetType().Name + ".");
-                operation.Events.ReplaceWithTerminal(
-                    LocalLlmEvent.Failed(
-                        1UL,
-                        LocalLlmFailure.RuntimeFailure,
-                        "Local LLM runtime operation failed; explicit reload is required."));
+                    exception.GetType().Name + "." + cleanupDetail;
+                MarkRuntimeFault(detail);
+                terminal = LocalLlmEvent.Failed(
+                    nextSequence,
+                    LocalLlmFailure.RuntimeFailure,
+                    detail);
             }
             finally
             {
-                generation?.Dispose();
+                if (generation != null)
+                {
+                    try
+                    {
+                        generation.Dispose();
+                    }
+                    catch (Exception exception)
+                    {
+                        string detail =
+                            "Local LLM generation release failed explicitly: " +
+                            exception.GetType().Name + ".";
+                        MarkRuntimeFault(detail);
+                        terminal = LocalLlmEvent.Failed(
+                            nextSequence,
+                            LocalLlmFailure.RuntimeFailure,
+                            detail);
+                        validatedIntent = null;
+                        rawValidatedJson = string.Empty;
+                    }
+                }
+
+                if (terminal == null && validatedIntent != null)
+                {
+                    terminal = CommitValidatedTurn(
+                        operation,
+                        rawValidatedJson,
+                        validatedIntent,
+                        nextSequence);
+                }
+                terminal ??= LocalLlmEvent.Failed(
+                    nextSequence,
+                    LocalLlmFailure.RuntimeFailure,
+                    "Local LLM generation ended without a terminal result.");
+                if (!operation.Events.TryWriteTerminal(terminal))
+                {
+                    operation.Events.ReplaceWithTerminal(
+                        LocalLlmEvent.Failed(
+                            nextSequence,
+                            LocalLlmFailure.RuntimeFailure,
+                            "The managed event queue could not publish the terminal generation result."));
+                }
+
                 lock (stateGate)
                 {
                     if (ReferenceEquals(activeOperation, operation))
@@ -579,51 +672,59 @@ namespace ReachyMini.Language
             return messages;
         }
 
-        private void CompleteValidatedTurn(
+        private LocalLlmEvent CommitValidatedTurn(
             TurnOperation operation,
             string rawJson,
+            LocalLlmBehaviorIntent intent,
             ulong sequence)
         {
-            LocalLlmIntentParseResult parsed = LocalLlmBehaviorIntentParser.Parse(rawJson);
-            if (!parsed.Succeeded || parsed.Intent == null)
-            {
-                operation.Events.ReplaceWithTerminal(
-                    LocalLlmEvent.Failed(
-                        sequence,
-                        LocalLlmFailure.InvalidIntent,
-                        "Constrained generation completed but independent behavior-intent validation failed: " +
-                        parsed.Failure + "."));
-                return;
-            }
-
             lock (stateGate)
             {
                 if (operation.Epoch != conversationEpoch ||
-                    operation.Cancellation.IsCancellationRequested ||
+                    operation.LinkedCancellation.IsCancellationRequested ||
                     !ReferenceEquals(activeOperation, operation))
                 {
-                    operation.Events.ReplaceWithTerminal(
-                        CancellationTerminal(operation, sequence));
-                    return;
+                    return CancellationTerminal(operation, sequence);
                 }
                 if (configuration.MaximumCommittedHistoryTurns > 0)
                 {
                     history.Add(new CommittedTurn(operation.Request.UserText, rawJson));
                 }
             }
-            operation.Events.ReplaceWithTerminal(
-                LocalLlmEvent.Completed(sequence, parsed.Intent));
+            return LocalLlmEvent.Completed(sequence, intent);
         }
 
         private static LocalLlmEvent CancellationTerminal(
             TurnOperation operation,
             ulong sequence)
         {
+            if (operation.CallerCancellation.IsCancellationRequested ||
+                operation.ProviderCancellation.IsCancellationRequested)
+            {
+                return LocalLlmEvent.Cancelled(
+                    sequence,
+                    "Local LLM generation was cancelled explicitly.");
+            }
+            if (operation.TimeoutCancellation.IsCancellationRequested)
+            {
+                return LocalLlmEvent.Failed(
+                    sequence,
+                    LocalLlmFailure.TimedOut,
+                    "Local LLM generation reached its explicit timeout.");
+            }
             return LocalLlmEvent.Cancelled(
                 sequence,
-                operation.CallerCancellation.IsCancellationRequested
-                    ? "Local LLM generation was cancelled."
-                    : "Local LLM generation reached its explicit timeout.");
+                "Local LLM generation was cancelled.");
+        }
+
+        private LocalLlmEvent RuntimeCleanupFailure(ulong sequence, string detail)
+        {
+            string visible = "Local LLM cancellation cleanup failed explicitly: " + detail;
+            MarkRuntimeFault(visible);
+            return LocalLlmEvent.Failed(
+                sequence,
+                LocalLlmFailure.RuntimeFailure,
+                visible);
         }
 
         private void MarkRuntimeFault(string detail)
@@ -637,34 +738,41 @@ namespace ReachyMini.Language
             }
         }
 
-        private static void CancelAndDrainBestEffort(ILocalLlmGeneration generation)
+        private static string? CancelAndDrain(ILocalLlmGeneration generation)
         {
             try
             {
                 generation.Cancel();
-                DrainCancelledGeneration(generation);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                return "generation cancel threw " + exception.GetType().Name + ".";
             }
+            return DrainCancelledGeneration(generation);
         }
 
-        private static void DrainCancelledGeneration(ILocalLlmGeneration generation)
+        private static string? DrainCancelledGeneration(ILocalLlmGeneration generation)
         {
             DateTime deadline = DateTime.UtcNow + CancellationDrainTimeout;
-            while (DateTime.UtcNow < deadline)
+            try
             {
-                LocalLlmRuntimeEvent item = generation.Poll();
-                if (item.Type == LocalLlmRuntimeEventType.Cancelled ||
-                    item.Type == LocalLlmRuntimeEventType.Completed ||
-                    item.Type == LocalLlmRuntimeEventType.Error)
+                while (DateTime.UtcNow < deadline)
                 {
-                    return;
+                    LocalLlmRuntimeEvent item = generation.Poll();
+                    if (item.Type == LocalLlmRuntimeEventType.Cancelled ||
+                        item.Type == LocalLlmRuntimeEventType.Completed ||
+                        item.Type == LocalLlmRuntimeEventType.Error)
+                    {
+                        return null;
+                    }
+                    Thread.Sleep(PollSleepMilliseconds);
                 }
-                Thread.Sleep(PollSleepMilliseconds);
+                return "the runtime did not reach a terminal event within 30 seconds.";
             }
-            throw new InvalidOperationException(
-                "Local LLM cancellation did not reach a terminal runtime event within 30 seconds.");
+            catch (Exception exception)
+            {
+                return "cancellation drain threw " + exception.GetType().Name + ".";
+            }
         }
 
         private void ValidateManifestAndArtifact()
@@ -687,7 +795,7 @@ namespace ReachyMini.Language
                     "reachy_llama",
                     StringComparison.Ordinal) ||
                 manifest.Runtime.AbiVersion != RequiredRuntimeAbiVersion ||
-                manifest.DeviceCompatibility.RequiresNetwork)
+                manifest.Runtime.RequiresNetworkAccess)
             {
                 throw new ArgumentException(
                     "The approved artifact and manifest do not describe the same ABI-2 on-device model.");
@@ -695,8 +803,8 @@ namespace ReachyMini.Language
 
             LocalLlmExecutionProfile profile = configuration.ExecutionProfile;
             if (profile.ContextTokens > manifest.Inference.ContextLimitTokens ||
-                profile.ContextTokens > manifest.Inference.MemoryEstimate.ContextTokens ||
-                profile.BatchTokens > manifest.Inference.MemoryEstimate.BatchTokens ||
+                profile.ContextTokens > manifest.Inference.MemoryEstimate.BasisContextTokens ||
+                profile.BatchTokens > manifest.Inference.MemoryEstimate.BasisBatchTokens ||
                 profile.Threads > manifest.Inference.RecommendedThreads ||
                 profile.BatchThreads > manifest.Inference.RecommendedThreads)
             {
@@ -743,23 +851,37 @@ namespace ReachyMini.Language
             public TurnOperation(
                 ulong epoch,
                 LocalLlmRequest request,
-                CancellationTokenSource cancellation,
-                BoundedEventQueue events)
+                CancellationToken callerCancellation,
+                int eventQueueCapacity)
             {
                 Epoch = epoch;
                 Request = request;
-                Cancellation = cancellation;
-                CallerCancellation = cancellation.Token;
-                Events = events;
+                CallerCancellation = callerCancellation;
+                ProviderCancellation = new CancellationTokenSource();
+                TimeoutSource = new CancellationTokenSource(request.Timeout);
+                TimeoutCancellation = TimeoutSource.Token;
+                LinkedSource = CancellationTokenSource.CreateLinkedTokenSource(
+                    CallerCancellation,
+                    ProviderCancellation.Token,
+                    TimeoutCancellation);
+                Events = new BoundedEventQueue(eventQueueCapacity);
             }
 
             public ulong Epoch { get; }
 
             public LocalLlmRequest Request { get; }
 
-            public CancellationTokenSource Cancellation { get; }
-
             public CancellationToken CallerCancellation { get; }
+
+            public CancellationTokenSource ProviderCancellation { get; }
+
+            public CancellationTokenSource TimeoutSource { get; }
+
+            public CancellationToken TimeoutCancellation { get; }
+
+            public CancellationTokenSource LinkedSource { get; }
+
+            public CancellationTokenSource LinkedCancellation => LinkedSource;
 
             public BoundedEventQueue Events { get; }
 
@@ -767,7 +889,9 @@ namespace ReachyMini.Language
 
             public void Dispose()
             {
-                Cancellation.Dispose();
+                LinkedSource.Dispose();
+                TimeoutSource.Dispose();
+                ProviderCancellation.Dispose();
                 Events.Dispose();
             }
         }
@@ -775,32 +899,57 @@ namespace ReachyMini.Language
         private sealed class BoundedEventQueue : IDisposable
         {
             private readonly object gate = new object();
-            private readonly ConcurrentQueue<LocalLlmEvent> queue =
-                new ConcurrentQueue<LocalLlmEvent>();
+            private readonly Queue<LocalLlmEvent> queue = new Queue<LocalLlmEvent>();
             private readonly SemaphoreSlim signal = new SemaphoreSlim(0);
             private readonly int capacity;
             private bool completed;
-            private int count;
 
             public BoundedEventQueue(int capacity)
             {
+                if (capacity < 2)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(capacity),
+                        "The managed local-LLM queue requires one delta slot plus one terminal slot.");
+                }
                 this.capacity = capacity;
             }
 
-            public bool TryWrite(LocalLlmEvent item)
+            public bool TryWriteDelta(LocalLlmEvent item)
             {
-                if (item == null)
+                if (item == null || item.IsTerminal)
                 {
-                    throw new ArgumentNullException(nameof(item));
+                    throw new ArgumentException(
+                        "Only non-terminal local LLM events can use the delta queue path.",
+                        nameof(item));
                 }
                 lock (gate)
                 {
-                    if (completed || count >= capacity)
+                    if (completed || queue.Count >= capacity - 1)
                     {
                         return false;
                     }
                     queue.Enqueue(item);
-                    ++count;
+                    signal.Release();
+                    return true;
+                }
+            }
+
+            public bool TryWriteTerminal(LocalLlmEvent terminal)
+            {
+                if (terminal == null || !terminal.IsTerminal)
+                {
+                    throw new ArgumentException(
+                        "The terminal queue path requires a terminal event.",
+                        nameof(terminal));
+                }
+                lock (gate)
+                {
+                    if (completed || queue.Count >= capacity)
+                    {
+                        return false;
+                    }
+                    queue.Enqueue(terminal);
                     signal.Release();
                     return true;
                 }
@@ -816,12 +965,8 @@ namespace ReachyMini.Language
                 }
                 lock (gate)
                 {
-                    while (queue.TryDequeue(out _))
-                    {
-                        --count;
-                    }
+                    queue.Clear();
                     queue.Enqueue(terminal);
-                    count = 1;
                     signal.Release();
                 }
             }
@@ -832,10 +977,9 @@ namespace ReachyMini.Language
                 {
                     lock (gate)
                     {
-                        if (queue.TryDequeue(out LocalLlmEvent? item))
+                        if (queue.Count > 0)
                         {
-                            --count;
-                            return item;
+                            return queue.Dequeue();
                         }
                         if (completed)
                         {
