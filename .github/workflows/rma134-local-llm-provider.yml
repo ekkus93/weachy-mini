@@ -15,6 +15,7 @@ on:
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'scripts/build_llama_android.sh'
+      - 'scripts/prepare_reachy_unity_presentation.sh'
       - 'scripts/run_rma134_local_llm_acceptance_android.sh'
       - 'scripts/stage_reachy_unity_android_runtime.sh'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
@@ -35,6 +36,7 @@ on:
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'scripts/build_llama_android.sh'
+      - 'scripts/prepare_reachy_unity_presentation.sh'
       - 'scripts/run_rma134_local_llm_acceptance_android.sh'
       - 'scripts/stage_reachy_unity_android_runtime.sh'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
@@ -100,11 +102,14 @@ jobs:
     needs: contract
     runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
     timeout-minutes: 120
+    env:
+      RMA134_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
-      - name: Check out repository
+      - name: Check out exact RMA-134 source
         uses: actions/checkout@v4
         with:
           lfs: true
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-python@v5
         with:
@@ -123,10 +128,16 @@ jobs:
               "schema_version": 1,
               "status": "initializing",
               "stage": "post_checkout",
-              "source_sha": os.environ["GITHUB_SHA"],
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
               "runner_name": os.environ.get("RUNNER_NAME", ""),
           }, sort_keys=True, indent=2))
           PY
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "${actual_sha}" != "${RMA134_SOURCE_SHA}" ]]; then
+            printf 'RMA-134 checkout mismatch: expected=%s actual=%s\n' \
+              "${RMA134_SOURCE_SHA}" "${actual_sha}" >&2
+            exit 1
+          fi
 
       - name: Resolve pinned Unity and Android installations
         shell: bash
@@ -148,7 +159,7 @@ jobs:
               "status": "failure",
               "stage": "resolve_toolchain",
               "exit_code": int(sys.argv[1]),
-              "source_sha": os.environ["GITHUB_SHA"],
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
               "runner_name": os.environ.get("RUNNER_NAME", ""),
           }, sort_keys=True, indent=2))
           PY
@@ -243,15 +254,6 @@ jobs:
             false
           fi
 
-          sdk_manager="${android_root}/cmdline-tools/latest/bin/sdkmanager"
-          if [[ ! -x "${sdk_manager}" ]]; then
-            sdk_manager="$(find "${android_root}/cmdline-tools" -path '*/bin/sdkmanager' -type f | sort -V | tail -n 1)"
-          fi
-          if [[ -z "${sdk_manager}" || ! -x "${sdk_manager}" ]]; then
-            printf '%s\n' 'Android sdkmanager was not found.' >&2
-            false
-          fi
-
           unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
           if [[ "${unity_version_output}" != *"${project_version}"* ]]; then
             printf 'Unity executable does not match pinned version %s.\n' \
@@ -265,7 +267,6 @@ jobs:
             printf 'ANDROID_SDK_ROOT=%s\n' "${android_root}"
             printf 'ANDROID_HOME=%s\n' "${android_root}"
             printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
-            printf 'SDKMANAGER=%s\n' "${sdk_manager}"
           } >> "${GITHUB_ENV}"
           printf '%s\n' "${android_root}/platform-tools" >> "${GITHUB_PATH}"
 
@@ -277,7 +278,7 @@ jobs:
               "schema_version": 1,
               "status": "success",
               "stage": "resolve_toolchain",
-              "source_sha": os.environ["GITHUB_SHA"],
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
               "runner_name": os.environ.get("RUNNER_NAME", ""),
               "unity_version": sys.argv[1],
               "unity_editor": sys.argv[2],
@@ -289,33 +290,55 @@ jobs:
 
       - name: Build production Android player with ABI-2 local LLM runtime
         shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
         run: |
-          set -euo pipefail
-          "${SDKMANAGER}" --sdk_root="${ANDROID_SDK_ROOT}" \
-            'platform-tools' \
-            'platforms;android-35' \
-            'build-tools;35.0.0' >/dev/null
-          chmod +x \
-            scripts/prepare_reachy_unity_project.sh \
-            scripts/stage_reachy_unity_android_runtime.sh \
-            scripts/build_unity_android.sh \
-            scripts/run_rma134_local_llm_acceptance_android.sh
-          ./scripts/prepare_reachy_unity_project.sh
-          ./scripts/stage_reachy_unity_android_runtime.sh
-          UNITY_ANDROID_MIN_SDK=26 UNITY_ANDROID_TARGET_SDK=35 \
-            ./scripts/build_unity_android.sh device-arm64
+          set -Eeuo pipefail
+          report='build/rma134-local-llm-report/build.json'
+          record_failure() {
+            code="$?"
+            trap - ERR
+            python3 - "${code}" <<'PY' > "${report}"
+          import json
+          import os
+          import sys
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "failure",
+              "stage": "build_android_player",
+              "exit_code": int(sys.argv[1]),
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+          }, sort_keys=True, indent=2))
+          PY
+            exit "${code}"
+          }
+          trap record_failure ERR
+
+          bash scripts/prepare_reachy_unity_presentation.sh
+          bash scripts/stage_reachy_unity_android_runtime.sh
+          bash scripts/build_unity_android.sh device-feasibility
+
+          python3 - <<'PY' > "${report}"
+          import json
+          import os
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "success",
+              "stage": "build_android_player",
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+          }, sort_keys=True, indent=2))
+          PY
+          trap - ERR
 
       - name: Run RMA-134 physical provider acceptance
         shell: bash
-        run: |
-          set -euo pipefail
-          ./scripts/run_rma134_local_llm_acceptance_android.sh
+        run: bash scripts/run_rma134_local_llm_acceptance_android.sh
 
       - name: Upload RMA-134 physical evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rma134-local-llm-provider-${{ github.sha }}
+          name: rma134-local-llm-provider-${{ env.RMA134_SOURCE_SHA }}
           path: build/rma134-local-llm-report/
           if-no-files-found: warn
           retention-days: 30

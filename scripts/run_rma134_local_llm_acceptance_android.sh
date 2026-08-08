@@ -18,7 +18,9 @@ REMOTE_STORE="${REMOTE_FILES_DIR}/${MANAGED_STORE_DIR}"
 TIMEOUT_SECONDS="${RMA134_TIMEOUT_SECONDS:-900}"
 POLL_SECONDS="${RMA134_POLL_SECONDS:-1}"
 CACHE_DIR="${RMA134_MODEL_CACHE_DIR:-${HOME}/.cache/weachy-mini/rma133/models}"
+SOURCE_SHA="${RMA134_SOURCE_SHA:-${GITHUB_SHA:-unknown}}"
 
+mkdir -p "${REPORT_DIR}"
 for path in "${APK_PATH}" "${CONFIG_PATH}" "${FOREGROUND_HELPER}"; do
     if [[ ! -s "${path}" ]]; then
         printf 'RMA-134 required file is missing: %s\n' "${path}" >&2
@@ -30,8 +32,11 @@ if [[ ! "${TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || (( TIMEOUT_SECONDS <= 0 )); then
     exit 1
 fi
 for tool in "${ADB_BIN}" python3 curl sha256sum; do
-    command -v "${tool}" >/dev/null
- done
+    if ! command -v "${tool}" >/dev/null; then
+        printf 'RMA-134 required tool is missing: %s\n' "${tool}" >&2
+        exit 1
+    fi
+done
 
 mapfile -t model_fields < <(
     python3 - "${CONFIG_PATH}" <<'PY'
@@ -73,23 +78,30 @@ verify_model()
     [[ "$(sha256sum "${MODEL_PATH}" | awk '{print $1}')" == "${MODEL_SHA}" ]]
 }
 
-if ! verify_model; then
-    rm -f -- "${MODEL_PATH}"
+if [[ -e "${MODEL_PATH}" ]]; then
+    if ! verify_model; then
+        printf '%s\n' \
+            'RMA-134 cached selected model exists but fails exact size/SHA validation; refusing silent repair.' >&2
+        exit 1
+    fi
+else
     partial="${MODEL_PATH}.partial.$$"
     rm -f -- "${partial}"
-    curl \
+    if ! curl \
         --fail-with-body \
         --location \
         --proto '=https' \
         --tlsv1.2 \
-        --retry 2 \
-        --retry-all-errors \
         --output "${partial}" \
-        "${MODEL_URL}"
+        "${MODEL_URL}"; then
+        rm -f -- "${partial}"
+        printf '%s\n' 'RMA-134 selected model download failed on the single permitted attempt.' >&2
+        exit 1
+    fi
     if [[ "$(stat -c '%s' "${partial}")" != "${MODEL_SIZE}" ]] ||
        [[ "$(sha256sum "${partial}" | awk '{print $1}')" != "${MODEL_SHA}" ]]; then
         rm -f -- "${partial}"
-        printf '%s\n' 'RMA-134 selected model cache failed exact size/SHA verification.' >&2
+        printf '%s\n' 'RMA-134 selected model download failed exact size/SHA verification.' >&2
         exit 1
     fi
     mv -- "${partial}" "${MODEL_PATH}"
@@ -124,34 +136,59 @@ select_device_serial()
 
 DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:-$(select_device_serial)}"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
-rm -rf -- "${REPORT_DIR}"
-mkdir -p "${REPORT_DIR}"
 
 capture_diagnostics()
 {
-    set +e
-    "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt"
-    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt"
-    "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt"
+    local status=0
+    "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" || status=1
+    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" || status=1
+    "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt" || status=1
     "${ADB[@]}" shell "ls -la '${REMOTE_FILES_DIR}' 2>&1" \
-        > "${REPORT_DIR}/external-files.txt"
-    "${ADB[@]}" exec-out screencap -p > "${REPORT_DIR}/device-screen-final.png"
+        > "${REPORT_DIR}/external-files.txt" || status=1
+    "${ADB[@]}" exec-out screencap -p > "${REPORT_DIR}/device-screen-final.png" || status=1
+    return "${status}"
 }
 
 cleanup()
 {
-    local exit_code=$?
+    local primary_exit=$?
+    local cleanup_exit=0
     trap - EXIT
-    if (( exit_code != 0 )); then
-        capture_diagnostics
+
+    if (( primary_exit != 0 )); then
+        if ! capture_diagnostics; then
+            printf '%s\n' 'RMA-134 diagnostic capture also failed during primary failure.' \
+                >> "${REPORT_DIR}/cleanup-errors.txt"
+        fi
     fi
-    set +e
-    "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1
-    "${ADB[@]}" shell rm -f "${REMOTE_MODEL}" "${REMOTE_RESULT}.tmp" >/dev/null 2>&1
-    "${ADB[@]}" shell rm -rf "${REMOTE_STORE}" >/dev/null 2>&1
-    ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
-        restore "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 10 >/dev/null 2>&1
-    exit "${exit_code}"
+
+    if ! "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1; then
+        printf '%s\n' 'force-stop failed' >> "${REPORT_DIR}/cleanup-errors.txt"
+        cleanup_exit=1
+    fi
+    if ! "${ADB[@]}" shell rm -f \
+        "${REMOTE_MODEL}" "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp" >/dev/null 2>&1; then
+        printf '%s\n' 'remote file cleanup failed' >> "${REPORT_DIR}/cleanup-errors.txt"
+        cleanup_exit=1
+    fi
+    if ! "${ADB[@]}" shell rm -rf "${REMOTE_STORE}" >/dev/null 2>&1; then
+        printf '%s\n' 'managed model store cleanup failed' >> "${REPORT_DIR}/cleanup-errors.txt"
+        cleanup_exit=1
+    fi
+    if ! ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
+        restore "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 10 >/dev/null 2>&1; then
+        printf '%s\n' 'foreground-state restore failed' >> "${REPORT_DIR}/cleanup-errors.txt"
+        cleanup_exit=1
+    fi
+
+    if (( primary_exit != 0 )); then
+        exit "${primary_exit}"
+    fi
+    if (( cleanup_exit != 0 )); then
+        printf '%s\n' 'RMA-134 cleanup failed after otherwise successful acceptance.' >&2
+        exit "${cleanup_exit}"
+    fi
+    exit 0
 }
 trap cleanup EXIT
 
@@ -202,18 +239,21 @@ ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
     wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 30 > "${REPORT_DIR}/focus.txt"
 
-deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+start_seconds=${SECONDS}
 report_json=""
 while true; do
-    report_json="$(
+    if ! report_json="$(
         "${ADB[@]}" shell \
             "if test -f '${REMOTE_RESULT}'; then cat '${REMOTE_RESULT}'; fi" \
-            2>/dev/null | tr -d '\r'
-    )"
+            | tr -d '\r'
+    )"; then
+        printf '%s\n' 'ADB failed while polling for RMA-134 provider evidence.' >&2
+        exit 1
+    fi
     if [[ -n "${report_json}" ]]; then
         break
     fi
-    if (( $(date +%s) >= deadline )); then
+    if (( SECONDS - start_seconds >= TIMEOUT_SECONDS )); then
         printf '%s\n' 'Timed out waiting for RMA-134 provider evidence.' >&2
         exit 1
     fi
@@ -278,11 +318,15 @@ if float(report.get("simulation_accumulated_lag_delta_seconds", -1.0)) < 0.0:
     raise SystemExit(f"RMA-134 simulation lag evidence is invalid: {report}")
 PY
 
-capture_diagnostics
+if ! capture_diagnostics; then
+    printf '%s\n' 'RMA-134 final diagnostic capture failed.' >&2
+    exit 1
+fi
 sha256sum "${APK_PATH}" > "${REPORT_DIR}/apk.sha256"
 sha256sum "${MODEL_PATH}" > "${REPORT_DIR}/selected-model.sha256"
 sha256sum "${REPORT_DIR}/${RESULT_FILE}" > "${REPORT_DIR}/report.sha256"
 {
+    printf 'source_sha=%s\n' "${SOURCE_SHA}"
     printf 'device_serial=%s\n' "${DEVICE_SERIAL}"
     printf 'sdk=%s\n' "$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
     printf 'abi=%s\n' "$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
