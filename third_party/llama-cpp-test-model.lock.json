@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "purpose": "RMA-133 hosted constrained-generation lifecycle tests only; not a product model and not redistributed by Weachy Mini",
+  "source_uri": "https://huggingface.co/ggml-org/tiny-llamas",
+  "source_revision": "def3e2dd70df35ecbf6403ea347de4c5977220c1",
+  "filename": "stories260K.gguf",
+  "url": "https://huggingface.co/ggml-org/tiny-llamas/resolve/def3e2dd70df35ecbf6403ea347de4c5977220c1/stories260K.gguf",
+  "file_size_bytes": 1185376,
+  "sha256": "047bf46455a544931cff6fef14d7910154c56afbc23ab1c5e56a72e69912c04b"
+}
