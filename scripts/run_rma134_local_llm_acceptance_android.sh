@@ -62,7 +62,16 @@ capture() {
   "${ADB[@]}" shell "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" | tr -d '\r' > "${REPORT_DIR}/rma134-local-llm-acceptance-latest.json" 2>/dev/null
   set -e
 }
-trap 'code=$?; trap - EXIT; if (( code != 0 )); then capture; fi; exit "$code"' EXIT
+
+on_exit() {
+  local code=$?
+  trap - EXIT
+  if (( code != 0 )); then
+    capture
+  fi
+  exit "${code}"
+}
+trap on_exit EXIT
 
 [[ "$("${ADB[@]}" get-state | tr -d '\r\n')" == "device" ]] || { printf '%s\n' 'RMA-134 adb device is unavailable.' >&2; exit 1; }
 model="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"; abi="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"; sdk="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"; qemu="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')"; hardware="$("${ADB[@]}" shell getprop ro.hardware | tr -d '\r')"
