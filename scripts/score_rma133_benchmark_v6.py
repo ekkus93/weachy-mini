@@ -9,6 +9,7 @@ import importlib.util
 import json
 import math
 import statistics
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,7 @@ _spec = importlib.util.spec_from_file_location("rma133_legacy", HERE / "score_rm
 if _spec is None or _spec.loader is None:
     raise RuntimeError("historical RMA-133 scorer is unavailable")
 legacy = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = legacy
 _spec.loader.exec_module(legacy)
 
 BENCHMARK_ID = "rma133-initial-local-model-v3"
