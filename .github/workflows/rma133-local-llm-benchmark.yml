@@ -15,10 +15,12 @@ on:
       - 'scripts/build_rma133_android_benchmark_v6.sh'
       - 'scripts/run_rma130_hosted_gate.sh'
       - 'scripts/run_rma133_device_benchmark_v6.*'
+      - 'scripts/run_rma133_hosted_constraint_model_tests.sh'
       - 'scripts/score_rma133_benchmark*.py'
       - 'scripts/tests/test_rma130_llama_runtime.py'
       - 'scripts/tests/test_rma133_*.py'
       - 'third_party/llama-cpp-source.lock.json'
+      - 'third_party/llama-cpp-test-model.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/LLAMA_CPP_ANDROID_RUNTIME*.md'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK*.md'
@@ -32,10 +34,12 @@ on:
       - 'scripts/build_rma133_android_benchmark_v6.sh'
       - 'scripts/run_rma130_hosted_gate.sh'
       - 'scripts/run_rma133_device_benchmark_v6.*'
+      - 'scripts/run_rma133_hosted_constraint_model_tests.sh'
       - 'scripts/score_rma133_benchmark*.py'
       - 'scripts/tests/test_rma130_llama_runtime.py'
       - 'scripts/tests/test_rma133_*.py'
       - 'third_party/llama-cpp-source.lock.json'
+      - 'third_party/llama-cpp-test-model.lock.json'
       - 'toolchain.lock.json'
       - 'docs/architecture/LLAMA_CPP_ANDROID_RUNTIME*.md'
       - 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK*.md'
@@ -70,7 +74,8 @@ jobs:
             scripts.tests.test_rma133_candidate_set_v4 \
             scripts.tests.test_rma133_candidate_set_v5 \
             scripts.tests.test_rma133_device_runner_loop \
-            scripts.tests.test_rma133_constrained_v6
+            scripts.tests.test_rma133_constrained_v6 \
+            scripts.tests.test_rma133_constraint_model_fixture
           python3 -m compileall -q scripts
           python3 scripts/score_rma133_benchmark.py validate \
             --config benchmarks/rma133/candidates-v5.json
@@ -79,6 +84,7 @@ jobs:
             --cases benchmarks/rma133/behavior_cases-v2.tsv
           bash -n scripts/build_rma133_android_benchmark_v6.sh
           bash -n scripts/run_rma133_device_benchmark_v6.sh
+          bash -n scripts/run_rma133_hosted_constraint_model_tests.sh
           clang -std=c17 -fsyntax-only \
             -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wshadow -Werror \
             -Inative/llama_runtime/include \
@@ -135,6 +141,7 @@ jobs:
           bash scripts/run_rma130_hosted_gate.sh
           cmake --build "$RMA130_HOST_BUILD_DIR" --target reachy_llama_constraint_contract_tests --parallel
           ctest --test-dir "$RMA130_HOST_BUILD_DIR" --output-on-failure -R '^reachy_llama_constraint_contracts$'
+          bash scripts/run_rma133_hosted_constraint_model_tests.sh
       - name: Run sanitizer ABI-2 contracts
         shell: bash
         env:
@@ -146,6 +153,7 @@ jobs:
           bash scripts/run_rma130_hosted_gate.sh
           cmake --build "$RMA130_HOST_BUILD_DIR" --target reachy_llama_constraint_contract_tests --parallel
           ctest --test-dir "$RMA130_HOST_BUILD_DIR" --output-on-failure -R '^reachy_llama_constraint_contracts$'
+          bash scripts/run_rma133_hosted_constraint_model_tests.sh
 
   device-benchmark:
     name: Benchmark V6 candidates on physical Android device
