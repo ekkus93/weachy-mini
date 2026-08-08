@@ -1,0 +1,89 @@
+name: RMA-133 reproducibility closure bookkeeping
+
+on:
+  push:
+    branches: [rma133-v6-reproducibility-stage]
+    paths:
+      - '.github/workflows/rma133-repro-closure-bookkeeping.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-v6-reproducibility-stage
+      - name: Patch closure bookkeeping
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo = Path('docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md')
+          text = todo.read_text(encoding='utf-8')
+          old = '**Status:** V6 selected; Phase 9A exact-SHA closure validation pending'
+          new = '**Status:** V6 selected and cool-start reproducibility confirmed; final hosted closure CI pending'
+          if old not in text:
+              raise SystemExit('RMA-133 TODO status marker missing')
+          text = text.replace(old, new, 1)
+
+          old = '''### RMA-133-CG-095 — Run final exact-SHA closure CI\n\n- [ ] Commit closure source/docs/manifest.\n- [ ] Run permanent hosted CI on that exact SHA.\n- [ ] Run the relevant permanent RMA-133 physical gate on the exact final SHA if workflow policy requires it.\n- [ ] Verify all required runs are completed and green.\n- [ ] Record final SHA and run/job URLs in the TODO/validation record.'''
+          new = '''### RMA-133-CG-095 — Run final exact-SHA closure CI\n\n- [x] Commit closure source/docs/manifest.\n- [ ] Run permanent hosted CI on the final closure SHA.\n- [x] Run the relevant RMA-133 physical reproducibility gate without changing frozen V6 benchmark/runtime bytes.\n- [ ] Verify all required final hosted runs are completed and green.\n- [ ] Record the final closure SHA and hosted run/job URLs in the TODO/validation record.\n\n**Reproducibility evidence**\n\n- Controlled source SHA: `efe2a31a3b4df17281096a81f8d7509e2cc8de3b`.\n- Workflow run `31270194090`; hosted frozen-contract job `93134714842`; physical job `93134741783`.\n- Artifact `9025603640`; digest `sha256:a53d54ec69d5d851241bef5d6d57073e965d2463cf167f11841d96137c32ab42`.\n- Cool/stable window: 31.2-31.3 C for 60.357 seconds; first real case: 31.2 C.\n- Qwen3 result: 12/12, schema 1.0, semantic 85.4167, 2.3677 tok/s, 740,376,576-byte peak RSS, 37.1 C peak, +5.9 C rise.\n- Malformed-grammar control again failed closed with status 16, zero text events, and no response bytes.\n- The warm closure rerun remains permanent failure evidence and is explicitly carried forward to RMA-135 thermal/resource governance.\n- Full evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.'''
+          if old not in text:
+              raise SystemExit('CG-095 block missing')
+          text = text.replace(old, new, 1)
+
+          replacements = {
+              '- [ ] V5 evidence is permanent and immutable.': '- [x] V5 evidence is permanent and immutable.',
+              '- [ ] V6 uses `rma133-initial-local-model-v3`.': '- [x] V6 uses `rma133-initial-local-model-v3`.',
+              '- [ ] Numerical acceptance gates are unchanged.': '- [x] Numerical acceptance gates are unchanged.',
+              '- [ ] Semantic false-positive regression is fixed.': '- [x] Semantic false-positive regression is fixed.',
+              '- [ ] GBNF bytes and SHA-256 are frozen.': '- [x] GBNF bytes and SHA-256 are frozen.',
+              '- [ ] Active runtime uses deliberate ABI 2.': '- [x] Active runtime uses deliberate ABI 2.',
+              '- [ ] Invalid grammar fails explicitly.': '- [x] Invalid grammar fails explicitly.',
+              '- [ ] No constrained-generation failure can fall back to unconstrained generation.': '- [x] No constrained-generation failure can fall back to unconstrained generation.',
+              '- [ ] No post-generation repair/Markdown stripping exists in acceptance or production paths.': '- [x] No post-generation repair/Markdown stripping exists in acceptance or production paths.',
+              '- [ ] Strict schema validation remains independent of grammar enforcement.': '- [x] Strict schema validation remains independent of grammar enforcement.',
+              '- [ ] Benchmark evidence proves constrained mode was active.': '- [x] Benchmark evidence proves constrained mode was active.',
+              '- [ ] Physical-device evidence is uploaded on both success and selector failure.': '- [x] Physical-device evidence is uploaded on both success and selector failure.',
+              '- [ ] Selection is deterministic.': '- [x] Selection is deterministic.',
+              '- [ ] A real model manifest exists only after a passing selected candidate.': '- [x] A real model manifest exists only after a passing selected candidate.',
+              '- [ ] No hidden alternate model/provider fallback was introduced.': '- [x] No hidden alternate model/provider fallback was introduced.',
+              '- [ ] No silent failure path was introduced.': '- [x] No silent failure path was introduced.',
+          }
+          for old_line, new_line in replacements.items():
+              if old_line not in text:
+                  raise SystemExit(f'final-audit marker missing: {old_line}')
+              text = text.replace(old_line, new_line, 1)
+          todo.write_text(text, encoding='utf-8')
+
+          roadmap = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          text = roadmap.read_text(encoding='utf-8')
+          old = '**Status:** Closure candidate — V6 selected; exact-SHA closure CI pending'
+          new = '**Status:** Closure candidate — V6 selection and cool-start reproducibility confirmed; final hosted closure CI pending'
+          if old not in text:
+              raise SystemExit('roadmap RMA-133 status marker missing')
+          text = text.replace(old, new, 1)
+          marker = '''- Full evidence: `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.\n\n## RMA-134 — Implement local LLM provider'''
+          replacement = '''- Full selection evidence: `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.\n- Controlled reproducibility run `31270194090` / physical job `93134741783` on source SHA `efe2a31a3b4df17281096a81f8d7509e2cc8de3b` reproduced Qwen3 at 12/12, schema 1.0, semantic 85.4167, 2.3677 token/s, 740,376,576-byte peak RSS, 37.1 C peak battery temperature, and +5.9 C rise after a 31.2-31.3 C stable cool-start window. Artifact `9025603640` has digest `sha256:a53d54ec69d5d851241bef5d6d57073e965d2463cf167f11841d96137c32ab42`.\n- The warm closure rerun remains explicit failure evidence: its unchanged Qwen3 behavior result fell to 0.5718 token/s from a 34.9 C start and reached 43.0 C. RMA-135 owns production thermal/resource governance; RMA-133 does not lower its throughput gate or hide that result.\n- Full reproducibility evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.\n\n## RMA-134 — Implement local LLM provider'''
+          if marker not in text:
+              raise SystemExit('roadmap RMA-133 evidence insertion marker missing')
+          roadmap.write_text(text.replace(marker, replacement, 1), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit bookkeeping
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md
+          git commit -m 'RMA-133: record reproducibility closure evidence'
+          git push origin HEAD:rma133-v6-reproducibility-stage
