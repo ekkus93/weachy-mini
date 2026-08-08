@@ -1,0 +1,44 @@
+name: RMA-134 staging ShellCheck fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-shellcheck-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+      - name: Apply exact arithmetic fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/run_rma134_local_llm_acceptance_android.sh')
+          text = path.read_text(encoding='utf-8')
+          old = 'required_kib=$(( (MODEL_SIZE + 1023) / 1024 * 2 + 262144 ))'
+          new = 'required_kib=$(( (MODEL_SIZE + 1023) * 2 / 1024 + 262144 ))'
+          if old not in text:
+              raise SystemExit('Missing RMA-134 storage arithmetic contract.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          shellcheck scripts/run_rma134_local_llm_acceptance_android.sh
+          git diff --check
+      - name: Commit script fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add scripts/run_rma134_local_llm_acceptance_android.sh
+          git commit -m 'RMA-134: fix device runner storage arithmetic'
+          git push origin HEAD:rma134-local-llm-provider-stage
