@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import shlex
 import shutil
@@ -165,14 +166,12 @@ def terminate_stale_benchmark(serial: str) -> dict[str, Any]:
 
 
 def stable_window(samples: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
-    if not samples:
+    required_samples = math.ceil(STABLE_WINDOW_SECONDS / SAMPLE_INTERVAL_SECONDS) + 1
+    if len(samples) < required_samples:
         return None
-    newest = float(samples[-1]["elapsed_seconds"])
-    cutoff = newest - STABLE_WINDOW_SECONDS
-    window = [sample for sample in samples if float(sample["elapsed_seconds"]) >= cutoff]
-    if not window or float(window[0]["elapsed_seconds"]) > cutoff + SAMPLE_INTERVAL_SECONDS:
-        return None
-    if newest - float(window[0]["elapsed_seconds"]) < STABLE_WINDOW_SECONDS:
+    window = samples[-required_samples:]
+    elapsed = float(window[-1]["elapsed_seconds"]) - float(window[0]["elapsed_seconds"])
+    if elapsed < STABLE_WINDOW_SECONDS:
         return None
     temperatures = [float(sample["temperature_c"]) for sample in window]
     if any(value > MAX_START_TEMP_C for value in temperatures):
