@@ -107,6 +107,8 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
             "The bounded conversation history is full; reset is required",
             "requests are not queued",
             "StartConstrained",
+            "IsTrackedEntityAllowed",
+            "current allowlist",
         )
         for token in required:
             self.assertIn(token, provider)

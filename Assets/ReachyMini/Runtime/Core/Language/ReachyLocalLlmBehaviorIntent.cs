@@ -308,7 +308,7 @@ namespace ReachyMini.Language
             }
         }
 
-        private static bool IsEntityId(string value)
+        internal static bool IsEntityId(string value)
         {
             const string prefix = "entity-";
             if (!value.StartsWith(prefix, StringComparison.Ordinal) || value.Length == prefix.Length)

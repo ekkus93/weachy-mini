@@ -61,6 +61,8 @@ RMA-134 deliberately does not define the future application-wide planner schema 
 
 A completed native generation is not exposed as a `Completed` behavior intent unless the independent managed parser accepts the full object.
 
+Each request also carries a bounded snapshot of the tracked entity IDs that are currently valid for gaze. A generated `gaze_target` is rejected unless its exact ID is present in that request snapshot. An empty snapshot authorizes no gaze. This prevents a syntactically valid hallucinated or stale `entity-N` from becoming executable behavior intent.
+
 ## Conversation transaction contract
 
 Conversation state uses committed turns only. A turn enters history only after:

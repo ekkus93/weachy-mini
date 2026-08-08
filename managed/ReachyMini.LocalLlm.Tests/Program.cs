@@ -16,6 +16,7 @@ internal static class Program
         "{\"schema_version\":1,\"speech\":\"Sure.\",\"gaze_target\":{\"kind\":\"tracked_entity\",\"entity_id\":\"entity-3\"},\"expression\":\"attentive\",\"gesture\":\"none\",\"urgency\":\"normal\"}";
     private const string NoGazeIntent =
         "{\"schema_version\":1,\"speech\":\"Hello!\",\"expression\":\"pleased\",\"gesture\":\"nod\",\"urgency\":\"normal\"}";
+    private static readonly string[] Entity3Allowlist = { "entity-3" };
 
     private static async Task<int> Main()
     {
@@ -26,6 +27,7 @@ internal static class Program
             ("ABI mismatch is explicit and does not load", AbiMismatchFailsClosedAsync),
             ("provider streams and commits only validated turns", StreamsAndCommitsAsync),
             ("invalid intent is not committed", InvalidIntentIsTransactionalAsync),
+            ("unallowed gaze is not committed", UnallowedGazeIsTransactionalAsync),
             ("context preflight rejects before generation", ContextLimitFailsClosedAsync),
             ("second request is rejected instead of queued", BusyRequestIsRejectedAsync),
             ("reset cancels active generation and clears history", ResetCancelsAndClearsAsync),
@@ -111,7 +113,11 @@ internal static class Program
         await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
         await RequireLoadedAsync(context).ConfigureAwait(false);
         context.Runtime.Session.EnqueueSuccess(ValidIntent, splitAt: 24);
-        List<LocalLlmEvent> first = await GenerateAsync(context.Provider, "one", "Look at me.")
+        List<LocalLlmEvent> first = await GenerateAsync(
+                context.Provider,
+                "one",
+                "Look at me.",
+                Entity3Allowlist)
             .ConfigureAwait(false);
         Require(first.Count >= 3, "streaming deltas were discarded before completion");
         Require(first[0].Kind == LocalLlmEventKind.OutputDelta, "first event was not a delta");
@@ -125,6 +131,7 @@ internal static class Program
         LocalLlmChatMessage[] messages = context.Runtime.Session.LastMessages;
         Require(messages.Length == 4, "validated prior turn was not committed to conversation history");
         Require(messages[1].Role == "user" && messages[2].Role == "assistant", "history role order is wrong");
+        Require(messages[1].Content == "Look at me.\n/no_think", "history did not preserve the exact user message seen by Qwen3");
         Require(messages[2].Content == ValidIntent, "history did not preserve exact validated JSON");
     }
 
@@ -144,6 +151,30 @@ internal static class Program
             .ConfigureAwait(false);
         Require(next[^1].Kind == LocalLlmEventKind.Completed, "provider did not recover after invalid intent");
         Require(context.Runtime.Session.LastMessages.Length == 2, "invalid turn was committed to history");
+    }
+
+    private static async Task UnallowedGazeIsTransactionalAsync()
+    {
+        await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
+        await RequireLoadedAsync(context).ConfigureAwait(false);
+        context.Runtime.Session.EnqueueSuccess(ValidIntent, splitAt: 24);
+        List<LocalLlmEvent> rejected = await GenerateAsync(
+                context.Provider,
+                "unallowed-gaze",
+                "Look somewhere")
+            .ConfigureAwait(false);
+        Require(
+            rejected[^1].Failure == LocalLlmFailure.InvalidIntent,
+            "unallowed tracked gaze was exposed as a completed intent");
+
+        context.Runtime.Session.EnqueueSuccess(NoGazeIntent, splitAt: 16);
+        List<LocalLlmEvent> recovered = await GenerateAsync(
+                context.Provider,
+                "after-unallowed-gaze",
+                "Hello")
+            .ConfigureAwait(false);
+        Require(recovered[^1].Kind == LocalLlmEventKind.Completed, "provider did not recover after rejecting unallowed gaze");
+        Require(context.Runtime.Session.LastMessages.Length == 2, "unallowed gaze turn was committed to history");
     }
 
     private static async Task ContextLimitFailsClosedAsync()
@@ -262,11 +293,16 @@ internal static class Program
     private static async Task<List<LocalLlmEvent>> GenerateAsync(
         ReachyLocalLlmProvider provider,
         string requestId,
-        string prompt)
+        string prompt,
+        IEnumerable<string>? validTrackedEntityIds = null)
     {
         var result = new List<LocalLlmEvent>();
         await foreach (LocalLlmEvent item in provider.GenerateAsync(
-            new LocalLlmRequest(requestId, prompt, TimeSpan.FromSeconds(30.0)),
+            new LocalLlmRequest(
+                requestId,
+                prompt,
+                TimeSpan.FromSeconds(30.0),
+                validTrackedEntityIds),
             CancellationToken.None))
         {
             result.Add(item);

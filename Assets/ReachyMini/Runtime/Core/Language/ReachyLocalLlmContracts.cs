@@ -159,7 +159,8 @@ namespace ReachyMini.Language
         public LocalLlmRequest(
             string requestId,
             string userText,
-            TimeSpan timeout)
+            TimeSpan timeout,
+            IEnumerable<string>? validTrackedEntityIds = null)
         {
             if (string.IsNullOrWhiteSpace(requestId) ||
                 requestId.Length > MaximumRequestIdCharacters)
@@ -184,6 +185,7 @@ namespace ReachyMini.Language
             RequestId = requestId;
             UserText = userText;
             Timeout = timeout;
+            ValidTrackedEntityIds = CopyValidTrackedEntityIds(validTrackedEntityIds);
         }
 
         public string RequestId { get; }
@@ -191,6 +193,57 @@ namespace ReachyMini.Language
         public string UserText { get; }
 
         public TimeSpan Timeout { get; }
+
+        public IReadOnlyList<string> ValidTrackedEntityIds { get; }
+
+        internal bool IsTrackedEntityAllowed(string entityId)
+        {
+            for (int index = 0; index < ValidTrackedEntityIds.Count; ++index)
+            {
+                if (string.Equals(
+                        ValidTrackedEntityIds[index],
+                        entityId,
+                        StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string[] CopyValidTrackedEntityIds(
+            IEnumerable<string>? validTrackedEntityIds)
+        {
+            if (validTrackedEntityIds == null)
+            {
+                return Array.Empty<string>();
+            }
+            var result = new List<string>();
+            var unique = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string entityId in validTrackedEntityIds)
+            {
+                if (!LocalLlmBehaviorIntentParser.IsEntityId(entityId))
+                {
+                    throw new ArgumentException(
+                        "Valid tracked-entity IDs must use entity-N syntax.",
+                        nameof(validTrackedEntityIds));
+                }
+                if (!unique.Add(entityId))
+                {
+                    throw new ArgumentException(
+                        "Valid tracked-entity IDs cannot contain duplicates.",
+                        nameof(validTrackedEntityIds));
+                }
+                result.Add(entityId);
+                if (result.Count > 128)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(validTrackedEntityIds),
+                        "A local LLM request may authorize at most 128 tracked entities.");
+                }
+            }
+            return result.ToArray();
+        }
     }
 
     public sealed class LocalLlmEvent

@@ -528,6 +528,16 @@ namespace ReachyMini.Language
                                     parsed.Failure + ".");
                                 break;
                             }
+                            if (parsed.Intent.GazeTarget != null &&
+                                !operation.Request.IsTrackedEntityAllowed(
+                                    parsed.Intent.GazeTarget.EntityId))
+                            {
+                                terminal = LocalLlmEvent.Failed(
+                                    nextSequence,
+                                    LocalLlmFailure.InvalidIntent,
+                                    "Behavior intent referenced a tracked entity outside the request's current allowlist.");
+                                break;
+                            }
                             validatedIntent = parsed.Intent;
                             rawValidatedJson = output.ToString();
                             break;
@@ -660,16 +670,22 @@ namespace ReachyMini.Language
             for (int index = 0; index < committed.Count; ++index)
             {
                 CommittedTurn turn = committed[index];
-                messages.Add(new LocalLlmChatMessage("user", turn.UserText));
+                messages.Add(new LocalLlmChatMessage(
+                    "user",
+                    BuildUserMessage(turn.UserText)));
                 messages.Add(new LocalLlmChatMessage("assistant", turn.RawIntentJson));
             }
-            string finalUser = userText;
-            if (!string.IsNullOrEmpty(configuration.UserPromptSuffix))
-            {
-                finalUser += "\n" + configuration.UserPromptSuffix;
-            }
-            messages.Add(new LocalLlmChatMessage("user", finalUser));
+            messages.Add(new LocalLlmChatMessage(
+                "user",
+                BuildUserMessage(userText)));
             return messages;
+        }
+
+        private string BuildUserMessage(string userText)
+        {
+            return string.IsNullOrEmpty(configuration.UserPromptSuffix)
+                ? userText
+                : userText + "\n" + configuration.UserPromptSuffix;
         }
 
         private LocalLlmEvent CommitValidatedTurn(
