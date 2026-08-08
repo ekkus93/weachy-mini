@@ -1,0 +1,129 @@
+name: RMA-134 staging source fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-source-fix.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/Program.cs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma134-staging-source-fix
+  cancel-in-progress: true
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+
+      - name: Apply deterministic analyzer fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path_text: str, old: str, new: str) -> None:
+              path = Path(path_text)
+              text = path.read_text(encoding='utf-8')
+              if old in text:
+                  text = text.replace(old, new, 1)
+                  path.write_text(text, encoding='utf-8')
+              elif new not in text:
+                  raise SystemExit(f'Neither old nor new analyzer contract found in {path}')
+
+          behavior = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmBehaviorIntent.cs'
+          replace(
+              behavior,
+              '''        internal LocalLlmGazeTarget(string entityId)\n        {\n            EntityId = entityId;\n        }''',
+              '''        internal LocalLlmGazeTarget(string entityId)\n        {\n            Kind = "tracked_entity";\n            EntityId = entityId;\n        }''')
+          replace(
+              behavior,
+              '        public string Kind => "tracked_entity";',
+              '        public string Kind { get; }')
+          replace(
+              behavior,
+              '''        {\n            Speech = speech;\n            GazeTarget = gazeTarget;''',
+              '''        {\n            SchemaVersion = 1;\n            Speech = speech;\n            GazeTarget = gazeTarget;''')
+          replace(
+              behavior,
+              '        public int SchemaVersion => 1;',
+              '        public int SchemaVersion { get; }')
+
+          contracts = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmContracts.cs'
+          replace(
+              contracts,
+              '''            DisplayName = RequireText(displayName, nameof(displayName), 256);\n        }''',
+              '''            DisplayName = RequireText(displayName, nameof(displayName), 256);\n            IsOnDevice = true;\n            RequiresNetwork = false;\n        }''')
+          replace(contracts, '        public bool IsOnDevice => true;', '        public bool IsOnDevice { get; }')
+          replace(contracts, '        public bool RequiresNetwork => false;', '        public bool RequiresNetwork { get; }')
+          replace(
+              contracts,
+              '''            StreamQueueCapacity = streamQueueCapacity;\n        }''',
+              '''            StreamQueueCapacity = streamQueueCapacity;\n            SupportsStreaming = true;\n            SupportsCancellation = true;\n            SupportsConversationReset = true;\n        }''')
+          replace(contracts, '        public bool SupportsStreaming => true;', '        public bool SupportsStreaming { get; }')
+          replace(contracts, '        public bool SupportsCancellation => true;', '        public bool SupportsCancellation { get; }')
+          replace(contracts, '        public bool SupportsConversationReset => true;', '        public bool SupportsConversationReset { get; }')
+
+          provider = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs'
+          replace(
+              provider,
+              '''                    operation = new TurnOperation(\n                        conversationEpoch,\n                        request,\n                        cancellationToken,\n                        configuration.ManagedEventQueueCapacity);''',
+              '''                    operation = new TurnOperation(\n                        conversationEpoch,\n                        request,\n                        configuration.ManagedEventQueueCapacity,\n                        cancellationToken);''')
+          replace(
+              provider,
+              '''            public TurnOperation(\n                ulong epoch,\n                LocalLlmRequest request,\n                CancellationToken callerCancellation,\n                int eventQueueCapacity)''',
+              '''            public TurnOperation(\n                ulong epoch,\n                LocalLlmRequest request,\n                int eventQueueCapacity,\n                CancellationToken callerCancellation)''')
+
+          runtime = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmRuntimeContracts.cs'
+          replace(
+              runtime,
+              '            if (managedEventQueueCapacity <= 0 || managedEventQueueCapacity > 1024)',
+              '            if (managedEventQueueCapacity < 2 || managedEventQueueCapacity > 1024)')
+
+          tests = 'managed/ReachyMini.LocalLlm.Tests/Program.cs'
+          replace(
+              tests,
+              '''            Require(import.Succeeded && import.Artifact != null, "synthetic approved artifact import failed");\n\n            var runtime = new FakeRuntimeFactory();''',
+              '''            Require(import.Succeeded, "synthetic approved artifact import failed");\n            LocalModelApprovedArtifact approved = import.Artifact ??\n                throw new InvalidOperationException("Synthetic approved artifact is missing.");\n\n            var runtime = new FakeRuntimeFactory();''')
+          replace(
+              tests,
+              '''                runtime,\n                import.Artifact,\n                manifest,''',
+              '''                runtime,\n                approved,\n                manifest,''')
+          replace(
+              tests,
+              'Task<List<LocalLlmEvent>> firstTask = GenerateAsync(context.Provider, "first", "Hold") ;',
+              'Task<List<LocalLlmEvent>> firstTask = GenerateAsync(context.Provider, "first", "Hold");')
+          replace(
+              tests,
+              '        private string? completionAfterHold;',
+              '        private volatile string? completionAfterHold;')
+          PY
+
+          git diff --check
+
+      - name: Commit source-only fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- \
+            Assets/ReachyMini/Runtime/Core/Language \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs; then
+            echo 'Source fixes already applied.'
+            exit 0
+          fi
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            Assets/ReachyMini/Runtime/Core/Language \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs
+          git commit -m 'RMA-134: fix analyzer contracts'
+          git push origin HEAD:rma134-local-llm-provider-stage
