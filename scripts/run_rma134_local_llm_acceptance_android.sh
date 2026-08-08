@@ -78,14 +78,36 @@ model="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"; abi="$("${AD
 [[ "${model}" == "${EXPECTED_DEVICE_MODEL}" && "${abi}" == "arm64-v8a" && "${sdk}" == "26" ]] || { printf 'Device mismatch model=%s abi=%s sdk=%s\n' "${model}" "${abi}" "${sdk}" >&2; exit 1; }
 [[ "${qemu}" != "1" && "${hardware,,}" != *goldfish* && "${hardware,,}" != *ranchu* ]] || { printf '%s\n' 'Emulator evidence refused.' >&2; exit 1; }
 printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' "${DEVICE_SERIAL}" "${model}" "${abi}" "${sdk}" "${hardware}" > "${REPORT_DIR}/device.txt"
-sha256sum "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"; sha256sum "${MODEL_CACHE_PATH}" > "${REPORT_DIR}/model-host-sha256.txt"
+APK_SHA256="$(sha256sum "${APK_PATH}" | awk '{print $1}')"
+printf '%s  %s\n' "${APK_SHA256}" "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"
+sha256sum "${MODEL_CACHE_PATH}" > "${REPORT_DIR}/model-host-sha256.txt"
 
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
-if ! "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt" 2>&1; then
-  cat "${REPORT_DIR}/install.txt" >&2
+mapfile -t INSTALLED_APK_PATHS < <(
+  "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+    | tr -d '\r' \
+    | sed -n 's/^package://p'
+)
+if (( ${#INSTALLED_APK_PATHS[@]} != 1 )); then
+  printf 'Expected one installed base APK from the successful exact-SHA Local Unity run; found %s.\n' \
+    "${#INSTALLED_APK_PATHS[@]}" >&2
   exit 1
 fi
-cat "${REPORT_DIR}/install.txt"
+INSTALLED_APK_PATH="${INSTALLED_APK_PATHS[0]}"
+INSTALLED_APK_SHA256="$(
+  "${ADB[@]}" shell "toybox sha256sum '${INSTALLED_APK_PATH}'" \
+    | tr -d '\r' \
+    | awk '{print $1}'
+)"
+printf 'host_sha256=%s\ndevice_path=%s\ndevice_sha256=%s\n' \
+  "${APK_SHA256}" "${INSTALLED_APK_PATH}" "${INSTALLED_APK_SHA256}" \
+  > "${REPORT_DIR}/installed-apk-verification.txt"
+if [[ "${INSTALLED_APK_SHA256}" != "${APK_SHA256}" ]]; then
+  printf 'Installed APK SHA-256 does not match exact source artifact: host=%s device=%s.\n' \
+    "${APK_SHA256}" "${INSTALLED_APK_SHA256}" >&2
+  exit 1
+fi
+
 "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package-before-launch.txt"
 launch_component="$(awk '/android.intent.action.MAIN:/ {main=1; next} main && / filter / {print $2; exit}' "${REPORT_DIR}/package-before-launch.txt")"
 [[ -n "${launch_component}" && "${launch_component}" == */* ]] || { printf '%s\n' 'Could not resolve Unity launcher activity.' >&2; exit 1; }
