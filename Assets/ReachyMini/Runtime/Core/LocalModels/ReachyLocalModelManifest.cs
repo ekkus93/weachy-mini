@@ -10,7 +10,7 @@ namespace ReachyMini.LocalModels
     {
         public const int CurrentSchemaVersion = 1;
 
-        public const int ReachyLlamaAbiVersion = 1;
+        public const int ReachyLlamaAbiVersion = 2;
 
         public const int MaximumStopTokenCount = 32;
 

@@ -24,7 +24,9 @@ fetches, imports, installs, selects, benchmarks, or loads a model. RMA-132 must 
 temporary-file, resume/restart, SHA-256, atomic-installation, recovery, deletion, and approved-path
 checks before any artifact can become loadable. RMA-133 owns model benchmarking and recommendation.
 
-The committed `examples/rma131-synthetic-experimental.local-llm.json` is deliberately synthetic.
+The active schema-version-1 compatibility policy requires `reachy_llama` ABI 2. The selected `qwen3-0.6b-q4-k-m.local-llm.json` records the exact RMA-133 V6 winner; it is metadata only and does not bundle or automatically download the GGUF.
+
+The committed `examples/rma131-synthetic-experimental.local-llm.json` remains deliberately synthetic.
 It names no real candidate and has no corresponding model file. Its only purpose is to exercise
 the schema and validators without creating a product recommendation or redistribution obligation.
 

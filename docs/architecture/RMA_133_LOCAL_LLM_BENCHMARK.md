@@ -167,6 +167,12 @@ than an assumption that the device is cool.
 V6 keeps the historical measurement naming discipline: time-to-first-text is not mislabeled as
 pure prefill latency merely because the native ABI does not expose a separate prefill timer.
 
+## V6 selected outcome — 2026-08-08
+
+Permanent run `31257650251` on physical LG-H872 job `93103766921` selected `qwen3-0.6b-q4-k-m`. The candidate completed 12/12 cases with schema reliability 1.0, semantic quality 85.4167, mean decode 2.3465 tokens/s, peak RSS 740,380,672 bytes, peak battery temperature 37.1 C, and a 5.9 C rise. The Qwen2.5-Coder-1.5B candidate remained constrained and structurally reliable but scored 83.3333 semantic quality, below the frozen 85 gate.
+
+The malformed-grammar negative control terminated with status 16 and zero text events. Artifact `9022498818` has digest `sha256:b529602b281ff948d4ce581534784ca86fce32e62f5dcab122f34b901c67e4b4`. The permanent validation record is `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.
+
 ## Downstream boundary
 
 RMA-133 still does not implement the production local LLM provider or production resource

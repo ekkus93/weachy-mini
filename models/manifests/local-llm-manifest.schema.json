@@ -109,7 +109,7 @@
           "const": "reachy_llama"
         },
         "abi_version": {
-          "const": 1
+          "const": 2
         },
         "requires_network_access": {
           "const": false
@@ -272,7 +272,7 @@
           "minimum": 1
         },
         "reachy_llama_abi_version": {
-          "const": 1
+          "const": 2
         }
       }
     }

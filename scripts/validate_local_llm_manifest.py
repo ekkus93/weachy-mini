@@ -151,8 +151,8 @@ def _validate_runtime(runtime: Any, errors: list[str]) -> None:
         return
     if runtime.get("runtime_id") != "reachy_llama":
         errors.append("runtime.runtime_id: schema version 1 requires 'reachy_llama'")
-    if runtime.get("abi_version") != 1:
-        errors.append("runtime.abi_version: schema version 1 requires ABI 1")
+    if runtime.get("abi_version") != 2:
+        errors.append("runtime.abi_version: schema version 1 requires ABI 2")
     if runtime.get("requires_network_access") is not False:
         errors.append("runtime.requires_network_access: local inference must be false")
 
@@ -259,8 +259,8 @@ def _validate_compatibility(
 
     minimum_ram = compatibility.get("minimum_ram_bytes")
     _require_positive_int(minimum_ram, "device_compatibility.minimum_ram_bytes", errors)
-    if compatibility.get("reachy_llama_abi_version") != 1:
-        errors.append("device_compatibility.reachy_llama_abi_version: must equal ABI 1")
+    if compatibility.get("reachy_llama_abi_version") != 2:
+        errors.append("device_compatibility.reachy_llama_abi_version: must equal ABI 2")
 
     if isinstance(inference, dict):
         memory = inference.get("memory_estimate")

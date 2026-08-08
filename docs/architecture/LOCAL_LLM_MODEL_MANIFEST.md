@@ -25,7 +25,7 @@ Version 1 contains seven top-level sections:
 1. `schema_version` — exactly `1`.
 2. `identity` — manifest/model IDs, display/version strings, HTTPS provenance, exact source
    revision, license, and explicit experimental state.
-3. `runtime` — exactly `reachy_llama` ABI 1 with network-independent local inference.
+3. `runtime` — exactly `reachy_llama` ABI 2 with network-independent local inference.
 4. `artifact` — one safe relative lowercase `.gguf` path, exact file size, and lowercase SHA-256.
 5. `gguf_metadata` — GGUF version, architecture, quantization, parameter count, tokenizer model,
    and tokenizer preprocessing identity.
@@ -34,7 +34,7 @@ Version 1 contains seven top-level sections:
 7. `device_compatibility` — exactly `arm64-v8a` for the current native plug-in, minimum Android API,
    required CPU features, minimum RAM, and exact `reachy_llama` ABI version.
 
-The single-artifact rule is intentional for schema version 1. It matches the initial sub-1B GGUF
+The single-artifact rule is intentional for schema version 1. It matches the initial single-GGUF
 work and gives RMA-132 one atomic integrity/install unit. Split/sharded model packages require a
 future schema revision rather than an ambiguous interpretation of the singular file-size/hash
 fields in the roadmap.
@@ -90,7 +90,7 @@ threads are bounded to 1 through 64. These values are metadata for later benchma
 policy; they are not enforcement or performance evidence by themselves.
 
 The device compatibility block currently requires `arm64-v8a`, API 26 or newer, exact
-`reachy_llama` ABI 1, explicit required CPU features, and a minimum-RAM value at least as large as
+`reachy_llama` ABI 2, explicit required CPU features, and a minimum-RAM value at least as large as
 the declared peak-RAM estimate. RMA-133/RMA-135 may narrow or revise these values based on measured
 device evidence.
 
@@ -112,6 +112,12 @@ implicit defaults. In particular they reject:
 
 A failed exact catalog lookup returns no model or throws `KeyNotFoundException`. It never chooses
 another manifest. There is no network, provider, model, or configuration fallback in RMA-131.
+
+## Selected RMA-133 manifest
+
+`models/manifests/qwen3-0.6b-q4-k-m.local-llm.json` is the first real selected-model manifest. It requires active `reachy_llama` ABI 2 and records the exact Qwen3-0.6B Q4_K_M revision, byte size, SHA-256, tokenizer/chat metadata, and V6 benchmark-backed context/thread/memory profile. It does not bundle the GGUF and does not authorize provider/model fallback.
+
+The schema shape remains version 1 because no manifest field or interpretation was added; the active runtime compatibility policy moved from historical ABI 1 to ABI 2 after RMA-133 constrained-generation validation. Historical RMA-131 and RMA-130 ABI-1 validation records remain immutable evidence of the earlier accepted boundary.
 
 ## Synthetic fixture
 

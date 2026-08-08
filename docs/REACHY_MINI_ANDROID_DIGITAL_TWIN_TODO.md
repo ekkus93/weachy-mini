@@ -2073,11 +2073,18 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-130 — Build llama.cpp Android native plug-in
 
-- [ ] Pin llama.cpp source revision.
-- [ ] Cross-compile for Android ARM64 with documented CPU features.
-- [ ] Expose a narrow, versioned C ABI for load, tokenize/chat-template application, generate/stream, cancel, unload, and metrics.
-- [ ] Ensure model inference cannot block the simulation thread.
-- [ ] Add memory-allocation and cancellation stress tests.
+**Status:** Complete (2026-08-08)
+
+- [x] Pin llama.cpp source revision.
+- [x] Cross-compile for Android ARM64 with documented CPU features.
+- [x] Expose a narrow, versioned C ABI for load, tokenize/chat-template application, generate/stream, cancel, unload, and metrics.
+- [x] Ensure model inference cannot block the simulation thread.
+- [x] Add memory-allocation and cancellation stress tests.
+
+**Completion evidence — RMA-130**
+
+- Historical ABI-1 implementation remains accepted at source SHA `11233d2967d9864f35f1684da13018110196f682`; dedicated run `31203427475`, job `92948655063`, and artifact `9003903370` passed.
+- RMA-133 later extended the same pinned-runtime boundary to ABI 2 for explicit GBNF constrained generation. That extension is additive evidence and does not rewrite the accepted ABI-1 record in `docs/validation/RMA_130_LLAMA_CPP_ANDROID_RUNTIME_VALIDATION_2026-08-07.md`.
 
 ## RMA-131 — Define local model manifest
 
@@ -2122,11 +2129,21 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-133 — Benchmark and select initial local model
 
-- [ ] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.
-- [ ] Measure load time, peak memory, prompt processing, token rate, thermal behavior, and response quality.
-- [ ] Test high-level behavior JSON reliability.
-- [ ] Select a default/recommended model through documented evidence.
-- [ ] Do not describe a candidate as final before benchmarking.
+**Status:** Complete (2026-08-08)
+
+- [x] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.
+- [x] Measure load time, peak memory, prompt processing, token rate, thermal behavior, and response quality.
+- [x] Test high-level behavior JSON reliability.
+- [x] Select a default/recommended model through documented evidence.
+- [x] Do not describe a candidate as final before benchmarking.
+
+**Completion evidence — RMA-133**
+
+- V6 permanent physical run `31257650251`, job `93103766921`, on LG-H872 selected `qwen3-0.6b-q4-k-m` under unchanged 12/12, schema 1.0, semantic >=85, decode >=1 token/s, RSS <=1.5 GB, battery <45 C, and rise <=10 C gates.
+- Selected metrics: semantic 85.4167, schema 1.0, decode 2.3465 token/s, peak RSS 740,380,672 bytes, battery peak 37.1 C, rise 5.9 C.
+- The malformed-grammar control failed closed with status 16 and zero text events; no repair or unconstrained fallback exists.
+- Real manifest: `models/manifests/qwen3-0.6b-q4-k-m.local-llm.json`, requiring `reachy_llama` ABI 2 and exact artifact SHA-256 `b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e`.
+- Full evidence: `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.
 
 ## RMA-134 — Implement local LLM provider
 
@@ -2493,7 +2510,7 @@ Order of preservation:
 - [ ] Full closed-loop Reachy model is rendered from native state.
 - [ ] Level 1 camera reprojection passes reference tests.
 - [ ] Android on-device ASR and offline TTS work where installed.
-- [ ] Local sub-1B-class LLM works without blocking physics.
+- [ ] Selected benchmark-backed local LLM works without blocking physics.
 - [ ] OpenAI and compatible providers are independently configurable.
 - [ ] Behavior planner validates all AI output.
 - [ ] No silent provider, privacy, calibration, or kinematic fallbacks remain.

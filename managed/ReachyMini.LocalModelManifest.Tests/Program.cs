@@ -59,7 +59,7 @@ namespace ReachyMini.LocalModels.Tests
             True(manifest.Identity.Experimental, "experimental marker");
             Contains(manifest.Identity.ExperimentalReason, "Synthetic", "experimental reason");
             Equal("reachy_llama", manifest.Runtime.RuntimeId, "runtime ID");
-            Equal(1, manifest.Runtime.AbiVersion, "runtime ABI");
+            Equal(2, manifest.Runtime.AbiVersion, "runtime ABI");
             False(manifest.Runtime.RequiresNetworkAccess, "local runtime network requirement");
             Equal("models/synthetic.gguf", manifest.Artifact.RelativePath, "artifact path");
             Equal(123456789L, manifest.Artifact.FileSizeBytes, "file size");
@@ -83,7 +83,7 @@ namespace ReachyMini.LocalModels.Tests
             Equal(26, manifest.DeviceCompatibility.MinimumAndroidApi, "minimum API");
             Equal(0, manifest.DeviceCompatibility.RequiredCpuFeatures.Count, "CPU feature count");
             Equal(2147483648L, manifest.DeviceCompatibility.MinimumRamBytes, "minimum RAM");
-            Equal(1, manifest.DeviceCompatibility.ReachyLlamaAbiVersion, "compatibility ABI");
+            Equal(2, manifest.DeviceCompatibility.ReachyLlamaAbiVersion, "compatibility ABI");
         }
 
         private static void SchemaAndRuntimeMismatchesFailClosed()
@@ -99,13 +99,13 @@ namespace ReachyMini.LocalModels.Tests
                     CreateCompatibility()),
                 "unknown schema version");
             Throws<ArgumentException>(
-                () => new LocalModelRuntimeRequirement("other_runtime", 1, false),
+                () => new LocalModelRuntimeRequirement("other_runtime", 2, false),
                 "wrong runtime ID");
             Throws<ArgumentOutOfRangeException>(
-                () => new LocalModelRuntimeRequirement("reachy_llama", 2, false),
+                () => new LocalModelRuntimeRequirement("reachy_llama", 1, false),
                 "wrong runtime ABI");
             Throws<ArgumentException>(
-                () => new LocalModelRuntimeRequirement("reachy_llama", 1, true),
+                () => new LocalModelRuntimeRequirement("reachy_llama", 2, true),
                 "network-required local runtime");
         }
 
@@ -239,7 +239,7 @@ namespace ReachyMini.LocalModels.Tests
                     26,
                     Array.Empty<string>(),
                     2147483648L,
-                    1),
+                    2),
                 "wrong Android ABI");
             Throws<ArgumentOutOfRangeException>(
                 () => new LocalModelDeviceCompatibility(
@@ -247,7 +247,7 @@ namespace ReachyMini.LocalModels.Tests
                     25,
                     Array.Empty<string>(),
                     2147483648L,
-                    1),
+                    2),
                 "API below native floor");
             Throws<ArgumentException>(
                 () => new LocalModelDeviceCompatibility(
@@ -255,7 +255,7 @@ namespace ReachyMini.LocalModels.Tests
                     26,
                     DuplicateCpuFeatures,
                     2147483648L,
-                    1),
+                    2),
                 "duplicate CPU feature");
             Throws<ArgumentOutOfRangeException>(
                 () => new LocalModelDeviceCompatibility(
@@ -263,7 +263,7 @@ namespace ReachyMini.LocalModels.Tests
                     26,
                     Array.Empty<string>(),
                     2147483648L,
-                    2),
+                    1),
                 "device/runtime ABI mismatch");
             Throws<ArgumentException>(
                 () => new LocalModelManifest(
@@ -278,7 +278,7 @@ namespace ReachyMini.LocalModels.Tests
                         26,
                         Array.Empty<string>(),
                         536870912L,
-                        1)),
+                        2)),
                 "minimum RAM understates peak estimate");
         }
 
@@ -364,7 +364,7 @@ namespace ReachyMini.LocalModels.Tests
 
         private static LocalModelRuntimeRequirement CreateRuntime()
         {
-            return new LocalModelRuntimeRequirement("reachy_llama", 1, false);
+            return new LocalModelRuntimeRequirement("reachy_llama", 2, false);
         }
 
         private static LocalModelArtifact CreateArtifact()
@@ -405,7 +405,7 @@ namespace ReachyMini.LocalModels.Tests
                 26,
                 Array.Empty<string>(),
                 2147483648L,
-                1);
+                2);
         }
 
         private static string[] CreateStopTokens(int count)

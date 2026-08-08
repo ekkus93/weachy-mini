@@ -20,7 +20,7 @@ Normative terms such as **MUST**, **MUST NOT**, **SHOULD**, and **MAY** describe
 
 1. **Android-first and self-contained.** Normal operation MUST NOT require a desktop computer, Python daemon, or remote physics server.
 2. **Authoritative dynamics.** MuJoCo state is authoritative. Unity transforms MUST render MuJoCo results and MUST NOT secretly replace or correct the simulated mechanism.
-3. **Offline by default.** Android on-device ASR, Android offline TTS, local perception where practical, and a local sub-1B-class LLM form the default configuration.
+3. **Offline by default.** Android on-device ASR, Android offline TTS, local perception where practical, and a small benchmark-selected local LLM form the default configuration.
 4. **Explicit cloud use.** No subsystem may silently switch from local processing to a network provider.
 5. **Provider independence.** ASR, TTS, LLM, and VLM providers are independently selectable.
 6. **Visible failures.** Permission errors, unsupported devices, provider failures, invalid model files, simulation overruns, unavailable camera pixels, and calibration deficiencies MUST be visible and diagnosable.
@@ -48,7 +48,7 @@ The initial implementation shall include:
 - Optional local or remote VLM analysis of the transformed Reachy-eye image.
 - Android on-device ASR as the preferred default.
 - Android offline TTS as the preferred default.
-- Local GGUF LLM approximately 1B parameters or smaller through an Android-native inference runtime, initially llama.cpp.
+- Local GGUF LLM selected through measured Android-device quality, memory, speed, and thermal gates through an Android-native inference runtime, initially llama.cpp.
 - Optional OpenAI and OpenAI-compatible ASR, TTS, LLM, and VLM providers.
 - Deterministic behavior planner for gaze, gestures, speech, idle behavior, listening, and error states.
 - Persistent settings, secure credential storage, diagnostics, performance monitoring, and test support.
@@ -540,7 +540,7 @@ The initial local inference runtime shall be llama.cpp or an equivalently portab
 
 ### 14.2 Default model class
 
-The initial model candidate shall be approximately 1B parameters or smaller, with Qwen3-0.6B-class models as an initial benchmark candidate. The final bundled or recommended model MUST be chosen through device testing, license review, quality evaluation, and thermal measurement.
+The initial local model shall remain small enough for supported Android devices, but parameter count alone is not an acceptance gate. Candidates up to the documented RMA-133 size policy may be evaluated, and the recommended model MUST be chosen through device testing, license review, quality evaluation, memory/speed measurement, and thermal measurement.
 
 A model need not be bundled in the APK. The app SHOULD support an explicit model download/import flow with:
 
