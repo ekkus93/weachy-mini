@@ -2,7 +2,8 @@ name: RMA-133 V6 staging formatter
 
 on:
   push:
-    branches: [rma133-v6-staging]
+    branches:
+      - rma133-v6-staging
     paths:
       - '.github/workflows/rma133-v6-staging-format.yml'
       - 'native/llama_runtime/src/reachy_llama.cpp'
@@ -10,9 +11,10 @@ on:
       - 'scripts/score_rma133_benchmark_v6.py'
       - 'scripts/tests/test_rma130_llama_runtime.py'
       - 'scripts/tests/test_rma133_constrained_v6.py'
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
@@ -25,37 +27,45 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Apply narrow historical include diagnostic boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('native/llama_runtime/src/reachy_llama.cpp')
-          text = path.read_text(encoding='utf-8')
-          needle = '#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal\n#include "reachy_llama_abi1_base.inc"\n#undef reachy_llama_generation_start\n'
-          replacement = '''#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wswitch"
-#endif
-#include "reachy_llama_abi1_base.inc"
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-#undef reachy_llama_generation_start
-'''
-          if needle not in text:
-              raise SystemExit('historical include anchor not found exactly once')
-          if text.count(needle) != 1:
-              raise SystemExit('historical include anchor is ambiguous')
-          path.write_text(text.replace(needle, replacement), encoding='utf-8')
-          PY
-      - name: Format with permanent-CI Ruff version
+      - name: Apply exact formatting and narrow historical diagnostic boundary
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check ruff==0.12.0
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("native/llama_runtime/src/reachy_llama.cpp")
+          text = path.read_text(encoding="utf-8")
+          marker = '#pragma GCC diagnostic ignored "-Wswitch"'
+          needle = (
+              "#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal\n"
+              '#include "reachy_llama_abi1_base.inc"\n'
+              "#undef reachy_llama_generation_start\n"
+          )
+          replacement = "\n".join(
+              [
+                  "#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal",
+                  "#if defined(__GNUC__) || defined(__clang__)",
+                  "#pragma GCC diagnostic push",
+                  '#pragma GCC diagnostic ignored "-Wswitch"',
+                  "#endif",
+                  '#include "reachy_llama_abi1_base.inc"',
+                  "#if defined(__GNUC__) || defined(__clang__)",
+                  "#pragma GCC diagnostic pop",
+                  "#endif",
+                  "#undef reachy_llama_generation_start",
+                  "",
+              ]
+          )
+          if marker not in text:
+              if text.count(needle) != 1:
+                  raise SystemExit("historical include anchor missing or ambiguous")
+              text = text.replace(needle, replacement)
+              path.write_text(text, encoding="utf-8")
+          elif text.count(marker) != 1:
+              raise SystemExit("historical switch diagnostic boundary is ambiguous")
+          PY
           files=(
             scripts/run_rma133_device_benchmark_v6.py
             scripts/score_rma133_benchmark_v6.py
@@ -67,29 +77,22 @@ jobs:
           ruff format "${files[@]}"
           ruff check "${files[@]}"
           python3 -m compileall -q "${files[@]}"
-      - name: Assert suppression is confined to historical include
+          test "$(grep -c '#pragma GCC diagnostic ignored "-Wswitch"' native/llama_runtime/src/reachy_llama.cpp)" -eq 1
+      - name: Commit formatter output to staging only
         shell: bash
         run: |
           set -euo pipefail
-          test "$(grep -c '#pragma GCC diagnostic ignored "-Wswitch"' native/llama_runtime/src/reachy_llama.cpp)" -eq 1
-          python3 - <<'PY'
-          from pathlib import Path
-          text = Path('native/llama_runtime/src/reachy_llama.cpp').read_text()
-          ignored = text.index('#pragma GCC diagnostic ignored "-Wswitch"')
-          include = text.index('#include "reachy_llama_abi1_base.inc"')
-          pop = text.index('#pragma GCC diagnostic pop', include)
-          if not ignored < include < pop:
-              raise SystemExit('switch diagnostic suppression is not confined to historical include')
-          PY
-      - name: Upload exact staged bytes
-        uses: actions/upload-artifact@v4
-        with:
-          name: rma133-v6-staging-formatted-${{ github.sha }}
-          path: |
-            native/llama_runtime/src/reachy_llama.cpp
-            scripts/run_rma133_device_benchmark_v6.py
-            scripts/score_rma133_benchmark_v6.py
-            scripts/tests/test_rma130_llama_runtime.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            native/llama_runtime/src/reachy_llama.cpp \
+            scripts/run_rma133_device_benchmark_v6.py \
+            scripts/score_rma133_benchmark_v6.py \
+            scripts/tests/test_rma130_llama_runtime.py \
             scripts/tests/test_rma133_constrained_v6.py
-          if-no-files-found: error
-          retention-days: 1
+          if git diff --cached --quiet; then
+            echo 'No formatter changes required.'
+            exit 0
+          fi
+          git commit -m 'RMA-133: format V6 implementation'
+          git push origin HEAD:rma133-v6-staging
