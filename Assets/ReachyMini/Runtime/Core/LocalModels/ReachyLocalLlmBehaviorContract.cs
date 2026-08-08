@@ -134,7 +134,7 @@ namespace ReachyMini.LocalModels
                 detail = "Behavior intent response is null.";
                 return false;
             }
-            if (response.IndexOf('\0') >= 0)
+            if (response.Contains('\0'))
             {
                 detail = "Behavior intent response contains an embedded NUL character.";
                 return false;
@@ -488,7 +488,7 @@ namespace ReachyMini.LocalModels
                 }
             }
 
-            private FormatException Error(string message)
+            private static FormatException Error(string message)
             {
                 return new FormatException(message);
             }

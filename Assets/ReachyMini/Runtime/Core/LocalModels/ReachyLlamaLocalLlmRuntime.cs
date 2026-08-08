@@ -13,14 +13,9 @@ namespace ReachyMini.LocalModels
         private static readonly UTF8Encoding StrictUtf8 =
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-        public uint GetAbiVersion()
-        {
-            return NativeReachyLlama.AbiVersion();
-        }
+        public uint GetAbiVersion() => NativeReachyLlama.AbiVersion();
 
-        public LocalLlmRuntimeLoadResult LoadModel(
-            string fullPath,
-            bool checkTensors)
+        public LocalLlmRuntimeLoadResult LoadModel(string fullPath, bool checkTensors)
         {
             using var path = new Utf8Buffer(fullPath, nameof(fullPath));
             var config = new NativeReachyLlamaModelConfig
@@ -51,19 +46,22 @@ namespace ReachyMini.LocalModels
 
         public LocalLlmRuntimeTemplateResult ApplyChatTemplate(
             ulong modelHandle,
-            string chatTemplate,
+            string? chatTemplate,
             IReadOnlyList<LocalLlmRuntimeChatMessage> messages)
         {
             if (messages == null)
             {
                 throw new ArgumentNullException(nameof(messages));
             }
-            using var template = new Utf8Buffer(chatTemplate, nameof(chatTemplate));
+            using Utf8Buffer? template = chatTemplate == null
+                ? null
+                : new Utf8Buffer(chatTemplate, nameof(chatTemplate));
             using var nativeMessages = new NativeChatMessageArray(messages);
+            IntPtr templatePointer = template == null ? IntPtr.Zero : template.Pointer;
             NativeReachyLlamaErrorInfo error = NativeReachyLlamaErrorInfo.Create();
             int status = NativeReachyLlama.ApplyChatTemplate(
                 modelHandle,
-                template.Pointer,
+                templatePointer,
                 nativeMessages.Pointer,
                 new UIntPtr(checked((uint)messages.Count)),
                 1U,
@@ -99,7 +97,7 @@ namespace ReachyMini.LocalModels
                 error = NativeReachyLlamaErrorInfo.Create();
                 status = NativeReachyLlama.ApplyChatTemplate(
                     modelHandle,
-                    template.Pointer,
+                    templatePointer,
                     nativeMessages.Pointer,
                     new UIntPtr(checked((uint)messages.Count)),
                     1U,
@@ -124,11 +122,10 @@ namespace ReachyMini.LocalModels
                         "reachy_llama changed the required chat-template capacity between query and copy.",
                         string.Empty);
                 }
-                string prompt = DecodeNulTerminated(output, capacity, "chat-template output");
                 return new LocalLlmRuntimeTemplateResult(
                     ReachyLlamaNativeContract.StatusOk,
                     string.Empty,
-                    prompt);
+                    DecodeNulTerminated(output, capacity, "chat-template output"));
             }
             finally
             {
@@ -136,9 +133,7 @@ namespace ReachyMini.LocalModels
             }
         }
 
-        public LocalLlmRuntimeTokenCountResult CountTokens(
-            ulong modelHandle,
-            string prompt)
+        public LocalLlmRuntimeTokenCountResult CountTokens(ulong modelHandle, string prompt)
         {
             using var text = new Utf8Buffer(prompt, nameof(prompt));
             NativeReachyLlamaErrorInfo error = NativeReachyLlamaErrorInfo.Create();
@@ -154,10 +149,7 @@ namespace ReachyMini.LocalModels
             if (status != ReachyLlamaNativeContract.StatusBufferTooSmall &&
                 status != ReachyLlamaNativeContract.StatusOk)
             {
-                return new LocalLlmRuntimeTokenCountResult(
-                    status,
-                    ErrorDetail(status, error),
-                    0);
+                return new LocalLlmRuntimeTokenCountResult(status, ErrorDetail(status, error), 0);
             }
 
             ulong count = requiredTokens.ToUInt64();
@@ -188,7 +180,6 @@ namespace ReachyMini.LocalModels
             using var promptBuffer = new Utf8Buffer(prompt, nameof(prompt));
             using var grammarBuffer = new Utf8Buffer(grammar, nameof(grammar));
             using var rootBuffer = new Utf8Buffer(grammarRoot, nameof(grammarRoot));
-
             var config = new NativeReachyLlamaGenerationConfig
             {
                 StructSize = checked((uint)Marshal.SizeOf<NativeReachyLlamaGenerationConfig>()),
@@ -231,8 +222,7 @@ namespace ReachyMini.LocalModels
 
         public LocalLlmRuntimePollResult Poll(ulong generationHandle)
         {
-            NativeReachyLlamaGenerationEvent generationEvent =
-                NativeReachyLlamaGenerationEvent.Create();
+            NativeReachyLlamaGenerationEvent generationEvent = NativeReachyLlamaGenerationEvent.Create();
             NativeReachyLlamaErrorInfo error = NativeReachyLlamaErrorInfo.Create();
             int status = NativeReachyLlama.GenerationPoll(
                 generationHandle,
@@ -243,63 +233,7 @@ namespace ReachyMini.LocalModels
                 ref error);
             if (status == ReachyLlamaNativeContract.StatusBufferTooSmall)
             {
-                int capacity;
-                try
-                {
-                    capacity = RequiredCapacity(requiredBytes, "generation text");
-                }
-                catch (InvalidOperationException exception)
-                {
-                    return RuntimePollFailure(exception.Message);
-                }
-                IntPtr output = Marshal.AllocHGlobal(capacity);
-                try
-                {
-                    generationEvent = NativeReachyLlamaGenerationEvent.Create();
-                    error = NativeReachyLlamaErrorInfo.Create();
-                    status = NativeReachyLlama.GenerationPoll(
-                        generationHandle,
-                        ref generationEvent,
-                        output,
-                        new UIntPtr(checked((uint)capacity)),
-                        out UIntPtr copiedRequiredBytes,
-                        ref error);
-                    if (status != ReachyLlamaNativeContract.StatusOk)
-                    {
-                        return new LocalLlmRuntimePollResult(
-                            status,
-                            ErrorDetail(status, error),
-                            LocalLlmRuntimePollKind.Error,
-                            status,
-                            0UL,
-                            string.Empty);
-                    }
-                    int copiedCapacity = RequiredCapacity(
-                        copiedRequiredBytes,
-                        "copied generation text");
-                    if (copiedCapacity != capacity)
-                    {
-                        return RuntimePollFailure(
-                            "reachy_llama changed the required generation-text capacity between query and copy.");
-                    }
-                    if (generationEvent.Type != ReachyLlamaNativeContract.EventText)
-                    {
-                        return RuntimePollFailure(
-                            "reachy_llama returned non-text event metadata for a text-buffer query.");
-                    }
-                    string text = DecodeNulTerminated(output, capacity, "generation text");
-                    return new LocalLlmRuntimePollResult(
-                        ReachyLlamaNativeContract.StatusOk,
-                        string.Empty,
-                        LocalLlmRuntimePollKind.Text,
-                        generationEvent.Status,
-                        generationEvent.Sequence,
-                        text);
-                }
-                finally
-                {
-                    Marshal.FreeHGlobal(output);
-                }
+                return CopyTextEvent(generationHandle, requiredBytes);
             }
             if (status != ReachyLlamaNativeContract.StatusOk)
             {
@@ -348,19 +282,12 @@ namespace ReachyMini.LocalModels
 
         public LocalLlmRuntimeMetricsResult GetGenerationMetrics(ulong generationHandle)
         {
-            NativeReachyLlamaGenerationMetrics nativeMetrics =
-                NativeReachyLlamaGenerationMetrics.Create();
+            NativeReachyLlamaGenerationMetrics nativeMetrics = NativeReachyLlamaGenerationMetrics.Create();
             NativeReachyLlamaErrorInfo error = NativeReachyLlamaErrorInfo.Create();
-            int status = NativeReachyLlama.GenerationGetMetrics(
-                generationHandle,
-                ref nativeMetrics,
-                ref error);
+            int status = NativeReachyLlama.GenerationGetMetrics(generationHandle, ref nativeMetrics, ref error);
             if (status != ReachyLlamaNativeContract.StatusOk)
             {
-                return new LocalLlmRuntimeMetricsResult(
-                    status,
-                    ErrorDetail(status, error),
-                    null);
+                return new LocalLlmRuntimeMetricsResult(status, ErrorDetail(status, error), null);
             }
             return new LocalLlmRuntimeMetricsResult(
                 ReachyLlamaNativeContract.StatusOk,
@@ -386,6 +313,65 @@ namespace ReachyMini.LocalModels
 
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
+        }
+
+        private static LocalLlmRuntimePollResult CopyTextEvent(ulong generationHandle, UIntPtr requiredBytes)
+        {
+            int capacity;
+            try
+            {
+                capacity = RequiredCapacity(requiredBytes, "generation text");
+            }
+            catch (InvalidOperationException exception)
+            {
+                return RuntimePollFailure(exception.Message);
+            }
+            IntPtr output = Marshal.AllocHGlobal(capacity);
+            try
+            {
+                NativeReachyLlamaGenerationEvent generationEvent = NativeReachyLlamaGenerationEvent.Create();
+                NativeReachyLlamaErrorInfo error = NativeReachyLlamaErrorInfo.Create();
+                int status = NativeReachyLlama.GenerationPoll(
+                    generationHandle,
+                    ref generationEvent,
+                    output,
+                    new UIntPtr(checked((uint)capacity)),
+                    out UIntPtr copiedRequiredBytes,
+                    ref error);
+                if (status != ReachyLlamaNativeContract.StatusOk)
+                {
+                    return new LocalLlmRuntimePollResult(
+                        status,
+                        ErrorDetail(status, error),
+                        LocalLlmRuntimePollKind.Error,
+                        status,
+                        0UL,
+                        string.Empty);
+                }
+                int copiedCapacity = RequiredCapacity(copiedRequiredBytes, "copied generation text");
+                if (copiedCapacity != capacity)
+                {
+                    return RuntimePollFailure(
+                        "reachy_llama changed the required generation-text capacity between query and copy.");
+                }
+                if (generationEvent.Type != ReachyLlamaNativeContract.EventText)
+                {
+                    return RuntimePollFailure(
+                        "reachy_llama returned non-text event metadata for a text-buffer query.");
+                }
+                return new LocalLlmRuntimePollResult(
+                    ReachyLlamaNativeContract.StatusOk,
+                    string.Empty,
+                    LocalLlmRuntimePollKind.Text,
+                    generationEvent.Status,
+                    generationEvent.Sequence,
+                    DecodeNulTerminated(output, capacity, "generation text"));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(output);
+            }
         }
 
         private static int RequiredCapacity(UIntPtr requiredBytes, string operation)
@@ -399,10 +385,7 @@ namespace ReachyMini.LocalModels
             return checked((int)required);
         }
 
-        private static string DecodeNulTerminated(
-            IntPtr pointer,
-            int capacity,
-            string operation)
+        private static string DecodeNulTerminated(IntPtr pointer, int capacity, string operation)
         {
             var bytes = new byte[capacity];
             Marshal.Copy(pointer, bytes, 0, capacity);
@@ -423,9 +406,7 @@ namespace ReachyMini.LocalModels
             }
         }
 
-        private static string ErrorDetail(
-            int status,
-            NativeReachyLlamaErrorInfo error)
+        private static string ErrorDetail(int status, NativeReachyLlamaErrorInfo error)
         {
             byte[]? message = error.Message;
             if (message != null && message.Length > 0)
@@ -433,16 +414,13 @@ namespace ReachyMini.LocalModels
                 int length = Array.IndexOf(message, (byte)0);
                 if (length < 0)
                 {
-                    length = Math.Min(
-                        message.Length,
-                        ReachyLlamaNativeContract.ErrorMessageCapacity);
+                    length = Math.Min(message.Length, ReachyLlamaNativeContract.ErrorMessageCapacity);
                 }
                 if (length > 0)
                 {
                     try
                     {
-                        return LocalLlmGenerationResult.BoundDiagnostic(
-                            StrictUtf8.GetString(message, 0, length));
+                        return LocalLlmGenerationResult.BoundDiagnostic(StrictUtf8.GetString(message, 0, length));
                     }
                     catch (DecoderFallbackException)
                     {
@@ -474,7 +452,7 @@ namespace ReachyMini.LocalModels
                 {
                     throw new ArgumentNullException(name);
                 }
-                if (text.IndexOf('\0') >= 0)
+                if (text.Contains('\0'))
                 {
                     throw new ArgumentException(
                         "Native reachy_llama strings cannot contain embedded NUL characters.",
@@ -491,7 +469,6 @@ namespace ReachyMini.LocalModels
             }
 
             internal IntPtr Pointer { get; private set; }
-
             internal int ByteCount { get; }
 
             public void Dispose()
@@ -502,6 +479,7 @@ namespace ReachyMini.LocalModels
                 {
                     Marshal.FreeHGlobal(pointer);
                 }
+                GC.SuppressFinalize(this);
             }
         }
 
@@ -509,15 +487,13 @@ namespace ReachyMini.LocalModels
         {
             private readonly List<Utf8Buffer> buffers = new List<Utf8Buffer>();
 
-            internal NativeChatMessageArray(
-                IReadOnlyList<LocalLlmRuntimeChatMessage> messages)
+            internal NativeChatMessageArray(IReadOnlyList<LocalLlmRuntimeChatMessage> messages)
             {
                 if (messages.Count == 0)
                 {
                     Pointer = IntPtr.Zero;
                     return;
                 }
-
                 int structSize = Marshal.SizeOf<NativeReachyLlamaChatMessage>();
                 Pointer = Marshal.AllocHGlobal(checked(structSize * messages.Count));
                 try
@@ -565,6 +541,7 @@ namespace ReachyMini.LocalModels
                 {
                     Marshal.FreeHGlobal(pointer);
                 }
+                GC.SuppressFinalize(this);
             }
         }
     }

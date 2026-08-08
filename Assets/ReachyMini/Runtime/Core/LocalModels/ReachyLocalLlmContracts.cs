@@ -187,29 +187,17 @@ namespace ReachyMini.LocalModels
         }
 
         public int ContextTokens { get; }
-
         public int BatchTokens { get; }
-
         public int MicroBatchTokens { get; }
-
         public int MaximumGeneratedTokens { get; }
-
         public int Threads { get; }
-
         public int BatchThreads { get; }
-
         public float Temperature { get; }
-
         public float MinP { get; }
-
         public uint Seed { get; }
-
         public int StreamQueueCapacity { get; }
-
         public int MaximumConversationMessages { get; }
-
         public int MaximumMessageCharacters { get; }
-
         public int MaximumResponseUtf8Bytes { get; }
 
         public static LocalLlmExecutionProfile CreateRma133V6Baseline()
@@ -259,7 +247,6 @@ namespace ReachyMini.LocalModels
         }
 
         public LocalLlmChatRole Role { get; }
-
         public string Content { get; }
 
         internal static string RequireBoundedText(
@@ -276,7 +263,7 @@ namespace ReachyMini.LocalModels
             {
                 throw new ArgumentOutOfRangeException(name);
             }
-            if (value.IndexOf('\0') >= 0)
+            if (value.Contains('\0'))
             {
                 throw new ArgumentException(
                     "Local LLM text cannot contain embedded NUL characters.",
@@ -326,7 +313,6 @@ namespace ReachyMini.LocalModels
         }
 
         public string RequestId { get; }
-
         public IReadOnlyList<LocalLlmChatMessage> Messages => messages;
     }
 
@@ -334,11 +320,11 @@ namespace ReachyMini.LocalModels
     {
         internal LocalLlmGazeTarget(string entityId)
         {
+            Kind = "tracked_entity";
             EntityId = entityId;
         }
 
-        public string Kind => "tracked_entity";
-
+        public string Kind { get; }
         public string EntityId { get; }
     }
 
@@ -351,6 +337,7 @@ namespace ReachyMini.LocalModels
             LocalLlmGesture gesture,
             LocalLlmUrgency urgency)
         {
+            SchemaVersion = 1;
             Speech = speech;
             GazeTarget = gazeTarget;
             Expression = expression;
@@ -358,16 +345,11 @@ namespace ReachyMini.LocalModels
             Urgency = urgency;
         }
 
-        public int SchemaVersion => 1;
-
+        public int SchemaVersion { get; }
         public string Speech { get; }
-
         public LocalLlmGazeTarget? GazeTarget { get; }
-
         public LocalLlmExpression Expression { get; }
-
         public LocalLlmGesture Gesture { get; }
-
         public LocalLlmUrgency Urgency { get; }
     }
 
@@ -383,17 +365,14 @@ namespace ReachyMini.LocalModels
             Sequence = sequence;
             Text = text;
             Detail = detail;
+            IsTrustedExecutableOutput = false;
         }
 
         public LocalLlmStreamEventType Type { get; }
-
         public ulong Sequence { get; }
-
         public string Text { get; }
-
         public string Detail { get; }
-
-        public bool IsTrustedExecutableOutput => false;
+        public bool IsTrustedExecutableOutput { get; }
     }
 
     public interface ILocalLlmStreamSink
@@ -428,21 +407,13 @@ namespace ReachyMini.LocalModels
         }
 
         public ulong PromptTokens { get; }
-
         public ulong GeneratedTokens { get; }
-
         public ulong StartedMonotonicMicroseconds { get; }
-
         public ulong FirstTextMonotonicMicroseconds { get; }
-
         public ulong FinishedMonotonicMicroseconds { get; }
-
         public int ContextTokens { get; }
-
         public int BatchTokens { get; }
-
         public int Threads { get; }
-
         public int BatchThreads { get; }
     }
 
@@ -467,19 +438,12 @@ namespace ReachyMini.LocalModels
         }
 
         public LocalLlmGenerationStatus Status { get; }
-
         public bool Succeeded => Status == LocalLlmGenerationStatus.Succeeded;
-
         public string RequestId { get; }
-
         public ulong ConversationEpoch { get; }
-
         public string Detail { get; }
-
         public int NativeStatus { get; }
-
         public LocalLlmBehaviorIntent? Intent { get; }
-
         public LocalLlmGenerationMetrics? Metrics { get; }
 
         internal static string BoundDiagnostic(string? detail)
@@ -508,13 +472,9 @@ namespace ReachyMini.LocalModels
         }
 
         public LocalLlmProviderCreationStatus Status { get; }
-
         public bool Succeeded => Status == LocalLlmProviderCreationStatus.Created;
-
         public string Detail { get; }
-
         public int NativeStatus { get; }
-
         public LocalLlmProvider? Provider { get; }
     }
 
@@ -531,11 +491,8 @@ namespace ReachyMini.LocalModels
         }
 
         public LocalLlmReloadStatus Status { get; }
-
         public bool Succeeded => Status == LocalLlmReloadStatus.Reloaded;
-
         public string Detail { get; }
-
         public int NativeStatus { get; }
     }
 }

@@ -23,9 +23,7 @@ namespace ReachyMini.LocalModels
         }
 
         internal int Status { get; }
-
         internal string Detail { get; }
-
         internal bool Succeeded => Status == 0;
     }
 
@@ -91,11 +89,8 @@ namespace ReachyMini.LocalModels
         }
 
         internal LocalLlmRuntimePollKind Kind { get; }
-
         internal int EventStatus { get; }
-
         internal ulong Sequence { get; }
-
         internal string Text { get; }
     }
 
@@ -122,42 +117,28 @@ namespace ReachyMini.LocalModels
         }
 
         internal string Role { get; }
-
         internal string Content { get; }
     }
 
     internal interface ILocalLlmRuntime : IDisposable
     {
         uint GetAbiVersion();
-
-        LocalLlmRuntimeLoadResult LoadModel(
-            string fullPath,
-            bool checkTensors);
-
+        LocalLlmRuntimeLoadResult LoadModel(string fullPath, bool checkTensors);
         LocalLlmRuntimeCallResult UnloadModel(ulong modelHandle);
-
         LocalLlmRuntimeTemplateResult ApplyChatTemplate(
             ulong modelHandle,
-            string chatTemplate,
+            string? chatTemplate,
             IReadOnlyList<LocalLlmRuntimeChatMessage> messages);
-
-        LocalLlmRuntimeTokenCountResult CountTokens(
-            ulong modelHandle,
-            string prompt);
-
+        LocalLlmRuntimeTokenCountResult CountTokens(ulong modelHandle, string prompt);
         LocalLlmRuntimeStartResult StartConstrained(
             ulong modelHandle,
             string prompt,
             LocalLlmExecutionProfile profile,
             string grammar,
             string grammarRoot);
-
         LocalLlmRuntimePollResult Poll(ulong generationHandle);
-
         LocalLlmRuntimeCallResult Cancel(ulong generationHandle);
-
         LocalLlmRuntimeMetricsResult GetGenerationMetrics(ulong generationHandle);
-
         LocalLlmRuntimeCallResult Release(ulong generationHandle);
     }
 }
