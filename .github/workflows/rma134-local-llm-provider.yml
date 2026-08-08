@@ -1,0 +1,77 @@
+name: RMA-134 Local LLM Provider
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma134-local-llm-provider-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Managed provider and fail-closed contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build core with warnings as errors
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Core/ReachyMini.Core.csproj
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Run local LLM provider contracts
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          timeout --signal=TERM --kill-after=15s 120s \
+            dotnet run \
+              --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
+              --configuration Release \
+              --no-restore
+
+      - name: Verify static safety and frozen RMA-133 inputs
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v scripts.tests.test_rma134_local_llm_provider
+          python3 -m compileall -q scripts
+          git diff --check
