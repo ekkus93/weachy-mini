@@ -620,18 +620,39 @@ namespace ReachyMini.LocalModels
                     exception.Message);
             }
 
-            // Passing a null template deliberately selects the chat template embedded
-            // in the exact SHA-pinned GGUF, matching the accepted RMA-133 V6 path.
-            LocalLlmRuntimeTemplateResult template = runtime.ApplyChatTemplate(
-                modelHandle,
-                null,
-                messages);
+            LocalLlmRuntimeTemplateResult template;
+            try
+            {
+                // Passing a null template deliberately selects the chat template embedded
+                // in the exact SHA-pinned GGUF, matching the accepted RMA-133 V6 path.
+                template = runtime.ApplyChatTemplate(modelHandle, null, messages);
+            }
+            catch (Exception exception)
+            {
+                return RuntimeFailure(
+                    request.RequestId,
+                    epoch,
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM chat-template application threw: " + exception.Message);
+            }
             if (!template.Succeeded)
             {
                 return RuntimeFailure(request.RequestId, epoch, template.Status, template.Detail);
             }
 
-            LocalLlmRuntimeTokenCountResult tokenCount = runtime.CountTokens(modelHandle, template.Prompt);
+            LocalLlmRuntimeTokenCountResult tokenCount;
+            try
+            {
+                tokenCount = runtime.CountTokens(modelHandle, template.Prompt);
+            }
+            catch (Exception exception)
+            {
+                return RuntimeFailure(
+                    request.RequestId,
+                    epoch,
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM token preflight threw: " + exception.Message);
+            }
             if (!tokenCount.Succeeded)
             {
                 return RuntimeFailure(request.RequestId, epoch, tokenCount.Status, tokenCount.Detail);
@@ -651,12 +672,24 @@ namespace ReachyMini.LocalModels
                 return CancellationResult(request.RequestId, epoch);
             }
 
-            LocalLlmRuntimeStartResult start = runtime.StartConstrained(
-                modelHandle,
-                template.Prompt,
-                profile,
-                LocalLlmBehaviorContract.Grammar,
-                LocalLlmBehaviorContract.GrammarRoot);
+            LocalLlmRuntimeStartResult start;
+            try
+            {
+                start = runtime.StartConstrained(
+                    modelHandle,
+                    template.Prompt,
+                    profile,
+                    LocalLlmBehaviorContract.Grammar,
+                    LocalLlmBehaviorContract.GrammarRoot);
+            }
+            catch (Exception exception)
+            {
+                return RuntimeFailure(
+                    request.RequestId,
+                    epoch,
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM constrained start threw: " + exception.Message);
+            }
             if (!start.Succeeded || start.GenerationHandle == 0UL)
             {
                 if (start.Status == ReachyLlamaNativeContract.StatusBusy)
@@ -680,7 +713,21 @@ namespace ReachyMini.LocalModels
                 return RuntimeFailure(request.RequestId, epoch, start.Status, start.Detail);
             }
 
-            ulong generationHandle = start.GenerationHandle;
+            return await RunStartedGenerationAsync(
+                request,
+                sink,
+                epoch,
+                cancellationToken,
+                start.GenerationHandle).ConfigureAwait(false);
+        }
+
+        private async Task<LocalLlmGenerationResult> RunStartedGenerationAsync(
+            LocalLlmGenerationRequest request,
+            ILocalLlmStreamSink sink,
+            ulong epoch,
+            CancellationToken cancellationToken,
+            ulong generationHandle)
+        {
             StringBuilder response = new StringBuilder();
             int responseUtf8Bytes = 0;
             bool cancellationIssued = false;
@@ -691,62 +738,25 @@ namespace ReachyMini.LocalModels
             ulong lastSequence = 0UL;
             Stopwatch? cancellationDrain = null;
             LocalLlmRuntimePollResult? terminal = null;
+            bool generationReleased = false;
 
-            while (terminal == null)
+            try
             {
-                bool superseded = !IsCurrentEpoch(epoch);
-                if ((cancellationToken.IsCancellationRequested || superseded || outputLimit || consumerFailure) &&
-                    !cancellationIssued)
+                while (terminal == null)
                 {
-                    LocalLlmRuntimeCallResult cancel = runtime.Cancel(generationHandle);
-                    cancellationIssued = true;
-                    cancellationDrain = Stopwatch.StartNew();
-                    if (!cancel.Succeeded && cancel.Status != ReachyLlamaNativeContract.StatusCancelled)
+                    bool superseded = !IsCurrentEpoch(epoch);
+                    if ((cancellationToken.IsCancellationRequested || superseded ||
+                        outputLimit || consumerFailure) && !cancellationIssued)
                     {
-                        bool cleaned = await CancelDrainReleaseAsync(generationHandle).ConfigureAwait(false);
-                        if (!cleaned)
+                        LocalLlmRuntimeCallResult cancel = SafeCancel(generationHandle);
+                        cancellationIssued = true;
+                        cancellationDrain = Stopwatch.StartNew();
+                        if (!cancel.Succeeded &&
+                            cancel.Status != ReachyLlamaNativeContract.StatusCancelled)
                         {
-                            MarkFaulted();
-                        }
-                        return RuntimeFailure(
-                            request.RequestId,
-                            epoch,
-                            cancel.Status,
-                            "Failed to cancel local LLM generation: " + cancel.Detail);
-                    }
-                }
-
-                if (cancellationIssued && cancellationDrain != null &&
-                    cancellationDrain.Elapsed > CancellationDrainTimeout)
-                {
-                    MarkFaulted();
-                    return RuntimeFailure(
-                        request.RequestId,
-                        epoch,
-                        ReachyLlamaNativeContract.StatusInternalError,
-                        "Timed out while draining a cancelled local LLM generation.");
-                }
-
-                LocalLlmRuntimePollResult poll = runtime.Poll(generationHandle);
-                if (!poll.Succeeded)
-                {
-                    bool cleaned = await CancelDrainReleaseAsync(generationHandle).ConfigureAwait(false);
-                    if (!cleaned)
-                    {
-                        MarkFaulted();
-                    }
-                    return RuntimeFailure(request.RequestId, epoch, poll.Status, poll.Detail);
-                }
-
-                switch (poll.Kind)
-                {
-                    case LocalLlmRuntimePollKind.None:
-                        await Task.Delay(1, CancellationToken.None).ConfigureAwait(false);
-                        break;
-                    case LocalLlmRuntimePollKind.Text:
-                        if (sequenceSeen && poll.Sequence <= lastSequence)
-                        {
-                            bool cleaned = await CancelDrainReleaseAsync(generationHandle).ConfigureAwait(false);
+                            bool cleaned = await DrainAndReleaseAsync(
+                                generationHandle).ConfigureAwait(false);
+                            generationReleased = cleaned;
                             if (!cleaned)
                             {
                                 MarkFaulted();
@@ -754,203 +764,284 @@ namespace ReachyMini.LocalModels
                             return RuntimeFailure(
                                 request.RequestId,
                                 epoch,
-                                ReachyLlamaNativeContract.StatusInternalError,
-                                "reachy_llama emitted a non-monotonic stream sequence.");
+                                cancel.Status,
+                                "Failed to cancel local LLM generation: " + cancel.Detail);
                         }
-                        sequenceSeen = true;
-                        lastSequence = poll.Sequence;
-                        if (cancellationIssued || cancellationToken.IsCancellationRequested ||
-                            !IsCurrentEpoch(epoch) || outputLimit || consumerFailure)
-                        {
-                            break;
-                        }
+                    }
 
-                        int fragmentBytes = Encoding.UTF8.GetByteCount(poll.Text);
-                        if (fragmentBytes > profile.MaximumResponseUtf8Bytes - responseUtf8Bytes)
-                        {
-                            outputLimit = true;
-                            break;
-                        }
-                        responseUtf8Bytes += fragmentBytes;
-                        response.Append(poll.Text);
-                        try
-                        {
-                            await sink.OnEventAsync(
-                                new LocalLlmStreamEvent(
-                                    LocalLlmStreamEventType.Text,
-                                    poll.Sequence,
-                                    poll.Text,
-                                    string.Empty),
-                                cancellationToken).ConfigureAwait(false);
-                        }
-                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                        {
-                        }
-                        catch (Exception exception)
-                        {
-                            consumerFailure = true;
-                            consumerFailureDetail = exception.Message;
-                        }
-                        break;
-                    case LocalLlmRuntimePollKind.Completed:
-                    case LocalLlmRuntimePollKind.Cancelled:
-                    case LocalLlmRuntimePollKind.Error:
-                        terminal = poll;
-                        break;
-                    default:
-                        bool releasedUnknown = await CancelDrainReleaseAsync(generationHandle).ConfigureAwait(false);
-                        if (!releasedUnknown)
+                    if (cancellationIssued && cancellationDrain != null &&
+                        cancellationDrain.Elapsed > CancellationDrainTimeout)
+                    {
+                        MarkFaulted();
+                        return RuntimeFailure(
+                            request.RequestId,
+                            epoch,
+                            ReachyLlamaNativeContract.StatusInternalError,
+                            "Timed out while draining a cancelled local LLM generation.");
+                    }
+
+                    LocalLlmRuntimePollResult poll = SafePoll(generationHandle);
+                    if (!poll.Succeeded)
+                    {
+                        bool cleaned = await CancelDrainReleaseAsync(
+                            generationHandle).ConfigureAwait(false);
+                        generationReleased = cleaned;
+                        if (!cleaned)
                         {
                             MarkFaulted();
                         }
                         return RuntimeFailure(
                             request.RequestId,
                             epoch,
-                            ReachyLlamaNativeContract.StatusInternalError,
-                            "The local LLM runtime returned an unknown poll event.");
+                            poll.Status,
+                            poll.Detail);
+                    }
+
+                    switch (poll.Kind)
+                    {
+                        case LocalLlmRuntimePollKind.None:
+                            await Task.Delay(1, CancellationToken.None).ConfigureAwait(false);
+                            break;
+                        case LocalLlmRuntimePollKind.Text:
+                            if (sequenceSeen && poll.Sequence <= lastSequence)
+                            {
+                                bool cleaned = await CancelDrainReleaseAsync(
+                                    generationHandle).ConfigureAwait(false);
+                                generationReleased = cleaned;
+                                if (!cleaned)
+                                {
+                                    MarkFaulted();
+                                }
+                                return RuntimeFailure(
+                                    request.RequestId,
+                                    epoch,
+                                    ReachyLlamaNativeContract.StatusInternalError,
+                                    "reachy_llama emitted a non-monotonic stream sequence.");
+                            }
+                            sequenceSeen = true;
+                            lastSequence = poll.Sequence;
+                            if (cancellationIssued || cancellationToken.IsCancellationRequested ||
+                                !IsCurrentEpoch(epoch) || outputLimit || consumerFailure)
+                            {
+                                break;
+                            }
+
+                            int fragmentBytes = Encoding.UTF8.GetByteCount(poll.Text);
+                            if (fragmentBytes > profile.MaximumResponseUtf8Bytes - responseUtf8Bytes)
+                            {
+                                outputLimit = true;
+                                break;
+                            }
+                            responseUtf8Bytes += fragmentBytes;
+                            response.Append(poll.Text);
+                            try
+                            {
+                                await sink.OnEventAsync(
+                                    new LocalLlmStreamEvent(
+                                        LocalLlmStreamEventType.Text,
+                                        poll.Sequence,
+                                        poll.Text,
+                                        string.Empty),
+                                    cancellationToken).ConfigureAwait(false);
+                            }
+                            catch (OperationCanceledException)
+                                when (cancellationToken.IsCancellationRequested)
+                            {
+                            }
+                            catch (Exception exception)
+                            {
+                                consumerFailure = true;
+                                consumerFailureDetail = exception.Message;
+                            }
+                            break;
+                        case LocalLlmRuntimePollKind.Completed:
+                        case LocalLlmRuntimePollKind.Cancelled:
+                        case LocalLlmRuntimePollKind.Error:
+                            terminal = poll;
+                            break;
+                        default:
+                            bool releasedUnknown = await CancelDrainReleaseAsync(
+                                generationHandle).ConfigureAwait(false);
+                            generationReleased = releasedUnknown;
+                            if (!releasedUnknown)
+                            {
+                                MarkFaulted();
+                            }
+                            return RuntimeFailure(
+                                request.RequestId,
+                                epoch,
+                                ReachyLlamaNativeContract.StatusInternalError,
+                                "The local LLM runtime returned an unknown poll event.");
+                    }
                 }
-            }
 
-            LocalLlmRuntimeMetricsResult metricsResult = runtime.GetGenerationMetrics(generationHandle);
-            LocalLlmRuntimeCallResult release = runtime.Release(generationHandle);
-            if (!release.Succeeded)
-            {
-                MarkFaulted();
-                return RuntimeFailure(
-                    request.RequestId,
-                    epoch,
-                    release.Status,
-                    "Failed to release local LLM generation: " + release.Detail);
-            }
-            if (!metricsResult.Succeeded)
-            {
-                return RuntimeFailure(
-                    request.RequestId,
-                    epoch,
-                    metricsResult.Status,
-                    metricsResult.Detail);
-            }
+                LocalLlmRuntimeMetricsResult metricsResult = SafeGetMetrics(
+                    generationHandle);
+                LocalLlmRuntimeCallResult release = SafeRelease(generationHandle);
+                generationReleased = release.Succeeded;
+                if (!release.Succeeded)
+                {
+                    MarkFaulted();
+                    return RuntimeFailure(
+                        request.RequestId,
+                        epoch,
+                        release.Status,
+                        "Failed to release local LLM generation: " + release.Detail);
+                }
+                if (!metricsResult.Succeeded)
+                {
+                    return RuntimeFailure(
+                        request.RequestId,
+                        epoch,
+                        metricsResult.Status,
+                        metricsResult.Detail);
+                }
 
-            if (consumerFailure)
-            {
-                return Result(
-                    LocalLlmGenerationStatus.ConsumerFailure,
-                    request.RequestId,
-                    epoch,
-                    consumerFailureDetail.Length == 0
-                        ? "The local LLM stream consumer failed."
-                        : consumerFailureDetail,
-                    terminal.EventStatus,
-                    null,
-                    metricsResult.Metrics);
-            }
-            if (outputLimit)
-            {
-                return await PublishTerminalResultAsync(
-                    sink,
-                    LocalLlmStreamEventType.Error,
-                    lastSequence,
-                    Result(
-                        LocalLlmGenerationStatus.OutputLimit,
+                if (consumerFailure)
+                {
+                    return Result(
+                        LocalLlmGenerationStatus.ConsumerFailure,
                         request.RequestId,
                         epoch,
-                        "The local LLM response exceeded the managed output-byte limit.",
+                        consumerFailureDetail.Length == 0
+                            ? "The local LLM stream consumer failed."
+                            : consumerFailureDetail,
                         terminal.EventStatus,
                         null,
-                        metricsResult.Metrics)).ConfigureAwait(false);
-            }
-            if (!IsCurrentEpoch(epoch))
-            {
+                        metricsResult.Metrics);
+                }
+                if (outputLimit)
+                {
+                    return await PublishTerminalResultAsync(
+                        sink,
+                        LocalLlmStreamEventType.Error,
+                        lastSequence,
+                        Result(
+                            LocalLlmGenerationStatus.OutputLimit,
+                            request.RequestId,
+                            epoch,
+                            "The local LLM response exceeded the managed output-byte limit.",
+                            terminal.EventStatus,
+                            null,
+                            metricsResult.Metrics)).ConfigureAwait(false);
+                }
+                if (!IsCurrentEpoch(epoch))
+                {
+                    return await PublishTerminalResultAsync(
+                        sink,
+                        LocalLlmStreamEventType.Superseded,
+                        lastSequence,
+                        Result(
+                            LocalLlmGenerationStatus.Superseded,
+                            request.RequestId,
+                            epoch,
+                            "The conversation reset superseded this generation.",
+                            terminal.EventStatus,
+                            null,
+                            metricsResult.Metrics)).ConfigureAwait(false);
+                }
+                if (cancellationToken.IsCancellationRequested ||
+                    terminal.Kind == LocalLlmRuntimePollKind.Cancelled)
+                {
+                    return await PublishTerminalResultAsync(
+                        sink,
+                        LocalLlmStreamEventType.Cancelled,
+                        lastSequence,
+                        Result(
+                            LocalLlmGenerationStatus.Cancelled,
+                            request.RequestId,
+                            epoch,
+                            "The local LLM generation was cancelled.",
+                            terminal.EventStatus,
+                            null,
+                            metricsResult.Metrics)).ConfigureAwait(false);
+                }
+                if (terminal.Kind == LocalLlmRuntimePollKind.Error)
+                {
+                    return await PublishTerminalResultAsync(
+                        sink,
+                        LocalLlmStreamEventType.Error,
+                        lastSequence,
+                        RuntimeFailure(
+                            request.RequestId,
+                            epoch,
+                            terminal.EventStatus,
+                            terminal.Detail,
+                            metricsResult.Metrics)).ConfigureAwait(false);
+                }
+                if (terminal.Kind != LocalLlmRuntimePollKind.Completed)
+                {
+                    return RuntimeFailure(
+                        request.RequestId,
+                        epoch,
+                        ReachyLlamaNativeContract.StatusInternalError,
+                        "Local LLM generation terminated without a completed event.",
+                        metricsResult.Metrics);
+                }
+
+                if (!LocalLlmBehaviorContract.TryParseIntent(
+                        response.ToString(),
+                        out LocalLlmBehaviorIntent? intent,
+                        out string parseDetail) || intent == null)
+                {
+                    return await PublishTerminalResultAsync(
+                        sink,
+                        LocalLlmStreamEventType.Error,
+                        lastSequence,
+                        Result(
+                            LocalLlmGenerationStatus.InvalidIntent,
+                            request.RequestId,
+                            epoch,
+                            parseDetail,
+                            terminal.EventStatus,
+                            null,
+                            metricsResult.Metrics)).ConfigureAwait(false);
+                }
+
                 return await PublishTerminalResultAsync(
                     sink,
-                    LocalLlmStreamEventType.Superseded,
+                    LocalLlmStreamEventType.Completed,
                     lastSequence,
                     Result(
-                        LocalLlmGenerationStatus.Superseded,
+                        LocalLlmGenerationStatus.Succeeded,
                         request.RequestId,
                         epoch,
-                        "The conversation reset superseded this generation.",
+                        "Behavior intent validated.",
                         terminal.EventStatus,
-                        null,
+                        intent,
                         metricsResult.Metrics)).ConfigureAwait(false);
             }
-            if (cancellationToken.IsCancellationRequested || terminal.Kind == LocalLlmRuntimePollKind.Cancelled)
+            catch (Exception exception)
             {
-                return await PublishTerminalResultAsync(
-                    sink,
-                    LocalLlmStreamEventType.Cancelled,
-                    lastSequence,
-                    Result(
-                        LocalLlmGenerationStatus.Cancelled,
-                        request.RequestId,
-                        epoch,
-                        "The local LLM generation was cancelled.",
-                        terminal.EventStatus,
-                        null,
-                        metricsResult.Metrics)).ConfigureAwait(false);
-            }
-            if (terminal.Kind == LocalLlmRuntimePollKind.Error)
-            {
-                return await PublishTerminalResultAsync(
-                    sink,
-                    LocalLlmStreamEventType.Error,
-                    lastSequence,
-                    RuntimeFailure(
-                        request.RequestId,
-                        epoch,
-                        terminal.EventStatus,
-                        terminal.Detail,
-                        metricsResult.Metrics)).ConfigureAwait(false);
-            }
-            if (terminal.Kind != LocalLlmRuntimePollKind.Completed)
-            {
+                bool cleaned = generationReleased;
+                if (!generationReleased)
+                {
+                    cleaned = terminal == null
+                        ? await CancelDrainReleaseAsync(
+                            generationHandle).ConfigureAwait(false)
+                        : SafeRelease(generationHandle).Succeeded;
+                }
+                if (!cleaned)
+                {
+                    MarkFaulted();
+                }
                 return RuntimeFailure(
                     request.RequestId,
                     epoch,
                     ReachyLlamaNativeContract.StatusInternalError,
-                    "Local LLM generation terminated without a completed event.",
-                    metricsResult.Metrics);
+                    "Unexpected local LLM post-start failure: " + exception.Message);
             }
-
-            if (!LocalLlmBehaviorContract.TryParseIntent(
-                    response.ToString(),
-                    out LocalLlmBehaviorIntent? intent,
-                    out string parseDetail) || intent == null)
-            {
-                return await PublishTerminalResultAsync(
-                    sink,
-                    LocalLlmStreamEventType.Error,
-                    lastSequence,
-                    Result(
-                        LocalLlmGenerationStatus.InvalidIntent,
-                        request.RequestId,
-                        epoch,
-                        parseDetail,
-                        terminal.EventStatus,
-                        null,
-                        metricsResult.Metrics)).ConfigureAwait(false);
-            }
-
-            return await PublishTerminalResultAsync(
-                sink,
-                LocalLlmStreamEventType.Completed,
-                lastSequence,
-                Result(
-                    LocalLlmGenerationStatus.Succeeded,
-                    request.RequestId,
-                    epoch,
-                    "Behavior intent validated.",
-                    terminal.EventStatus,
-                    intent,
-                    metricsResult.Metrics)).ConfigureAwait(false);
         }
 
-        private List<LocalLlmRuntimeChatMessage> BuildRuntimeMessages(LocalLlmGenerationRequest request)
+        private List<LocalLlmRuntimeChatMessage> BuildRuntimeMessages(
+            LocalLlmGenerationRequest request)
         {
             List<LocalLlmRuntimeChatMessage> messages =
                 new List<LocalLlmRuntimeChatMessage>(request.Messages.Count + 1)
                 {
-                    new LocalLlmRuntimeChatMessage("system", LocalLlmBehaviorContract.SystemPrompt),
+                    new LocalLlmRuntimeChatMessage(
+                        "system",
+                        LocalLlmBehaviorContract.SystemPrompt),
                 };
             for (int index = 0; index < request.Messages.Count; ++index)
             {
@@ -959,14 +1050,16 @@ namespace ReachyMini.LocalModels
                 if (index == request.Messages.Count - 1)
                 {
                     int finalLength = checked(
-                        content.Length + 1 + LocalLlmBehaviorContract.UserPromptSuffix.Length);
+                        content.Length + 1 +
+                        LocalLlmBehaviorContract.UserPromptSuffix.Length);
                     if (finalLength > profile.MaximumMessageCharacters)
                     {
                         throw new ArgumentException(
                             "The final user message plus the selected model suffix exceeds the configured message limit.",
                             nameof(request));
                     }
-                    content = content + "\n" + LocalLlmBehaviorContract.UserPromptSuffix;
+                    content = content + "\n" +
+                        LocalLlmBehaviorContract.UserPromptSuffix;
                 }
                 messages.Add(new LocalLlmRuntimeChatMessage(
                     message.Role == LocalLlmChatRole.User ? "user" : "assistant",
@@ -983,7 +1076,8 @@ namespace ReachyMini.LocalModels
             }
             for (int index = 0; index < request.Messages.Count; ++index)
             {
-                if (request.Messages[index].Content.Length > profile.MaximumMessageCharacters)
+                if (request.Messages[index].Content.Length >
+                    profile.MaximumMessageCharacters)
                 {
                     return "The local LLM request contains a message beyond the configured character limit.";
                 }
@@ -1008,16 +1102,21 @@ namespace ReachyMini.LocalModels
 
         private async Task<bool> CancelDrainReleaseAsync(ulong generationHandle)
         {
-            LocalLlmRuntimeCallResult cancel = runtime.Cancel(generationHandle);
-            if (!cancel.Succeeded && cancel.Status != ReachyLlamaNativeContract.StatusCancelled)
+            LocalLlmRuntimeCallResult cancel = SafeCancel(generationHandle);
+            if (!cancel.Succeeded &&
+                cancel.Status != ReachyLlamaNativeContract.StatusCancelled)
             {
                 return false;
             }
+            return await DrainAndReleaseAsync(generationHandle).ConfigureAwait(false);
+        }
 
+        private async Task<bool> DrainAndReleaseAsync(ulong generationHandle)
+        {
             Stopwatch stopwatch = Stopwatch.StartNew();
             while (stopwatch.Elapsed <= CancellationDrainTimeout)
             {
-                LocalLlmRuntimePollResult poll = runtime.Poll(generationHandle);
+                LocalLlmRuntimePollResult poll = SafePoll(generationHandle);
                 if (!poll.Succeeded)
                 {
                     return false;
@@ -1026,12 +1125,72 @@ namespace ReachyMini.LocalModels
                     poll.Kind == LocalLlmRuntimePollKind.Completed ||
                     poll.Kind == LocalLlmRuntimePollKind.Error)
                 {
-                    LocalLlmRuntimeCallResult release = runtime.Release(generationHandle);
-                    return release.Succeeded;
+                    return SafeRelease(generationHandle).Succeeded;
                 }
                 await Task.Delay(1, CancellationToken.None).ConfigureAwait(false);
             }
             return false;
+        }
+
+        private LocalLlmRuntimePollResult SafePoll(ulong generationHandle)
+        {
+            try
+            {
+                return runtime.Poll(generationHandle);
+            }
+            catch (Exception exception)
+            {
+                return new LocalLlmRuntimePollResult(
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM poll threw: " + exception.Message,
+                    LocalLlmRuntimePollKind.Error,
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    0UL,
+                    string.Empty);
+            }
+        }
+
+        private LocalLlmRuntimeCallResult SafeCancel(ulong generationHandle)
+        {
+            try
+            {
+                return runtime.Cancel(generationHandle);
+            }
+            catch (Exception exception)
+            {
+                return new LocalLlmRuntimeCallResult(
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM cancel threw: " + exception.Message);
+            }
+        }
+
+        private LocalLlmRuntimeMetricsResult SafeGetMetrics(ulong generationHandle)
+        {
+            try
+            {
+                return runtime.GetGenerationMetrics(generationHandle);
+            }
+            catch (Exception exception)
+            {
+                return new LocalLlmRuntimeMetricsResult(
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM metrics collection threw: " + exception.Message,
+                    null);
+            }
+        }
+
+        private LocalLlmRuntimeCallResult SafeRelease(ulong generationHandle)
+        {
+            try
+            {
+                return runtime.Release(generationHandle);
+            }
+            catch (Exception exception)
+            {
+                return new LocalLlmRuntimeCallResult(
+                    ReachyLlamaNativeContract.StatusInternalError,
+                    "Local LLM generation release threw: " + exception.Message);
+            }
         }
 
         private static async Task<LocalLlmGenerationResult> PublishTerminalResultAsync(
@@ -1057,7 +1216,8 @@ namespace ReachyMini.LocalModels
                     LocalLlmGenerationStatus.ConsumerFailure,
                     baseResult.RequestId,
                     baseResult.ConversationEpoch,
-                    "Terminal stream notification failed after " + baseResult.Status + ": " + exception.Message,
+                    "Terminal stream notification failed after " +
+                        baseResult.Status + ": " + exception.Message,
                     baseResult.NativeStatus,
                     null,
                     baseResult.Metrics);
@@ -1068,7 +1228,8 @@ namespace ReachyMini.LocalModels
         {
             lock (sync)
             {
-                return conversationEpoch == epoch && state != LocalLlmProviderState.Disposed;
+                return conversationEpoch == epoch &&
+                    state != LocalLlmProviderState.Disposed;
             }
         }
 
@@ -1106,11 +1267,15 @@ namespace ReachyMini.LocalModels
             }
         }
 
-        private LocalLlmGenerationResult CancellationResult(string requestId, ulong epoch)
+        private LocalLlmGenerationResult CancellationResult(
+            string requestId,
+            ulong epoch)
         {
             bool current = IsCurrentEpoch(epoch);
             return Result(
-                current ? LocalLlmGenerationStatus.Cancelled : LocalLlmGenerationStatus.Superseded,
+                current
+                    ? LocalLlmGenerationStatus.Cancelled
+                    : LocalLlmGenerationStatus.Superseded,
                 requestId,
                 epoch,
                 current
@@ -1130,7 +1295,9 @@ namespace ReachyMini.LocalModels
                 LocalLlmGenerationStatus.RuntimeFailure,
                 requestId,
                 epoch,
-                detail.Length == 0 ? "The local LLM runtime failed." : detail,
+                detail.Length == 0
+                    ? "The local LLM runtime failed."
+                    : detail,
                 nativeStatus,
                 null,
                 metrics);
@@ -1160,10 +1327,16 @@ namespace ReachyMini.LocalModels
             string detail,
             int nativeStatus)
         {
-            return new LocalLlmProviderCreationResult(status, detail, nativeStatus, null);
+            return new LocalLlmProviderCreationResult(
+                status,
+                detail,
+                nativeStatus,
+                null);
         }
 
-        private static LocalLlmReloadResult RuntimeReloadFailure(string detail, int nativeStatus)
+        private static LocalLlmReloadResult RuntimeReloadFailure(
+            string detail,
+            int nativeStatus)
         {
             return new LocalLlmReloadResult(
                 LocalLlmReloadStatus.RuntimeFailure,
