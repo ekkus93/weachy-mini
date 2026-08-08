@@ -157,7 +157,7 @@ namespace ReachyMini.AppState
             LocalModelApprovedArtifact approved;
             using (var manager = new LocalModelPackageManager(
                 storeRoot,
-                new DriveInfoLocalModelStorageProbe()))
+                new AndroidStatFsLocalModelStorageProbe()))
             await using (var source = new FileStream(
                 inputPath,
                 FileMode.Open,

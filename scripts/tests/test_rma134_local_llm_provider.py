@@ -113,6 +113,23 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
         for token in required:
             self.assertIn(token, provider)
 
+    def test_android_acceptance_uses_statfs_without_driveinfo_fallback(self) -> None:
+        acceptance = (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs"
+        ).read_text(encoding="utf-8")
+        storage = (
+            INTEROP_DIR / "AndroidStatFsLocalModelStorageProbe.cs"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("new AndroidStatFsLocalModelStorageProbe()", acceptance)
+        self.assertNotIn("new DriveInfoLocalModelStorageProbe()", acceptance)
+        self.assertIn("android.os.StatFs", storage)
+        self.assertIn('Call<long>("getAvailableBytes")', storage)
+        self.assertIn("PlatformNotSupportedException", storage)
+        self.assertNotIn("DriveInfo", storage)
+        self.assertNotIn("catch", storage)
+
 
 if __name__ == "__main__":
     unittest.main()
