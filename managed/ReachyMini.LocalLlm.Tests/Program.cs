@@ -34,8 +34,11 @@ internal static class Program
         await TestStreamConsumerFailureAsync().ConfigureAwait(false);
         await TestTerminalConsumerFailureAsync().ConfigureAwait(false);
         await TestRuntimeTerminalErrorAsync().ConfigureAwait(false);
+        await TestFailedCancelDoesNotRetryAsync().ConfigureAwait(false);
+        await TestPollExceptionCleanupAsync().ConfigureAwait(false);
+        await TestMetricsExceptionStillReleasesAsync().ConfigureAwait(false);
         await TestReloadRecoveryAndDisposeAsync().ConfigureAwait(false);
-        Console.WriteLine("RMA-134 local LLM managed contracts passed (14 groups).");
+        Console.WriteLine("RMA-134 local LLM managed contracts passed (17 groups).");
     }
 
     private static void TestNativeAbi2Layouts()
@@ -241,7 +244,7 @@ internal static class Program
         cancellation.Cancel();
         LocalLlmGenerationResult cancelled = await first.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         Require(cancelled.Status == LocalLlmGenerationStatus.Cancelled, "Cancellation did not remain explicit.");
-        Require(runtime.CancelCount >= 1, "Cancellation did not reach native generation_cancel.");
+        Require(runtime.CancelCount == 1, "Cancellation did not issue exactly one native cancel.");
         Require(runtime.ReleaseCount == 1, "Cancelled generation handle was not released.");
     }
 
@@ -263,6 +266,7 @@ internal static class Program
         LocalLlmGenerationResult result = await generation.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.Superseded, "Reset generation was not superseded.");
         Require(!sink.Text.Contains("STALE", StringComparison.Ordinal), "Post-reset stale text reached the stream sink.");
+        Require(runtime.CancelCount == 1, "Reset issued more than one native cancel.");
         Require(runtime.ReleaseCount == 1, "Reset generation handle was not released.");
     }
 
@@ -291,7 +295,7 @@ internal static class Program
             Request("req-output-limit", "Generate."), new CollectingSink(), CancellationToken.None)
             .ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.OutputLimit, "Managed output-byte limit was not enforced.");
-        Require(runtime.CancelCount >= 1, "Output-limit breach did not cancel native generation.");
+        Require(runtime.CancelCount == 1, "Output-limit breach did not issue exactly one native cancel.");
         Require(runtime.ReleaseCount == 1, "Output-limit generation was not released.");
     }
 
@@ -306,7 +310,7 @@ internal static class Program
             new ThrowingSink(LocalLlmStreamEventType.Text),
             CancellationToken.None).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.ConsumerFailure, "Text sink failure was swallowed.");
-        Require(runtime.CancelCount >= 1, "Text sink failure did not cancel native generation.");
+        Require(runtime.CancelCount == 1, "Text sink failure issued the wrong cancel count.");
         Require(runtime.ReleaseCount == 1, "Text sink failure leaked the generation handle.");
     }
 
@@ -337,6 +341,64 @@ internal static class Program
         Require(result.NativeStatus == 11, "Native terminal status was lost.");
         Require(result.Detail.Contains("decode failed", StringComparison.Ordinal), "Native terminal detail was lost.");
         Require(runtime.ReleaseCount == 1, "Native error terminal generation was not released.");
+    }
+
+    private static async Task TestFailedCancelDoesNotRetryAsync()
+    {
+        using FakeRuntime runtime = new FakeRuntime
+        {
+            BlockUntilCancel = true,
+            CancelStatus = 11,
+            TerminalAfterFailedCancel = true,
+        };
+        await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
+        using CancellationTokenSource cancellation = new CancellationTokenSource();
+        Task<LocalLlmGenerationResult> generation = provider.GenerateAsync(
+            Request("req-cancel-fail", "Generate."),
+            new CollectingSink(),
+            cancellation.Token);
+        await runtime.GenerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        cancellation.Cancel();
+        LocalLlmGenerationResult result = await generation.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+        Require(result.Status == LocalLlmGenerationStatus.RuntimeFailure,
+            "Failed native cancel did not remain an explicit runtime failure.");
+        Require(result.NativeStatus == 11, "Failed native cancel status was lost.");
+        Require(runtime.CancelCount == 1, "Failed native cancel was retried implicitly.");
+        Require(runtime.ReleaseCount == 1, "Terminal generation was not released after failed cancel.");
+    }
+
+    private static async Task TestPollExceptionCleanupAsync()
+    {
+        using FakeRuntime runtime = new FakeRuntime { ThrowOnNextPoll = true };
+        await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
+        LocalLlmGenerationResult result = await provider.GenerateAsync(
+            Request("req-poll-throw", "Generate."),
+            new CollectingSink(),
+            CancellationToken.None).ConfigureAwait(false);
+        Require(result.Status == LocalLlmGenerationStatus.RuntimeFailure,
+            "Thrown poll did not become an explicit runtime failure.");
+        Require(result.Detail.Contains("poll threw", StringComparison.OrdinalIgnoreCase),
+            "Thrown poll detail was not preserved.");
+        Require(runtime.CancelCount == 1, "Thrown poll did not issue exactly one cleanup cancel.");
+        Require(runtime.ReleaseCount == 1, "Thrown poll leaked the generation handle.");
+    }
+
+    private static async Task TestMetricsExceptionStillReleasesAsync()
+    {
+        using FakeRuntime runtime = new FakeRuntime { ThrowOnMetrics = true };
+        runtime.EnqueueText(1UL, ValidIntent);
+        runtime.EnqueueCompleted(2UL);
+        await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
+        LocalLlmGenerationResult result = await provider.GenerateAsync(
+            Request("req-metrics-throw", "Generate."),
+            new CollectingSink(),
+            CancellationToken.None).ConfigureAwait(false);
+        Require(result.Status == LocalLlmGenerationStatus.RuntimeFailure,
+            "Thrown metrics collection did not become an explicit runtime failure.");
+        Require(result.Detail.Contains("metrics", StringComparison.OrdinalIgnoreCase),
+            "Thrown metrics detail was not preserved.");
+        Require(runtime.CancelCount == 0, "Terminal metrics failure issued an unnecessary cancel.");
+        Require(runtime.ReleaseCount == 1, "Thrown metrics collection leaked the generation handle.");
     }
 
     private static async Task TestReloadRecoveryAndDisposeAsync()
@@ -494,6 +556,10 @@ internal static class Program
         internal bool BlockStart { get; set; }
         internal bool BlockUntilCancel { get; set; }
         internal bool EmitStaleTextAfterCancel { get; set; }
+        internal bool TerminalAfterFailedCancel { get; set; }
+        internal bool ThrowOnNextPoll { get; set; }
+        internal bool ThrowOnMetrics { get; set; }
+        internal int CancelStatus { get; set; }
         internal int LoadCount { get; private set; }
         internal int UnloadCount { get; private set; }
         internal int StartCount { get; private set; }
@@ -583,7 +649,12 @@ internal static class Program
         public LocalLlmRuntimePollResult Poll(ulong generationHandle)
         {
             Require(generationHandle != 0UL, "Poll called with null generation handle.");
-            if (CancelCount > 0)
+            if (ThrowOnNextPoll)
+            {
+                ThrowOnNextPoll = false;
+                throw new InvalidOperationException("synthetic poll threw");
+            }
+            if (CancelCount > 0 && CancelStatus == 0)
             {
                 if (EmitStaleTextAfterCancel && !staleAfterCancelEmitted)
                 {
@@ -593,6 +664,11 @@ internal static class Program
                 }
                 return new LocalLlmRuntimePollResult(
                     0, string.Empty, LocalLlmRuntimePollKind.Cancelled, 13, 1000UL, string.Empty);
+            }
+            if (CancelCount > 0 && CancelStatus != 0 && TerminalAfterFailedCancel)
+            {
+                return new LocalLlmRuntimePollResult(
+                    0, string.Empty, LocalLlmRuntimePollKind.Completed, 0, 1000UL, string.Empty);
             }
             if (BlockUntilCancel)
             {
@@ -611,12 +687,18 @@ internal static class Program
         {
             Require(generationHandle != 0UL, "Cancel called with null generation handle.");
             ++CancelCount;
-            return new LocalLlmRuntimeCallResult(0, string.Empty);
+            return new LocalLlmRuntimeCallResult(
+                CancelStatus,
+                CancelStatus == 0 ? string.Empty : "synthetic cancel failure");
         }
 
         public LocalLlmRuntimeMetricsResult GetGenerationMetrics(ulong generationHandle)
         {
             Require(generationHandle != 0UL, "Metrics called with null generation handle.");
+            if (ThrowOnMetrics)
+            {
+                throw new InvalidOperationException("synthetic metrics failure");
+            }
             return new LocalLlmRuntimeMetricsResult(
                 0,
                 string.Empty,
