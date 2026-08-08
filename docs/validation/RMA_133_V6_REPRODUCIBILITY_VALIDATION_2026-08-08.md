@@ -104,4 +104,8 @@ An earlier reproducibility staging attempt, run `31269855994` / job `93133888248
 
 RMA-133's selected model disposition is confirmed: **Qwen3-0.6B Q4_K_M remains the initial recommended local model**. It reproducibly clears the unchanged V6 gates from the controlled cool-start state that matches the original accepted execution condition.
 
-RMA-133 can close once the reproducibility protocol/evidence and final bookkeeping are committed and exact-SHA hosted closure CI is green. RMA-135 must retain the warm-run evidence and implement production thermal/resource governance rather than assuming cool-start performance is continuously available.
+RMA-133 is closed. The validated closure source/docs/manifest SHA `1141b3e72f4e621164eecceb241c5f2013b706f4` passed permanent CI run `31271532993`: Reachy-model job `93138230896`, managed job `93138230914`, static/actionlint/Ruff/ShellCheck job `93138230929`, Android job `93138230973`, and native/sanitizer job `93138230986`.
+
+A later CI-policy hardening commit, `4565a2fb5508cc59dda4501c8daaa77e82c5e9a3`, passed permanent CI run `31271760818` and RMA-133 hosted run `31271760823` (contract job `93138825379`, ABI-2 normal/sanitizer job `93138841219`). That workflow proved the physical scope decision was `false` for a workflow-only change, preventing a redundant warm phone benchmark while retaining hosted RMA-133 validation.
+
+The evidence-only final bookkeeping commit does not alter the selected artifact, frozen V6 benchmark inputs, scorer, runtime, or physical evidence. RMA-135 must retain the warm-run failure evidence and implement production thermal/resource governance rather than assuming cool-start performance is continuously available.
