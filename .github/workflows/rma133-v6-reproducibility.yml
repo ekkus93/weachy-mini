@@ -1,0 +1,202 @@
+name: RMA-133 V6 reproducibility
+
+on:
+  push:
+    branches: [rma133-v6-reproducibility-stage]
+    paths:
+      - '.github/workflows/rma133-v6-reproducibility.yml'
+      - 'scripts/prepare_rma133_reproducibility_device.py'
+      - 'scripts/run_rma133_device_reproducibility_v6.py'
+      - 'scripts/tests/test_rma133_reproducibility.py'
+      - 'docs/validation/RMA_133_V6_REPRODUCIBILITY_PROTOCOL_2026-08-08.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma133-v6-reproducibility.yml'
+      - 'scripts/prepare_rma133_reproducibility_device.py'
+      - 'scripts/run_rma133_device_reproducibility_v6.py'
+      - 'scripts/tests/test_rma133_reproducibility.py'
+      - 'docs/validation/RMA_133_V6_REPRODUCIBILITY_PROTOCOL_2026-08-08.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma133-v6-reproducibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Validate frozen V6 reproducibility contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prove frozen V6 benchmark and runtime bytes are unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          accepted='e3007579d0365d31f5d5efc378fc81a13f2d705e'
+          git fetch --no-tags --depth=1 origin "$accepted"
+          frozen_paths=(
+            benchmarks/rma133/candidates-v6.json
+            benchmarks/rma133/behavior_cases-v2.tsv
+            benchmarks/rma133/system_prompt-v4.txt
+            benchmarks/rma133/behavior-output-v1.gbnf
+            native/llama_runtime/benchmark/rma133_benchmark_v6.c
+            native/llama_runtime/benchmark/rma133_benchmark_v5_base.inc
+            native/llama_runtime/include/reachy_llama.h
+            native/llama_runtime/src
+            scripts/build_llama_android.sh
+            scripts/build_rma133_android_benchmark_v6.sh
+            scripts/run_rma133_device_benchmark_v6.py
+            scripts/score_rma133_benchmark_v6.py
+            third_party/llama-cpp-source.lock.json
+            toolchain.lock.json
+          )
+          if ! git diff --quiet "$accepted" HEAD -- "${frozen_paths[@]}"; then
+            echo 'Frozen V6 benchmark/runtime bytes differ from the accepted source SHA.' >&2
+            git diff --stat "$accepted" HEAD -- "${frozen_paths[@]}" >&2
+            exit 1
+          fi
+      - name: Validate reproducibility contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v \
+            scripts.tests.test_rma133_reproducibility \
+            scripts.tests.test_rma133_constrained_v6 \
+            scripts.tests.test_rma133_device_runner_loop
+          python3 -m compileall -q \
+            scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py
+          python3 scripts/score_rma133_benchmark_v6.py validate \
+            --config benchmarks/rma133/candidates-v6.json \
+            --cases benchmarks/rma133/behavior_cases-v2.tsv
+
+  physical-reproducibility:
+    name: Reproduce selected Qwen3 on cool physical Android
+    if: github.event_name != 'pull_request'
+    needs: contract
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read exact llama.cpp and Android pins
+        id: pins
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          llama = json.loads(Path('third_party/llama-cpp-source.lock.json').read_text())
+          android = json.loads(Path('toolchain.lock.json').read_text())['android']
+          repo = urlparse(llama['repository']).path.removesuffix('.git').strip('/')
+          if repo.count('/') != 1:
+              raise SystemExit('invalid pinned llama.cpp repository')
+          print(f'repository={repo}')
+          print(f'commit={llama["commit"]}')
+          print(f'ndk={android["ndk"]}')
+          print(f'cmake={android["cmake"]}')
+          print(f'min_sdk={android["native_feasibility_min_sdk"]}')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.pins.outputs.repository }}
+          ref: ${{ steps.pins.outputs.commit }}
+          path: upstream/llama.cpp
+          fetch-depth: 1
+          lfs: false
+          persist-credentials: false
+      - name: Resolve pinned Android toolchain
+        shell: bash
+        env:
+          PINNED_NDK: ${{ steps.pins.outputs.ndk }}
+          PINNED_CMAKE: ${{ steps.pins.outputs.cmake }}
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          sdkmanager="${sdk_root}/cmdline-tools/latest/bin/sdkmanager"
+          [[ -x "$sdkmanager" ]] || sdkmanager="$(command -v sdkmanager || true)"
+          [[ -n "$sdkmanager" && -x "$sdkmanager" ]] || { echo 'sdkmanager unavailable' >&2; exit 1; }
+          if [[ ! -f "${sdk_root}/ndk/${PINNED_NDK}/source.properties" || ! -x "${sdk_root}/cmake/${PINNED_CMAKE}/bin/cmake" ]]; then
+            "$sdkmanager" --install "ndk;${PINNED_NDK}" "cmake;${PINNED_CMAKE}"
+          fi
+          {
+            echo "ANDROID_SDK_ROOT=${sdk_root}"
+            echo "ANDROID_HOME=${sdk_root}"
+            echo "ANDROID_NDK_HOME=${sdk_root}/ndk/${PINNED_NDK}"
+            echo "ANDROID_NDK_ROOT=${sdk_root}/ndk/${PINNED_NDK}"
+          } >> "$GITHUB_ENV"
+          echo "${sdk_root}/cmake/${PINNED_CMAKE}/bin" >> "$GITHUB_PATH"
+      - name: Build the frozen ABI-2 Android runtime and V6 benchmark
+        shell: bash
+        env:
+          LLAMA_CPP_SOURCE_DIR: ${{ github.workspace }}/upstream/llama.cpp
+          LLAMA_ANDROID_PLATFORM: android-${{ steps.pins.outputs.min_sdk }}
+          LLAMA_ANDROID_BUILD_DIR: ${{ github.workspace }}/build/rma133/llama-build
+          LLAMA_ANDROID_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/runtime
+          RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
+          RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_source_checkout.py \
+            --source upstream/llama.cpp \
+            --lock third_party/llama-cpp-source.lock.json
+          bash scripts/build_llama_android.sh
+          bash scripts/build_rma133_android_benchmark_v6.sh
+      - name: Wait for cool and stable physical-device start
+        shell: bash
+        env:
+          RMA133_REPRO_PRECONDITION_OUTPUT: ${{ github.workspace }}/build/rma133/reproducibility/precondition.json
+          RMA133_REPRO_MAX_START_TEMP_C: '32.0'
+          RMA133_REPRO_MAX_STABLE_SPAN_C: '0.3'
+          RMA133_REPRO_STABLE_WINDOW_SECONDS: '60'
+          RMA133_REPRO_SAMPLE_INTERVAL_SECONDS: '10'
+          RMA133_REPRO_TIMEOUT_SECONDS: '3600'
+        run: python3 scripts/prepare_rma133_reproducibility_device.py
+      - name: Reproduce selected Qwen3 with unchanged V6 gates
+        shell: bash
+        env:
+          RMA133_CONFIG: ${{ github.workspace }}/benchmarks/rma133/candidates-v6.json
+          RMA133_CASES: ${{ github.workspace }}/benchmarks/rma133/behavior_cases-v2.tsv
+          RMA133_SYSTEM_PROMPT: ${{ github.workspace }}/benchmarks/rma133/system_prompt-v4.txt
+          RMA133_GRAMMAR: ${{ github.workspace }}/benchmarks/rma133/behavior-output-v1.gbnf
+          RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
+          RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
+          RMA133_REPRO_PRECONDITION_OUTPUT: ${{ github.workspace }}/build/rma133/reproducibility/precondition.json
+          RMA133_REPRO_RESULTS_DIR: ${{ github.workspace }}/build/rma133/reproducibility/results
+          RMA133_REPRO_FIRST_CASE_MAX_START_TEMP_C: '32.5'
+        run: python3 scripts/run_rma133_device_reproducibility_v6.py
+      - name: Upload RMA-133 reproducibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma133-v6-reproducibility-${{ github.sha }}
+          path: |
+            benchmarks/rma133/candidates-v6.json
+            benchmarks/rma133/behavior_cases-v2.tsv
+            benchmarks/rma133/behavior-output-v1.gbnf
+            benchmarks/rma133/system_prompt-v4.txt
+            docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md
+            docs/validation/RMA_133_V6_REPRODUCIBILITY_PROTOCOL_2026-08-08.md
+            build/rma133/runtime/LLAMA_BUILD_INFO.txt
+            build/rma133/runtime/libreachy_llama.dynamic.txt
+            build/rma133/runtime/libreachy_llama.exports.txt
+            build/rma133/benchmark/rma133_benchmark_v6.dynamic.txt
+            build/rma133/benchmark/rma133_benchmark_v6.sha256
+            build/rma133/reproducibility
+          if-no-files-found: warn
+          retention-days: 30
