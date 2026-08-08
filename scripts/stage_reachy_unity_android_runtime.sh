@@ -141,6 +141,9 @@ cp "${LLAMA_OUTPUT_DIR}/libreachy_llama.so" "${PLUGIN_DIR}/libreachy_llama.so"
 
 MJB_PATH="${RESOURCE_DIR}/reachy_mini_mjb.bytes"
 MANIFEST_PATH="${RESOURCE_DIR}/runtime_manifest_json.bytes"
+SELECTED_LLM_MANIFEST_PATH="${RESOURCE_DIR}/rma133_selected_local_llm_manifest_json.bytes"
+cp "${ROOT_DIR}/models/manifests/qwen3-0.6b-q4-k-m.local-llm.json" \
+    "${SELECTED_LLM_MANIFEST_PATH}"
 "${VENV_DIR}/bin/python" "${SCRIPT_DIR}/compile_reachy_runtime_mjb.py" \
     --model "${MODEL_XML}" \
     --output "${MJB_PATH}" \
@@ -151,7 +154,8 @@ for required_file in \
     "${PLUGIN_DIR}/libreachy_sim.so" \
     "${PLUGIN_DIR}/libreachy_llama.so" \
     "${MJB_PATH}" \
-    "${MANIFEST_PATH}"; do
+    "${MANIFEST_PATH}" \
+    "${SELECTED_LLM_MANIFEST_PATH}"; do
     if [[ ! -s "${required_file}" ]]; then
         printf 'Staged Unity production runtime file is missing: %s\n' \
             "${required_file}" >&2

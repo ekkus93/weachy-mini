@@ -117,7 +117,7 @@ namespace ReachyMini.AppState
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             ReachyProductionAuthoritativeRuntime simulation =
-                await WaitForSimulationAsync().ConfigureAwait(false);
+                await WaitForSimulationAsync();
             ulong simulationStepsBefore = simulation.WorkerStepCount;
             if (simulation.Status != ReachyProductionRuntimeStatus.Running ||
                 simulationStepsBefore == 0UL)
@@ -163,7 +163,7 @@ namespace ReachyMini.AppState
                         manifest,
                         source,
                         CancellationToken.None)
-                    .ConfigureAwait(false);
+                    ;
                 if (!imported.Succeeded || imported.Artifact == null)
                 {
                     throw new InvalidOperationException(
@@ -187,7 +187,7 @@ namespace ReachyMini.AppState
 
             var stopwatch = Stopwatch.StartNew();
             LocalLlmOperationResult load = await provider.LoadAsync(CancellationToken.None)
-                .ConfigureAwait(false);
+                ;
             if (!load.Succeeded)
             {
                 throw new InvalidOperationException(
@@ -198,12 +198,12 @@ namespace ReachyMini.AppState
                     provider,
                     "rma134-first",
                     "Greet me briefly and naturally.")
-                .ConfigureAwait(false);
+                ;
             GenerationObservation cancelled = await ObserveCancellationAsync(provider)
-                .ConfigureAwait(false);
+                ;
             LocalLlmOperationResult reset = await provider.ResetConversationAsync(
                     CancellationToken.None)
-                .ConfigureAwait(false);
+                ;
             if (!reset.Succeeded)
             {
                 throw new InvalidOperationException(
@@ -213,7 +213,7 @@ namespace ReachyMini.AppState
                     provider,
                     "rma134-reuse",
                     "Reply with a short friendly acknowledgement.")
-                .ConfigureAwait(false);
+                ;
             stopwatch.Stop();
 
             ulong simulationStepsAfter = simulation.WorkerStepCount;
@@ -277,7 +277,7 @@ namespace ReachyMini.AppState
                         "Authoritative simulation faulted before RMA-134 acceptance: " +
                         runtime.Fault);
                 }
-                await Task.Delay(100).ConfigureAwait(false);
+                await Task.Delay(100);
             }
             throw new TimeoutException(
                 "Authoritative simulation did not become ready for RMA-134 acceptance.");
