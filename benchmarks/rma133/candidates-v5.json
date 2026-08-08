@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "rma133-initial-local-model-v2",
+  "experiment_id": "rma133-candidate-set-v5",
+  "system_prompt_contract": {
+    "path": "benchmarks/rma133/system_prompt-v4.txt",
+    "sha256": "0f174887e7686da42d88d7bddea28c4a5399b8006d2e3ad71715340c84c10e20"
+  },
+  "model_size_policy": {
+    "constraint": "up-to-2B-class",
+    "relaxed_from": "sub-1B",
+    "reason": "Candidate-set v4 showed adequate Android memory, speed, and thermal headroom but no sub-1B candidate met the frozen schema and semantic-quality gates."
+  },
+  "license_policy": {
+    "allowed_spdx_ids": [
+      "Apache-2.0"
+    ]
+  },
+  "runtime_profile": {
+    "context_tokens": 2048,
+    "batch_tokens": 256,
+    "micro_batch_tokens": 64,
+    "max_generated_tokens": 128,
+    "threads": 4,
+    "batch_threads": 4,
+    "temperature": 0.0,
+    "min_p": 0.0,
+    "seed": 133,
+    "stream_queue_capacity": 64
+  },
+  "selection_policy": {
+    "required_completed_cases": 12,
+    "minimum_schema_reliability": 1.0,
+    "minimum_semantic_quality_score": 85.0,
+    "minimum_mean_decode_tokens_per_second": 1.0,
+    "maximum_peak_rss_bytes": 1500000000,
+    "maximum_battery_temperature_c": 45.0,
+    "maximum_battery_temperature_rise_c": 10.0,
+    "ranking": [
+      "semantic_quality_score_desc",
+      "schema_reliability_desc",
+      "mean_decode_tokens_per_second_desc",
+      "peak_rss_bytes_asc",
+      "load_time_ms_asc",
+      "candidate_id_asc"
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "qwen3-0.6b-q4-k-m",
+      "model_id": "qwen3-0.6b",
+      "display_name": "Qwen3 0.6B Q4_K_M",
+      "model_class": "qwen3-0.6b-class",
+      "source_uri": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+      "license_id": "Apache-2.0",
+      "artifact": {
+        "filename": "Qwen3-0.6B-Q4_K_M.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/8e42d41f70cb6c571f58c3f31bd9287b372d97cc/Qwen3-0.6B-Q4_K_M.gguf",
+        "file_size_bytes": 396704416,
+        "sha256": "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e",
+        "quantization": "Q4_K_M"
+      },
+      "user_prompt_suffix": "/no_think",
+      "prompt_suffix_reason": "Qwen3 exposes an explicit no-thinking control; structured robot intent should not spend output budget on hidden reasoning text."
+    },
+    {
+      "candidate_id": "qwen2.5-coder-1.5b-instruct-q4-k-m",
+      "model_id": "qwen2.5-coder-1.5b-instruct",
+      "display_name": "Qwen2.5 Coder 1.5B Instruct Q4_K_M",
+      "model_class": "alternative-local",
+      "source_uri": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+      "source_revision": "2ab9f8f42af02fc212effaef7c4850c885e965f4",
+      "license_id": "Apache-2.0",
+      "artifact": {
+        "filename": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/2ab9f8f42af02fc212effaef7c4850c885e965f4/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+        "file_size_bytes": 1117320768,
+        "sha256": "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
+        "quantization": "Q4_K_M"
+      },
+      "user_prompt_suffix": "",
+      "prompt_suffix_reason": "No model-specific suffix is used; the embedded GGUF chat template and cryptographically pinned v4 system prompt define the structured-output request."
+    }
+  ]
+}

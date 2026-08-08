@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score and select RMA-133 sub-1B benchmark candidates from device evidence."""
+"""Score and select RMA-133 local-model benchmark candidates from device evidence."""
 
 from __future__ import annotations
 
@@ -73,8 +73,13 @@ def _validate_config(config: dict[str, Any]) -> None:
     if config.get("schema_version") != 1:
         raise ValueError("RMA-133 candidate config schema_version must be 1")
     benchmark_id = config.get("benchmark_id")
-    if benchmark_id != "rma133-initial-sub1b-v1":
-        raise ValueError("RMA-133 benchmark_id changed from the frozen v1 contract")
+    allowed_benchmark_ids = {
+        "rma133-initial-sub1b-v1",
+        "rma133-initial-local-model-v2",
+    }
+    if benchmark_id not in allowed_benchmark_ids:
+        raise ValueError("RMA-133 benchmark_id is not an accepted frozen contract lineage")
+    relaxed_size_contract = benchmark_id == "rma133-initial-local-model-v2"
 
     license_policy = config.get("license_policy")
     if not isinstance(license_policy, dict):
@@ -120,7 +125,8 @@ def _validate_config(config: dict[str, Any]) -> None:
         raise ValueError("RMA-133 requires Qwen3-0.6B-class and at least one alternative")
     ids: set[str] = set()
     has_qwen = False
-    has_alternative = False
+    has_sub1b_alternative = False
+    has_relaxed_alternative = False
     quantizations: set[str] = set()
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -132,8 +138,20 @@ def _validate_config(config: dict[str, Any]) -> None:
             raise ValueError(f"candidate {candidate_id!r} has an unsafe candidate ID")
         ids.add(candidate_id)
         model_class = candidate.get("model_class")
+        allowed_model_classes = {
+            "qwen3-0.6b-class",
+            "alternative-sub1b",
+            "alternative-local",
+        }
+        if model_class not in allowed_model_classes:
+            raise ValueError(f"candidate {candidate_id} has an unknown model class")
+        if relaxed_size_contract and model_class == "alternative-sub1b":
+            raise ValueError("relaxed-size contract cannot label an alternative as sub-1B")
+        if not relaxed_size_contract and model_class == "alternative-local":
+            raise ValueError("sub-1B contract cannot include a relaxed-size alternative")
         has_qwen = has_qwen or model_class == "qwen3-0.6b-class"
-        has_alternative = has_alternative or model_class == "alternative-sub1b"
+        has_sub1b_alternative = has_sub1b_alternative or model_class == "alternative-sub1b"
+        has_relaxed_alternative = has_relaxed_alternative or model_class == "alternative-local"
         license_id = candidate.get("license_id")
         if license_id not in allowed:
             raise ValueError(f"candidate {candidate_id} is outside the frozen license policy")
@@ -180,8 +198,13 @@ def _validate_config(config: dict[str, Any]) -> None:
             raise ValueError(
                 f"candidate {candidate_id} prompt suffix changed from the frozen v1 contract"
             )
-    if not has_qwen or not has_alternative:
-        raise ValueError("RMA-133 candidate set must include Qwen3-0.6B-class and an alternative")
+    if not has_qwen:
+        raise ValueError("RMA-133 candidate set must retain the Qwen3-0.6B control")
+    if relaxed_size_contract:
+        if not has_relaxed_alternative:
+            raise ValueError("RMA-133 relaxed-size contract requires a larger local alternative")
+    elif not has_sub1b_alternative:
+        raise ValueError("RMA-133 sub-1B contract requires a sub-1B alternative")
     if len(quantizations) != 1:
         raise ValueError("RMA-133 v1 candidates must use the same quantization class")
 

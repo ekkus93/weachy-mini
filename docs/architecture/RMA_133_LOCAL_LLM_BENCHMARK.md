@@ -97,3 +97,10 @@ Models are staged one at a time under `/data/local/tmp` and removed after each c
 There is no model fallback in the native benchmark and no provider fallback anywhere in RMA-133. Acquisition/integrity failure, model-load failure, missing thermal evidence, runtime error, incomplete corpus, malformed structured output, invalid UTF-8, or no eligible candidate is visible and prevents selection.
 
 RMA-133 does not implement the production local LLM provider. After a winner is measured, the repository can record that recommendation and a real validated model manifest from the exact selected artifact. RMA-134 must still stream/cancel through the worker-thread runtime, enforce context/output limits, validate production behavior intent, and report local unavailable state instead of silently calling a cloud model. RMA-135 owns runtime resource and thermal governance.
+
+
+## Candidate-size policy relaxation (2026-08-08)
+
+Candidate sets v1 through v4 evaluated the original sub-1B scope. V4 improved Qwen2.5-Coder-0.5B-Instruct to 75% strict schema reliability and 62.5/100 semantic quality while remaining well inside the memory, decode-rate, and thermal envelopes. Because it still failed the frozen 100% schema and 85/100 semantic gates, RMA-133 now permits an up-to-2B-class follow-up candidate.
+
+This is a size-scope change only. Candidate-set v5 keeps the v4 system prompt bytes, 12 behavior cases, Q4_K_M quantization, runtime profile, Apache-2.0 license policy, scorer, thresholds, ranking, raw byte evidence, no-repair rule, and fail-closed selector unchanged. The new benchmark lineage ID is `rma133-initial-local-model-v2`; historical `rma133-initial-sub1b-v1` configs remain valid and immutable.

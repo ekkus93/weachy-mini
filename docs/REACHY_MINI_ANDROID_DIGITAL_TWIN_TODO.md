@@ -2120,9 +2120,9 @@ public interface ITtsProvider : IAsyncDisposable
 - Artifact `9007154955` has digest `sha256:3babe8eea5088de9e6b4f45da8115f562f03b051c233cb31ecedd3310f36f7c3`. Hosted CI run `31212296177` passed static, managed, native/sanitizer, Android, and pinned Reachy-model jobs on the same SHA.
 - No real model was downloaded, selected, recommended, or bundled; RMA-133 still owns benchmark-backed model selection and RMA-134 owns inference. Detailed design and evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.
 
-## RMA-133 — Benchmark and select initial sub-1B model
+## RMA-133 — Benchmark and select initial local model
 
-- [ ] Evaluate Qwen3-0.6B-class and at least one alternative under the selected license constraints.
+- [ ] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.
 - [ ] Measure load time, peak memory, prompt processing, token rate, thermal behavior, and response quality.
 - [ ] Test high-level behavior JSON reliability.
 - [ ] Select a default/recommended model through documented evidence.
