@@ -1,0 +1,70 @@
+name: RMA-133 V6 closure documentation consistency
+
+on:
+  push:
+    branches:
+      - rma133-v6-closure-stage
+    paths:
+      - '.github/workflows/rma133-v6-doc-consistency-stage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-v6-closure-stage
+          fetch-depth: 0
+      - name: Patch historical/current status wording
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected one match for {old!r}, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          roadmap = 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+          replace_once(
+              roadmap,
+              '- Experimental state is mandatory and internally consistent. The only committed example is a synthetic experimental fixture on the reserved `.invalid` domain; RMA-131 selects, downloads, recommends, and bundles no real model.',
+              '- Experimental state is mandatory and internally consistent. At RMA-131 acceptance, the only committed example was a synthetic experimental fixture on the reserved `.invalid` domain; RMA-131 itself selected, downloaded, recommended, and bundled no real model. RMA-133 has since added a separately benchmark-selected real manifest without rewriting the historical RMA-131 acceptance record.',
+          )
+          replace_once(
+              roadmap,
+              '- No real model was downloaded, selected, recommended, or bundled; RMA-133 still owns benchmark-backed model selection and RMA-134 owns inference. Detailed design and evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.',
+              '- At RMA-132 acceptance, no real model had been downloaded, selected, recommended, or bundled; RMA-133 still owned benchmark-backed model selection and RMA-134 owned inference. RMA-133 has since selected Qwen3-0.6B through independent physical-device evidence; RMA-132 package integrity semantics remain unchanged. Detailed design and historical evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.',
+          )
+          replace_once(
+              roadmap,
+              '## RMA-133 — Benchmark and select initial local model\n\n**Status:** Complete (2026-08-08)',
+              '## RMA-133 — Benchmark and select initial local model\n\n**Status:** Closure candidate — V6 selected; exact-SHA closure CI pending',
+          )
+
+          constrained = 'docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md'
+          replace_once(
+              constrained,
+              '**Status:** Ready for implementation / Ralph loop',
+              '**Status:** V6 selected; Phase 9A exact-SHA closure validation pending',
+          )
+          PY
+      - name: Commit non-workflow documentation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'no documentation patch produced' >&2; exit 1; }
+          git commit -m 'RMA-133: reconcile closure documentation state'
+          git push origin HEAD:rma133-v6-closure-stage
