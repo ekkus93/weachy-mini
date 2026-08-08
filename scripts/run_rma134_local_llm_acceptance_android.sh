@@ -272,6 +272,12 @@ if int(report.get("simulation_steps_after", 0)) <= int(report.get("simulation_st
     raise SystemExit(f"RMA-134 authoritative simulation did not advance: {report}")
 if int(report.get("simulation_step_delta", 0)) <= 0:
     raise SystemExit(f"RMA-134 simulation step delta is invalid: {report}")
+if int(report.get("simulation_solver_warnings_after", -1)) != int(
+    report.get("simulation_solver_warnings_before", -2)
+):
+    raise SystemExit(f"RMA-134 simulation solver warnings changed: {report}")
+if float(report.get("simulation_accumulated_lag_delta_seconds", -1.0)) < 0.0:
+    raise SystemExit(f"RMA-134 simulation lag evidence is invalid: {report}")
 PY
 
 capture_diagnostics

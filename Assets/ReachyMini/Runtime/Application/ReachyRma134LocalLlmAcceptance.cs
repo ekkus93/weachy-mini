@@ -11,6 +11,7 @@ using ReachyMini.Interop;
 using ReachyMini.Language;
 using ReachyMini.LocalModels;
 using ReachyMini.Rendering;
+using ReachyMini.Simulation;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
@@ -119,6 +120,12 @@ namespace ReachyMini.AppState
             ReachyProductionAuthoritativeRuntime simulation =
                 await WaitForSimulationAsync();
             ulong simulationStepsBefore = simulation.WorkerStepCount;
+            if (!simulation.TryGetLatestWorkerTiming(
+                    out ReachySimulationTimingSnapshot timingBefore))
+            {
+                throw new InvalidOperationException(
+                    "Authoritative simulation timing was unavailable before local LLM inference.");
+            }
             if (simulation.Status != ReachyProductionRuntimeStatus.Running ||
                 simulationStepsBefore == 0UL)
             {
@@ -217,6 +224,12 @@ namespace ReachyMini.AppState
             stopwatch.Stop();
 
             ulong simulationStepsAfter = simulation.WorkerStepCount;
+            if (!simulation.TryGetLatestWorkerTiming(
+                    out ReachySimulationTimingSnapshot timingAfter))
+            {
+                throw new InvalidOperationException(
+                    "Authoritative simulation timing was unavailable after local LLM inference.");
+            }
             if (simulation.Status != ReachyProductionRuntimeStatus.Running)
             {
                 throw new InvalidOperationException(
@@ -227,6 +240,11 @@ namespace ReachyMini.AppState
             {
                 throw new InvalidOperationException(
                     "Authoritative simulation made no progress while local LLM inference was active.");
+            }
+            if (timingAfter.SolverWarningCount != timingBefore.SolverWarningCount)
+            {
+                throw new InvalidOperationException(
+                    "Authoritative simulation accumulated a solver warning during local LLM inference.");
             }
             if (provider.Availability.State != LocalLlmProviderState.Ready)
             {
@@ -250,6 +268,8 @@ namespace ReachyMini.AppState
                 reused.IntentSpeech,
                 simulationStepsBefore,
                 simulationStepsAfter,
+                timingBefore,
+                timingAfter,
                 stopwatch.Elapsed.TotalSeconds);
 #else
             await Task.Yield();
@@ -445,6 +465,15 @@ namespace ReachyMini.AppState
             public ulong simulation_steps_after;
             public ulong simulation_step_delta;
             public bool simulation_remained_running;
+            public ulong simulation_deadline_misses_before;
+            public ulong simulation_deadline_misses_after;
+            public ulong simulation_deadline_miss_delta;
+            public ulong simulation_solver_warnings_before;
+            public ulong simulation_solver_warnings_after;
+            public double simulation_accumulated_lag_before_seconds;
+            public double simulation_accumulated_lag_after_seconds;
+            public double simulation_accumulated_lag_delta_seconds;
+            public double simulation_maximum_step_duration_seconds;
             public double acceptance_elapsed_seconds;
 
             public static Report Success(
@@ -462,6 +491,8 @@ namespace ReachyMini.AppState
                 string reuseSpeech,
                 ulong simulationStepsBefore,
                 ulong simulationStepsAfter,
+                ReachySimulationTimingSnapshot timingBefore,
+                ReachySimulationTimingSnapshot timingAfter,
                 double elapsedSeconds)
             {
                 return new Report
@@ -488,6 +519,20 @@ namespace ReachyMini.AppState
                     simulation_steps_after = simulationStepsAfter,
                     simulation_step_delta = simulationStepsAfter - simulationStepsBefore,
                     simulation_remained_running = true,
+                    simulation_deadline_misses_before = timingBefore.DeadlineMissCount,
+                    simulation_deadline_misses_after = timingAfter.DeadlineMissCount,
+                    simulation_deadline_miss_delta =
+                        timingAfter.DeadlineMissCount - timingBefore.DeadlineMissCount,
+                    simulation_solver_warnings_before = timingBefore.SolverWarningCount,
+                    simulation_solver_warnings_after = timingAfter.SolverWarningCount,
+                    simulation_accumulated_lag_before_seconds =
+                        timingBefore.AccumulatedLagSeconds,
+                    simulation_accumulated_lag_after_seconds =
+                        timingAfter.AccumulatedLagSeconds,
+                    simulation_accumulated_lag_delta_seconds =
+                        timingAfter.AccumulatedLagSeconds - timingBefore.AccumulatedLagSeconds,
+                    simulation_maximum_step_duration_seconds =
+                        timingAfter.MaximumStepDurationSeconds,
                     acceptance_elapsed_seconds = elapsedSeconds,
                 };
             }
