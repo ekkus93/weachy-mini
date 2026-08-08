@@ -269,6 +269,14 @@ internal static class Program
         Require(blocked.Count == 1 && blocked[0].Failure == LocalLlmFailure.RuntimeFailure, "fault silently retried");
         Require(context.Runtime.LoadCount == 1, "fault triggered an automatic model reload");
 
+        LocalLlmOperationResult ordinaryLoad = await context.Provider.LoadAsync(
+                CancellationToken.None)
+            .ConfigureAwait(false);
+        Require(
+            !ordinaryLoad.Succeeded && ordinaryLoad.Failure == LocalLlmFailure.RuntimeFailure,
+            "ordinary LoadAsync recovered a retained runtime fault");
+        Require(context.Runtime.LoadCount == 1, "ordinary LoadAsync reloaded a faulted provider");
+
         LocalLlmOperationResult reload = await context.Provider.ReloadAsync(CancellationToken.None)
             .ConfigureAwait(false);
         Require(reload.Succeeded && context.Runtime.LoadCount == 2, "explicit reload did not recover provider");

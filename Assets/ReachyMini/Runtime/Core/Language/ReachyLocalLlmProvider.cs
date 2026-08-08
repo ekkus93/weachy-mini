@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -323,6 +324,12 @@ namespace ReachyMini.Language
                     return LocalLlmOperationResult.Failed(
                         LocalLlmFailure.Busy,
                         "The model cannot be loaded or reloaded during active generation.");
+                }
+                if (!reload && state == LocalLlmProviderState.Faulted)
+                {
+                    return LocalLlmOperationResult.Failed(
+                        LocalLlmFailure.RuntimeFailure,
+                        "The local LLM provider is faulted; explicit ReloadAsync is required.");
                 }
                 if (!reload && modelSession != null && state == LocalLlmProviderState.Ready)
                 {
@@ -769,10 +776,10 @@ namespace ReachyMini.Language
 
         private static string? DrainCancelledGeneration(ILocalLlmGeneration generation)
         {
-            DateTime deadline = DateTime.UtcNow + CancellationDrainTimeout;
+            var stopwatch = Stopwatch.StartNew();
             try
             {
-                while (DateTime.UtcNow < deadline)
+                while (stopwatch.Elapsed < CancellationDrainTimeout)
                 {
                     LocalLlmRuntimeEvent item = generation.Poll();
                     if (item.Type == LocalLlmRuntimeEventType.Cancelled ||
