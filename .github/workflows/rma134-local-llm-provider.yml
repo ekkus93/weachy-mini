@@ -1,0 +1,180 @@
+name: RMA-134 local LLM provider
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlm*.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'benchmarks/rma133/system_prompt-v4.txt'
+      - 'benchmarks/rma133/behavior-output-v1.gbnf'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md'
+      - 'docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma134-local-llm-provider.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlm*.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'benchmarks/rma133/system_prompt-v4.txt'
+      - 'benchmarks/rma133/behavior-output-v1.gbnf'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md'
+      - 'docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma134-local-llm-provider.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma134-local-llm-provider-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Validate RMA-134 contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-134 Local LLM Provider",
+              description: "Local LLM provider validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run managed local LLM provider contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          --configuration Release
+
+      - name: Run deterministic local LLM static contracts
+        run: python3 scripts/tests/test_rma134_local_llm_provider.py
+
+      - name: Compile Python contract
+        run: python3 -m py_compile scripts/tests/test_rma134_local_llm_provider.py
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="artifacts/rma134-local-llm-provider"
+          mkdir -p "$OUT"
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmContracts.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmBehaviorContract.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmRuntimeContracts.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLlamaLocalLlmRuntime.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs \
+            Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs \
+            Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs \
+            managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
+            scripts/tests/test_rma134_local_llm_provider.py \
+            benchmarks/rma133/system_prompt-v4.txt \
+            benchmarks/rma133/behavior-output-v1.gbnf \
+            models/manifests/qwen3-0.6b-q4-k-m.local-llm.json \
+            docs/RMA_134_LOCAL_LLM_PROVIDER_SPEC_2026-08-08.md \
+            docs/RMA_134_LOCAL_LLM_PROVIDER_TODO_2026-08-08.md \
+            > "$OUT/source-sha256.txt"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "rma": "RMA-134",
+              "managed_contract_groups": 13,
+              "static_contract_groups": 7,
+              "reachy_llama_abi": 2,
+              "selected_model_id": "qwen3-0.6b",
+              "selected_artifact_sha256": "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e",
+              "constrained_generation_only": True,
+              "gguf_embedded_chat_template": True,
+              "json_repair": False,
+              "history_truncation": False,
+              "hidden_request_queue": False,
+              "automatic_model_or_provider_fallback": False,
+              "cloud_fallback": False,
+              "adaptive_thermal_policy_in_rma134": False,
+          }
+          Path("artifacts/rma134-local-llm-provider/report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload RMA-134 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma134-local-llm-provider-${{ github.sha }}
+          path: artifacts/rma134-local-llm-provider
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-134 Local LLM Provider",
+              description: succeeded
+                ? "Local LLM provider contracts passed"
+                : "Local LLM provider contracts failed"
+            });
