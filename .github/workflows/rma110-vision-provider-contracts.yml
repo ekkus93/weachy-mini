@@ -12,6 +12,16 @@ on:
       - 'docs/architecture/VISION_PROVIDER_CONTRACTS.md'
       - 'docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma110-vision-provider-contracts.yml'
+      - 'Assets/ReachyMini/Runtime/Core/Perception/**'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs'
+      - 'managed/ReachyMini.Camera.Tests/Program.cs'
+      - 'managed/ReachyMini.Camera.Tests/Rma110*.cs'
+      - 'docs/architecture/VISION_PROVIDER_CONTRACTS.md'
+      - 'docs/validation/RMA_110_VISION_PROVIDER_CONTRACTS_VALIDATION_2026-08-05.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
   workflow_dispatch:
 
 permissions:
@@ -130,6 +140,8 @@ jobs:
               'VisionOperationStatus.Superseded',
               'requiresProviderReset: true',
               'networkDisclosureAcknowledged',
+              'AutomaticProviderFallbackEnabled => false',
+              'AutomaticRetryEnabled => false',
           ]
           for token in required_contracts:
               if token not in contracts:
@@ -198,7 +210,11 @@ jobs:
               'catch {',
               'Task.Run(',
               'Thread.Sleep(',
-              'Retry',
+              'AutomaticProviderFallbackEnabled => true',
+              'AutomaticRetryEnabled => true',
+              'Retry(',
+              'RetryAsync(',
+              'RetryPolicy',
               'retryCount',
               'fallbackProvider',
           )
@@ -227,6 +243,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
+        with:
+          # Intentionally omitted; bash step uses env and run only.
+          dummy: unused
         run: |
           set -euo pipefail
           python3 - <<'PY' > "${RUNNER_TEMP}/status.json"
