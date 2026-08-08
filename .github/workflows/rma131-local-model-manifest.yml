@@ -9,6 +9,7 @@ on:
       - 'managed/ReachyMini.LocalModelManifest.Tests/**'
       - 'models/manifests/local-llm-manifest.schema.json'
       - 'models/manifests/examples/rma131-synthetic-experimental.local-llm.json'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'models/manifests/README.md'
       - 'scripts/validate_local_llm_manifest.py'
       - 'scripts/tests/test_rma131_local_model_manifest.py'
@@ -22,6 +23,7 @@ on:
       - 'managed/ReachyMini.LocalModelManifest.Tests/**'
       - 'models/manifests/local-llm-manifest.schema.json'
       - 'models/manifests/examples/rma131-synthetic-experimental.local-llm.json'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
       - 'models/manifests/README.md'
       - 'scripts/validate_local_llm_manifest.py'
       - 'scripts/tests/test_rma131_local_model_manifest.py'
@@ -91,16 +93,25 @@ jobs:
       - name: Run deterministic JSON-manifest contracts
         run: python3 scripts/tests/test_rma131_local_model_manifest.py
 
-      - name: Validate committed synthetic manifest without network
-        run: >-
-          python3 scripts/validate_local_llm_manifest.py
-          models/manifests/examples/rma131-synthetic-experimental.local-llm.json
-
-      - name: Parse manifest schema and fixture
+      - name: Validate committed manifests without network
+        shell: bash
         run: |
+          set -euo pipefail
+          python3 scripts/validate_local_llm_manifest.py \
+            models/manifests/examples/rma131-synthetic-experimental.local-llm.json
+          python3 scripts/validate_local_llm_manifest.py \
+            models/manifests/qwen3-0.6b-q4-k-m.local-llm.json
+
+      - name: Parse manifest schema and fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 -m json.tool models/manifests/local-llm-manifest.schema.json > /dev/null
           python3 -m json.tool \
             models/manifests/examples/rma131-synthetic-experimental.local-llm.json \
+            > /dev/null
+          python3 -m json.tool \
+            models/manifests/qwen3-0.6b-q4-k-m.local-llm.json \
             > /dev/null
 
       - name: Create exact-SHA evidence
@@ -115,6 +126,7 @@ jobs:
             managed/ReachyMini.LocalModelManifest.Tests/ReachyMini.LocalModelManifest.Tests.csproj \
             models/manifests/local-llm-manifest.schema.json \
             models/manifests/examples/rma131-synthetic-experimental.local-llm.json \
+            models/manifests/qwen3-0.6b-q4-k-m.local-llm.json \
             scripts/validate_local_llm_manifest.py \
             scripts/tests/test_rma131_local_model_manifest.py \
             docs/architecture/LOCAL_LLM_MODEL_MANIFEST.md \
@@ -131,13 +143,15 @@ jobs:
               "rma": "RMA-131",
               "schema_version": 1,
               "runtime_id": "reachy_llama",
-              "runtime_abi_version": 1,
+              "runtime_abi_version": 2,
               "android_abis": ["arm64-v8a"],
               "minimum_android_api_floor": 26,
               "managed_contract_groups": 7,
-              "json_contract_groups": 7,
-              "synthetic_fixture_only": True,
-              "real_model_selected": False,
+              "json_contract_groups": 8,
+              "synthetic_fixture_only": False,
+              "real_model_selected": True,
+              "selected_model_id": "qwen3-0.6b",
+              "selected_artifact_sha256": "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e",
               "model_payload_bundled": False,
               "automatic_download_or_install": False,
               "network_required_for_local_inference": False,
