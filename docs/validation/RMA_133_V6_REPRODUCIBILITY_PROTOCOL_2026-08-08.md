@@ -1,6 +1,6 @@
 # RMA-133 V6 physical reproducibility protocol — 2026-08-08
 
-**Status:** Protocol candidate
+**Status:** Protocol candidate v2
 
 ## Purpose
 
@@ -67,6 +67,7 @@ After the cool/stable precondition passes, the runner performs only the already-
 The run must:
 
 - use the frozen V6 Android binary and production ABI-2 runtime;
+- preserve the frozen V6 free-space guard before transferring the selected GGUF;
 - verify the exact Qwen3 artifact SHA-256 and byte size on host and device;
 - execute the same malformed-grammar negative control and require status `16` with zero emitted response bytes;
 - execute all 12 frozen V6 behavior cases using the unchanged V6 prompt, grammar, runtime profile, and scorer;
@@ -89,6 +90,14 @@ The Qwen3 report must still satisfy the original V6 gates without modification:
 - constrained-generation evidence valid
 
 No threshold reduction, JSON repair, fence stripping, unconstrained retry, model substitution, provider fallback, or post-hoc repair is permitted.
+
+## Protocol-development evidence
+
+The first staging attempt used workflow run `31269855994`, physical job `93133888248`, on source SHA `d5c6d3442bc1c0cbda05a2574d5322d2a5843cbf`. Hosted validation proved the frozen V6 benchmark/runtime paths were byte-identical to the accepted source and the Android ABI-2 runtime/benchmark build passed.
+
+The physical attempt stopped **before temperature sampling or inference** because the stale-process probe matched its own remote shell command. The probe contained the literal glob `*rma133_benchmark_v6*`; therefore every verification invocation created new matching shell PIDs. The job correctly failed closed and uploaded artifact `9025291303`; it is protocol-development evidence only and says nothing about candidate reproducibility.
+
+Protocol candidate v2 fixes that defect by using the self-nonmatching glob `*rma133_benchmark_v[6]*`, adds a regression proving the scan command cannot match its own literal command line, restores the frozen V6 device free-space guard, and passes Ruff 0.12.0 formatting/lint plus the reproducibility unit contracts. No frozen V6 benchmark/runtime input changed.
 
 ## Interpretation
 
