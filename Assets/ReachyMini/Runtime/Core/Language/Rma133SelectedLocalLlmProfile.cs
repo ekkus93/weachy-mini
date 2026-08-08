@@ -109,7 +109,7 @@ namespace ReachyMini.Language
                 exactGrammar,
                 GrammarRoot,
                 UserPromptSuffix,
-                LocalLlmExecutionProfile.CreateRma133SelectedProfile(),
+                LocalLlmExecutionProfile.CreateInitialProductCoexistenceProfile(),
                 maximumCommittedHistoryTurns: 8,
                 managedEventQueueCapacity: 64);
         }

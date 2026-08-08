@@ -81,6 +81,21 @@ namespace ReachyMini.Language
                 seed: 133U,
                 streamQueueCapacity: 64U);
         }
+
+        public static LocalLlmExecutionProfile CreateInitialProductCoexistenceProfile()
+        {
+            return new LocalLlmExecutionProfile(
+                contextTokens: 2048U,
+                batchTokens: 256U,
+                microBatchTokens: 64U,
+                maximumGeneratedTokens: 128U,
+                threads: 2,
+                batchThreads: 2,
+                temperature: 0.0F,
+                minimumProbability: 0.0F,
+                seed: 133U,
+                streamQueueCapacity: 64U);
+        }
     }
 
     public sealed class LocalLlmProviderConfiguration

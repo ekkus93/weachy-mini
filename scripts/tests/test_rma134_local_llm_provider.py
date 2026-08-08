@@ -34,28 +34,35 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
             (ROOT / constraint["grammar_path"]).read_bytes(),
         )
 
-    def test_selected_profile_is_exact_v6_profile(self) -> None:
-        source = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(encoding="utf-8")
-        expected = (
-            "contextTokens: 2048U",
-            "batchTokens: 256U",
-            "microBatchTokens: 64U",
-            "maximumGeneratedTokens: 128U",
-            "threads: 4",
-            "batchThreads: 4",
-            "temperature: 0.0F",
-            "minimumProbability: 0.0F",
-            "seed: 133U",
-            "streamQueueCapacity: 64U",
+    def test_v6_profile_is_preserved_and_product_profile_is_conservative(self) -> None:
+        source = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(
+            encoding="utf-8"
         )
-        for token in expected:
-            self.assertIn(token, source)
+        selected = (LANGUAGE_DIR / "Rma133SelectedLocalLlmProfile.cs").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("CreateRma133SelectedProfile", source)
+        self.assertIn("threads: 4", source)
+        self.assertIn("batchThreads: 4", source)
+        self.assertIn("CreateInitialProductCoexistenceProfile", source)
+        self.assertIn("threads: 2", source)
+        self.assertIn("batchThreads: 2", source)
+        self.assertIn(
+            "LocalLlmExecutionProfile.CreateInitialProductCoexistenceProfile()",
+            selected,
+        )
+        self.assertIn("RecommendedThreads = 4", selected)
 
     def test_product_runtime_exposes_only_constrained_generation(self) -> None:
         native = (INTEROP_DIR / "NativeReachyLlama.cs").read_text(encoding="utf-8")
         runtime = (INTEROP_DIR / "ReachyLlamaNativeRuntime.cs").read_text(encoding="utf-8")
-        contracts = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(encoding="utf-8")
-        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(encoding="utf-8")
+        contracts = (LANGUAGE_DIR / "ReachyLocalLlmRuntimeContracts.cs").read_text(
+            encoding="utf-8"
+        )
+        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(
+            encoding="utf-8"
+        )
         combined = "\n".join((native, runtime, contracts, provider))
 
         self.assertIn("reachy_llama_generation_start_constrained", combined)
@@ -96,7 +103,9 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
         )
 
     def test_transaction_and_failure_contracts_are_present(self) -> None:
-        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(encoding="utf-8")
+        provider = (LANGUAGE_DIR / "ReachyLocalLlmProvider.cs").read_text(
+            encoding="utf-8"
+        )
         required = (
             "LocalLlmBehaviorIntentParser.Parse",
             "CommitValidatedTurn",
