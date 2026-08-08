@@ -5,7 +5,6 @@ on:
     branches:
       - rma133-v6-closure-stage
     paths:
-      - 'scripts/rma133_closure_stage.py'
       - '.github/workflows/rma133-v6-closure-stage.yml'
 
 permissions:
@@ -65,15 +64,20 @@ jobs:
           python3 scripts/tests/test_rma131_local_model_manifest.py
           dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj --configuration Release --warnaserror
           dotnet run --project managed/ReachyMini.LocalModelManifest.Tests/ReachyMini.LocalModelManifest.Tests.csproj --configuration Release
-      - name: Remove staging helpers and commit validated closure
+      - name: Commit validated non-workflow closure changes
         shell: bash
         run: |
           set -euo pipefail
-          rm scripts/rma133_closure_stage.py .github/workflows/rma133-v6-closure-stage.yml
+          git restore --source=HEAD -- .github/workflows/rma131-local-model-manifest.yml
+          rm scripts/rma133_closure_stage.py
           git config user.name 'Phillip Chin'
           git config user.email 'ekkus93@gmail.com'
           git add -A
           git diff --cached --check
           git diff --cached --quiet && { echo 'no closure changes produced' >&2; exit 1; }
+          if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
+            echo 'runner commit unexpectedly contains workflow changes' >&2
+            exit 1
+          fi
           git commit -m 'RMA-133: close V6 model selection'
           git push origin HEAD:rma133-v6-closure-stage
