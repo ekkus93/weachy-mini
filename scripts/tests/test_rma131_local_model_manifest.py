@@ -236,7 +236,6 @@ def test_device_compatibility_rejections() -> None:
     )
 
 
-
 def test_selected_manifest_matches_frozen_v6() -> None:
     selected = json.loads(SELECTED_PATH.read_text(encoding="utf-8"))
     config = json.loads(V6_CONFIG_PATH.read_text(encoding="utf-8"))
@@ -253,19 +252,28 @@ def test_selected_manifest_matches_frozen_v6() -> None:
         raise AssertionError("Selected manifest artifact size does not match V6.")
     if selected["artifact"]["sha256"] != candidate["artifact"]["sha256"]:
         raise AssertionError("Selected manifest artifact hash does not match V6.")
-    if selected["runtime"] != {"runtime_id": "reachy_llama", "abi_version": 2, "requires_network_access": False}:
+    if selected["runtime"] != {
+        "runtime_id": "reachy_llama",
+        "abi_version": 2,
+        "requires_network_access": False,
+    }:
         raise AssertionError("Selected manifest must require only local reachy_llama ABI 2.")
     if selected["device_compatibility"]["reachy_llama_abi_version"] != 2:
         raise AssertionError("Selected manifest device compatibility must require ABI 2.")
     inference = selected["inference"]
     if inference["context_limit_tokens"] != 40960:
         raise AssertionError("Selected manifest context must match measured Qwen3 metadata.")
-    if inference["memory_estimate"] != {"peak_ram_bytes": 740380672, "basis_context_tokens": 2048, "basis_batch_tokens": 256}:
+    if inference["memory_estimate"] != {
+        "peak_ram_bytes": 740380672,
+        "basis_context_tokens": 2048,
+        "basis_batch_tokens": 256,
+    }:
         raise AssertionError("Selected manifest memory profile must match V6 evidence.")
     if inference["recommended_threads"] != 4:
         raise AssertionError("Selected manifest thread recommendation must match V6.")
     if not inference["chat_template"].strip() or not inference["stop_tokens"]:
         raise AssertionError("Selected manifest must contain explicit tokenizer/chat metadata.")
+
 
 def test_ui_has_no_candidate_model_ids() -> None:
     application_root = ROOT / "Assets/ReachyMini/Runtime/Application"
@@ -293,7 +301,10 @@ def main() -> int:
     )
     for test in tests:
         test()
-    print("RMA-131 local-model JSON manifest contracts passed (8 groups; synthetic + selected manifests).")
+    print(
+        "RMA-131 local-model JSON manifest contracts passed "
+        "(8 groups; synthetic + selected manifests)."
+    )
     return 0
 
 
