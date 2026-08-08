@@ -155,40 +155,61 @@ internal static class Program
 
     private static async Task TestWorkerPromptAndSuccessAsync()
     {
-        int callerThread = Environment.CurrentManagedThreadId;
-        using FakeRuntime runtime = new FakeRuntime();
-        runtime.EnqueueText(1UL, ValidIntent.Substring(0, 45));
-        runtime.EnqueueText(2UL, ValidIntent.Substring(45));
-        runtime.EnqueueCompleted(3UL);
+        using FakeRuntime runtime = new FakeRuntime { BlockLoad = true };
+        Task<LocalLlmProviderCreationResult> creation = LocalLlmProvider.CreateForTestingAsync(
+            CreateManifest(),
+            CreateApprovedArtifact(),
+            LocalLlmExecutionProfile.CreateRma133V6Baseline(),
+            runtime,
+            CancellationToken.None);
+        Require(runtime.LoadEntered.Wait(TimeSpan.FromSeconds(5)), "Worker model load never entered.");
+        Require(!creation.IsCompleted, "Provider creation blocked through native model load.");
+        runtime.LoadRelease.Set();
+        LocalLlmProviderCreationResult creationResult = await creation.ConfigureAwait(false);
+        Require(creationResult.Status == LocalLlmProviderCreationStatus.Created,
+            "Provider creation failed: " + creationResult.Detail);
+        LocalLlmProvider provider = creationResult.Provider ??
+            throw new InvalidOperationException("Created provider result had no provider.");
 
-        await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
-        Require(runtime.LoadThreadId != callerThread, "Model load ran on the caller thread.");
+        try
+        {
+            runtime.BlockStart = true;
+            runtime.EnqueueText(1UL, ValidIntent.Substring(0, 45));
+            runtime.EnqueueText(2UL, ValidIntent.Substring(45));
+            runtime.EnqueueCompleted(3UL);
+            CollectingSink sink = new CollectingSink();
+            Task<LocalLlmGenerationResult> generation = provider.GenerateAsync(
+                Request("req-success", "Please say hello."),
+                sink,
+                CancellationToken.None);
+            Require(runtime.StartEntered.Wait(TimeSpan.FromSeconds(5)), "Worker generation start never entered.");
+            Require(!generation.IsCompleted, "GenerateAsync blocked through native generation start.");
+            runtime.StartRelease.Set();
+            LocalLlmGenerationResult result = await generation.ConfigureAwait(false);
 
-        CollectingSink sink = new CollectingSink();
-        LocalLlmGenerationResult result = await provider.GenerateAsync(
-            Request("req-success", "Please say hello."),
-            sink,
-            CancellationToken.None).ConfigureAwait(false);
-
-        Require(result.Status == LocalLlmGenerationStatus.Succeeded, "Valid generation did not succeed.");
-        Require(result.Intent?.Speech == "Hello.", "Validated intent content changed.");
-        Require(runtime.StartThreadId != callerThread, "Generation start ran on the caller thread.");
-        Require(runtime.StartCount == 1, "Constrained generation did not start exactly once.");
-        Require(runtime.LastChatTemplate == null, "Provider did not use the GGUF-embedded chat template.");
-        Require(runtime.LastMessages.Count == 2, "Provider constructed the wrong chat-message count.");
-        Require(runtime.LastMessages[0].Role == "system", "Provider did not inject the frozen system message.");
-        Require(runtime.LastMessages[0].Content == LocalLlmBehaviorContract.SystemPrompt,
-            "Provider system prompt drifted from the frozen RMA-133 bytes.");
-        Require(runtime.LastMessages[1].Role == "user", "Final request message role changed.");
-        Require(runtime.LastMessages[1].Content == "Please say hello.\n/no_think",
-            "Qwen3 no-think suffix was not appended exactly as accepted in RMA-133.");
-        Require(runtime.LastGrammar == LocalLlmBehaviorContract.Grammar && runtime.LastGrammarRoot == "root",
-            "Provider did not use the frozen GBNF contract.");
-        Require(sink.Text == ValidIntent, "Stream fragments were dropped, changed, or reordered.");
-        Require(sink.Events.Count == 3 && sink.Events[2].Type == LocalLlmStreamEventType.Completed,
-            "Terminal validated stream event was not delivered.");
-        Require(!sink.Events[0].IsTrustedExecutableOutput,
-            "Partial text was incorrectly marked as executable/trusted.");
+            Require(result.Status == LocalLlmGenerationStatus.Succeeded, "Valid generation did not succeed.");
+            Require(result.Intent?.Speech == "Hello.", "Validated intent content changed.");
+            Require(runtime.StartCount == 1, "Constrained generation did not start exactly once.");
+            Require(runtime.LastChatTemplate == null, "Provider did not use the GGUF-embedded chat template.");
+            Require(runtime.LastMessages.Count == 2, "Provider constructed the wrong chat-message count.");
+            Require(runtime.LastMessages[0].Role == "system", "Provider did not inject the frozen system message.");
+            Require(runtime.LastMessages[0].Content == LocalLlmBehaviorContract.SystemPrompt,
+                "Provider system prompt drifted from the frozen RMA-133 bytes.");
+            Require(runtime.LastMessages[1].Role == "user", "Final request message role changed.");
+            Require(runtime.LastMessages[1].Content == "Please say hello.\n/no_think",
+                "Qwen3 no-think suffix was not appended exactly as accepted in RMA-133.");
+            Require(runtime.LastGrammar == LocalLlmBehaviorContract.Grammar && runtime.LastGrammarRoot == "root",
+                "Provider did not use the frozen GBNF contract.");
+            Require(sink.Text == ValidIntent, "Stream fragments were dropped, changed, or reordered.");
+            Require(sink.Events.Count == 3 && sink.Events[2].Type == LocalLlmStreamEventType.Completed,
+                "Terminal validated stream event was not delivered.");
+            Require(!sink.Events[0].IsTrustedExecutableOutput,
+                "Partial text was incorrectly marked as executable/trusted.");
+        }
+        finally
+        {
+            await provider.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     private static async Task TestContextPreflightAsync()
@@ -210,18 +231,13 @@ internal static class Program
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
         using CancellationTokenSource cancellation = new CancellationTokenSource();
         Task<LocalLlmGenerationResult> first = provider.GenerateAsync(
-            Request("req-first", "Wait here."),
-            new CollectingSink(),
-            cancellation.Token);
+            Request("req-first", "Wait here."), new CollectingSink(), cancellation.Token);
         await runtime.GenerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-
         LocalLlmGenerationResult busy = await provider.GenerateAsync(
-            Request("req-busy", "Second request."),
-            new CollectingSink(),
-            CancellationToken.None).ConfigureAwait(false);
+            Request("req-busy", "Second request."), new CollectingSink(), CancellationToken.None)
+            .ConfigureAwait(false);
         Require(busy.Status == LocalLlmGenerationStatus.Busy, "Concurrent request was not rejected as Busy.");
         Require(runtime.StartCount == 1, "Busy request was queued or started implicitly.");
-
         cancellation.Cancel();
         LocalLlmGenerationResult cancelled = await first.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         Require(cancelled.Status == LocalLlmGenerationStatus.Cancelled, "Cancellation did not remain explicit.");
@@ -239,14 +255,11 @@ internal static class Program
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
         CollectingSink sink = new CollectingSink();
         Task<LocalLlmGenerationResult> generation = provider.GenerateAsync(
-            Request("req-reset", "Track this conversation."),
-            sink,
-            CancellationToken.None);
+            Request("req-reset", "Track this conversation."), sink, CancellationToken.None);
         await runtime.GenerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         ulong priorEpoch = provider.ConversationEpoch;
         ulong newEpoch = provider.ResetConversation();
         Require(newEpoch != priorEpoch, "Conversation reset did not rotate the epoch.");
-
         LocalLlmGenerationResult result = await generation.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.Superseded, "Reset generation was not superseded.");
         Require(!sink.Text.Contains("STALE", StringComparison.Ordinal), "Post-reset stale text reached the stream sink.");
@@ -260,9 +273,8 @@ internal static class Program
         runtime.EnqueueCompleted(2UL);
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
         LocalLlmGenerationResult result = await provider.GenerateAsync(
-            Request("req-invalid", "Return an intent."),
-            new CollectingSink(),
-            CancellationToken.None).ConfigureAwait(false);
+            Request("req-invalid", "Return an intent."), new CollectingSink(), CancellationToken.None)
+            .ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.InvalidIntent, "Fenced JSON was repaired or accepted.");
         Require(result.Intent == null, "Invalid intent produced executable intent data.");
     }
@@ -270,16 +282,14 @@ internal static class Program
     private static async Task TestOutputLimitAsync()
     {
         LocalLlmExecutionProfile profile = new LocalLlmExecutionProfile(
-            2048, 256, 64, 128, 4, 4, 0.0F, 0.0F, 133U, 64,
-            maximumResponseUtf8Bytes: 8);
+            2048, 256, 64, 128, 4, 4, 0.0F, 0.0F, 133U, 64, maximumResponseUtf8Bytes: 8);
         using FakeRuntime runtime = new FakeRuntime();
         runtime.EnqueueText(1UL, "123456789");
         runtime.EnqueueCompleted(2UL);
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime, profile).ConfigureAwait(false);
         LocalLlmGenerationResult result = await provider.GenerateAsync(
-            Request("req-output-limit", "Generate."),
-            new CollectingSink(),
-            CancellationToken.None).ConfigureAwait(false);
+            Request("req-output-limit", "Generate."), new CollectingSink(), CancellationToken.None)
+            .ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.OutputLimit, "Managed output-byte limit was not enforced.");
         Require(runtime.CancelCount >= 1, "Output-limit breach did not cancel native generation.");
         Require(runtime.ReleaseCount == 1, "Output-limit generation was not released.");
@@ -321,9 +331,8 @@ internal static class Program
         runtime.EnqueueError(1UL, 11, "decode failed");
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
         LocalLlmGenerationResult result = await provider.GenerateAsync(
-            Request("req-runtime-error", "Generate."),
-            new CollectingSink(),
-            CancellationToken.None).ConfigureAwait(false);
+            Request("req-runtime-error", "Generate."), new CollectingSink(), CancellationToken.None)
+            .ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.RuntimeFailure, "Native terminal error was not preserved.");
         Require(result.NativeStatus == 11, "Native terminal status was lost.");
         Require(result.Detail.Contains("decode failed", StringComparison.Ordinal), "Native terminal detail was lost.");
@@ -342,7 +351,6 @@ internal static class Program
             LocalLlmReloadResult failed = await provider.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
             Require(failed.Status == LocalLlmReloadStatus.RuntimeFailure, "Reload failure was hidden.");
             Require(provider.State == LocalLlmProviderState.Faulted, "Failed reload did not fault provider state.");
-
             LocalLlmReloadResult recovered = await provider.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
             Require(recovered.Status == LocalLlmReloadStatus.Reloaded,
                 "Provider did not recover in-process on explicit reload.");
@@ -432,9 +440,7 @@ internal static class Program
     private sealed class CollectingSink : ILocalLlmStreamSink
     {
         private readonly List<LocalLlmStreamEvent> events = new List<LocalLlmStreamEvent>();
-
         internal List<LocalLlmStreamEvent> Events => events;
-
         internal string Text
         {
             get
@@ -462,11 +468,7 @@ internal static class Program
     private sealed class ThrowingSink : ILocalLlmStreamSink
     {
         private readonly LocalLlmStreamEventType throwOn;
-
-        internal ThrowingSink(LocalLlmStreamEventType throwOn)
-        {
-            this.throwOn = throwOn;
-        }
+        internal ThrowingSink(LocalLlmStreamEventType throwOn) => this.throwOn = throwOn;
 
         public ValueTask OnEventAsync(LocalLlmStreamEvent streamEvent, CancellationToken cancellationToken)
         {
@@ -488,6 +490,8 @@ internal static class Program
 
         internal uint AbiVersion { get; set; } = 2U;
         internal int TokenCount { get; set; } = 100;
+        internal bool BlockLoad { get; set; }
+        internal bool BlockStart { get; set; }
         internal bool BlockUntilCancel { get; set; }
         internal bool EmitStaleTextAfterCancel { get; set; }
         internal int LoadCount { get; private set; }
@@ -495,12 +499,14 @@ internal static class Program
         internal int StartCount { get; private set; }
         internal int CancelCount { get; private set; }
         internal int ReleaseCount { get; private set; }
-        internal int LoadThreadId { get; private set; }
-        internal int StartThreadId { get; private set; }
         internal string? LastChatTemplate { get; private set; }
         internal List<LocalLlmRuntimeChatMessage> LastMessages { get; } = new List<LocalLlmRuntimeChatMessage>();
         internal string LastGrammar { get; private set; } = string.Empty;
         internal string LastGrammarRoot { get; private set; } = string.Empty;
+        internal ManualResetEventSlim LoadEntered { get; } = new ManualResetEventSlim(false);
+        internal ManualResetEventSlim LoadRelease { get; } = new ManualResetEventSlim(false);
+        internal ManualResetEventSlim StartEntered { get; } = new ManualResetEventSlim(false);
+        internal ManualResetEventSlim StartRelease { get; } = new ManualResetEventSlim(false);
         internal TaskCompletionSource<bool> GenerationStarted { get; } =
             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -511,7 +517,11 @@ internal static class Program
             Require(Path.IsPathRooted(fullPath), "Provider passed a non-rooted approved model path.");
             Require(checkTensors, "Provider disabled tensor checking.");
             ++LoadCount;
-            LoadThreadId = Environment.CurrentManagedThreadId;
+            LoadEntered.Set();
+            if (BlockLoad && !LoadRelease.Wait(TimeSpan.FromSeconds(5)))
+            {
+                return new LocalLlmRuntimeLoadResult(14, "synthetic load gate timed out", 0UL);
+            }
             if (loadResults.Count > 0)
             {
                 return loadResults.Dequeue();
@@ -559,10 +569,14 @@ internal static class Program
             Require(prompt == "templated-prompt", "Generation did not consume exact templated prompt.");
             Require(profile.ContextTokens == 2048, "Unexpected generation profile reached fake runtime.");
             ++StartCount;
-            StartThreadId = Environment.CurrentManagedThreadId;
             LastGrammar = grammar;
             LastGrammarRoot = grammarRoot;
+            StartEntered.Set();
             GenerationStarted.TrySetResult(true);
+            if (BlockStart && !StartRelease.Wait(TimeSpan.FromSeconds(5)))
+            {
+                return new LocalLlmRuntimeStartResult(14, "synthetic start gate timed out", 0UL);
+            }
             return new LocalLlmRuntimeStartResult(0, string.Empty, 5000UL + (ulong)StartCount);
         }
 
@@ -616,31 +630,27 @@ internal static class Program
             return new LocalLlmRuntimeCallResult(0, string.Empty);
         }
 
-        internal void EnqueueLoad(int status, ulong handle, string detail)
-        {
+        internal void EnqueueLoad(int status, ulong handle, string detail) =>
             loadResults.Enqueue(new LocalLlmRuntimeLoadResult(status, detail, handle));
-        }
 
-        internal void EnqueueText(ulong sequence, string text)
-        {
+        internal void EnqueueText(ulong sequence, string text) =>
             polls.Enqueue(new LocalLlmRuntimePollResult(
                 0, string.Empty, LocalLlmRuntimePollKind.Text, 0, sequence, text));
-        }
 
-        internal void EnqueueCompleted(ulong sequence)
-        {
+        internal void EnqueueCompleted(ulong sequence) =>
             polls.Enqueue(new LocalLlmRuntimePollResult(
                 0, string.Empty, LocalLlmRuntimePollKind.Completed, 0, sequence, string.Empty));
-        }
 
-        internal void EnqueueError(ulong sequence, int eventStatus, string detail)
-        {
+        internal void EnqueueError(ulong sequence, int eventStatus, string detail) =>
             polls.Enqueue(new LocalLlmRuntimePollResult(
                 0, detail, LocalLlmRuntimePollKind.Error, eventStatus, sequence, string.Empty));
-        }
 
         public void Dispose()
         {
+            LoadEntered.Dispose();
+            LoadRelease.Dispose();
+            StartEntered.Dispose();
+            StartRelease.Dispose();
             GC.SuppressFinalize(this);
         }
     }
