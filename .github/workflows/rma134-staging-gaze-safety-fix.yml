@@ -1,0 +1,128 @@
+name: RMA-134 staging gaze safety fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-gaze-safety-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+      - name: Apply semantic gaze and exact-history fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path_text: str, old: str, new: str) -> None:
+              path = Path(path_text)
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'Missing expected contract in {path}: {old[:100]!r}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          behavior = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmBehaviorIntent.cs'
+          replace(
+              behavior,
+              '        private static bool IsEntityId(string value)',
+              '        internal static bool IsEntityId(string value)')
+
+          contracts = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmContracts.cs'
+          replace(
+              contracts,
+              '''        public LocalLlmRequest(\n            string requestId,\n            string userText,\n            TimeSpan timeout)''',
+              '''        public LocalLlmRequest(\n            string requestId,\n            string userText,\n            TimeSpan timeout,\n            IEnumerable<string>? validTrackedEntityIds = null)''')
+          replace(
+              contracts,
+              '''            RequestId = requestId;\n            UserText = userText;\n            Timeout = timeout;''',
+              '''            RequestId = requestId;\n            UserText = userText;\n            Timeout = timeout;\n            ValidTrackedEntityIds = CopyValidTrackedEntityIds(validTrackedEntityIds);''')
+          replace(
+              contracts,
+              '''        public TimeSpan Timeout { get; }\n    }''',
+              '''        public TimeSpan Timeout { get; }\n\n        public IReadOnlyList<string> ValidTrackedEntityIds { get; }\n\n        internal bool IsTrackedEntityAllowed(string entityId)\n        {\n            for (int index = 0; index < ValidTrackedEntityIds.Count; ++index)\n            {\n                if (string.Equals(\n                        ValidTrackedEntityIds[index],\n                        entityId,\n                        StringComparison.Ordinal))\n                {\n                    return true;\n                }\n            }\n            return false;\n        }\n\n        private static string[] CopyValidTrackedEntityIds(\n            IEnumerable<string>? validTrackedEntityIds)\n        {\n            if (validTrackedEntityIds == null)\n            {\n                return Array.Empty<string>();\n            }\n            var result = new List<string>();\n            var unique = new HashSet<string>(StringComparer.Ordinal);\n            foreach (string entityId in validTrackedEntityIds)\n            {\n                if (!LocalLlmBehaviorIntentParser.IsEntityId(entityId))\n                {\n                    throw new ArgumentException(\n                        "Valid tracked-entity IDs must use entity-N syntax.",\n                        nameof(validTrackedEntityIds));\n                }\n                if (!unique.Add(entityId))\n                {\n                    throw new ArgumentException(\n                        "Valid tracked-entity IDs cannot contain duplicates.",\n                        nameof(validTrackedEntityIds));\n                }\n                result.Add(entityId);\n                if (result.Count > 128)\n                {\n                    throw new ArgumentOutOfRangeException(\n                        nameof(validTrackedEntityIds),\n                        "A local LLM request may authorize at most 128 tracked entities.");\n                }\n            }\n            return result.ToArray();\n        }\n    }''')
+
+          provider = 'Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs'
+          replace(
+              provider,
+              '''                            validatedIntent = parsed.Intent;\n                            rawValidatedJson = output.ToString();\n                            break;''',
+              '''                            if (parsed.Intent.GazeTarget != null &&\n                                !operation.Request.IsTrackedEntityAllowed(\n                                    parsed.Intent.GazeTarget.EntityId))\n                            {\n                                terminal = LocalLlmEvent.Failed(\n                                    nextSequence,\n                                    LocalLlmFailure.InvalidIntent,\n                                    "Behavior intent referenced a tracked entity outside the request's current allowlist.");\n                                break;\n                            }\n                            validatedIntent = parsed.Intent;\n                            rawValidatedJson = output.ToString();\n                            break;''')
+          replace(
+              provider,
+              '''                messages.Add(new LocalLlmChatMessage("user", turn.UserText));''',
+              '''                messages.Add(new LocalLlmChatMessage(\n                    "user",\n                    BuildUserMessage(turn.UserText)));''')
+          replace(
+              provider,
+              '''            string finalUser = userText;\n            if (!string.IsNullOrEmpty(configuration.UserPromptSuffix))\n            {\n                finalUser += "\\n" + configuration.UserPromptSuffix;\n            }\n            messages.Add(new LocalLlmChatMessage("user", finalUser));\n            return messages;\n        }''',
+              '''            messages.Add(new LocalLlmChatMessage(\n                "user",\n                BuildUserMessage(userText)));\n            return messages;\n        }\n\n        private string BuildUserMessage(string userText)\n        {\n            return string.IsNullOrEmpty(configuration.UserPromptSuffix)\n                ? userText\n                : userText + "\\n" + configuration.UserPromptSuffix;\n        }''')
+
+          tests = 'managed/ReachyMini.LocalLlm.Tests/Program.cs'
+          replace(
+              tests,
+              '''    private const string NoGazeIntent =\n        "{\\\"schema_version\\\":1,\\\"speech\\\":\\\"Hello!\\\",\\\"expression\\\":\\\"pleased\\\",\\\"gesture\\\":\\\"nod\\\",\\\"urgency\\\":\\\"normal\\\"}";''',
+              '''    private const string NoGazeIntent =\n        "{\\\"schema_version\\\":1,\\\"speech\\\":\\\"Hello!\\\",\\\"expression\\\":\\\"pleased\\\",\\\"gesture\\\":\\\"nod\\\",\\\"urgency\\\":\\\"normal\\\"}";\n    private static readonly string[] Entity3Allowlist = { "entity-3" };''')
+          replace(
+              tests,
+              '''            ("invalid intent is not committed", InvalidIntentIsTransactionalAsync),\n            ("context preflight rejects before generation", ContextLimitFailsClosedAsync),''',
+              '''            ("invalid intent is not committed", InvalidIntentIsTransactionalAsync),\n            ("unallowed gaze is not committed", UnallowedGazeIsTransactionalAsync),\n            ("context preflight rejects before generation", ContextLimitFailsClosedAsync),''')
+          replace(
+              tests,
+              '''        List<LocalLlmEvent> first = await GenerateAsync(context.Provider, "one", "Look at me.")\n            .ConfigureAwait(false);''',
+              '''        List<LocalLlmEvent> first = await GenerateAsync(\n                context.Provider,\n                "one",\n                "Look at me.",\n                Entity3Allowlist)\n            .ConfigureAwait(false);''')
+          replace(
+              tests,
+              '''        Require(messages[1].Role == "user" && messages[2].Role == "assistant", "history role order is wrong");\n        Require(messages[2].Content == ValidIntent, "history did not preserve exact validated JSON");''',
+              '''        Require(messages[1].Role == "user" && messages[2].Role == "assistant", "history role order is wrong");\n        Require(messages[1].Content == "Look at me.\\n/no_think", "history did not preserve the exact user message seen by Qwen3");\n        Require(messages[2].Content == ValidIntent, "history did not preserve exact validated JSON");''')
+          replace(
+              tests,
+              '''    private static async Task ContextLimitFailsClosedAsync()''',
+              '''    private static async Task UnallowedGazeIsTransactionalAsync()\n    {\n        await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);\n        await RequireLoadedAsync(context).ConfigureAwait(false);\n        context.Runtime.Session.EnqueueSuccess(ValidIntent, splitAt: 24);\n        List<LocalLlmEvent> rejected = await GenerateAsync(\n                context.Provider,\n                "unallowed-gaze",\n                "Look somewhere")\n            .ConfigureAwait(false);\n        Require(\n            rejected[^1].Failure == LocalLlmFailure.InvalidIntent,\n            "unallowed tracked gaze was exposed as a completed intent");\n\n        context.Runtime.Session.EnqueueSuccess(NoGazeIntent, splitAt: 16);\n        List<LocalLlmEvent> recovered = await GenerateAsync(\n                context.Provider,\n                "after-unallowed-gaze",\n                "Hello")\n            .ConfigureAwait(false);\n        Require(recovered[^1].Kind == LocalLlmEventKind.Completed, "provider did not recover after rejecting unallowed gaze");\n        Require(context.Runtime.Session.LastMessages.Length == 2, "unallowed gaze turn was committed to history");\n    }\n\n    private static async Task ContextLimitFailsClosedAsync()''')
+          replace(
+              tests,
+              '''    private static async Task<List<LocalLlmEvent>> GenerateAsync(\n        ReachyLocalLlmProvider provider,\n        string requestId,\n        string prompt)''',
+              '''    private static async Task<List<LocalLlmEvent>> GenerateAsync(\n        ReachyLocalLlmProvider provider,\n        string requestId,\n        string prompt,\n        IEnumerable<string>? validTrackedEntityIds = null)''')
+          replace(
+              tests,
+              '''            new LocalLlmRequest(requestId, prompt, TimeSpan.FromSeconds(30.0)),''',
+              '''            new LocalLlmRequest(\n                requestId,\n                prompt,\n                TimeSpan.FromSeconds(30.0),\n                validTrackedEntityIds),''')
+
+          static_test = 'scripts/tests/test_rma134_local_llm_provider.py'
+          replace(
+              static_test,
+              '''            "StartConstrained",\n        )''',
+              '''            "StartConstrained",\n            "IsTrackedEntityAllowed",\n            "current allowlist",\n        )''')
+
+          architecture = Path('docs/architecture/LOCAL_LLM_PROVIDER.md')
+          text = architecture.read_text(encoding='utf-8')
+          needle = '''A completed native generation is not exposed as a `Completed` behavior intent unless the independent managed parser accepts the full object.\n'''
+          addition = '''A completed native generation is not exposed as a `Completed` behavior intent unless the independent managed parser accepts the full object.\n\nEach request also carries a bounded snapshot of the tracked entity IDs that are currently valid for gaze. A generated `gaze_target` is rejected unless its exact ID is present in that request snapshot. An empty snapshot authorizes no gaze. This prevents a syntactically valid hallucinated or stale `entity-N` from becoming executable behavior intent.\n'''
+          if needle not in text:
+              raise SystemExit('Missing architecture intent-validation paragraph.')
+          architecture.write_text(text.replace(needle, addition, 1), encoding='utf-8')
+          PY
+
+          git diff --check
+      - name: Commit safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmBehaviorIntent.cs \
+            Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmContracts.cs \
+            Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmProvider.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs \
+            scripts/tests/test_rma134_local_llm_provider.py \
+            docs/architecture/LOCAL_LLM_PROVIDER.md
+          git commit -m 'RMA-134: validate gaze against current tracked entities'
+          git push origin HEAD:rma134-local-llm-provider-stage
