@@ -174,7 +174,7 @@ fi
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp" "${REMOTE_MODEL}"
 "${ADB[@]}" shell rm -rf "${REMOTE_STORE}"
 free_kib="$("${ADB[@]}" shell df -Pk "${REMOTE_FILES_DIR}" | tr -d '\r' | tail -n 1 | awk '{print $4}')"
-required_kib=$(( (MODEL_SIZE + 1023) / 1024 * 2 + 262144 ))
+required_kib=$(( (MODEL_SIZE + 1023) * 2 / 1024 + 262144 ))
 if [[ ! "${free_kib}" =~ ^[0-9]+$ ]] || (( free_kib < required_kib )); then
     printf 'Insufficient device storage for RMA-134 import: free_kib=%s required_kib=%s\n' \
         "${free_kib}" "${required_kib}" >&2
