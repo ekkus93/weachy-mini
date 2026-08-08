@@ -29,9 +29,9 @@ class Rma133ConstraintModelFixtureContracts(unittest.TestCase):
         self.assertNotIn("models/manifests", lock["url"])
 
     def test_hosted_runner_is_hash_gated_and_has_no_fallback(self) -> None:
-        script = (
-            ROOT / "scripts/run_rma133_hosted_constraint_model_tests.sh"
-        ).read_text(encoding="utf-8")
+        script = (ROOT / "scripts/run_rma133_hosted_constraint_model_tests.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("sha256sum", script)
         self.assertIn("expected_size", script)
         self.assertIn("--fail-with-body", script)
