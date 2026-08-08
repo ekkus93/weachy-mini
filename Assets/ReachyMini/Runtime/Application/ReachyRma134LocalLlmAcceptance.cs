@@ -14,7 +14,7 @@ using ReachyMini.LocalModels;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-namespace ReachyMini.Application
+namespace ReachyMini.Validation
 {
     internal sealed class ReachyRma134LocalLlmAcceptance : MonoBehaviour
     {
@@ -567,7 +567,7 @@ namespace ReachyMini.Application
                 {
                     TerminalValidated = true;
                 }
-                return ValueTask.CompletedTask;
+                return default;
             }
         }
 
@@ -586,7 +586,7 @@ namespace ReachyMini.Application
                     ++TextEventCount;
                     cancellation.Cancel();
                 }
-                return ValueTask.CompletedTask;
+                return default;
             }
         }
 
