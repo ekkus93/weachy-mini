@@ -28,6 +28,21 @@ jobs:
           set -euo pipefail
           python -m pip install --disable-pip-version-check ruff==0.12.0
           ruff format scripts/tests/test_rma131_local_model_manifest.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/tests/test_rma131_local_model_manifest.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    print(
+              "RMA-131 local-model JSON manifest contracts passed (8 groups; synthetic + selected manifests)."
+          )'''
+          new = '''    print(
+              "RMA-131 local-model JSON manifest contracts passed "
+              "(8 groups; synthetic + selected manifests)."
+          )'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one long status string, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           ruff check scripts/tests/test_rma131_local_model_manifest.py
           ruff format --check scripts/tests/test_rma131_local_model_manifest.py
       - name: Commit formatted test only
