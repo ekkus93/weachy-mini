@@ -717,16 +717,16 @@ namespace ReachyMini.LocalModels
                 request,
                 sink,
                 epoch,
-                cancellationToken,
-                start.GenerationHandle).ConfigureAwait(false);
+                start.GenerationHandle,
+                cancellationToken).ConfigureAwait(false);
         }
 
         private async Task<LocalLlmGenerationResult> RunStartedGenerationAsync(
             LocalLlmGenerationRequest request,
             ILocalLlmStreamSink sink,
             ulong epoch,
-            CancellationToken cancellationToken,
-            ulong generationHandle)
+            ulong generationHandle,
+            CancellationToken cancellationToken)
         {
             StringBuilder response = new StringBuilder();
             int responseUtf8Bytes = 0;
