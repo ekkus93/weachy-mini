@@ -19,6 +19,7 @@ on:
       - 'scripts/tests/test_rma133_candidate_set_v2.py'
       - 'scripts/tests/test_rma133_candidate_set_v3.py'
       - 'scripts/tests/test_rma133_candidate_set_v4.py'
+      - 'scripts/tests/test_rma133_candidate_set_v5.py'
       - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
@@ -26,6 +27,7 @@ on:
       - 'docs/validation/RMA_133_CANDIDATE_SET_V1_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_CANDIDATE_SET_V2_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_CANDIDATE_SET_V3_VALIDATION_2026-08-07.md'
+      - 'docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   pull_request:
     paths:
@@ -43,6 +45,7 @@ on:
       - 'scripts/tests/test_rma133_candidate_set_v2.py'
       - 'scripts/tests/test_rma133_candidate_set_v3.py'
       - 'scripts/tests/test_rma133_candidate_set_v4.py'
+      - 'scripts/tests/test_rma133_candidate_set_v5.py'
       - 'scripts/tests/test_rma133_device_runner_loop.py'
       - 'third_party/llama-cpp-source.lock.json'
       - 'toolchain.lock.json'
@@ -50,6 +53,7 @@ on:
       - 'docs/validation/RMA_133_CANDIDATE_SET_V1_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_CANDIDATE_SET_V2_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_CANDIDATE_SET_V3_VALIDATION_2026-08-07.md'
+      - 'docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md'
       - 'docs/validation/RMA_133_LOCAL_LLM_BENCHMARK_VALIDATION_2026-08-07.md'
   workflow_dispatch:
 
@@ -83,10 +87,11 @@ jobs:
             scripts.tests.test_rma133_candidate_set_v2 \
             scripts.tests.test_rma133_candidate_set_v3 \
             scripts.tests.test_rma133_candidate_set_v4 \
+            scripts.tests.test_rma133_candidate_set_v5 \
             scripts.tests.test_rma133_device_runner_loop
           python3 -m compileall -q scripts
           python3 scripts/score_rma133_benchmark.py validate \
-            --config benchmarks/rma133/candidates-v4.json
+            --config benchmarks/rma133/candidates-v5.json
           bash -n scripts/build_rma133_android_benchmark.sh
           bash -n scripts/run_rma133_device_benchmark.sh
 
@@ -214,10 +219,10 @@ jobs:
           RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
         run: bash scripts/build_rma133_android_benchmark.sh
 
-      - name: Benchmark candidate-set v4 and select only if gates pass
+      - name: Benchmark candidate-set v5 and select only if gates pass
         shell: bash
         env:
-          RMA133_CONFIG: ${{ github.workspace }}/benchmarks/rma133/candidates-v4.json
+          RMA133_CONFIG: ${{ github.workspace }}/benchmarks/rma133/candidates-v5.json
           RMA133_SYSTEM_PROMPT: ${{ github.workspace }}/benchmarks/rma133/system_prompt-v4.txt
           RMA133_RUNTIME_DIR: ${{ github.workspace }}/build/rma133/runtime
           RMA133_BENCHMARK_OUTPUT_DIR: ${{ github.workspace }}/build/rma133/benchmark
@@ -228,12 +233,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rma133-local-llm-benchmark-v4-${{ github.sha }}
+          name: rma133-local-llm-benchmark-v5-${{ github.sha }}
           path: |
             benchmarks/rma133/candidates.json
             benchmarks/rma133/candidates-v2.json
             benchmarks/rma133/candidates-v3.json
             benchmarks/rma133/candidates-v4.json
+            benchmarks/rma133/candidates-v5.json
             benchmarks/rma133/behavior_cases.tsv
             benchmarks/rma133/system_prompt.txt
             benchmarks/rma133/system_prompt-v4.txt
