@@ -1,0 +1,43 @@
+name: RMA-133 V6 Ruff staging
+
+on:
+  push:
+    branches:
+      - rma133-v6-closure-stage
+    paths:
+      - '.github/workflows/rma133-v6-ruff-stage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-v6-closure-stage
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply permanent-CI Ruff 0.12.0 formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff format scripts/tests/test_rma131_local_model_manifest.py
+          ruff check scripts/tests/test_rma131_local_model_manifest.py
+          ruff format --check scripts/tests/test_rma131_local_model_manifest.py
+      - name: Commit formatted test only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add scripts/tests/test_rma131_local_model_manifest.py
+          git diff --cached --check
+          git diff --cached --quiet && { echo 'Ruff produced no change' >&2; exit 1; }
+          git commit -m 'RMA-131: format selected manifest contracts'
+          git push origin HEAD:rma133-v6-closure-stage
