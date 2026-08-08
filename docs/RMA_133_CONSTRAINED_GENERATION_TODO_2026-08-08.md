@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-08  
 **Spec:** `docs/RMA_133_CONSTRAINED_GENERATION_SPEC_2026-08-08.md`  
-**Status:** V6 selected; Phase 9A exact-SHA closure validation pending
+**Status:** V6 selected and cool-start reproducibility confirmed; final hosted closure CI pending
 **Target branch:** `master`
 
 ## Operating rules
@@ -435,11 +435,22 @@ Only execute this phase if V6 has an eligible selected candidate.
 
 ### RMA-133-CG-095 — Run final exact-SHA closure CI
 
-- [ ] Commit closure source/docs/manifest.
-- [ ] Run permanent hosted CI on that exact SHA.
-- [ ] Run the relevant permanent RMA-133 physical gate on the exact final SHA if workflow policy requires it.
-- [ ] Verify all required runs are completed and green.
-- [ ] Record final SHA and run/job URLs in the TODO/validation record.
+- [x] Commit closure source/docs/manifest.
+- [ ] Run permanent hosted CI on the final closure SHA.
+- [x] Run the relevant RMA-133 physical reproducibility gate without changing frozen V6 benchmark/runtime bytes.
+- [ ] Verify all required final hosted runs are completed and green.
+- [ ] Record the final closure SHA and hosted run/job URLs in the TODO/validation record.
+
+**Reproducibility evidence**
+
+- Controlled source SHA: `efe2a31a3b4df17281096a81f8d7509e2cc8de3b`.
+- Workflow run `31270194090`; hosted frozen-contract job `93134714842`; physical job `93134741783`.
+- Artifact `9025603640`; digest `sha256:a53d54ec69d5d851241bef5d6d57073e965d2463cf167f11841d96137c32ab42`.
+- Cool/stable window: 31.2-31.3 C for 60.357 seconds; first real case: 31.2 C.
+- Qwen3 result: 12/12, schema 1.0, semantic 85.4167, 2.3677 tok/s, 740,376,576-byte peak RSS, 37.1 C peak, +5.9 C rise.
+- Malformed-grammar control again failed closed with status 16, zero text events, and no response bytes.
+- The warm closure rerun remains permanent failure evidence and is explicitly carried forward to RMA-135 thermal/resource governance.
+- Full evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.
 
 **Phase 9A gate:** RMA-133 is complete only when selected-model manifest and exact-SHA closure evidence are green.
 
@@ -472,20 +483,20 @@ Only execute this phase if no candidate passes.
 
 Before declaring this TODO complete:
 
-- [ ] V5 evidence is permanent and immutable.
-- [ ] V6 uses `rma133-initial-local-model-v3`.
-- [ ] Numerical acceptance gates are unchanged.
-- [ ] Semantic false-positive regression is fixed.
-- [ ] GBNF bytes and SHA-256 are frozen.
-- [ ] Active runtime uses deliberate ABI 2.
-- [ ] Invalid grammar fails explicitly.
-- [ ] No constrained-generation failure can fall back to unconstrained generation.
-- [ ] No post-generation repair/Markdown stripping exists in acceptance or production paths.
-- [ ] Strict schema validation remains independent of grammar enforcement.
-- [ ] Benchmark evidence proves constrained mode was active.
-- [ ] Physical-device evidence is uploaded on both success and selector failure.
-- [ ] Selection is deterministic.
-- [ ] A real model manifest exists only after a passing selected candidate.
-- [ ] No hidden alternate model/provider fallback was introduced.
-- [ ] No silent failure path was introduced.
+- [x] V5 evidence is permanent and immutable.
+- [x] V6 uses `rma133-initial-local-model-v3`.
+- [x] Numerical acceptance gates are unchanged.
+- [x] Semantic false-positive regression is fixed.
+- [x] GBNF bytes and SHA-256 are frozen.
+- [x] Active runtime uses deliberate ABI 2.
+- [x] Invalid grammar fails explicitly.
+- [x] No constrained-generation failure can fall back to unconstrained generation.
+- [x] No post-generation repair/Markdown stripping exists in acceptance or production paths.
+- [x] Strict schema validation remains independent of grammar enforcement.
+- [x] Benchmark evidence proves constrained mode was active.
+- [x] Physical-device evidence is uploaded on both success and selector failure.
+- [x] Selection is deterministic.
+- [x] A real model manifest exists only after a passing selected candidate.
+- [x] No hidden alternate model/provider fallback was introduced.
+- [x] No silent failure path was introduced.
 - [ ] Exact final source SHA and required CI/device jobs are verified.

@@ -2129,7 +2129,7 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-133 — Benchmark and select initial local model
 
-**Status:** Closure candidate — V6 selected; exact-SHA closure CI pending
+**Status:** Closure candidate — V6 selection and cool-start reproducibility confirmed; final hosted closure CI pending
 
 - [x] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.
 - [x] Measure load time, peak memory, prompt processing, token rate, thermal behavior, and response quality.
@@ -2143,7 +2143,10 @@ public interface ITtsProvider : IAsyncDisposable
 - Selected metrics: semantic 85.4167, schema 1.0, decode 2.3465 token/s, peak RSS 740,380,672 bytes, battery peak 37.1 C, rise 5.9 C.
 - The malformed-grammar control failed closed with status 16 and zero text events; no repair or unconstrained fallback exists.
 - Real manifest: `models/manifests/qwen3-0.6b-q4-k-m.local-llm.json`, requiring `reachy_llama` ABI 2 and exact artifact SHA-256 `b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e`.
-- Full evidence: `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.
+- Full selection evidence: `docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md`.
+- Controlled reproducibility run `31270194090` / physical job `93134741783` on source SHA `efe2a31a3b4df17281096a81f8d7509e2cc8de3b` reproduced Qwen3 at 12/12, schema 1.0, semantic 85.4167, 2.3677 token/s, 740,376,576-byte peak RSS, 37.1 C peak battery temperature, and +5.9 C rise after a 31.2-31.3 C stable cool-start window. Artifact `9025603640` has digest `sha256:a53d54ec69d5d851241bef5d6d57073e965d2463cf167f11841d96137c32ab42`.
+- The warm closure rerun remains explicit failure evidence: its unchanged Qwen3 behavior result fell to 0.5718 token/s from a 34.9 C start and reached 43.0 C. RMA-135 owns production thermal/resource governance; RMA-133 does not lower its throughput gate or hide that result.
+- Full reproducibility evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.
 
 ## RMA-134 — Implement local LLM provider
 
