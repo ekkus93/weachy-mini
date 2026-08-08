@@ -1,0 +1,348 @@
+name: RMA-134 Local LLM Provider
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/prepare_reachy_unity_presentation.sh'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  pull_request:
+    paths:
+      - '.github/workflows/rma134-local-llm-provider.yml'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Core/Language/**'
+      - 'Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/AndroidStatFsLocalModelStorageProbe.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs'
+      - 'Assets/ReachyMini/Runtime/Resources/LocalLlm/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'models/manifests/qwen3-0.6b-q4-k-m.local-llm.json'
+      - 'scripts/build_llama_android.sh'
+      - 'scripts/prepare_reachy_unity_presentation.sh'
+      - 'scripts/run_rma134_local_llm_acceptance_android.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma134_local_llm_provider.py'
+      - 'third_party/llama-cpp-source.lock.json'
+      - 'toolchain.lock.json'
+      - 'docs/architecture/LOCAL_LLM_PROVIDER.md'
+      - 'docs/validation/RMA_134_LOCAL_LLM_PROVIDER_VALIDATION_*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma134-local-llm-provider-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Managed provider and fail-closed contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build core with warnings as errors
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Core/ReachyMini.Core.csproj
+          dotnet build managed/ReachyMini.Core/ReachyMini.Core.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Run local LLM provider contracts
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          timeout --signal=TERM --kill-after=15s 120s \
+            dotnet run \
+              --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
+              --configuration Release \
+              --no-restore
+
+      - name: Verify static safety and frozen RMA-133 inputs
+        run: |
+          set -euo pipefail
+          python3 -m unittest -v scripts.tests.test_rma134_local_llm_provider
+          python3 -m compileall -q scripts
+          bash -n scripts/run_rma134_local_llm_acceptance_android.sh
+          bash -n scripts/stage_reachy_unity_android_runtime.sh
+          git diff --check
+
+  physical:
+    name: Validate selected local LLM provider on physical Android
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.head_ref == 'rma134-local-llm-provider-v2')
+    needs: contract
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 120
+    env:
+      RMA134_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out exact RMA-134 source
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Initialize RMA-134 evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_dir='build/rma134-local-llm-report'
+          mkdir -p "${report_dir}"
+          python3 - <<'PY' > "${report_dir}/setup.json"
+          import json
+          import os
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "initializing",
+              "stage": "post_checkout",
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+              "runner_name": os.environ.get("RUNNER_NAME", ""),
+          }, sort_keys=True, indent=2))
+          PY
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "${actual_sha}" != "${RMA134_SOURCE_SHA}" ]]; then
+            printf 'RMA-134 checkout mismatch: expected=%s actual=%s\n' \
+              "${RMA134_SOURCE_SHA}" "${actual_sha}" >&2
+            exit 1
+          fi
+
+      - name: Resolve pinned Unity and Android installations
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          report_dir='build/rma134-local-llm-report'
+          setup_report="${report_dir}/setup.json"
+          mkdir -p "${report_dir}"
+
+          record_failure() {
+            code="$?"
+            trap - ERR
+            python3 - "${code}" <<'PY' > "${setup_report}"
+          import json
+          import os
+          import sys
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "failure",
+              "stage": "resolve_toolchain",
+              "exit_code": int(sys.argv[1]),
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+              "runner_name": os.environ.get("RUNNER_NAME", ""),
+          }, sort_keys=True, indent=2))
+          PY
+            exit "${code}"
+          }
+          trap record_failure ERR
+
+          project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+          if [[ -z "${project_version}" ]]; then
+            printf '%s\n' 'Could not read the pinned Unity version.' >&2
+            false
+          fi
+
+          unity_editor="${UNITY_EDITOR:-}"
+          if [[ -n "${unity_editor}" && ! -x "${unity_editor}" ]]; then
+            printf 'Configured UNITY_EDITOR is not executable: %s\n' \
+              "${unity_editor}" >&2
+            false
+          fi
+
+          if [[ -z "${unity_editor}" ]]; then
+            for candidate in \
+              "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "/opt/unity/editors/${project_version}/Editor/Unity"; do
+              if [[ -x "${candidate}" ]]; then
+                unity_editor="${candidate}"
+                break
+              fi
+            done
+          fi
+
+          if [[ -z "${unity_editor}" ]]; then
+            printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+            printf '%s\n' 'Executable Unity editors visible to the runner:' >&2
+            editor_found=false
+            for editor_root in \
+              "${HOME}/Unity/Hub/Editor" \
+              "${HOME}/UnityHub/Editors" \
+              "${HOME}/.local/share/UnityHub/Editors" \
+              "/opt/Unity/Hub/Editor" \
+              "/opt/unity/editors"; do
+              if [[ ! -d "${editor_root}" ]]; then
+                continue
+              fi
+              while IFS= read -r candidate; do
+                printf '  %s\n' "${candidate}" >&2
+                editor_found=true
+              done < <(
+                find "${editor_root}" \
+                  -mindepth 3 \
+                  -maxdepth 3 \
+                  -type f \
+                  -path '*/Editor/Unity' \
+                  -perm -u+x \
+                  -print \
+                  | sort
+              )
+            done
+            if [[ "${editor_found}" != true ]]; then
+              printf '%s\n' '  none found in the supported Unity Hub locations' >&2
+            fi
+            false
+          fi
+
+          android_player_dir="$(dirname "${unity_editor}")/Data/PlaybackEngines/AndroidPlayer"
+          if [[ ! -d "${android_player_dir}" ]]; then
+            printf 'Unity Android Build Support is missing: %s\n' \
+              "${android_player_dir}" >&2
+            false
+          fi
+
+          android_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          if [[ ! -x "${android_root}/platform-tools/adb" ]]; then
+            printf 'Android SDK platform-tools were not found under %s.\n' \
+              "${android_root}" >&2
+            false
+          fi
+
+          ndk_version="$(
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('toolchain.lock.json').read_text(encoding='utf-8'))['android']['ndk'])
+          PY
+          )"
+          ndk_root="${ANDROID_NDK_ROOT:-${android_root}/ndk/${ndk_version}}"
+          if [[ ! -x "${ndk_root}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]]; then
+            printf 'Pinned Android NDK is missing: %s\n' "${ndk_root}" >&2
+            false
+          fi
+
+          unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
+          if [[ "${unity_version_output}" != *"${project_version}"* ]]; then
+            printf 'Unity executable does not match pinned version %s.\n' \
+              "${project_version}" >&2
+            printf '%s\n' "${unity_version_output}" >&2
+            false
+          fi
+
+          {
+            printf 'UNITY_EDITOR=%s\n' "${unity_editor}"
+            printf 'ANDROID_SDK_ROOT=%s\n' "${android_root}"
+            printf 'ANDROID_HOME=%s\n' "${android_root}"
+            printf 'ANDROID_NDK_ROOT=%s\n' "${ndk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${android_root}/platform-tools" >> "${GITHUB_PATH}"
+
+          python3 - "${project_version}" "${unity_editor}" "${android_root}" "${ndk_root}" <<'PY' > "${setup_report}"
+          import json
+          import os
+          import sys
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "success",
+              "stage": "resolve_toolchain",
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+              "runner_name": os.environ.get("RUNNER_NAME", ""),
+              "unity_version": sys.argv[1],
+              "unity_editor": sys.argv[2],
+              "android_sdk_root": sys.argv[3],
+              "android_ndk_root": sys.argv[4],
+          }, sort_keys=True, indent=2))
+          PY
+          trap - ERR
+
+      - name: Build production Android player with ABI-2 local LLM runtime
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: |
+          set -Eeuo pipefail
+          report='build/rma134-local-llm-report/build.json'
+          record_failure() {
+            code="$?"
+            trap - ERR
+            python3 - "${code}" <<'PY' > "${report}"
+          import json
+          import os
+          import sys
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "failure",
+              "stage": "build_android_player",
+              "exit_code": int(sys.argv[1]),
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+          }, sort_keys=True, indent=2))
+          PY
+            exit "${code}"
+          }
+          trap record_failure ERR
+
+          bash scripts/prepare_reachy_unity_presentation.sh
+          bash scripts/stage_reachy_unity_android_runtime.sh
+          bash scripts/build_unity_android.sh device-feasibility
+
+          python3 - <<'PY' > "${report}"
+          import json
+          import os
+          print(json.dumps({
+              "schema_version": 1,
+              "status": "success",
+              "stage": "build_android_player",
+              "source_sha": os.environ["RMA134_SOURCE_SHA"],
+          }, sort_keys=True, indent=2))
+          PY
+          trap - ERR
+
+      - name: Run RMA-134 physical provider acceptance
+        shell: bash
+        run: bash scripts/run_rma134_local_llm_acceptance_android.sh
+
+      - name: Upload RMA-134 physical evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma134-local-llm-provider-${{ env.RMA134_SOURCE_SHA }}
+          path: build/rma134-local-llm-report/
+          if-no-files-found: warn
+          retention-days: 30
