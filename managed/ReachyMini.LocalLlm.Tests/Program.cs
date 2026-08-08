@@ -57,12 +57,14 @@ internal static class Program
     private static Task ParserAcceptsFrozenShapeAsync()
     {
         LocalLlmIntentParseResult result = LocalLlmBehaviorIntentParser.Parse(ValidIntent);
-        Require(result.Succeeded && result.Intent != null, "valid constrained JSON was rejected");
-        Require(result.Intent.SchemaVersion == 1, "schema version mismatch");
-        Require(result.Intent.GazeTarget?.EntityId == "entity-3", "gaze entity mismatch");
-        Require(result.Intent.Expression == LocalLlmExpression.Attentive, "expression mismatch");
-        Require(result.Intent.Gesture == LocalLlmGesture.None, "gesture mismatch");
-        Require(result.Intent.Urgency == LocalLlmUrgency.Normal, "urgency mismatch");
+        Require(result.Succeeded, "valid constrained JSON was rejected");
+        LocalLlmBehaviorIntent intent = result.Intent ??
+            throw new InvalidOperationException("Valid parse returned no intent.");
+        Require(intent.SchemaVersion == 1, "schema version mismatch");
+        Require(intent.GazeTarget?.EntityId == "entity-3", "gaze entity mismatch");
+        Require(intent.Expression == LocalLlmExpression.Attentive, "expression mismatch");
+        Require(intent.Gesture == LocalLlmGesture.None, "gesture mismatch");
+        Require(intent.Urgency == LocalLlmUrgency.Normal, "urgency mismatch");
         return Task.CompletedTask;
     }
 
@@ -159,7 +161,7 @@ internal static class Program
     {
         await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
         await RequireLoadedAsync(context).ConfigureAwait(false);
-        var hold = new FakeGeneration(holdUntilCancelled: true);
+        using var hold = new FakeGeneration(holdUntilCancelled: true);
         context.Runtime.Session.EnqueueGeneration(hold);
 
         Task<List<LocalLlmEvent>> firstTask = GenerateAsync(context.Provider, "first", "Hold");
@@ -182,7 +184,7 @@ internal static class Program
                 LocalLlmEventKind.Completed,
             "setup turn did not commit");
 
-        var hold = new FakeGeneration(holdUntilCancelled: true);
+        using var hold = new FakeGeneration(holdUntilCancelled: true);
         context.Runtime.Session.EnqueueGeneration(hold);
         Task<List<LocalLlmEvent>> active = GenerateAsync(context.Provider, "cancel", "Cancel me");
         await hold.Started.Task.ConfigureAwait(false);
@@ -204,7 +206,8 @@ internal static class Program
     {
         await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
         await RequireLoadedAsync(context).ConfigureAwait(false);
-        context.Runtime.Session.EnqueueGeneration(FakeGeneration.TerminalError(11));
+        using FakeGeneration errorGeneration = FakeGeneration.TerminalError(11);
+        context.Runtime.Session.EnqueueGeneration(errorGeneration);
         List<LocalLlmEvent> failed = await GenerateAsync(context.Provider, "fault", "Fault")
             .ConfigureAwait(false);
         Require(failed[^1].Failure == LocalLlmFailure.RuntimeFailure, "runtime error was not visible");
@@ -257,7 +260,7 @@ internal static class Program
     }
 
     private static async Task<List<LocalLlmEvent>> GenerateAsync(
-        ILocalLlmProvider provider,
+        ReachyLocalLlmProvider provider,
         string requestId,
         string prompt)
     {
@@ -283,19 +286,27 @@ internal static class Program
     private sealed class TestContext : IAsyncDisposable
     {
         internal const string Grammar = "root ::= \"{\" \"}\"";
+        private static readonly string[] SupportedAbis = { "arm64-v8a" };
         private readonly string root;
+        private readonly ReachyLocalLlmProvider provider;
 
         private TestContext(
             string root,
-            ReachyLocalLlmProvider provider,
-            FakeRuntimeFactory runtime)
+            FakeRuntimeFactory runtime,
+            LocalModelApprovedArtifact approved,
+            LocalModelManifest manifest,
+            LocalLlmProviderConfiguration configuration)
         {
             this.root = root;
-            Provider = provider;
             Runtime = runtime;
+            provider = new ReachyLocalLlmProvider(
+                runtime,
+                approved,
+                manifest,
+                configuration);
         }
 
-        public ReachyLocalLlmProvider Provider { get; }
+        public ReachyLocalLlmProvider Provider => provider;
 
         public FakeRuntimeFactory Runtime { get; }
 
@@ -330,17 +341,17 @@ internal static class Program
                 LocalLlmExecutionProfile.CreateRma133SelectedProfile(),
                 maximumHistoryTurns,
                 managedEventQueueCapacity: 64);
-            var provider = new ReachyLocalLlmProvider(
+            return new TestContext(
+                root,
                 runtime,
                 approved,
                 manifest,
                 config);
-            return new TestContext(root, provider, runtime);
         }
 
         public async ValueTask DisposeAsync()
         {
-            await Provider.DisposeAsync().ConfigureAwait(false);
+            await provider.DisposeAsync().ConfigureAwait(false);
             try
             {
                 Directory.Delete(root, recursive: true);
@@ -374,7 +385,7 @@ internal static class Program
                     new LocalModelMemoryEstimate(800_000_000L, 2048, 256),
                     4),
                 new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    SupportedAbis,
                     26,
                     Array.Empty<string>(),
                     800_000_000L,
@@ -415,13 +426,14 @@ internal static class Program
 
     private sealed class FakeSession : ILocalLlmModelSession
     {
-        private readonly Queue<FakeGeneration> generations = new Queue<FakeGeneration>();
+        private readonly Queue<Func<FakeGeneration>> generationFactories =
+            new Queue<Func<FakeGeneration>>();
 
         public int TokenCount { get; set; } = 128;
 
         public int StartCount { get; private set; }
 
-        public IReadOnlyList<LocalLlmChatMessage> LastMessages { get; private set; } =
+        public LocalLlmChatMessage[] LastMessages { get; private set; } =
             Array.Empty<LocalLlmChatMessage>();
 
         public string LastGrammar { get; private set; } = string.Empty;
@@ -430,12 +442,16 @@ internal static class Program
 
         public void EnqueueSuccess(string json, int splitAt)
         {
-            EnqueueGeneration(FakeGeneration.Success(json, splitAt));
+            generationFactories.Enqueue(() => FakeGeneration.Success(json, splitAt));
         }
 
         public void EnqueueGeneration(FakeGeneration generation)
         {
-            generations.Enqueue(generation ?? throw new ArgumentNullException(nameof(generation)));
+            if (generation == null)
+            {
+                throw new ArgumentNullException(nameof(generation));
+            }
+            generationFactories.Enqueue(() => generation);
         }
 
         public string RenderChatTemplate(IReadOnlyList<LocalLlmChatMessage> messages)
@@ -466,11 +482,11 @@ internal static class Program
             LastGrammar = grammar;
             LastGrammarRoot = grammarRoot;
             ++StartCount;
-            if (generations.Count == 0)
+            if (generationFactories.Count == 0)
             {
                 throw new InvalidOperationException("Fake runtime has no queued generation.");
             }
-            FakeGeneration generation = generations.Dequeue();
+            FakeGeneration generation = generationFactories.Dequeue()();
             generation.MarkStarted();
             return generation;
         }
