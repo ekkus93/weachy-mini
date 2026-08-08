@@ -81,7 +81,7 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
         )
         for token in forbidden:
             self.assertNotIn(token, product)
-        self.assertIn("RequiresNetwork => false", product)
+        self.assertIn("RequiresNetwork = false", product)
         self.assertIn("RequiresNetworkAccess", product)
 
     def test_selected_manifest_is_local_abi2_qwen3(self) -> None:
