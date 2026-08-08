@@ -1,106 +1,180 @@
-# RMA-133 initial sub-1B local LLM benchmark
+# RMA-133 initial local LLM benchmark
 
 **RMA:** 133  
-**Scope:** reproducible candidate comparison and default-selection evidence; no production LLM provider, hidden fallback, or thermal governor
+**Scope:** reproducible local-model comparison and selection evidence; no production provider, hidden fallback, or production thermal governor
 
-## Purpose
+The historical V1-V5 architecture text is preserved verbatim in
+`docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK_V1_V5.md`. This document describes the current
+RMA-133 scope and the V6 constrained-generation experiment.
 
-RMA-133 chooses the first recommended local text model only after measured evidence on the physical Android device used by the project. The benchmark is deliberately narrow: it compares license-compatible sub-1B GGUF candidates through the public RMA-130 `reachy_llama` ABI and scores the high-level robot behavior output that later RMA-134/RMA-151 work will consume.
+## Purpose and immutable experiment history
 
-The benchmark contract is frozen in `benchmarks/rma133/candidates.json` before candidate measurements are accepted. Changing a threshold, runtime profile, candidate identity, artifact hash, or ranking rule changes the benchmark rather than retroactively changing a result. Static tests reject such mutations for the v1 contract.
+RMA-133 selects the first recommended local text model only after measured evidence on the
+project's physical Android device. Selection is fail-closed: an experiment either satisfies its
+predeclared gates or records `no_candidate_passed`. A later experiment may change a documented
+contract under a new lineage, but it never rewrites a completed experiment to manufacture a pass.
 
-## Frozen candidates
+Candidate sets V1-V4 used the historical `rma133-initial-sub1b-v1` lineage. They established that
+the original sub-1B candidates had adequate resource headroom but did not satisfy the frozen
+structured-output/semantic gates. V5 therefore relaxed **only model-size scope** to up-to-2B under
+lineage `rma133-initial-local-model-v2`; it retained the V4 prompt, behavior corpus, runtime
+profile, Q4_K_M comparison, license policy, scorer, numerical thresholds, ranking, raw-byte
+evidence, and no-repair rule.
 
-RMA-133 v1 compares the same `Q4_K_M` quantization class:
+V5 still selected no model. Qwen2.5-Coder-1.5B completed 12/12 cases and remained inside speed,
+memory, and thermal limits, but all responses were Markdown-fenced JSON, so the strict historical
+scorer correctly recorded schema reliability 0/12. Its permanent evidence is
+`docs/validation/RMA_133_CANDIDATE_SET_V5_VALIDATION_2026-08-08.md`.
 
-- `qwen3-0.6b-q4-k-m`: Qwen3 0.6B from the official Qwen GGUF repository, Apache-2.0, exact source revision and exact GGUF SHA-256 recorded in the candidate file. Its prompt suffix is the model-documented `/no_think` control so the bounded output budget is spent on the requested structured result rather than reasoning text.
-- `smollm2-360m-instruct-q4-k-m`: SmolLM2 360M Instruct conversion from the pinned Unsloth GGUF repository, Apache-2.0, exact source revision and exact GGUF SHA-256 recorded in the candidate file. It uses no model-specific suffix.
+V6 is a new explicit lineage, `rma133-initial-local-model-v3`, because it changes the generation
+contract and corrects a discovered semantic-oracle defect. It does **not** weaken any numerical
+acceptance gate.
 
-The device runner downloads only the exact revision-pinned HTTPS artifact URL. It verifies exact byte size and SHA-256 before accepting a host cache entry or pushing a file to the device. It never tries another revision, mirror, quantization, model, or cloud provider when acquisition or integrity fails.
+## Frozen V6 comparison
 
-Candidate-set iterations do not rewrite a completed experiment. V1 is retained as a negative result after both Qwen3 0.6B and SmolLM2 360M failed the frozen structured-output gate. `benchmarks/rma133/candidates-v2.json` keeps the same corpus, runtime profile, thresholds, ranking, Qwen3 control, and quantization while replacing the alternative with Qwen2.5 0.5B Instruct. A later candidate-set iteration must follow the same rule rather than changing a threshold after observing results.
+`benchmarks/rma133/candidates-v6.json` freezes the complete comparison. V6 reruns the exact V5
+candidate artifacts:
 
-## Runtime profile
+- `qwen3-0.6b-q4-k-m` — Qwen3 0.6B Q4_K_M control; and
+- `qwen2.5-coder-1.5b-instruct-q4-k-m` — Qwen2.5-Coder-1.5B-Instruct Q4_K_M.
 
-Every candidate uses the same RMA-130 settings:
+Each entry retains the exact source revision, revision-pinned HTTPS artifact URL, byte size, and
+SHA-256 from V5. Both remain Apache-2.0 candidates. The runner never substitutes a mirror,
+revision, quantization, candidate, or cloud provider after acquisition/integrity failure.
 
-- 2,048-token context;
-- 256-token batch and 64-token micro-batch;
-- maximum 128 generated tokens;
-- four decode threads and four batch threads;
-- greedy decoding (`temperature=0`, `min_p=0`);
-- seed 133; and
-- bounded 64-fragment stream queue.
+The system prompt remains the exact V4 bytes at
+`benchmarks/rma133/system_prompt-v4.txt`, frozen by SHA-256. Qwen3 retains its documented
+`/no_think` suffix; the 1.5B candidate retains no model-specific suffix.
 
-The benchmark renders the model's embedded GGUF chat template through `reachy_llama_apply_chat_template`. It does not duplicate family-specific templates in benchmark code.
+## Frozen runtime profile and gates
 
-## Behavior-intent quality corpus
+V6 retains the V5 runtime profile exactly:
 
-RMA-151 has not yet frozen the production behavior-intent schema, so RMA-133 uses an explicitly **provisional benchmark-only** contract. It is intentionally smaller than the future production schema and cannot command actuators directly.
+- context: 2,048 tokens;
+- batch: 256 tokens;
+- micro-batch: 64 tokens;
+- maximum output: 128 generated tokens;
+- decode and batch threads: 4 / 4;
+- temperature: 0.0;
+- min-p: 0.0;
+- seed: 133; and
+- stream queue: 64 fragments.
 
-The system prompt permits only:
-
-- `schema_version=1`;
-- bounded user-facing `speech`;
-- optional `gaze_target` containing exactly a current tracked entity ID;
-- one expression from a six-value vocabulary;
-- one gesture from a four-value vocabulary; and
-- low/normal/high urgency.
-
-The 12 fixed cases cover greetings, valid gaze, stale targets, ambiguous targets, camera unavailability, stop/rest requests, a surprise reaction, and an attempted raw motor command. The deterministic scorer does not repair malformed output. Markdown-wrapped JSON, unknown keys, unsafe raw-actuation keys, invalid gaze objects, or any other schema violation fails that case's JSON gate.
-
-Semantic quality is scored out of 100 per case: 10 schema, 25 speech semantics, 25 gaze correctness, 15 expression, 15 gesture, and 10 urgency. A wrong but syntactically valid tracked entity therefore loses gaze credit rather than being treated as successful.
-
-## Measurements
-
-The first-party C benchmark uses only the public RMA-130 C ABI and Android/Linux process telemetry. It records:
-
-- model load elapsed time;
-- model tensor bytes and parameter count;
-- process `VmHWM` peak resident memory;
-- prompt token count;
-- time to first streamed text, which is the available RMA-130 measurement of prompt processing plus first-token latency;
-- generated token count and post-first-token decode rate;
-- battery temperature before the model, around every case, and after the candidate; and
-- the exact generated response bytes, hex-encoded in the JSONL artifact for deterministic offline scoring.
-
-Response bytes are not sanitized, replacement-decoded, or truncated to a Unicode boundary. The scorer decodes `response_bytes_hex` with strict UTF-8. If generation stops in the middle of a UTF-8 code point, that case receives a visible schema failure and zero semantic score; malformed response bytes cannot crash the candidate scorer and cannot be repaired into an eligible response.
-
-RMA-130 ABI v1 does not expose pure prefill duration separately, so RMA-133 does not mislabel time-to-first-text as isolated prefill time. A future ABI may add that finer metric without rewriting this evidence.
-
-Battery-temperature telemetry is mandatory for v1 evidence. If it is unavailable or disappears, the physical benchmark fails instead of assuming the device is cool. The native harness also stops before model load or a case when the measured battery temperature is already at the configured 45 C safety ceiling.
-
-## Predeclared pass and selection gates
-
-A candidate is eligible only when all of these hold:
+A candidate is eligible only if all frozen numerical gates hold:
 
 - all 12 cases complete;
-- strict JSON/schema reliability is 12/12;
-- mean semantic score is at least 85/100;
+- strict JSON/schema reliability is 12/12 (1.0);
+- mean semantic quality is at least 85/100;
 - mean decode speed is at least 1 token/s;
-- measured process peak RSS is at most 1.5 GB;
-- peak measured battery temperature remains below 45 C; and
-- battery temperature rises no more than 10 C from the candidate's initial reading.
+- process peak RSS is at most 1,500,000,000 bytes;
+- peak battery temperature remains below 45.0 C; and
+- battery temperature rises no more than 10.0 C from the candidate's initial reading.
 
-These are RMA-133 selection gates, not the production resource governor. RMA-135 still owns device profiles, Android thermal APIs, dynamic throttling, and physics-preserving resource policy.
+Ranking is also unchanged: higher semantic quality, higher schema reliability, higher decode rate,
+lower peak RSS, lower load time, then stable candidate ID. If nobody passes, selection is null and
+the selector exits nonzero.
 
-Eligible candidates are ranked, in order, by higher semantic quality, higher schema reliability, higher decode rate, lower peak RSS, lower load time, then stable candidate ID. If no candidate passes, the selector emits `no_candidate_passed` and exits nonzero. It does not weaken thresholds or nominate the least-bad failure.
+## V6 behavior oracle
 
-## Physical-device boundary
+The provisional benchmark-only behavior intent remains a safe high-level contract, not raw robot
+actuation. The output fields are `schema_version`, `speech`, optional `gaze_target`, `expression`,
+`gesture`, and `urgency`. Independent structural validation still rejects unknown/unsafe keys,
+invalid enums/gaze shapes, overlong speech, malformed JSON, invalid UTF-8, Markdown wrappers,
+prefix/suffix prose, or multiple objects.
 
-The dedicated workflow runs candidate inference only on the project's physical ARM64 Android runner. Emulator evidence is rejected. The runner builds the exact pinned RMA-130 llama.cpp source for the exact pinned Android NDK/API baseline, then builds the benchmark executable with first-party warnings-as-errors and links it only through `libreachy_llama.so`.
+`benchmarks/rma133/behavior_cases-v2.tsv` preserves the same 12 behavioral scenarios but fixes the
+V5 semantic false-positive exposed by `reject_stale_target`. Speech expectations use deterministic
+required concept groups plus optional forbidden terms instead of a loose single OR-list. In
+particular, the stale-target case must communicate both tracking context and stale/current
+availability; an unrelated answer such as `I can't issue raw actuator commands.` does not receive
+speech credit. `reject_raw_actuator` and `camera_unavailable` likewise require their relevant
+paired concepts. Speech remains worth 25 points and total semantic score remains 100.
 
-Models are staged one at a time under `/data/local/tmp` and removed after each candidate. They are not committed, bundled into the application, or uploaded as CI artifacts. Benchmark result artifacts contain configuration, response bytes, scores, runtime/build identity, and selection evidence only.
+This oracle change is why V6 has a new lineage. It is not back-applied to official V5 scores.
+Diagnostic rescoring of historical outputs remains non-acceptance evidence.
 
-## Failure policy and downstream boundary
+## Frozen GBNF generation contract
 
-There is no model fallback in the native benchmark and no provider fallback anywhere in RMA-133. Acquisition/integrity failure, model-load failure, missing thermal evidence, runtime error, incomplete corpus, malformed structured output, invalid UTF-8, or no eligible candidate is visible and prevents selection.
+V6 adds generation-time GBNF through ABI-2 `reachy_llama_generation_start_constrained`.
+`benchmarks/rma133/behavior-output-v1.gbnf` is frozen by exact SHA-256 in the V6 config with root
+`root` and constraint type `GBNF`.
 
-RMA-133 does not implement the production local LLM provider. After a winner is measured, the repository can record that recommendation and a real validated model manifest from the exact selected artifact. RMA-134 must still stream/cancel through the worker-thread runtime, enforce context/output limits, validate production behavior intent, and report local unavailable state instead of silently calling a cloud model. RMA-135 owns runtime resource and thermal governance.
+The grammar permits exactly one behavior JSON object in a canonical key order. It fixes
+`schema_version` to 1, restricts expression/gesture/urgency enumerations, permits gaze only as null
+or exactly a `tracked_entity` object with an accepted entity ID lexical form, and provides no
+production for unknown/raw-actuation keys. It cannot generate a Markdown fence, `<think>` prefix,
+trailing prose, or a second top-level object.
 
+The grammar is a **generation constraint**, not a parser repair. The raw generated bytes are still
+passed through the strict independent JSON/schema validator. Nothing strips fences, repairs JSON,
+recovers a partial parse, retries unconstrained, or treats grammar failure as successful output.
 
-## Candidate-size policy relaxation (2026-08-08)
+## Constraint evidence and negative control
 
-Candidate sets v1 through v4 evaluated the original sub-1B scope. V4 improved Qwen2.5-Coder-0.5B-Instruct to 75% strict schema reliability and 62.5/100 semantic quality while remaining well inside the memory, decode-rate, and thermal envelopes. Because it still failed the frozen 100% schema and 85/100 semantic gates, RMA-133 now permits an up-to-2B-class follow-up candidate.
+The V6 native benchmark uses only the public first-party ABI. Before candidate acceptance it
+verifies the grammar bytes and records a dedicated constraint evidence record containing:
 
-This is a size-scope change only. Candidate-set v5 keeps the v4 system prompt bytes, 12 behavior cases, Q4_K_M quantization, runtime profile, Apache-2.0 license policy, scorer, thresholds, ranking, raw byte evidence, no-repair rule, and fail-closed selector unchanged. The new benchmark lineage ID is `rma133-initial-local-model-v2`; historical `rma133-initial-sub1b-v1` configs remain valid and immutable.
+- runtime ABI version;
+- constraint type;
+- grammar path, SHA-256, and root;
+- constrained-start attempt/success counts;
+- terminal error status;
+- text-event count; and
+- whether constrained mode remained active for the complete candidate run.
+
+The physical runner also executes a malformed-grammar negative control before real candidate
+selection. That control must fail nonzero with explicit constraint-initialization status 16, zero
+text events, and no response bytes from the first attempted case. If malformed grammar emits text,
+returns success, or silently becomes unconstrained generation, the physical run aborts before any
+candidate can be eligible.
+
+## Hosted runtime proof before the phone
+
+The physical benchmark is gated on hosted contract and ABI-2 validation. Hosted validation uses
+the exact pinned llama.cpp source and runs both normal and ASan/UBSan first-party builds.
+
+A tiny GGUF used by llama.cpp-style tests is separately revision/size/SHA-256 pinned in
+`third_party/llama-cpp-test-model.lock.json`. It is test-only and is not a product model. Loaded
+model tests prove:
+
+- caller-owned grammar/root buffers can be overwritten immediately after start because the runtime
+  owns deep copies;
+- a deterministic grammar produces the exact constrained byte and cannot start with a Markdown
+  fence or `<think>`;
+- malformed grammar terminates with explicit status 16 and zero partial/unconstrained output;
+- cancellation while the bounded stream queue is backpressured reaches a visible cancelled state;
+- release after cancellation clears the generation slot; and
+- the same model can then be reused and unloaded successfully.
+
+These tests prevent a static validation-only implementation from being mistaken for a safe
+asynchronous constraint implementation.
+
+## Physical-device/resource evidence
+
+Candidate inference runs only on the project's physical ARM64 Android runner. Emulator evidence is
+rejected. The runner builds ABI-2 `libreachy_llama.so` from the exact pinned llama.cpp checkout and
+builds the V6 benchmark with strict first-party warnings and only the first-party runtime ABI.
+
+Models are staged one at a time under `/data/local/tmp`, with exact host and device size/SHA-256
+checks, then removed. Model files are not committed, bundled into the app, or uploaded in benchmark
+evidence.
+
+Per-candidate raw JSONL preserves exact response bytes (hex), model/load identity, prompt/generated
+token metrics, time-to-first-text, post-first-token decode rate, process peak RSS, battery/thermal
+telemetry, and constraint evidence. Missing mandatory battery telemetry remains a failure rather
+than an assumption that the device is cool.
+
+V6 keeps the historical measurement naming discipline: time-to-first-text is not mislabeled as
+pure prefill latency merely because the native ABI does not expose a separate prefill timer.
+
+## Downstream boundary
+
+RMA-133 still does not implement the production local LLM provider or production resource
+governor. Only a candidate that passes the complete frozen physical V6 gates may receive a real
+RMA-131 selected-model manifest and RMA-133 selection record. RMA-134 must later integrate
+streaming/cancellation and report local-unavailable state without provider fallback. RMA-135 owns
+runtime resource and thermal governance.
+
+If V6 selects no candidate, the V6 evidence is preserved and RMA-133 remains unresolved. The next
+experiment must be separately frozen; it may not lower V6 gates or repair V6 outputs after the
+fact.
