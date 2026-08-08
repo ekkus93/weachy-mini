@@ -1,0 +1,112 @@
+name: RMA-133 reproducibility staging fixes
+
+on:
+  push:
+    branches: [rma133-v6-reproducibility-stage]
+    paths:
+      - '.github/workflows/rma133-repro-staging-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-v6-reproducibility-stage
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply reproducibility fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          prepare = Path('scripts/prepare_rma133_reproducibility_device.py')
+          text = prepare.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  'from datetime import datetime, timezone',
+                  'from datetime import UTC, datetime',
+              ),
+              (
+                  '        stdout=subprocess.PIPE,\n        stderr=subprocess.PIPE,',
+                  '        capture_output=True,',
+              ),
+              (
+                  '    return datetime.now(timezone.utc).isoformat()',
+                  '    return datetime.now(UTC).isoformat()',
+              ),
+              (
+                  '                f"RMA-133 reproducibility requires exactly one authorized device; found {len(devices)}"',
+                  '                "RMA-133 reproducibility requires exactly one authorized device; "\n'
+                  '                f"found {len(devices)}"',
+              ),
+              (
+                  '*rma133_benchmark_v6*) printf \'%s\\n\' "${p#/proc/}" ;;',
+                  '*rma133_benchmark_v[6]*) printf \'%s\\n\' "${p#/proc/}" ;;',
+              ),
+              (
+                  '    except Exception as exc:  # noqa: BLE001 - evidence must survive an environmental failure',
+                  '    except Exception as exc:',
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing prepare replacement: {old!r}')
+              text = text.replace(old, new, 1)
+          prepare.write_text(text, encoding='utf-8')
+
+          reproduce = Path('scripts/run_rma133_device_reproducibility_v6.py')
+          text = reproduce.read_text(encoding='utf-8')
+          old = '''    if not isinstance(limits, dict) or float(limits.get("maximum_start_temperature_c", 0.0)) != 32.0:\n        raise RuntimeError("RMA-133 reproducibility precondition temperature contract changed")'''
+          new = '''    if (\n        not isinstance(limits, dict)\n        or float(limits.get("maximum_start_temperature_c", 0.0)) != 32.0\n    ):\n        raise RuntimeError("RMA-133 reproducibility precondition temperature contract changed")'''
+          if old not in text:
+              raise SystemExit('missing reproducibility precondition line-wrap target')
+          text = text.replace(old, new, 1)
+          old = '''        artifact = candidate["artifact"]\n        cached = base.model_cache(candidate)\n        base.shell(serial, ["rm", "-f", f"{REMOTE}/model.gguf"], check=False)'''
+          new = '''        artifact = candidate["artifact"]\n        cached = base.model_cache(candidate)\n        free_kib = int(\n            base.shell(serial, ["df", "-Pk", "/data/local/tmp"])\n            .stdout.splitlines()[-1]\n            .split()[3]\n        )\n        need_kib = (artifact["file_size_bytes"] + 1023) // 1024 + 262144\n        if free_kib < need_kib:\n            raise RuntimeError("RMA-133 reproducibility device storage is insufficient")\n        base.shell(serial, ["rm", "-f", f"{REMOTE}/model.gguf"], check=False)'''
+          if old not in text:
+              raise SystemExit('missing selected-artifact storage insertion point')
+          reproduce.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          tests = Path('scripts/tests/test_rma133_reproducibility.py')
+          text = tests.read_text(encoding='utf-8')
+          old = '''    def test_reproducibility_targets_only_frozen_selected_candidate(self) -> None:\n'''
+          new = '''    def test_stale_process_probe_cannot_match_itself(self) -> None:\n        source = Path(prepare.__file__).read_text(encoding="utf-8")\n        scan_start = source.index('script = r"""')\n        scan_end = source.index('"""', scan_start + len('script = r"""'))\n        scan_script = source[scan_start:scan_end]\n        self.assertNotIn("*rma133_benchmark_v6*", scan_script)\n        self.assertIn("*rma133_benchmark_v[6]*", scan_script)\n\n    def test_reproducibility_targets_only_frozen_selected_candidate(self) -> None:\n'''
+          if old not in text:
+              raise SystemExit('missing process-probe test insertion point')
+          tests.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          ruff check --fix scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py \
+            scripts/tests/test_rma133_reproducibility.py
+          ruff format scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py \
+            scripts/tests/test_rma133_reproducibility.py
+          ruff check scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py \
+            scripts/tests/test_rma133_reproducibility.py
+          ruff format --check --diff scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py \
+            scripts/tests/test_rma133_reproducibility.py
+          python3 -m unittest -v scripts.tests.test_rma133_reproducibility
+          git diff --check
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            scripts/prepare_rma133_reproducibility_device.py \
+            scripts/run_rma133_device_reproducibility_v6.py \
+            scripts/tests/test_rma133_reproducibility.py
+          git commit -m 'RMA-133: fix reproducibility precondition probe'
+          git push origin HEAD:rma133-v6-reproducibility-stage
