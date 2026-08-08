@@ -1,0 +1,64 @@
+name: RMA-134 staging allowlist immutability fix
+
+on:
+  push:
+    branches: [rma134-local-llm-provider-stage]
+    paths:
+      - '.github/workflows/rma134-staging-allowlist-immutability-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma134-local-llm-provider-stage
+      - name: Seal request authorization snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          contracts = Path('Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmContracts.cs')
+          text = contracts.read_text(encoding='utf-8')
+          old = '''        private static string[] CopyValidTrackedEntityIds(\n            IEnumerable<string>? validTrackedEntityIds)'''
+          new = '''        private static IReadOnlyList<string> CopyValidTrackedEntityIds(\n            IEnumerable<string>? validTrackedEntityIds)'''
+          if old not in text:
+              raise SystemExit('Missing tracked-entity snapshot method signature.')
+          text = text.replace(old, new, 1)
+          old = '            return result.ToArray();'
+          new = '            return Array.AsReadOnly(result.ToArray());'
+          if old not in text:
+              raise SystemExit('Missing mutable tracked-entity snapshot return.')
+          contracts.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          tests = Path('managed/ReachyMini.LocalLlm.Tests/Program.cs')
+          text = tests.read_text(encoding='utf-8')
+          old = '''            ("strict parser rejects framing and schema drift", ParserRejectsFramingAsync),\n            ("ABI mismatch is explicit and does not load", AbiMismatchFailsClosedAsync),'''
+          new = '''            ("strict parser rejects framing and schema drift", ParserRejectsFramingAsync),\n            ("tracked gaze authorization snapshot is immutable", TrackedGazeAuthorizationIsImmutableAsync),\n            ("ABI mismatch is explicit and does not load", AbiMismatchFailsClosedAsync),'''
+          if old not in text:
+              raise SystemExit('Missing managed test registration insertion point.')
+          text = text.replace(old, new, 1)
+          old = '''    private static async Task AbiMismatchFailsClosedAsync()'''
+          new = '''    private static Task TrackedGazeAuthorizationIsImmutableAsync()\n    {\n        string[] source = { "entity-3" };\n        var request = new LocalLlmRequest(\n            "immutable-gaze",\n            "Look at the current entity.",\n            TimeSpan.FromSeconds(30.0),\n            source);\n        source[0] = "entity-99";\n        Require(\n            request.ValidTrackedEntityIds.Count == 1 &&\n            request.ValidTrackedEntityIds[0] == "entity-3",\n            "request did not preserve its tracked-entity authorization snapshot");\n        Require(\n            request.ValidTrackedEntityIds is not string[],\n            "request exposed a mutable tracked-entity authorization array");\n        return Task.CompletedTask;\n    }\n\n    private static async Task AbiMismatchFailsClosedAsync()'''
+          if old not in text:
+              raise SystemExit('Missing managed immutability test insertion point.')
+          tests.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit immutability contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            Assets/ReachyMini/Runtime/Core/Language/ReachyLocalLlmContracts.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.cs
+          git commit -m 'RMA-134: make gaze authorization snapshot immutable'
+          git push origin HEAD:rma134-local-llm-provider-stage
