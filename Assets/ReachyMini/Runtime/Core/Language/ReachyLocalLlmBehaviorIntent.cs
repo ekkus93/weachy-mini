@@ -34,10 +34,11 @@ namespace ReachyMini.Language
     {
         internal LocalLlmGazeTarget(string entityId)
         {
+            Kind = "tracked_entity";
             EntityId = entityId;
         }
 
-        public string Kind => "tracked_entity";
+        public string Kind { get; }
 
         public string EntityId { get; }
     }
@@ -51,6 +52,7 @@ namespace ReachyMini.Language
             LocalLlmGesture gesture,
             LocalLlmUrgency urgency)
         {
+            SchemaVersion = 1;
             Speech = speech;
             GazeTarget = gazeTarget;
             Expression = expression;
@@ -58,7 +60,7 @@ namespace ReachyMini.Language
             Urgency = urgency;
         }
 
-        public int SchemaVersion => 1;
+        public int SchemaVersion { get; }
 
         public string Speech { get; }
 

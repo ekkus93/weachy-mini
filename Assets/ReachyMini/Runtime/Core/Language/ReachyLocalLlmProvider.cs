@@ -165,8 +165,8 @@ namespace ReachyMini.Language
                     operation = new TurnOperation(
                         conversationEpoch,
                         request,
-                        cancellationToken,
-                        configuration.ManagedEventQueueCapacity);
+                        configuration.ManagedEventQueueCapacity,
+                        cancellationToken);
                     activeOperation = operation;
                     SetStateLocked(
                         LocalLlmProviderState.Busy,
@@ -851,8 +851,8 @@ namespace ReachyMini.Language
             public TurnOperation(
                 ulong epoch,
                 LocalLlmRequest request,
-                CancellationToken callerCancellation,
-                int eventQueueCapacity)
+                int eventQueueCapacity,
+                CancellationToken callerCancellation)
             {
                 Epoch = epoch;
                 Request = request;

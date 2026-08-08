@@ -53,6 +53,8 @@ namespace ReachyMini.Language
             ProviderId = RequireText(providerId, nameof(providerId), 128);
             ModelId = RequireText(modelId, nameof(modelId), 128);
             DisplayName = RequireText(displayName, nameof(displayName), 256);
+            IsOnDevice = true;
+            RequiresNetwork = false;
         }
 
         public string ProviderId { get; }
@@ -61,9 +63,9 @@ namespace ReachyMini.Language
 
         public string DisplayName { get; }
 
-        public bool IsOnDevice => true;
+        public bool IsOnDevice { get; }
 
-        public bool RequiresNetwork => false;
+        public bool RequiresNetwork { get; }
 
         private static string RequireText(string value, string name, int maximumLength)
         {
@@ -99,6 +101,9 @@ namespace ReachyMini.Language
             Threads = threads;
             BatchThreads = batchThreads;
             StreamQueueCapacity = streamQueueCapacity;
+            SupportsStreaming = true;
+            SupportsCancellation = true;
+            SupportsConversationReset = true;
         }
 
         public uint ContextTokens { get; }
@@ -111,11 +116,11 @@ namespace ReachyMini.Language
 
         public uint StreamQueueCapacity { get; }
 
-        public bool SupportsStreaming => true;
+        public bool SupportsStreaming { get; }
 
-        public bool SupportsCancellation => true;
+        public bool SupportsCancellation { get; }
 
-        public bool SupportsConversationReset => true;
+        public bool SupportsConversationReset { get; }
     }
 
     public sealed class LocalLlmProviderAvailability

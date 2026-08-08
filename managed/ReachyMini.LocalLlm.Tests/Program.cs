@@ -162,7 +162,7 @@ internal static class Program
         var hold = new FakeGeneration(holdUntilCancelled: true);
         context.Runtime.Session.EnqueueGeneration(hold);
 
-        Task<List<LocalLlmEvent>> firstTask = GenerateAsync(context.Provider, "first", "Hold") ;
+        Task<List<LocalLlmEvent>> firstTask = GenerateAsync(context.Provider, "first", "Hold");
         await hold.Started.Task.ConfigureAwait(false);
         List<LocalLlmEvent> second = await GenerateAsync(context.Provider, "second", "Do not queue")
             .ConfigureAwait(false);
@@ -317,7 +317,9 @@ internal static class Program
                     stream,
                     CancellationToken.None)
                 .ConfigureAwait(false);
-            Require(import.Succeeded && import.Artifact != null, "synthetic approved artifact import failed");
+            Require(import.Succeeded, "synthetic approved artifact import failed");
+            LocalModelApprovedArtifact approved = import.Artifact ??
+                throw new InvalidOperationException("Synthetic approved artifact is missing.");
 
             var runtime = new FakeRuntimeFactory();
             var config = new LocalLlmProviderConfiguration(
@@ -330,7 +332,7 @@ internal static class Program
                 managedEventQueueCapacity: 64);
             var provider = new ReachyLocalLlmProvider(
                 runtime,
-                import.Artifact,
+                approved,
                 manifest,
                 config);
             return new TestContext(root, provider, runtime);
@@ -485,7 +487,7 @@ internal static class Program
         private readonly bool holdUntilCancelled;
         private bool started;
         private bool cancelled;
-        private string? completionAfterHold;
+        private volatile string? completionAfterHold;
 
         public FakeGeneration(bool holdUntilCancelled)
         {

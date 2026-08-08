@@ -127,7 +127,7 @@ namespace ReachyMini.Language
             {
                 throw new ArgumentOutOfRangeException(nameof(maximumCommittedHistoryTurns));
             }
-            if (managedEventQueueCapacity <= 0 || managedEventQueueCapacity > 1024)
+            if (managedEventQueueCapacity < 2 || managedEventQueueCapacity > 1024)
             {
                 throw new ArgumentOutOfRangeException(nameof(managedEventQueueCapacity));
             }
