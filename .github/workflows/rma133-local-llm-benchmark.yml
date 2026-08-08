@@ -253,3 +253,65 @@ jobs:
             build/rma133/results
           if-no-files-found: warn
           retention-days: 30
+
+  staging-format-artifact:
+    name: Generate exact staged format patch
+    if: github.event_name == 'pull_request' && github.head_ref == 'rma133-v6-staging'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Patch historical include boundary and format Python
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('native/llama_runtime/src/reachy_llama.cpp')
+          text = path.read_text(encoding='utf-8')
+          needle = '#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal\n#include "reachy_llama_abi1_base.inc"\n#undef reachy_llama_generation_start\n'
+          replacement = '''#define reachy_llama_generation_start ReachyLegacyGenerationStartInternal
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+#endif
+#include "reachy_llama_abi1_base.inc"
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
+#undef reachy_llama_generation_start
+'''
+          if text.count(needle) != 1:
+              raise SystemExit('historical include anchor missing or ambiguous')
+          path.write_text(text.replace(needle, replacement), encoding='utf-8')
+          PY
+          python -m pip install --disable-pip-version-check ruff==0.12.0
+          files=(
+            scripts/run_rma133_device_benchmark_v6.py
+            scripts/score_rma133_benchmark_v6.py
+            scripts/tests/test_rma130_llama_runtime.py
+            scripts/tests/test_rma133_constrained_v6.py
+          )
+          ruff format "${files[@]}"
+          ruff check --fix "${files[@]}"
+          ruff format "${files[@]}"
+          ruff check "${files[@]}"
+          python3 -m compileall -q "${files[@]}"
+          test "$(grep -c '#pragma GCC diagnostic ignored "-Wswitch"' native/llama_runtime/src/reachy_llama.cpp)" -eq 1
+      - name: Upload exact staged bytes
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma133-v6-staging-formatted-${{ github.event.pull_request.head.sha }}
+          path: |
+            native/llama_runtime/src/reachy_llama.cpp
+            scripts/run_rma133_device_benchmark_v6.py
+            scripts/score_rma133_benchmark_v6.py
+            scripts/tests/test_rma130_llama_runtime.py
+            scripts/tests/test_rma133_constrained_v6.py
+          if-no-files-found: error
+          retention-days: 1
