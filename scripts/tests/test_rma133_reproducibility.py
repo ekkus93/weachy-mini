@@ -50,8 +50,7 @@ class Rma133ReproducibilityTests(unittest.TestCase):
             prepare.MAX_START_TEMP_C = 32.0
             prepare.MAX_STABLE_SPAN_C = 0.3
             warm = [
-                {"elapsed_seconds": float(index * 10), "temperature_c": 32.1}
-                for index in range(7)
+                {"elapsed_seconds": float(index * 10), "temperature_c": 32.1} for index in range(7)
             ]
             unstable = [
                 {"elapsed_seconds": float(index * 10), "temperature_c": value}
@@ -94,6 +93,14 @@ class Rma133ReproducibilityTests(unittest.TestCase):
                     reproduce.require_precondition()
         finally:
             reproduce.PRECONDITION = old_path
+
+    def test_stale_process_probe_cannot_match_itself(self) -> None:
+        source = Path(prepare.__file__).read_text(encoding="utf-8")
+        scan_start = source.index('script = r"""')
+        scan_end = source.index('"""', scan_start + len('script = r"""'))
+        scan_script = source[scan_start:scan_end]
+        self.assertNotIn("*rma133_benchmark_v6*", scan_script)
+        self.assertIn("*rma133_benchmark_v[6]*", scan_script)
 
     def test_reproducibility_targets_only_frozen_selected_candidate(self) -> None:
         config = json.loads(reproduce.base.CONFIG.read_text(encoding="utf-8"))

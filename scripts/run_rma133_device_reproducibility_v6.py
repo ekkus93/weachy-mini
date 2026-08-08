@@ -50,7 +50,10 @@ def require_precondition() -> dict[str, Any]:
     if data.get("status") != "passed":
         raise RuntimeError("RMA-133 reproducibility precondition did not pass")
     limits = data.get("limits")
-    if not isinstance(limits, dict) or float(limits.get("maximum_start_temperature_c", 0.0)) != 32.0:
+    if (
+        not isinstance(limits, dict)
+        or float(limits.get("maximum_start_temperature_c", 0.0)) != 32.0
+    ):
         raise RuntimeError("RMA-133 reproducibility precondition temperature contract changed")
     return data
 
@@ -230,6 +233,12 @@ def main() -> int:
 
         artifact = candidate["artifact"]
         cached = base.model_cache(candidate)
+        free_kib = int(
+            base.shell(serial, ["df", "-Pk", "/data/local/tmp"]).stdout.splitlines()[-1].split()[3]
+        )
+        need_kib = (artifact["file_size_bytes"] + 1023) // 1024 + 262144
+        if free_kib < need_kib:
+            raise RuntimeError("RMA-133 reproducibility device storage is insufficient")
         base.shell(serial, ["rm", "-f", f"{REMOTE}/model.gguf"], check=False)
         base.adb(serial, "push", str(cached), f"{REMOTE}/model.gguf")
         remote_sha = base.shell(

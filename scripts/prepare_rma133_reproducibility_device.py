@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -40,8 +40,7 @@ def run(args: list[str], *, check: bool = True) -> subprocess.CompletedProcess[s
         args,
         check=check,
         text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
 
@@ -54,7 +53,7 @@ def shell(serial: str, argv: list[str], *, check: bool = True) -> subprocess.Com
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def normalize_temperature(raw: float) -> float:
@@ -92,7 +91,8 @@ def resolve_device() -> tuple[str, dict[str, Any]]:
         ]
         if len(devices) != 1:
             raise RuntimeError(
-                f"RMA-133 reproducibility requires exactly one authorized device; found {len(devices)}"
+                "RMA-133 reproducibility requires exactly one authorized device; "
+                f"found {len(devices)}"
             )
         serial = devices[0]
 
@@ -123,7 +123,7 @@ for p in /proc/[0-9]*; do
   [ -r "$p/cmdline" ] || continue
   cmd="$(tr '\000' ' ' < "$p/cmdline" 2>/dev/null || true)"
   case "$cmd" in
-    *rma133_benchmark_v6*) printf '%s\n' "${p#/proc/}" ;;
+    *rma133_benchmark_v[6]*) printf '%s\n' "${p#/proc/}" ;;
   esac
 done
 """
@@ -269,7 +269,7 @@ def main() -> int:
                 return 0
 
             time.sleep(SAMPLE_INTERVAL_SECONDS)
-    except Exception as exc:  # noqa: BLE001 - evidence must survive an environmental failure
+    except Exception as exc:
         evidence["status"] = "invalid_environment"
         evidence["completed_at_utc"] = utc_now()
         evidence["reason"] = str(exc)
