@@ -1,0 +1,85 @@
+name: RMA-133 final evidence staging
+
+on:
+  push:
+    branches: [rma133-final-evidence-stage]
+    paths:
+      - '.github/workflows/rma133-final-evidence-stage.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rma133-final-evidence-stage
+      - name: Apply final RMA-133 evidence bookkeeping
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          todo = Path('docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md')
+          text = todo.read_text(encoding='utf-8')
+          replacements = {
+              '**Status:** V6 selected and cool-start reproducibility confirmed; final hosted closure CI pending':
+                  '**Status:** Complete (2026-08-08)',
+              '- [ ] Run permanent hosted CI on the final closure SHA.':
+                  '- [x] Run permanent hosted CI on the validated closure source SHA.',
+              '- [ ] Verify all required final hosted runs are completed and green.':
+                  '- [x] Verify all required final hosted runs are completed and green.',
+              '- [ ] Record the final closure SHA and hosted run/job URLs in the TODO/validation record.':
+                  '- [x] Record the validated closure SHA and hosted run/job URLs in the TODO/validation record.',
+              '- [ ] Exact final source SHA and required CI/device jobs are verified.':
+                  '- [x] Exact final source SHA and required CI/device jobs are verified.',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing TODO closure marker: {old}')
+              text = text.replace(old, new, 1)
+
+          marker = '''- Full evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.\n\n**Phase 9A gate:** RMA-133 is complete only when selected-model manifest and exact-SHA closure evidence are green.'''
+          replacement = '''- Full evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.\n\n**Final closure evidence**\n\n- Validated closure source/docs/manifest SHA: `1141b3e72f4e621164eecceb241c5f2013b706f4`.\n- Permanent CI run `31271532993` completed successfully on that exact SHA: Reachy-model job `93138230896`, managed job `93138230914`, static/actionlint/Ruff/ShellCheck job `93138230929`, Android job `93138230973`, and native/sanitizer job `93138230986`.\n- Physical reproducibility remains anchored to frozen-byte-verified source `efe2a31a3b4df17281096a81f8d7509e2cc8de3b`, run `31270194090`, physical job `93134741783`, artifact `9025603640`, digest `sha256:a53d54ec69d5d851241bef5d6d57073e965d2463cf167f11841d96137c32ab42`.\n- Physical-trigger hardening SHA `4565a2fb5508cc59dda4501c8daaa77e82c5e9a3` passed permanent CI run `31271760818` and RMA-133 hosted run `31271760823` (contract job `93138825379`, ABI-2 normal/sanitizer job `93138841219`). The scope gate recorded that only workflow policy changed, so no redundant physical benchmark was launched.\n- The later evidence-only bookkeeping commit does not modify any frozen V6 benchmark/runtime/model input and is not candidate evidence.\n\n**Phase 9A gate:** Complete. The selected manifest, controlled physical reproducibility evidence, validated closure source, and required hosted CI are green.'''
+          if marker not in text:
+              raise SystemExit('missing TODO final closure evidence insertion marker')
+          todo.write_text(text.replace(marker, replacement, 1), encoding='utf-8')
+
+          roadmap = Path('docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md')
+          text = roadmap.read_text(encoding='utf-8')
+          old = '**Status:** Closure candidate — V6 selection and cool-start reproducibility confirmed; final hosted closure CI pending'
+          new = '**Status:** Complete (2026-08-08)'
+          if old not in text:
+              raise SystemExit('missing roadmap RMA-133 status marker')
+          text = text.replace(old, new, 1)
+          marker = '''- Full reproducibility evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.\n\n## RMA-134 — Implement local LLM provider'''
+          replacement = '''- Full reproducibility evidence: `docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md`.\n- Final closure source/docs/manifest SHA `1141b3e72f4e621164eecceb241c5f2013b706f4` passed permanent CI run `31271532993` across native/sanitizer, managed, Android, static/actionlint/Ruff/ShellCheck, and pinned Reachy-model jobs.\n- RMA-133 physical-trigger hardening SHA `4565a2fb5508cc59dda4501c8daaa77e82c5e9a3` passed permanent CI run `31271760818` and hosted RMA-133 run `31271760823`; its scope gate correctly skipped a redundant physical benchmark because no frozen physical-benchmark input changed.\n- RMA-133 is closed with Qwen3-0.6B Q4_K_M selected. The warm throttled run remains explicit evidence for RMA-135; no RMA-133 threshold, model, scorer, or fallback policy was weakened to obtain closure.\n\n## RMA-134 — Implement local LLM provider'''
+          if marker not in text:
+              raise SystemExit('missing roadmap final evidence insertion marker')
+          roadmap.write_text(text.replace(marker, replacement, 1), encoding='utf-8')
+
+          validation = Path('docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md')
+          text = validation.read_text(encoding='utf-8')
+          old = '''RMA-133 can close once the reproducibility protocol/evidence and final bookkeeping are committed and exact-SHA hosted closure CI is green. RMA-135 must retain the warm-run evidence and implement production thermal/resource governance rather than assuming cool-start performance is continuously available.'''
+          new = '''RMA-133 is closed. The validated closure source/docs/manifest SHA `1141b3e72f4e621164eecceb241c5f2013b706f4` passed permanent CI run `31271532993`: Reachy-model job `93138230896`, managed job `93138230914`, static/actionlint/Ruff/ShellCheck job `93138230929`, Android job `93138230973`, and native/sanitizer job `93138230986`.\n\nA later CI-policy hardening commit, `4565a2fb5508cc59dda4501c8daaa77e82c5e9a3`, passed permanent CI run `31271760818` and RMA-133 hosted run `31271760823` (contract job `93138825379`, ABI-2 normal/sanitizer job `93138841219`). That workflow proved the physical scope decision was `false` for a workflow-only change, preventing a redundant warm phone benchmark while retaining hosted RMA-133 validation.\n\nThe evidence-only final bookkeeping commit does not alter the selected artifact, frozen V6 benchmark inputs, scorer, runtime, or physical evidence. RMA-135 must retain the warm-run failure evidence and implement production thermal/resource governance rather than assuming cool-start performance is continuously available.'''
+          if old not in text:
+              raise SystemExit('missing reproducibility validation disposition marker')
+          validation.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit staged evidence files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Phillip Chin'
+          git config user.email 'ekkus93@gmail.com'
+          git add \
+            docs/RMA_133_CONSTRAINED_GENERATION_TODO_2026-08-08.md \
+            docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md \
+            docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md
+          git commit -m 'RMA-133: close reproducibility validation'
+          git push origin HEAD:rma133-final-evidence-stage
