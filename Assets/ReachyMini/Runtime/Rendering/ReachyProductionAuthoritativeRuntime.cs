@@ -88,6 +88,19 @@ namespace ReachyMini.Rendering
             }
         }
 
+        public bool TryGetLatestWorkerTiming(
+            out ReachySimulationTimingSnapshot timing)
+        {
+            if (worker != null && worker.TryGetLatestSnapshot(
+                out ReachyPublishedSimulationSnapshot snapshot))
+            {
+                timing = snapshot.Timing;
+                return true;
+            }
+            timing = default;
+            return false;
+        }
+
         public ReachyPresentationBody[] GetCanonicalBodies()
         {
             ReachyPresentationBody[] copy =
