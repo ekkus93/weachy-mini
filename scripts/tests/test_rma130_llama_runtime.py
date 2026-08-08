@@ -11,7 +11,9 @@ PINNED_VERSION = "b10313"
 
 class Rma130LlamaRuntimeContracts(unittest.TestCase):
     def test_source_lock_and_inventory_match_exact_release(self) -> None:
-        lock = json.loads((ROOT / "third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8"))
+        lock = json.loads(
+            (ROOT / "third_party/llama-cpp-source.lock.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(lock["schema_version"], 1)
         self.assertEqual(lock["version"], PINNED_VERSION)
         self.assertEqual(lock["commit"], PINNED_COMMIT)
@@ -44,7 +46,9 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertNotIn("reachy_llama_generation_wait(", header)
 
     def test_abi1_implementation_is_preserved_as_historical_source(self) -> None:
-        base = (ROOT / "native/llama_runtime/src/reachy_llama_abi1_base.inc").read_text(encoding="utf-8")
+        base = (ROOT / "native/llama_runtime/src/reachy_llama_abi1_base.inc").read_text(
+            encoding="utf-8"
+        )
         self.assertIn('constexpr const char * kVersion = "rma130-abi1"', base)
         self.assertIn("RMA-130 does not queue requests", base)
         self.assertIn("release never blocks waiting for inference", base)
@@ -53,10 +57,21 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertIn('#include "reachy_llama_abi1_base.inc"', source)
         self.assertIn("rma133-abi2-constrained", source)
 
-    def test_constrained_runtime_fails_closed_without_provider_or_unconstrained_fallback(self) -> None:
+    def test_constrained_runtime_fails_closed_without_provider_or_unconstrained_fallback(
+        self,
+    ) -> None:
         source = (ROOT / "native/llama_runtime/src/reachy_llama.cpp").read_text(encoding="utf-8")
         lowered = source.lower()
-        for prohibited in ("http://", "https://", "curl_", "socket(", "fallback provider", "cloud", "download", ".detach()"):
+        for prohibited in (
+            "http://",
+            "https://",
+            "curl_",
+            "socket(",
+            "fallback provider",
+            "cloud",
+            "download",
+            ".detach()",
+        ):
             self.assertNotIn(prohibited, lowered)
         self.assertIn("llama_sampler_init_grammar", source)
         self.assertIn("REACHY_LLAMA_STATUS_CONSTRAINT_INIT_FAILED", source)
@@ -69,9 +84,15 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
     def test_third_party_build_isolated_from_first_party_warning_policy(self) -> None:
         cmake = (ROOT / "native/llama_runtime/CMakeLists.txt").read_text(encoding="utf-8")
         for setting in (
-            "set(BUILD_SHARED_LIBS OFF", "set(LLAMA_ALL_WARNINGS OFF", "set(LLAMA_FATAL_WARNINGS OFF",
-            "set(LLAMA_OPENSSL OFF", "set(LLAMA_SUBPROCESS OFF", "set(GGML_NATIVE OFF",
-            "set(GGML_OPENMP OFF", "set(GGML_LLAMAFILE OFF", 'set(GGML_CPU_ARM_ARCH "armv8-a"',
+            "set(BUILD_SHARED_LIBS OFF",
+            "set(LLAMA_ALL_WARNINGS OFF",
+            "set(LLAMA_FATAL_WARNINGS OFF",
+            "set(LLAMA_OPENSSL OFF",
+            "set(LLAMA_SUBPROCESS OFF",
+            "set(GGML_NATIVE OFF",
+            "set(GGML_OPENMP OFF",
+            "set(GGML_LLAMAFILE OFF",
+            'set(GGML_CPU_ARM_ARCH "armv8-a"',
         ):
             self.assertIn(setting, cmake)
         self.assertIn("reachy_enable_strict_warnings(reachy_llama)", cmake)
@@ -97,7 +118,9 @@ class Rma130LlamaRuntimeContracts(unittest.TestCase):
         self.assertNotIn(".gguf", stage.lower())
 
     def test_stress_contract_keeps_bounded_queue_and_cancellation(self) -> None:
-        tests = (ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp").read_text(encoding="utf-8")
+        tests = (ROOT / "native/llama_runtime/tests/reachy_llama_contract_tests.cpp").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("TestBoundedQueueOrderingAndAllocationStress", tests)
         self.assertIn("TestCancellationUnblocksBackpressureWithoutSilentDrain", tests)
         self.assertIn("queue.Cancel()", tests)

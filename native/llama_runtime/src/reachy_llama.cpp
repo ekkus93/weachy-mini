@@ -72,7 +72,14 @@ llama_sampler * InitSamplerChain(llama_sampler_chain_params params)
 #define reachy_llama_version_string ReachyLegacyVersionStringInternal
 #define reachy_llama_status_string ReachyLegacyStatusStringInternal
 #define reachy_llama_generation_start ReachyLegacyGenerationStartInternal
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wswitch"
+#endif
 #include "reachy_llama_abi1_base.inc"
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 #undef reachy_llama_generation_start
 #undef reachy_llama_status_string
 #undef reachy_llama_version_string

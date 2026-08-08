@@ -20,12 +20,20 @@ class Rma133ConstrainedV6Contracts(unittest.TestCase):
         self.assertEqual(v6["selection_policy"], v5["selection_policy"])
         self.assertEqual(v6["candidates"], v5["candidates"])
         self.assertEqual(v6["license_policy"], v5["license_policy"])
-        scorer.validate_config(ROOT / "benchmarks/rma133/candidates-v6.json", ROOT / "benchmarks/rma133/behavior_cases-v2.tsv")
+        scorer.validate_config(
+            ROOT / "benchmarks/rma133/candidates-v6.json",
+            ROOT / "benchmarks/rma133/behavior_cases-v2.tsv",
+        )
 
     def test_frozen_grammar_and_cases_hashes_are_exact(self) -> None:
-        config = json.loads((ROOT / "benchmarks/rma133/candidates-v6.json").read_text(encoding="utf-8"))
+        config = json.loads(
+            (ROOT / "benchmarks/rma133/candidates-v6.json").read_text(encoding="utf-8")
+        )
         contract = config["constrained_generation_contract"]
-        for path_key, hash_key in (("grammar_path", "grammar_sha256"), ("behavior_cases_path", "behavior_cases_sha256")):
+        for path_key, hash_key in (
+            ("grammar_path", "grammar_sha256"),
+            ("behavior_cases_path", "behavior_cases_sha256"),
+        ):
             actual = hashlib.sha256((ROOT / contract[path_key]).read_bytes()).hexdigest()
             self.assertEqual(actual, contract[hash_key])
         grammar = (ROOT / contract["grammar_path"]).read_text(encoding="utf-8")
@@ -37,14 +45,16 @@ class Rma133ConstrainedV6Contracts(unittest.TestCase):
         data = (ROOT / "scripts/score_rma133_benchmark.py").read_bytes()
         git_blob = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
         self.assertEqual(git_blob, "56bc46c2966c968a4a5d00b4fbc684d52ff9db49")
-        validation = (ROOT / "docs/validation/RMA_133_CANDIDATE_SET_V5_VALIDATION_2026-08-08.md").read_text(encoding="utf-8")
+        validation = (
+            ROOT / "docs/validation/RMA_133_CANDIDATE_SET_V5_VALIDATION_2026-08-08.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("31247094414", validation)
         self.assertIn("9019295576", validation)
         self.assertIn("no candidate selected", validation.lower())
 
     def test_markdown_fence_is_still_schema_invalid(self) -> None:
         case = scorer.load_cases(ROOT / "benchmarks/rma133/behavior_cases-v2.tsv")[0]
-        body = '{"schema_version":1,"speech":"Hello","gaze_target":null,"expression":"pleased","gesture":"nod","urgency":"normal"}'
+        body = '{"schema_version":1,"speech":"Hello","gaze_target":null,"expression":"pleased","gesture":"nod","urgency":"normal"}'  # noqa: E501
         record = {"response_bytes_hex": ("```json\n" + body + "\n```").encode().hex()}
         result = scorer.score_case(case, record)
         self.assertFalse(result["schema_valid"])
@@ -52,7 +62,10 @@ class Rma133ConstrainedV6Contracts(unittest.TestCase):
         self.assertIn("exactly one JSON object", " ".join(result["reasons"]))
 
     def test_stale_target_actuator_excuse_no_longer_gets_speech_credit(self) -> None:
-        cases = {case.case_id: case for case in scorer.load_cases(ROOT / "benchmarks/rma133/behavior_cases-v2.tsv")}
+        cases = {
+            case.case_id: case
+            for case in scorer.load_cases(ROOT / "benchmarks/rma133/behavior_cases-v2.tsv")
+        }
         body = {
             "schema_version": 1,
             "speech": "I can't issue raw actuator commands.",
