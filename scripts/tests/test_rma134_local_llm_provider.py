@@ -115,12 +115,11 @@ class Rma134LocalLlmProviderContracts(unittest.TestCase):
 
     def test_android_acceptance_uses_statfs_without_driveinfo_fallback(self) -> None:
         acceptance = (
-            ROOT
-            / "Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs"
+            ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs"
         ).read_text(encoding="utf-8")
-        storage = (
-            INTEROP_DIR / "AndroidStatFsLocalModelStorageProbe.cs"
-        ).read_text(encoding="utf-8")
+        storage = (INTEROP_DIR / "AndroidStatFsLocalModelStorageProbe.cs").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("new AndroidStatFsLocalModelStorageProbe()", acceptance)
         self.assertNotIn("new DriveInfoLocalModelStorageProbe()", acceptance)

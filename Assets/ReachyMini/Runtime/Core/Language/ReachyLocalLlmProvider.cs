@@ -603,6 +603,10 @@ namespace ReachyMini.Language
             {
                 if (generation != null)
                 {
+                    if (terminal?.Failure == LocalLlmFailure.TimedOut)
+                    {
+                        terminal = AttachTimeoutMetrics(terminal, generation);
+                    }
                     try
                     {
                         generation.Dispose();
@@ -738,6 +742,33 @@ namespace ReachyMini.Language
             return LocalLlmEvent.Cancelled(
                 sequence,
                 "Local LLM generation was cancelled.");
+        }
+
+        private static LocalLlmEvent AttachTimeoutMetrics(
+            LocalLlmEvent terminal,
+            ILocalLlmGeneration generation)
+        {
+            try
+            {
+                LocalLlmGenerationMetrics metrics = generation.GetMetrics();
+                return LocalLlmEvent.Failed(
+                    terminal.Sequence,
+                    LocalLlmFailure.TimedOut,
+                    terminal.Detail +
+                    " Native progress: prompt_tokens=" + metrics.PromptTokens +
+                    " generated_tokens=" + metrics.GeneratedTokens +
+                    " time_to_first_token_us=" + metrics.TimeToFirstTokenMicroseconds +
+                    " decode_us=" + metrics.DecodeMicroseconds + ".");
+            }
+            catch (Exception exception)
+            {
+                return LocalLlmEvent.Failed(
+                    terminal.Sequence,
+                    LocalLlmFailure.TimedOut,
+                    terminal.Detail +
+                    " Native progress metrics unavailable explicitly: " +
+                    exception.GetType().Name + ".");
+            }
         }
 
         private LocalLlmEvent RuntimeCleanupFailure(ulong sequence, string detail)

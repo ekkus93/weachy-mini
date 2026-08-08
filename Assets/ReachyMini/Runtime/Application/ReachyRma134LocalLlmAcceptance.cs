@@ -322,7 +322,8 @@ namespace ReachyMini.AppState
                 if (item.Kind != LocalLlmEventKind.Completed || item.Intent == null)
                 {
                     throw new InvalidOperationException(
-                        "Local LLM completion request failed: " +
+                        "Local LLM completion request failed after " +
+                        deltas + " streamed delta event(s): " +
                         item.Failure + ": " + item.Detail);
                 }
                 intent = item.Intent;

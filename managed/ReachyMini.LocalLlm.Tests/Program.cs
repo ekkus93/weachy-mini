@@ -31,6 +31,7 @@ internal static class Program
             ("unallowed gaze is not committed", UnallowedGazeIsTransactionalAsync),
             ("context preflight rejects before generation", ContextLimitFailsClosedAsync),
             ("second request is rejected instead of queued", BusyRequestIsRejectedAsync),
+            ("timeout preserves native progress diagnostics", TimeoutReportsNativeProgressAsync),
             ("reset cancels active generation and clears history", ResetCancelsAndClearsAsync),
             ("runtime fault requires explicit reload", RuntimeFaultRequiresReloadAsync),
             ("history bound requires explicit reset", HistoryBoundRequiresResetAsync),
@@ -223,6 +224,44 @@ internal static class Program
         hold.AllowCompletion(NoGazeIntent);
         List<LocalLlmEvent> first = await firstTask.ConfigureAwait(false);
         Require(first[^1].Kind == LocalLlmEventKind.Completed, "first request did not finish after busy rejection");
+    }
+
+    private static async Task TimeoutReportsNativeProgressAsync()
+    {
+        await using TestContext context = await TestContext.CreateAsync().ConfigureAwait(false);
+        await RequireLoadedAsync(context).ConfigureAwait(false);
+        using var hold = new FakeGeneration(holdUntilCancelled: true);
+        context.Runtime.Session.EnqueueGeneration(hold);
+
+        var events = new List<LocalLlmEvent>();
+        await foreach (LocalLlmEvent item in context.Provider.GenerateAsync(
+            new LocalLlmRequest(
+                "timeout-progress",
+                "Keep generating until the explicit timeout.",
+                TimeSpan.FromMilliseconds(25.0)),
+            CancellationToken.None))
+        {
+            events.Add(item);
+        }
+
+        Require(events.Count > 0, "timeout produced no terminal event");
+        LocalLlmEvent terminal = events[^1];
+        Require(terminal.Failure == LocalLlmFailure.TimedOut, "timeout was not explicit");
+        Require(
+            terminal.Detail.Contains("prompt_tokens=128", StringComparison.Ordinal),
+            "timeout omitted native prompt-token diagnostics");
+        Require(
+            terminal.Detail.Contains("generated_tokens=32", StringComparison.Ordinal),
+            "timeout omitted native generated-token diagnostics");
+        Require(
+            terminal.Detail.Contains("time_to_first_token_us=1000", StringComparison.Ordinal),
+            "timeout omitted native TTFT diagnostics");
+        Require(
+            terminal.Detail.Contains("decode_us=2000", StringComparison.Ordinal),
+            "timeout omitted native decode diagnostics");
+        Require(
+            context.Provider.Availability.State == LocalLlmProviderState.Ready,
+            "an ordinary request timeout faulted the provider");
     }
 
     private static async Task ResetCancelsAndClearsAsync()
