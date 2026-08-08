@@ -22,7 +22,7 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'master'
-    runs-on: [self-hosted, linux, x64, unity-6000.0.62f1, android]
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
     timeout-minutes: 30
 
     steps:
@@ -59,6 +59,55 @@ jobs:
             echo 'relevant=false' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Pin LG-H872 physical Android device
+        if: steps.scope.outputs.relevant == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          adb_bin="${sdk_root}/platform-tools/adb"
+          if [[ ! -x "${adb_bin}" ]]; then
+            adb_bin="$(command -v adb || true)"
+          fi
+          [[ -n "${adb_bin}" && -x "${adb_bin}" ]] || {
+            printf '%s\n' 'adb is unavailable on the physical Android runner.' >&2
+            exit 1
+          }
+
+          mapfile -t serials < <(
+            "${adb_bin}" devices \
+              | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${serials[@]}"; do
+            state="$("${adb_bin}" -s "${serial}" get-state | tr -d '\r')"
+            model="$("${adb_bin}" -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+            abi="$("${adb_bin}" -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$("${adb_bin}" -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            qemu="$("${adb_bin}" -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' \
+              "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
+            if [[ "${state}" == "device" && "${model}" == "LG-H872" && \
+                  "${abi}" == "arm64-v8a" && "${sdk}" == "26" && "${qemu}" != "1" ]]; then
+              accepted+=("${serial}")
+            fi
+          done
+          if (( ${#accepted[@]} != 1 )); then
+            printf 'Expected exactly one LG-H872 arm64-v8a API-26 device; found %s.\n' \
+              "${#accepted[@]}" >&2
+            "${adb_bin}" devices -l >&2
+            exit 1
+          fi
+          serial="${accepted[0]}"
+          "${adb_bin}" -s "${serial}" wait-for-device
+          [[ "$("${adb_bin}" -s "${serial}" get-state | tr -d '\r')" == "device" ]] || {
+            printf 'Pinned Android device is not ready: %s\n' "${serial}" >&2
+            exit 1
+          }
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+
       - name: Download exact-SHA Unity Android artifacts
         if: steps.scope.outputs.relevant == 'true'
         env:
@@ -88,7 +137,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : "${REACHY_ANDROID_SERIAL:?The self-hosted Android runner must expose REACHY_ANDROID_SERIAL.}"
+          : "${REACHY_ANDROID_SERIAL:?The workflow must pin REACHY_ANDROID_SERIAL before acceptance.}"
           bash scripts/run_rma134_local_llm_acceptance_android.sh \
             artifacts/android/weachy-mini-device-arm64-api26.apk \
             artifacts/rma134-local-llm-android
