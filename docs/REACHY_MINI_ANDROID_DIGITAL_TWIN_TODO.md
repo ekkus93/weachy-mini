@@ -2097,7 +2097,7 @@ public interface ITtsProvider : IAsyncDisposable
 **Completion evidence**
 
 - Schema version 1 and the immutable managed mirror define exact model/provenance/license identity, one verified GGUF artifact, normalized GGUF/tokenizer metadata, context/chat/stop metadata, context-and-batch-qualified peak RAM, recommended threads, and explicit Android/runtime compatibility.
-- Experimental state is mandatory and internally consistent. The only committed example is a synthetic experimental fixture on the reserved `.invalid` domain; RMA-131 selects, downloads, recommends, and bundles no real model.
+- Experimental state is mandatory and internally consistent. At RMA-131 acceptance, the only committed example was a synthetic experimental fixture on the reserved `.invalid` domain; RMA-131 itself selected, downloaded, recommended, and bundled no real model. RMA-133 has since added a separately benchmark-selected real manifest without rewriting the historical RMA-131 acceptance record.
 - `LocalModelManifestCatalog` uses unique data-driven IDs and ordinal exact lookup only. Missing IDs return no model or throw; no default, fuzzy, prefix, provider, or cloud fallback exists, and permanent tests reject candidate IDs hard-coded into settings/UI logic.
 - Artifact paths are bounded package-relative lowercase `.gguf` paths. Absolute paths, traversal, drive prefixes, backslashes, invalid sizes/hashes, incompatible runtime/device metadata, and understated RAM fail visibly rather than receiving defaults.
 - Dedicated run `31208746428`, job `92966163017`, passed the warnings-as-errors managed build, managed contract suite, JSON mutation suite, zero-network fixture validation, schema parsing, exact-SHA evidence generation, and artifact upload on accepted implementation SHA `94145dda69f6ee3f886a78be9728ea6ddc355bb8`.
@@ -2125,11 +2125,11 @@ public interface ITtsProvider : IAsyncDisposable
 - The Ralph loop fixed strict async-stream/static analyzer findings and test-harness analyzer findings without suppression, corrected an over-broad static path assertion, and hardened a real staging-orphan cleanup edge before acceptance. No fallback or integrity relaxation was introduced.
 - Dedicated run `31212296409`, job `92977704407`, passed the warnings-as-errors core build, all 15 managed package behaviors, static contracts, Python compilation, exact-SHA evidence generation, and artifact upload on accepted implementation SHA `d50e44d83b14e1e1420dc347164671db6593d73c`.
 - Artifact `9007154955` has digest `sha256:3babe8eea5088de9e6b4f45da8115f562f03b051c233cb31ecedd3310f36f7c3`. Hosted CI run `31212296177` passed static, managed, native/sanitizer, Android, and pinned Reachy-model jobs on the same SHA.
-- No real model was downloaded, selected, recommended, or bundled; RMA-133 still owns benchmark-backed model selection and RMA-134 owns inference. Detailed design and evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.
+- At RMA-132 acceptance, no real model had been downloaded, selected, recommended, or bundled; RMA-133 still owned benchmark-backed model selection and RMA-134 owned inference. RMA-133 has since selected Qwen3-0.6B through independent physical-device evidence; RMA-132 package integrity semantics remain unchanged. Detailed design and historical evidence are in `docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md` and `docs/validation/RMA_132_LOCAL_MODEL_PACKAGE_VALIDATION_2026-08-07.md`.
 
 ## RMA-133 — Benchmark and select initial local model
 
-**Status:** Complete (2026-08-08)
+**Status:** Closure candidate — V6 selected; exact-SHA closure CI pending
 
 - [x] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.
 - [x] Measure load time, peak memory, prompt processing, token rate, thermal behavior, and response quality.

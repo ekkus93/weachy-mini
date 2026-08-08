@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-08  
 **Spec:** `docs/RMA_133_CONSTRAINED_GENERATION_SPEC_2026-08-08.md`  
-**Status:** Ready for implementation / Ralph loop  
+**Status:** V6 selected; Phase 9A exact-SHA closure validation pending
 **Target branch:** `master`
 
 ## Operating rules
