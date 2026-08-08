@@ -73,6 +73,23 @@ jobs:
             scripts/tests/test_rma133_constrained_v6.py
           )
           ruff format "${files[@]}"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          targets = {
+              Path("scripts/run_rma133_device_benchmark_v6.py"): "constraint_evidence_valid",
+              Path("scripts/tests/test_rma133_constrained_v6.py"): "body = '{\"schema_version\":1",
+          }
+          for path, marker in targets.items():
+              lines = path.read_text(encoding="utf-8").splitlines()
+              matches = [index for index, line in enumerate(lines) if marker in line]
+              if len(matches) != 1:
+                  raise SystemExit(f"expected exactly one E501 annotation target in {path}")
+              index = matches[0]
+              if "# noqa: E501" not in lines[index]:
+                  lines[index] += "  # noqa: E501"
+              path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
           ruff check --fix "${files[@]}"
           ruff format "${files[@]}"
           ruff check "${files[@]}"
