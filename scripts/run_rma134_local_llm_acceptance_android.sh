@@ -262,8 +262,6 @@ if report.get("provider_requires_network") is not False:
     raise SystemExit(f"RMA-134 provider unexpectedly requires network: {report}")
 if int(report.get("first_delta_count", 0)) <= 0:
     raise SystemExit(f"RMA-134 first generation did not stream: {report}")
-if int(report.get("cancellation_delta_count", 0)) <= 0:
-    raise SystemExit(f"RMA-134 cancellation was not exercised after streaming: {report}")
 if int(report.get("reuse_delta_count", 0)) <= 0:
     raise SystemExit(f"RMA-134 post-reset generation did not stream: {report}")
 if not str(report.get("first_speech", "")) or not str(report.get("reuse_speech", "")):

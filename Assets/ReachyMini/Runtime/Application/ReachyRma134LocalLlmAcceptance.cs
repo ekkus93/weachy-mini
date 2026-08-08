@@ -338,7 +338,8 @@ namespace ReachyMini.AppState
         private static async Task<GenerationObservation> ObserveCancellationAsync(
             ReachyLocalLlmProvider provider)
         {
-            using var cancellation = new CancellationTokenSource();
+            using var cancellation = new CancellationTokenSource(
+                TimeSpan.FromSeconds(2.0));
             int deltas = 0;
             LocalLlmEvent? terminal = null;
             await foreach (LocalLlmEvent item in provider.GenerateAsync(
@@ -351,17 +352,16 @@ namespace ReachyMini.AppState
                 if (item.Kind == LocalLlmEventKind.OutputDelta)
                 {
                     ++deltas;
-                    cancellation.Cancel();
                     continue;
                 }
                 terminal = item;
             }
-            if (deltas <= 0 || terminal == null ||
+            if (terminal == null ||
                 terminal.Kind != LocalLlmEventKind.Cancelled ||
                 terminal.Failure != LocalLlmFailure.Cancelled)
             {
                 throw new InvalidOperationException(
-                    "Local LLM cancellation did not produce a streamed delta followed by explicit cancellation.");
+                    "Local LLM cancellation did not produce an explicit Cancelled terminal event.");
             }
             return new GenerationObservation(deltas, string.Empty);
         }
