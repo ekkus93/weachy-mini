@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${ROOT_DIR}"
+APK_PATH="${1:-artifacts/android/weachy-mini-device-arm64-api26.apk}"
+REPORT_DIR="${2:-artifacts/rma134-local-llm-android}"
+DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:?Set REACHY_ANDROID_SERIAL to the dedicated physical Android device serial.}"
+ADB_BIN="${ADB_BIN:-adb}"
+PACKAGE_NAME="com.ekkus.weachymini"
+REMOTE_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
+REMOTE_RESULT_PATH="${REMOTE_FILES_DIR}/rma134-local-llm-acceptance.json"
+REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma134-qwen3-0.6b-q4_k_m.gguf"
+MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
+TIMEOUT_SECONDS="${RMA134_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
+EXPECTED_DEVICE_MODEL="${RMA134_EXPECTED_DEVICE_MODEL:-LG-H872}"
+ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
+mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
+
+[[ -f "${APK_PATH}" ]] || { printf 'RMA-134 APK is missing: %s\n' "${APK_PATH}" >&2; exit 1; }
+command -v "${ADB_BIN}" >/dev/null 2>&1 || { printf 'adb unavailable: %s\n' "${ADB_BIN}" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'python3 is required.' >&2; exit 1; }
+command -v curl >/dev/null 2>&1 || { printf '%s\n' 'curl is required.' >&2; exit 1; }
+
+mapfile -t MODEL_FIELDS < <(python3 - "benchmarks/rma133/candidates-v6.json" <<'PY'
+import json, sys
+from pathlib import Path
+config=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+items=[c for c in config['candidates'] if c.get('candidate_id')=='qwen3-0.6b-q4-k-m']
+if len(items)!=1: raise SystemExit(f'expected one qwen3 candidate, found {len(items)}')
+c=items[0]; a=c['artifact']
+for value in (c['model_id'], a['filename'], a['url'], a['file_size_bytes'], a['sha256'], c.get('user_prompt_suffix','')): print(value)
+PY
+)
+(( ${#MODEL_FIELDS[@]} == 6 )) || { printf '%s\n' 'Could not resolve selected RMA-133 model.' >&2; exit 1; }
+MODEL_ID="${MODEL_FIELDS[0]}"; MODEL_FILENAME="${MODEL_FIELDS[1]}"; MODEL_URL="${MODEL_FIELDS[2]}"
+MODEL_BYTES="${MODEL_FIELDS[3]}"; MODEL_SHA256="${MODEL_FIELDS[4]}"; MODEL_SUFFIX="${MODEL_FIELDS[5]}"
+[[ "${MODEL_ID}" == "qwen3-0.6b" && "${MODEL_BYTES}" == "396704416" && \
+   "${MODEL_SHA256}" == "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e" && \
+   "${MODEL_SUFFIX}" == "/no_think" ]] || { printf '%s\n' 'Frozen RMA-134 model contract drifted.' >&2; exit 1; }
+MODEL_CACHE_PATH="${MODEL_CACHE_ROOT}/${MODEL_SHA256}-${MODEL_FILENAME}"
+verify_model() { [[ -f "$1" ]] && [[ "$(stat -c '%s' "$1")" == "${MODEL_BYTES}" ]] && [[ "$(sha256sum "$1" | awk '{print $1}')" == "${MODEL_SHA256}" ]]; }
+if [[ -e "${MODEL_CACHE_PATH}" ]] && ! verify_model "${MODEL_CACHE_PATH}"; then
+  printf 'Cached selected model is invalid: %s\n' "${MODEL_CACHE_PATH}" >&2; exit 1
+fi
+if [[ ! -e "${MODEL_CACHE_PATH}" ]]; then
+  tmp="${MODEL_CACHE_PATH}.partial.$$"; rm -f -- "${tmp}"
+  curl --fail --location --silent --show-error --output "${tmp}" "${MODEL_URL}"
+  verify_model "${tmp}" || { rm -f -- "${tmp}"; printf '%s\n' 'Downloaded selected model failed exact validation.' >&2; exit 1; }
+  mv -f -- "${tmp}" "${MODEL_CACHE_PATH}"
+fi
+verify_model "${MODEL_CACHE_PATH}" || { printf '%s\n' 'Selected model cache preparation failed.' >&2; exit 1; }
+
+capture() {
+  set +e
+  "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
+  "${ADB_BIN}" devices -l > "${REPORT_DIR}/adb-devices.txt" 2>&1
+  "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
+  "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" 2>&1
+  "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
+  "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
+  "${ADB[@]}" shell "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" | tr -d '\r' > "${REPORT_DIR}/rma134-local-llm-acceptance-latest.json" 2>/dev/null
+  set -e
+}
+trap 'code=$?; trap - EXIT; if (( code != 0 )); then capture; fi; exit "$code"' EXIT
+
+[[ "$("${ADB[@]}" get-state | tr -d '\r\n')" == "device" ]] || { printf '%s\n' 'RMA-134 adb device is unavailable.' >&2; exit 1; }
+model="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"; abi="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"; sdk="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"; qemu="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')"; hardware="$("${ADB[@]}" shell getprop ro.hardware | tr -d '\r')"
+[[ "${model}" == "${EXPECTED_DEVICE_MODEL}" && "${abi}" == "arm64-v8a" && "${sdk}" == "26" ]] || { printf 'Device mismatch model=%s abi=%s sdk=%s\n' "${model}" "${abi}" "${sdk}" >&2; exit 1; }
+[[ "${qemu}" != "1" && "${hardware,,}" != *goldfish* && "${hardware,,}" != *ranchu* ]] || { printf '%s\n' 'Emulator evidence refused.' >&2; exit 1; }
+printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' "${DEVICE_SERIAL}" "${model}" "${abi}" "${sdk}" "${hardware}" > "${REPORT_DIR}/device.txt"
+sha256sum "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"; sha256sum "${MODEL_CACHE_PATH}" > "${REPORT_DIR}/model-host-sha256.txt"
+
+"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+set +e; timeout --signal=TERM --kill-after=15s 180s "${ADB[@]}" install -r -g "${APK_PATH}" > "${REPORT_DIR}/install.txt" 2>&1; install_status=$?; set -e
+cat "${REPORT_DIR}/install.txt"; (( install_status == 0 )) || exit "${install_status}"
+"${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package-before-launch.txt"
+launch_component="$(awk '/android.intent.action.MAIN:/ {main=1; next} main && / filter / {print $2; exit}' "${REPORT_DIR}/package-before-launch.txt")"
+[[ -n "${launch_component}" && "${launch_component}" == */* ]] || { printf '%s\n' 'Could not resolve Unity launcher activity.' >&2; exit 1; }
+printf '%s\n' "${launch_component}" > "${REPORT_DIR}/launch-component.txt"
+"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+"${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"
+"${ADB[@]}" shell "mkdir -p '${REMOTE_FILES_DIR}' && rm -f '${REMOTE_RESULT_PATH}' '${REMOTE_MODEL_PATH}'"
+timeout --signal=TERM --kill-after=15s 240s "${ADB[@]}" push "${MODEL_CACHE_PATH}" "${REMOTE_MODEL_PATH}" > "${REPORT_DIR}/model-push.txt" 2>&1
+remote="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL_PATH}'; toybox stat -c '%s' '${REMOTE_MODEL_PATH}'" | tr -d '\r')"; printf '%s\n' "${remote}" > "${REPORT_DIR}/model-device-verification.txt"
+[[ "$(printf '%s\n' "${remote}" | sed -n '1s/[[:space:]].*$//p')" == "${MODEL_SHA256}" && "$(printf '%s\n' "${remote}" | sed -n '2p')" == "${MODEL_BYTES}" ]] || { printf '%s\n' 'On-device selected model verification failed.' >&2; exit 1; }
+
+"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
+"${ADB[@]}" shell am start -W -n "${launch_component}" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --ez reachy_rma134_acceptance true > "${REPORT_DIR}/launch.txt" 2>&1
+cat "${REPORT_DIR}/launch.txt"; grep -Eq '(^|[[:space:]])(Error:|Exception)' "${REPORT_DIR}/launch.txt" && { printf '%s\n' 'RMA-134 Unity launch reported an error.' >&2; exit 1; }
+
+start="$(date +%s)"
+while true; do
+  json="$("${ADB[@]}" shell "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" | tr -d '\r' || true)"
+  if [[ -n "${json}" ]]; then
+    printf '%s\n' "${json}" > "${REPORT_DIR}/rma134-local-llm-acceptance.json"
+    status="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("status",""))' <<<"${json}")"
+    [[ "${status}" == "passed" ]] && break
+    printf 'RMA-134 device report status=%s: %s\n' "${status}" "${json}" >&2; exit 1
+  fi
+  "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null || { printf '%s\n' 'Unity exited before RMA-134 report.' >&2; exit 1; }
+  (( $(date +%s) - start < TIMEOUT_SECONDS )) || { printf '%s\n' 'RMA-134 device acceptance timed out.' >&2; exit 1; }
+  sleep 2
+done
+
+python3 - "${REPORT_DIR}/rma134-local-llm-acceptance.json" <<'PY'
+import json, math, sys
+from pathlib import Path
+r=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert r['status']=='passed' and r['reachy_llama_abi']==2
+assert r['model_id']=='qwen3-0.6b' and r['artifact_sha256']=='b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e' and r['artifact_bytes']==396704416
+for key,value in [('initial_generation_status','Succeeded'),('cancellation_status','Cancelled'),('reset_status','Superseded'),('reload_status','Reloaded'),('post_reload_generation_status','Succeeded')]:
+    assert r[key]==value,(key,r)
+assert r['initial_stream_text_events']>0 and r['physics_steps']>=250
+assert r['physics_p95_budget_microseconds']==2000.0 and math.isfinite(r['physics_p95_microseconds']) and r['physics_p95_microseconds']<=2000.0
+assert r['adaptive_resource_changes_applied'] is False and r['network_fallback_used'] is False and r['json_repair_used'] is False
+print(json.dumps(r, indent=2, sort_keys=True))
+PY
+capture
+"${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+trap - EXIT
+printf 'RMA-134 managed local LLM physical acceptance passed on %s (%s).\n' "${DEVICE_SERIAL}" "${model}"
