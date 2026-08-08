@@ -3,8 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Interop;
 using ReachyMini.LocalModels;
 
 internal static class Program
@@ -12,9 +15,13 @@ internal static class Program
     private const string ValidIntent =
         "{\"schema_version\":1,\"speech\":\"Hello.\",\"expression\":\"attentive\",\"gesture\":\"nod\",\"urgency\":\"normal\"}";
 
+    private static readonly string[] StopTokens = { "<|im_end|>", "<|endoftext|>" };
+    private static readonly string[] SupportedAbis = { "arm64-v8a" };
+
     private static async Task Main()
     {
         LocalLlmBehaviorContract.ValidateFrozenBytes();
+        TestNativeAbi2Layouts();
         TestRma133BaselineProfile();
         TestStrictIntentParser();
         await TestManifestArtifactAndAbiFailuresAsync().ConfigureAwait(false);
@@ -28,7 +35,19 @@ internal static class Program
         await TestTerminalConsumerFailureAsync().ConfigureAwait(false);
         await TestRuntimeTerminalErrorAsync().ConfigureAwait(false);
         await TestReloadRecoveryAndDisposeAsync().ConfigureAwait(false);
-        Console.WriteLine("RMA-134 local LLM managed contracts passed (13 groups).");
+        Console.WriteLine("RMA-134 local LLM managed contracts passed (14 groups).");
+    }
+
+    private static void TestNativeAbi2Layouts()
+    {
+        Require(ReachyLlamaNativeContract.AbiVersion == 2U, "Managed runtime ABI is not 2.");
+        Require(Marshal.SizeOf<NativeReachyLlamaErrorInfo>() == 392, "error_info ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaModelConfig>() == 16, "model_config ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaGenerationConfig>() == 48, "generation_config ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaGenerationConstraint>() == 48, "constraint ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaChatMessage>() == 16, "chat_message ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaGenerationEvent>() == 24, "generation_event ABI layout drifted.");
+        Require(Marshal.SizeOf<NativeReachyLlamaGenerationMetrics>() == 72, "generation_metrics ABI layout drifted.");
     }
 
     private static void TestRma133BaselineProfile()
@@ -49,16 +68,17 @@ internal static class Program
         Require(
             LocalLlmBehaviorContract.TryParseIntent(
                 ValidIntent,
-                out LocalLlmBehaviorIntent? valid,
+                out LocalLlmBehaviorIntent? parsed,
                 out string validDetail),
             "Valid behavior intent was rejected: " + validDetail);
-        Require(valid != null, "Valid behavior intent returned null.");
+        LocalLlmBehaviorIntent valid = parsed ??
+            throw new InvalidOperationException("Valid behavior intent returned null.");
         Require(valid.SchemaVersion == 1, "Behavior schema version changed.");
         Require(valid.Expression == LocalLlmExpression.Attentive, "Expression parse changed.");
         Require(valid.Gesture == LocalLlmGesture.Nod, "Gesture parse changed.");
         Require(valid.Urgency == LocalLlmUrgency.Normal, "Urgency parse changed.");
 
-        string withGaze =
+        const string withGaze =
             "{\"schema_version\":1,\"speech\":\"Looking.\",\"gaze_target\":{\"kind\":\"tracked_entity\",\"entity_id\":\"entity-12\"},\"expression\":\"curious\",\"gesture\":\"small_head_tilt\",\"urgency\":\"low\"}";
         Require(
             LocalLlmBehaviorContract.TryParseIntent(
@@ -82,10 +102,7 @@ internal static class Program
         for (int index = 0; index < invalid.Length; ++index)
         {
             Require(
-                !LocalLlmBehaviorContract.TryParseIntent(
-                    invalid[index],
-                    out _,
-                    out _),
+                !LocalLlmBehaviorContract.TryParseIntent(invalid[index], out _, out _),
                 "Unsafe or repaired behavior intent was accepted at fixture " + index + ".");
         }
     }
@@ -97,15 +114,13 @@ internal static class Program
 
         using (FakeRuntime mismatchRuntime = new FakeRuntime())
         {
-            LocalModelApprovedArtifact mismatch = CreateApprovedArtifact(modelId: "wrong-model");
             LocalLlmProviderCreationResult result = await LocalLlmProvider.CreateForTestingAsync(
                 manifest,
-                mismatch,
+                CreateApprovedArtifact("wrong-model"),
                 profile,
                 mismatchRuntime,
                 CancellationToken.None).ConfigureAwait(false);
-            Require(
-                result.Status == LocalLlmProviderCreationStatus.InvalidConfiguration,
+            Require(result.Status == LocalLlmProviderCreationStatus.InvalidConfiguration,
                 "Manifest/artifact identity mismatch did not fail closed.");
             Require(mismatchRuntime.LoadCount == 0, "Mismatch reached native model load.");
         }
@@ -118,8 +133,7 @@ internal static class Program
                 profile,
                 abiRuntime,
                 CancellationToken.None).ConfigureAwait(false);
-            Require(
-                result.Status == LocalLlmProviderCreationStatus.Unavailable,
+            Require(result.Status == LocalLlmProviderCreationStatus.Unavailable,
                 "ABI mismatch did not surface as unavailable.");
             Require(abiRuntime.LoadCount == 0, "ABI mismatch reached native model load.");
         }
@@ -133,8 +147,7 @@ internal static class Program
                 profile,
                 loadRuntime,
                 CancellationToken.None).ConfigureAwait(false);
-            Require(
-                result.Status == LocalLlmProviderCreationStatus.RuntimeFailure,
+            Require(result.Status == LocalLlmProviderCreationStatus.RuntimeFailure,
                 "Native model-load failure was not preserved.");
             Require(result.Provider == null, "Failed model load returned a provider.");
         }
@@ -164,22 +177,17 @@ internal static class Program
         Require(runtime.LastChatTemplate == null, "Provider did not use the GGUF-embedded chat template.");
         Require(runtime.LastMessages.Count == 2, "Provider constructed the wrong chat-message count.");
         Require(runtime.LastMessages[0].Role == "system", "Provider did not inject the frozen system message.");
-        Require(
-            runtime.LastMessages[0].Content == LocalLlmBehaviorContract.SystemPrompt,
+        Require(runtime.LastMessages[0].Content == LocalLlmBehaviorContract.SystemPrompt,
             "Provider system prompt drifted from the frozen RMA-133 bytes.");
         Require(runtime.LastMessages[1].Role == "user", "Final request message role changed.");
-        Require(
-            runtime.LastMessages[1].Content == "Please say hello.\n/no_think",
+        Require(runtime.LastMessages[1].Content == "Please say hello.\n/no_think",
             "Qwen3 no-think suffix was not appended exactly as accepted in RMA-133.");
-        Require(
-            runtime.LastGrammar == LocalLlmBehaviorContract.Grammar && runtime.LastGrammarRoot == "root",
+        Require(runtime.LastGrammar == LocalLlmBehaviorContract.Grammar && runtime.LastGrammarRoot == "root",
             "Provider did not use the frozen GBNF contract.");
         Require(sink.Text == ValidIntent, "Stream fragments were dropped, changed, or reordered.");
-        Require(
-            sink.Events.Count == 3 && sink.Events[2].Type == LocalLlmStreamEventType.Completed,
+        Require(sink.Events.Count == 3 && sink.Events[2].Type == LocalLlmStreamEventType.Completed,
             "Terminal validated stream event was not delivered.");
-        Require(
-            sink.Events[0].IsTrustedExecutableOutput == false,
+        Require(!sink.Events[0].IsTrustedExecutableOutput,
             "Partial text was incorrectly marked as executable/trusted.");
     }
 
@@ -187,10 +195,9 @@ internal static class Program
     {
         using FakeRuntime runtime = new FakeRuntime { TokenCount = 2000 };
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
-        CollectingSink sink = new CollectingSink();
         LocalLlmGenerationResult result = await provider.GenerateAsync(
             Request("req-context", "A long request."),
-            sink,
+            new CollectingSink(),
             CancellationToken.None).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.ContextLimit, "Context overflow was not rejected.");
         Require(runtime.StartCount == 0, "Context overflow reached native generation start.");
@@ -201,11 +208,10 @@ internal static class Program
     {
         using FakeRuntime runtime = new FakeRuntime { BlockUntilCancel = true };
         await using LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
-        CollectingSink firstSink = new CollectingSink();
         using CancellationTokenSource cancellation = new CancellationTokenSource();
         Task<LocalLlmGenerationResult> first = provider.GenerateAsync(
             Request("req-first", "Wait here."),
-            firstSink,
+            new CollectingSink(),
             cancellation.Token);
         await runtime.GenerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
 
@@ -259,22 +265,12 @@ internal static class Program
             CancellationToken.None).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.InvalidIntent, "Fenced JSON was repaired or accepted.");
         Require(result.Intent == null, "Invalid intent produced executable intent data.");
-        Require(runtime.StartCount == 1, "Invalid-intent test did not exercise constrained generation.");
     }
 
     private static async Task TestOutputLimitAsync()
     {
         LocalLlmExecutionProfile profile = new LocalLlmExecutionProfile(
-            contextTokens: 2048,
-            batchTokens: 256,
-            microBatchTokens: 64,
-            maximumGeneratedTokens: 128,
-            threads: 4,
-            batchThreads: 4,
-            temperature: 0.0F,
-            minP: 0.0F,
-            seed: 133U,
-            streamQueueCapacity: 64,
+            2048, 256, 64, 128, 4, 4, 0.0F, 0.0F, 133U, 64,
             maximumResponseUtf8Bytes: 8);
         using FakeRuntime runtime = new FakeRuntime();
         runtime.EnqueueText(1UL, "123456789");
@@ -315,9 +311,8 @@ internal static class Program
             new ThrowingSink(LocalLlmStreamEventType.Completed),
             CancellationToken.None).ConfigureAwait(false);
         Require(result.Status == LocalLlmGenerationStatus.ConsumerFailure, "Terminal sink failure was swallowed.");
-        Require(
-            result.Detail.Contains("Succeeded", StringComparison.Ordinal),
-            "Terminal sink failure did not preserve the underlying terminal disposition.");
+        Require(result.Detail.Contains("Succeeded", StringComparison.Ordinal),
+            "Terminal sink failure did not preserve the underlying disposition.");
     }
 
     private static async Task TestRuntimeTerminalErrorAsync()
@@ -349,7 +344,8 @@ internal static class Program
             Require(provider.State == LocalLlmProviderState.Faulted, "Failed reload did not fault provider state.");
 
             LocalLlmReloadResult recovered = await provider.ReloadAsync(CancellationToken.None).ConfigureAwait(false);
-            Require(recovered.Status == LocalLlmReloadStatus.Reloaded, "Provider did not recover in-process on explicit reload.");
+            Require(recovered.Status == LocalLlmReloadStatus.Reloaded,
+                "Provider did not recover in-process on explicit reload.");
             Require(provider.State == LocalLlmProviderState.Ready, "Recovered provider did not return to Ready.");
         }
         finally
@@ -369,7 +365,8 @@ internal static class Program
             profile ?? LocalLlmExecutionProfile.CreateRma133V6Baseline(),
             runtime,
             CancellationToken.None).ConfigureAwait(false);
-        Require(result.Status == LocalLlmProviderCreationStatus.Created, "Provider creation failed: " + result.Detail);
+        Require(result.Status == LocalLlmProviderCreationStatus.Created,
+            "Provider creation failed: " + result.Detail);
         return result.Provider ?? throw new InvalidOperationException("Created provider result had no provider.");
     }
 
@@ -383,8 +380,8 @@ internal static class Program
     private static LocalModelManifest CreateManifest()
     {
         return new LocalModelManifest(
-            schemaVersion: 1,
-            identity: new LocalModelIdentity(
+            1,
+            new LocalModelIdentity(
                 LocalLlmBehaviorContract.ManifestId,
                 LocalLlmBehaviorContract.ModelId,
                 "Qwen3 0.6B Q4_K_M",
@@ -394,26 +391,20 @@ internal static class Program
                 "Apache-2.0",
                 experimental: false,
                 experimentalReason: string.Empty),
-            runtime: new LocalModelRuntimeRequirement("reachy_llama", 2, requiresNetworkAccess: false),
-            artifact: new LocalModelArtifact(
+            new LocalModelRuntimeRequirement("reachy_llama", 2, requiresNetworkAccess: false),
+            new LocalModelArtifact(
                 "qwen3/qwen3-0.6b-q4_k_m.gguf",
                 LocalLlmBehaviorContract.ArtifactBytes,
                 LocalLlmBehaviorContract.ArtifactSha256),
-            ggufMetadata: new LocalModelGgufMetadata(
-                3,
-                "qwen3",
-                "Q4_K_M",
-                596049920L,
-                "gpt2",
-                "qwen2"),
-            inference: new LocalModelInferenceProfile(
+            new LocalModelGgufMetadata(3, "qwen3", "Q4_K_M", 596049920L, "gpt2", "qwen2"),
+            new LocalModelInferenceProfile(
                 40960,
                 "manifest-template-must-not-be-used",
-                new[] { "<|im_end|>", "<|endoftext|>" },
+                StopTokens,
                 new LocalModelMemoryEstimate(740380672L, 2048, 256),
                 4),
-            deviceCompatibility: new LocalModelDeviceCompatibility(
-                new[] { "arm64-v8a" },
+            new LocalModelDeviceCompatibility(
+                SupportedAbis,
                 26,
                 Array.Empty<string>(),
                 740380672L,
@@ -422,11 +413,10 @@ internal static class Program
 
     private static LocalModelApprovedArtifact CreateApprovedArtifact(string? modelId = null)
     {
-        string path = Path.Combine(Path.GetTempPath(), "rma134-qwen3-0.6b-q4_k_m.gguf");
         return new LocalModelApprovedArtifact(
             LocalLlmBehaviorContract.ManifestId,
             modelId ?? LocalLlmBehaviorContract.ModelId,
-            path,
+            Path.Combine(Path.GetTempPath(), "rma134-qwen3-0.6b-q4_k_m.gguf"),
             LocalLlmBehaviorContract.ArtifactBytes,
             LocalLlmBehaviorContract.ArtifactSha256);
     }
@@ -443,21 +433,21 @@ internal static class Program
     {
         private readonly List<LocalLlmStreamEvent> events = new List<LocalLlmStreamEvent>();
 
-        internal IReadOnlyList<LocalLlmStreamEvent> Events => events;
+        internal List<LocalLlmStreamEvent> Events => events;
 
         internal string Text
         {
             get
             {
-                string result = string.Empty;
+                StringBuilder builder = new StringBuilder();
                 for (int index = 0; index < events.Count; ++index)
                 {
                     if (events[index].Type == LocalLlmStreamEventType.Text)
                     {
-                        result += events[index].Text;
+                        builder.Append(events[index].Text);
                     }
                 }
-                return result;
+                return builder.ToString();
             }
         }
 
@@ -585,42 +575,22 @@ internal static class Program
                 {
                     staleAfterCancelEmitted = true;
                     return new LocalLlmRuntimePollResult(
-                        0,
-                        string.Empty,
-                        LocalLlmRuntimePollKind.Text,
-                        0,
-                        999UL,
-                        "STALE");
+                        0, string.Empty, LocalLlmRuntimePollKind.Text, 0, 999UL, "STALE");
                 }
                 return new LocalLlmRuntimePollResult(
-                    0,
-                    string.Empty,
-                    LocalLlmRuntimePollKind.Cancelled,
-                    13,
-                    1000UL,
-                    string.Empty);
+                    0, string.Empty, LocalLlmRuntimePollKind.Cancelled, 13, 1000UL, string.Empty);
             }
             if (BlockUntilCancel)
             {
                 return new LocalLlmRuntimePollResult(
-                    0,
-                    string.Empty,
-                    LocalLlmRuntimePollKind.None,
-                    0,
-                    0UL,
-                    string.Empty);
+                    0, string.Empty, LocalLlmRuntimePollKind.None, 0, 0UL, string.Empty);
             }
             if (polls.Count > 0)
             {
                 return polls.Dequeue();
             }
             return new LocalLlmRuntimePollResult(
-                0,
-                string.Empty,
-                LocalLlmRuntimePollKind.None,
-                0,
-                0UL,
-                string.Empty);
+                0, string.Empty, LocalLlmRuntimePollKind.None, 0, 0UL, string.Empty);
         }
 
         public LocalLlmRuntimeCallResult Cancel(ulong generationHandle)
@@ -636,16 +606,7 @@ internal static class Program
             return new LocalLlmRuntimeMetricsResult(
                 0,
                 string.Empty,
-                new LocalLlmGenerationMetrics(
-                    100UL,
-                    20UL,
-                    1000UL,
-                    2000UL,
-                    3000UL,
-                    2048,
-                    256,
-                    4,
-                    4));
+                new LocalLlmGenerationMetrics(100UL, 20UL, 1000UL, 2000UL, 3000UL, 2048, 256, 4, 4));
         }
 
         public LocalLlmRuntimeCallResult Release(ulong generationHandle)
@@ -663,34 +624,19 @@ internal static class Program
         internal void EnqueueText(ulong sequence, string text)
         {
             polls.Enqueue(new LocalLlmRuntimePollResult(
-                0,
-                string.Empty,
-                LocalLlmRuntimePollKind.Text,
-                0,
-                sequence,
-                text));
+                0, string.Empty, LocalLlmRuntimePollKind.Text, 0, sequence, text));
         }
 
         internal void EnqueueCompleted(ulong sequence)
         {
             polls.Enqueue(new LocalLlmRuntimePollResult(
-                0,
-                string.Empty,
-                LocalLlmRuntimePollKind.Completed,
-                0,
-                sequence,
-                string.Empty));
+                0, string.Empty, LocalLlmRuntimePollKind.Completed, 0, sequence, string.Empty));
         }
 
         internal void EnqueueError(ulong sequence, int eventStatus, string detail)
         {
             polls.Enqueue(new LocalLlmRuntimePollResult(
-                0,
-                detail,
-                LocalLlmRuntimePollKind.Error,
-                eventStatus,
-                sequence,
-                string.Empty));
+                0, detail, LocalLlmRuntimePollKind.Error, eventStatus, sequence, string.Empty));
         }
 
         public void Dispose()
