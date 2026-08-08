@@ -8,8 +8,10 @@
 extern "C" {
 #endif
 
-#define REACHY_LLAMA_ABI_VERSION 1u
+#define REACHY_LLAMA_ABI_VERSION 2u
 #define REACHY_LLAMA_ERROR_MESSAGE_CAPACITY 384u
+#define REACHY_LLAMA_MAX_GRAMMAR_BYTES (256u * 1024u)
+#define REACHY_LLAMA_MAX_GRAMMAR_ROOT_BYTES 128u
 
 #if defined(_WIN32)
 #define REACHY_LLAMA_API __declspec(dllexport)
@@ -37,8 +39,15 @@ typedef enum reachy_llama_status {
     REACHY_LLAMA_STATUS_DECODE_FAILED = 11,
     REACHY_LLAMA_STATUS_UNSUPPORTED_MODEL = 12,
     REACHY_LLAMA_STATUS_CANCELLED = 13,
-    REACHY_LLAMA_STATUS_INTERNAL_ERROR = 14
+    REACHY_LLAMA_STATUS_INTERNAL_ERROR = 14,
+    REACHY_LLAMA_STATUS_INVALID_CONSTRAINT = 15,
+    REACHY_LLAMA_STATUS_CONSTRAINT_INIT_FAILED = 16
 } reachy_llama_status;
+
+typedef enum reachy_llama_constraint_type {
+    REACHY_LLAMA_CONSTRAINT_NONE = 0,
+    REACHY_LLAMA_CONSTRAINT_GBNF = 1
+} reachy_llama_constraint_type;
 
 typedef enum reachy_llama_generation_event_type {
     REACHY_LLAMA_GENERATION_EVENT_NONE = 0,
@@ -82,6 +91,17 @@ typedef struct reachy_llama_generation_config {
     uint32_t seed;
     uint32_t stream_queue_capacity;
 } reachy_llama_generation_config;
+
+typedef struct reachy_llama_generation_constraint {
+    uint32_t struct_size;
+    uint32_t abi_version;
+    uint32_t type;
+    uint32_t reserved;
+    const char * grammar_utf8;
+    size_t grammar_bytes;
+    const char * root_utf8;
+    size_t root_bytes;
+} reachy_llama_generation_constraint;
 
 typedef struct reachy_llama_chat_message {
     const char * role_utf8;
@@ -167,6 +187,13 @@ REACHY_LLAMA_API int32_t reachy_llama_generation_start(
     reachy_llama_model_handle model,
     const char * prompt_utf8,
     const reachy_llama_generation_config * config,
+    reachy_llama_generation_handle * out_generation,
+    reachy_llama_error_info * error);
+REACHY_LLAMA_API int32_t reachy_llama_generation_start_constrained(
+    reachy_llama_model_handle model,
+    const char * prompt_utf8,
+    const reachy_llama_generation_config * config,
+    const reachy_llama_generation_constraint * constraint,
     reachy_llama_generation_handle * out_generation,
     reachy_llama_error_info * error);
 REACHY_LLAMA_API int32_t reachy_llama_generation_poll(
