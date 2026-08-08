@@ -199,7 +199,7 @@ namespace ReachyMini.Interop
             int status = NativeReachyLlama.Tokenize(
                 activeModel,
                 text.Pointer,
-                0U,
+                1U,
                 1U,
                 IntPtr.Zero,
                 UIntPtr.Zero,
