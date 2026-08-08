@@ -30,6 +30,26 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Normalize exact active-ABI messages for transformer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/validate_local_llm_manifest.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              'runtime.abi_version: schema version 1 requires ABI 1':
+                  'runtime.abi_version: schema version 1 requires ABI 2',
+              'device_compatibility.reachy_llama_abi_version: must equal ABI 1':
+                  'device_compatibility.reachy_llama_abi_version: must equal ABI 2',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected exactly one active-ABI message: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
       - name: Apply closure transformation
         run: python3 scripts/rma133_closure_stage.py
       - name: Validate manifest and managed contracts before commit
