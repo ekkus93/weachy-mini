@@ -58,11 +58,76 @@ jobs:
     name: Validate V1-V6 benchmark contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      physical_required: ${{ steps.scope.outputs.physical_required }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Determine whether physical benchmark is required
+        id: scope
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == 'workflow_dispatch' ]]; then
+            echo 'physical_required=true' >> "$GITHUB_OUTPUT"
+            echo 'Manual dispatch requires physical validation.'
+            exit 0
+          fi
+          if [[ "${EVENT_NAME}" == 'pull_request' ]]; then
+            echo 'physical_required=false' >> "$GITHUB_OUTPUT"
+            echo 'Pull requests run hosted validation only.'
+            exit 0
+          fi
+          if [[ -z "${BEFORE_SHA}" || "${BEFORE_SHA}" == '0000000000000000000000000000000000000000' ]]; then
+            echo 'physical_required=true' >> "$GITHUB_OUTPUT"
+            echo 'Push has no usable before SHA; fail closed to physical validation.'
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "${BEFORE_SHA}"
+          git diff --name-only "${BEFORE_SHA}" "${GITHUB_SHA}" > "${RUNNER_TEMP}/rma133-changed-paths.txt"
+          cat "${RUNNER_TEMP}/rma133-changed-paths.txt"
+          python3 - "${RUNNER_TEMP}/rma133-changed-paths.txt" "$GITHUB_OUTPUT" <<'PY'
+          import fnmatch
+          import sys
+          from pathlib import Path
+
+          changed = [line.strip() for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
+          physical_patterns = (
+              "benchmarks/rma133/candidates-v6.json",
+              "benchmarks/rma133/behavior_cases-v2.tsv",
+              "benchmarks/rma133/system_prompt-v4.txt",
+              "benchmarks/rma133/behavior-output-v1.gbnf",
+              "native/llama_runtime/benchmark/**",
+              "native/llama_runtime/include/reachy_llama.h",
+              "native/llama_runtime/src/**",
+              "native/llama_runtime/CMakeLists.txt",
+              "scripts/build_llama_android.sh",
+              "scripts/build_rma133_android_benchmark_v6.sh",
+              "scripts/run_rma133_device_benchmark_v6.*",
+              "scripts/score_rma133_benchmark*.py",
+              "third_party/llama-cpp-source.lock.json",
+              "toolchain.lock.json",
+          )
+          matched = [
+              path
+              for path in changed
+              if any(fnmatch.fnmatchcase(path, pattern) for pattern in physical_patterns)
+          ]
+          required = bool(matched)
+          with Path(sys.argv[2]).open("a", encoding="utf-8") as output:
+              output.write(f"physical_required={'true' if required else 'false'}\n")
+          if required:
+              print("Physical benchmark required by:")
+              for path in matched:
+                  print(f"  {path}")
+          else:
+              print("No physical-benchmark input changed; hosted validation is sufficient.")
+          PY
       - name: Validate historical and V6 contracts
         shell: bash
         run: |
@@ -157,7 +222,7 @@ jobs:
 
   device-benchmark:
     name: Benchmark V6 candidates on physical Android device
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.contract.outputs.physical_required == 'true'
     needs: [contract, native-abi2]
     runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
     timeout-minutes: 120
