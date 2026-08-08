@@ -32,6 +32,7 @@ jobs:
           python3 - <<'PY'
           from __future__ import annotations
 
+          import base64
           import json
           from pathlib import Path
 
@@ -52,76 +53,68 @@ jobs:
           )
           replace_once(
               scorer,
-              '''    benchmark_id = config.get("benchmark_id")
-              if benchmark_id != "rma133-initial-sub1b-v1":
-                  raise ValueError("RMA-133 benchmark_id changed from the frozen v1 contract")
-          ''',
-              '''    benchmark_id = config.get("benchmark_id")
-              allowed_benchmark_ids = {
-                  "rma133-initial-sub1b-v1",
-                  "rma133-initial-local-model-v2",
-              }
-              if benchmark_id not in allowed_benchmark_ids:
-                  raise ValueError("RMA-133 benchmark_id is not an accepted frozen contract lineage")
-              relaxed_size_contract = benchmark_id == "rma133-initial-local-model-v2"
-          ''',
+              '    benchmark_id = config.get("benchmark_id")\n'
+              '    if benchmark_id != "rma133-initial-sub1b-v1":\n'
+              '        raise ValueError("RMA-133 benchmark_id changed from the frozen v1 contract")\n',
+              '    benchmark_id = config.get("benchmark_id")\n'
+              '    allowed_benchmark_ids = {\n'
+              '        "rma133-initial-sub1b-v1",\n'
+              '        "rma133-initial-local-model-v2",\n'
+              '    }\n'
+              '    if benchmark_id not in allowed_benchmark_ids:\n'
+              '        raise ValueError("RMA-133 benchmark_id is not an accepted frozen contract lineage")\n'
+              '    relaxed_size_contract = benchmark_id == "rma133-initial-local-model-v2"\n',
           )
           replace_once(
               scorer,
-              '''    has_qwen = False
-              has_alternative = False
-              quantizations: set[str] = set()
-          ''',
-              '''    has_qwen = False
-              has_sub1b_alternative = False
-              has_relaxed_alternative = False
-              quantizations: set[str] = set()
-          ''',
+              '    has_qwen = False\n'
+              '    has_alternative = False\n'
+              '    quantizations: set[str] = set()\n',
+              '    has_qwen = False\n'
+              '    has_sub1b_alternative = False\n'
+              '    has_relaxed_alternative = False\n'
+              '    quantizations: set[str] = set()\n',
           )
           replace_once(
               scorer,
-              '''        model_class = candidate.get("model_class")
-                  has_qwen = has_qwen or model_class == "qwen3-0.6b-class"
-                  has_alternative = has_alternative or model_class == "alternative-sub1b"
-                  license_id = candidate.get("license_id")
-          ''',
-              '''        model_class = candidate.get("model_class")
-                  allowed_model_classes = {
-                      "qwen3-0.6b-class",
-                      "alternative-sub1b",
-                      "alternative-local",
-                  }
-                  if model_class not in allowed_model_classes:
-                      raise ValueError(f"candidate {candidate_id} has an unknown model class")
-                  if relaxed_size_contract and model_class == "alternative-sub1b":
-                      raise ValueError("relaxed-size contract cannot label an alternative as sub-1B")
-                  if not relaxed_size_contract and model_class == "alternative-local":
-                      raise ValueError("sub-1B contract cannot include a relaxed-size alternative")
-                  has_qwen = has_qwen or model_class == "qwen3-0.6b-class"
-                  has_sub1b_alternative = (
-                      has_sub1b_alternative or model_class == "alternative-sub1b"
-                  )
-                  has_relaxed_alternative = (
-                      has_relaxed_alternative or model_class == "alternative-local"
-                  )
-                  license_id = candidate.get("license_id")
-          ''',
+              '        model_class = candidate.get("model_class")\n'
+              '        has_qwen = has_qwen or model_class == "qwen3-0.6b-class"\n'
+              '        has_alternative = has_alternative or model_class == "alternative-sub1b"\n'
+              '        license_id = candidate.get("license_id")\n',
+              '        model_class = candidate.get("model_class")\n'
+              '        allowed_model_classes = {\n'
+              '            "qwen3-0.6b-class",\n'
+              '            "alternative-sub1b",\n'
+              '            "alternative-local",\n'
+              '        }\n'
+              '        if model_class not in allowed_model_classes:\n'
+              '            raise ValueError(f"candidate {candidate_id} has an unknown model class")\n'
+              '        if relaxed_size_contract and model_class == "alternative-sub1b":\n'
+              '            raise ValueError("relaxed-size contract cannot label an alternative as sub-1B")\n'
+              '        if not relaxed_size_contract and model_class == "alternative-local":\n'
+              '            raise ValueError("sub-1B contract cannot include a relaxed-size alternative")\n'
+              '        has_qwen = has_qwen or model_class == "qwen3-0.6b-class"\n'
+              '        has_sub1b_alternative = (\n'
+              '            has_sub1b_alternative or model_class == "alternative-sub1b"\n'
+              '        )\n'
+              '        has_relaxed_alternative = (\n'
+              '            has_relaxed_alternative or model_class == "alternative-local"\n'
+              '        )\n'
+              '        license_id = candidate.get("license_id")\n',
           )
           replace_once(
               scorer,
-              '''    if not has_qwen or not has_alternative:
-                  raise ValueError("RMA-133 candidate set must include Qwen3-0.6B-class and an alternative")
-              if len(quantizations) != 1:
-          ''',
-              '''    if not has_qwen:
-                  raise ValueError("RMA-133 candidate set must retain the Qwen3-0.6B control")
-              if relaxed_size_contract:
-                  if not has_relaxed_alternative:
-                      raise ValueError("RMA-133 relaxed-size contract requires a larger local alternative")
-              elif not has_sub1b_alternative:
-                  raise ValueError("RMA-133 sub-1B contract requires a sub-1B alternative")
-              if len(quantizations) != 1:
-          ''',
+              '    if not has_qwen or not has_alternative:\n'
+              '        raise ValueError("RMA-133 candidate set must include Qwen3-0.6B-class and an alternative")\n'
+              '    if len(quantizations) != 1:\n',
+              '    if not has_qwen:\n'
+              '        raise ValueError("RMA-133 candidate set must retain the Qwen3-0.6B control")\n'
+              '    if relaxed_size_contract:\n'
+              '        if not has_relaxed_alternative:\n'
+              '            raise ValueError("RMA-133 relaxed-size contract requires a larger local alternative")\n'
+              '    elif not has_sub1b_alternative:\n'
+              '        raise ValueError("RMA-133 sub-1B contract requires a sub-1B alternative")\n'
+              '    if len(quantizations) != 1:\n',
           )
 
           v4 = json.loads((root / 'benchmarks/rma133/candidates-v4.json').read_text(encoding='utf-8'))
@@ -179,167 +172,50 @@ jobs:
               json.dumps(v5, indent=2) + '\n', encoding='utf-8'
           )
 
-          test = '''from __future__ import annotations
-
-import importlib.util
-import json
-import sys
-import unittest
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[2]
-V4_CONFIG = ROOT / "benchmarks" / "rma133" / "candidates-v4.json"
-V5_CONFIG = ROOT / "benchmarks" / "rma133" / "candidates-v5.json"
-SCORER = ROOT / "scripts" / "score_rma133_benchmark.py"
-
-spec = importlib.util.spec_from_file_location("rma133_scorer_v5_contract", SCORER)
-if spec is None or spec.loader is None:
-    raise RuntimeError("could not load RMA-133 scorer")
-scorer = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = scorer
-spec.loader.exec_module(scorer)
-
-
-class Rma133CandidateSetV5Tests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.v4 = json.loads(V4_CONFIG.read_text(encoding="utf-8"))
-        self.v5 = json.loads(V5_CONFIG.read_text(encoding="utf-8"))
-
-    def test_v5_relaxes_only_candidate_size_scope(self) -> None:
-        scorer._validate_config(self.v4)
-        scorer._validate_config(self.v5)
-        self.assertEqual(self.v5["benchmark_id"], "rma133-initial-local-model-v2")
-        self.assertEqual(self.v5["experiment_id"], "rma133-candidate-set-v5")
-        self.assertEqual(self.v5["system_prompt_contract"], self.v4["system_prompt_contract"])
-        self.assertEqual(self.v5["license_policy"], self.v4["license_policy"])
-        self.assertEqual(self.v5["runtime_profile"], self.v4["runtime_profile"])
-        self.assertEqual(self.v5["selection_policy"], self.v4["selection_policy"])
-        self.assertEqual(
-            self.v5["model_size_policy"]["constraint"],
-            "up-to-2B-class",
-        )
-        self.assertEqual(self.v5["model_size_policy"]["relaxed_from"], "sub-1B")
-
-    def test_v5_retains_qwen_control_and_pins_larger_coder(self) -> None:
-        v4_qwen = next(
-            candidate
-            for candidate in self.v4["candidates"]
-            if candidate["candidate_id"] == "qwen3-0.6b-q4-k-m"
-        )
-        v5_qwen = next(
-            candidate
-            for candidate in self.v5["candidates"]
-            if candidate["candidate_id"] == "qwen3-0.6b-q4-k-m"
-        )
-        self.assertEqual(v5_qwen, v4_qwen)
-
-        larger = next(
-            candidate
-            for candidate in self.v5["candidates"]
-            if candidate["candidate_id"] == "qwen2.5-coder-1.5b-instruct-q4-k-m"
-        )
-        self.assertEqual(larger["model_class"], "alternative-local")
-        self.assertEqual(larger["license_id"], "Apache-2.0")
-        self.assertEqual(larger["source_revision"], "2ab9f8f42af02fc212effaef7c4850c885e965f4")
-        self.assertEqual(larger["artifact"]["filename"], "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
-        self.assertEqual(larger["artifact"]["file_size_bytes"], 1_117_320_768)
-        self.assertEqual(
-            larger["artifact"]["sha256"],
-            "cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046",
-        )
-        self.assertEqual(larger["artifact"]["quantization"], "Q4_K_M")
-        self.assertEqual(larger["user_prompt_suffix"], "")
-        self.assertGreater(larger["artifact"]["file_size_bytes"], 1_000_000_000)
-
-
-if __name__ == "__main__":
-    unittest.main()
-'''
-          (root / 'scripts/tests/test_rma133_candidate_set_v5.py').write_text(test, encoding='utf-8')
-
-          v4_doc = '''# RMA-133 Candidate-Set V4 Validation — 2026-08-07
-
-## Disposition
-
-Candidate-set v4 completed on the physical LG-H872 and selected no model. The stricter, cryptographically pinned system prompt materially improved Qwen2.5-Coder-0.5B-Instruct structured-output behavior, but neither candidate met the unchanged schema-reliability and semantic-quality gates. No output repair, fallback, retry-to-another-model, or threshold reduction was applied.
-
-## Exact evidence
-
-- Source SHA: `44e5f49d200435787e8bf8463efcf712e893625a`
-- Dedicated workflow run: `31226448507`
-- Physical-device job: `93021656910`
-- Evidence artifact ID: `9012680552`
-- Artifact digest: `sha256:2d517b497f0dd6ce6d5a62b8c36ca29eead362a7a191f0c5635bb7c8464c3222`
-- Device: `LG-H872`, ARM64, Android API 26
-- Hosted CI run on the same SHA: `31226448540`, success
-- Selector: `status=no_candidate_passed`, `selected_candidate_id=null`
-
-## Frozen gates
-
-- 12/12 completed cases
-- schema reliability: 1.0
-- semantic quality: at least 85/100
-- mean decode rate: at least 1 token/s
-- peak RSS: at most 1.5 GB
-- peak battery temperature: below 45 C
-- battery-temperature rise: at most 10 C
-
-## Measured results
-
-### Qwen3 0.6B Q4_K_M
-
-- completed cases: 12/12
-- schema reliability: 0/12 = 0.000
-- semantic quality: 0.00/100
-- load time: 1051.487 ms
-- mean TTFT: 35364.986 ms
-- mean decode: 4.3311 tok/s
-- peak RSS: 675,487,744 bytes
-- battery: 33.2 C before, 38.0 C peak/after, +4.8 C
-- disposition: rejected on schema and semantic gates
-
-### Qwen2.5-Coder 0.5B Instruct Q4_K_M
-
-- completed cases: 12/12
-- schema reliability: 9/12 = 0.750
-- semantic quality: 62.50/100
-- load time: 2301.979 ms
-- mean TTFT: 31472.345 ms
-- mean decode: 8.1184 tok/s
-- peak RSS: 561,270,784 bytes
-- battery: 38.1 C before, 40.0 C peak/after, +1.9 C
-- disposition: rejected on schema and semantic gates
-
-The Coder candidate produced nine schema-valid objects. The remaining failures included two responses that were not exactly one JSON object and one missing/invalid speech field. Several schema-valid cases still lost semantic credit for weak speech semantics or an unexpected gaze decision. The performance, memory, and thermal gates all passed.
-
-## Decision
-
-V1 through V4 establish that the tested Apache-2.0 sub-1B candidates have adequate device resource characteristics but do not satisfy the frozen Reachy behavior-intent reliability/quality contract. The next experiment therefore relaxes the model-size constraint without weakening any behavior, safety, resource, or thermal acceptance gate. Candidate-set v5 retains the Qwen3 control and tests the official Qwen2.5-Coder-1.5B-Instruct Q4_K_M artifact under the same v4 prompt and runtime/scoring policy.
-'''
-          (root / 'docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md').write_text(
-              v4_doc, encoding='utf-8'
+          test_b64 = 'ZnJvbSBfX2Z1dHVyZV9fIGltcG9ydCBhbm5vdGF0aW9ucwoKaW1wb3J0IGltcG9ydGxpYi51dGlsCmltcG9ydCBqc29uCmltcG9ydCBzeXMKaW1wb3J0IHVuaXR0ZXN0CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKUk9PVCA9IFBhdGgoX19maWxlX18pLnJlc29sdmUoKS5wYXJlbnRzWzJdClY0X0NPTkZJRyA9IFJPT1QgLyAiYmVuY2htYXJrcyIgLyAicm1hMTMzIiAvICJjYW5kaWRhdGVzLXY0Lmpzb24iClY1X0NPTkZJRyA9IFJPT1QgLyAiYmVuY2htYXJrcyIgLyAicm1hMTMzIiAvICJjYW5kaWRhdGVzLXY1Lmpzb24iClNDT1JFUiA9IFJPT1QgLyAic2NyaXB0cyIgLyAic2NvcmVfcm1hMTMzX2JlbmNobWFyay5weSIKCnNwZWMgPSBpbXBvcnRsaWIudXRpbC5zcGVjX2Zyb21fZmlsZV9sb2NhdGlvbigicm1hMTMzX3Njb3Jlcl92NV9jb250cmFjdCIsIFNDT1JFUikKaWYgc3BlYyBpcyBOb25lIG9yIHNwZWMubG9hZGVyIGlzIE5vbmU6CiAgICByYWlzZSBSdW50aW1lRXJyb3IoImNvdWxkIG5vdCBsb2FkIFJNQS0xMzMgc2NvcmVyIikKc2NvcmVyID0gaW1wb3J0bGliLnV0aWwubW9kdWxlX2Zyb21fc3BlYyhzcGVjKQpzeXMubW9kdWxlc1tzcGVjLm5hbWVdID0gc2NvcmVyCnNwZWMubG9hZGVyLmV4ZWNfbW9kdWxlKHNjb3JlcikKCgpjbGFzcyBSbWExMzNDYW5kaWRhdGVTZXRWNVRlc3RzKHVuaXR0ZXN0LlRlc3RDYXNlKToKICAgIGRlZiBzZXRVcChzZWxmKSAtPiBOb25lOgogICAgICAgIHNlbGYudjQgPSBqc29uLmxvYWRzKFY0X0NPTkZJRy5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikpCiAgICAgICAgc2VsZi52NSA9IGpzb24ubG9hZHMoVjVfQ09ORklHLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKSkKCiAgICBkZWYgdGVzdF92NV9yZWxheGVzX29ubHlfY2FuZGlkYXRlX3NpemVfc2NvcGUoc2VsZikgLT4gTm9uZToKICAgICAgICBzY29yZXIuX3ZhbGlkYXRlX2NvbmZpZyhzZWxmLnY0KQogICAgICAgIHNjb3Jlci5fdmFsaWRhdGVfY29uZmlnKHNlbGYudjUpCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChzZWxmLnY1WyJiZW5jaG1hcmtfaWQiXSwgInJtYTEzMy1pbml0aWFsLWxvY2FsLW1vZGVsLXYyIikKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHNlbGYudjVbImV4cGVyaW1lbnRfaWQiXSwgInJtYTEzMy1jYW5kaWRhdGUtc2V0LXY1IikKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHNlbGYudjVbInN5c3RlbV9wcm9tcHRfY29udHJhY3QiXSwgc2VsZi52NFsic3lzdGVtX3Byb21wdF9jb250cmFjdCJdKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwoc2VsZi52NVsibGljZW5zZV9wb2xpY3kiXSwgc2VsZi52NFsibGljZW5zZV9wb2xpY3kiXSkKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHNlbGYudjVbInJ1bnRpbWVfcHJvZmlsZSJdLCBzZWxmLnY0WyJydW50aW1lX3Byb2ZpbGUiXSkKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKHNlbGYudjVbInNlbGVjdGlvbl9wb2xpY3kiXSwgc2VsZi52NFsic2VsZWN0aW9uX3BvbGljeSJdKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwoCiAgICAgICAgICAgIHNlbGYudjVbIm1vZGVsX3NpemVfcG9saWN5Il1bImNvbnN0cmFpbnQiXSwKICAgICAgICAgICAgInVwLXRvLTJCLWNsYXNzIiwKICAgICAgICApCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChzZWxmLnY1WyJtb2RlbF9zaXplX3BvbGljeSJdWyJyZWxheGVkX2Zyb20iXSwgInN1Yi0xQiIpCgogICAgZGVmIHRlc3RfdjVfcmV0YWluc19xd2VuX2NvbnRyb2xfYW5kX3BpbnNfbGFyZ2VyX2NvZGVyKHNlbGYpIC0+IE5vbmU6CiAgICAgICAgdjRfcXdlbiA9IG5leHQoCiAgICAgICAgICAgIGNhbmRpZGF0ZQogICAgICAgICAgICBmb3IgY2FuZGlkYXRlIGluIHNlbGYudjRbImNhbmRpZGF0ZXMiXQogICAgICAgICAgICBpZiBjYW5kaWRhdGVbImNhbmRpZGF0ZV9pZCJdID09ICJxd2VuMy0wLjZiLXE0LWstbSIKICAgICAgICApCiAgICAgICAgdjVfcXdlbiA9IG5leHQoCiAgICAgICAgICAgIGNhbmRpZGF0ZQogICAgICAgICAgICBmb3IgY2FuZGlkYXRlIGluIHNlbGYudjVbImNhbmRpZGF0ZXMiXQogICAgICAgICAgICBpZiBjYW5kaWRhdGVbImNhbmRpZGF0ZV9pZCJdID09ICJxd2VuMy0wLjZiLXE0LWstbSIKICAgICAgICApCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbCh2NV9xd2VuLCB2NF9xd2VuKQoKICAgICAgICBsYXJnZXIgPSBuZXh0KAogICAgICAgICAgICBjYW5kaWRhdGUKICAgICAgICAgICAgZm9yIGNhbmRpZGF0ZSBpbiBzZWxmLnY1WyJjYW5kaWRhdGVzIl0KICAgICAgICAgICAgaWYgY2FuZGlkYXRlWyJjYW5kaWRhdGVfaWQiXSA9PSAicXdlbjIuNS1jb2Rlci0xLjViLWluc3RydWN0LXE0LWstbSIKICAgICAgICApCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChsYXJnZXJbIm1vZGVsX2NsYXNzIl0sICJhbHRlcm5hdGl2ZS1sb2NhbCIpCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChsYXJnZXJbImxpY2Vuc2VfaWQiXSwgIkFwYWNoZS0yLjAiKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwobGFyZ2VyWyJzb3VyY2VfcmV2aXNpb24iXSwgIjJhYjlmOGY0MmFmMDJmYzIxMmVmZmFlZjdjNDg1MGM4ODVlOTY1ZjQiKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwoCiAgICAgICAgICAgIGxhcmdlclsiYXJ0aWZhY3QiXVsiZmlsZW5hbWUiXSwKICAgICAgICAgICAgInF3ZW4yLjUtY29kZXItMS41Yi1pbnN0cnVjdC1xNF9rX20uZ2d1ZiIsCiAgICAgICAgKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwobGFyZ2VyWyJhcnRpZmFjdCJdWyJmaWxlX3NpemVfYnl0ZXMiXSwgMV8xMTdfMzIwXzc2OCkKICAgICAgICBzZWxmLmFzc2VydEVxdWFsKAogICAgICAgICAgICBsYXJnZXJbImFydGlmYWN0Il1bInNoYTI1NiJdLAogICAgICAgICAgICAiY2MzMjRhZjA3MGMyZWNiZmQzMjRhMzA4ODRkMmY5NTFhN2ZmNzU2YWJhODVjYjgxMWE2ZWM0MzY5MzNiYjA0NiIsCiAgICAgICAgKQogICAgICAgIHNlbGYuYXNzZXJ0RXF1YWwobGFyZ2VyWyJhcnRpZmFjdCJdWyJxdWFudGl6YXRpb24iXSwgIlE0X0tfTSIpCiAgICAgICAgc2VsZi5hc3NlcnRFcXVhbChsYXJnZXJbInVzZXJfcHJvbXB0X3N1ZmZpeCJdLCAiIikKICAgICAgICBzZWxmLmFzc2VydEdyZWF0ZXIobGFyZ2VyWyJhcnRpZmFjdCJdWyJmaWxlX3NpemVfYnl0ZXMiXSwgMV8wMDBfMDAwXzAwMCkKCgppZiBfX25hbWVfXyA9PSAiX19tYWluX18iOgogICAgdW5pdHRlc3QubWFpbigpCg=='
+          doc_b64 = 'IyBSTUEtMTMzIENhbmRpZGF0ZS1TZXQgVjQgVmFsaWRhdGlvbiDigJQgMjAyNi0wOC0wNwoKIyMgRGlzcG9zaXRpb24KCkNhbmRpZGF0ZS1zZXQgdjQgY29tcGxldGVkIG9uIHRoZSBwaHlzaWNhbCBMRy1IODcyIGFuZCBzZWxlY3RlZCBubyBtb2RlbC4gVGhlIHN0cmljdGVyLCBjcnlwdG9ncmFwaGljYWxseSBwaW5uZWQgc3lzdGVtIHByb21wdCBtYXRlcmlhbGx5IGltcHJvdmVkIFF3ZW4yLjUtQ29kZXItMC41Qi1JbnN0cnVjdCBzdHJ1Y3R1cmVkLW91dHB1dCBiZWhhdmlvciwgYnV0IG5laXRoZXIgY2FuZGlkYXRlIG1ldCB0aGUgdW5jaGFuZ2VkIHNjaGVtYS1yZWxpYWJpbGl0eSBhbmQgc2VtYW50aWMtcXVhbGl0eSBnYXRlcy4gTm8gb3V0cHV0IHJlcGFpciwgZmFsbGJhY2ssIHJldHJ5LXRvLWFub3RoZXItbW9kZWwsIG9yIHRocmVzaG9sZCByZWR1Y3Rpb24gd2FzIGFwcGxpZWQuCgojIyBFeGFjdCBldmlkZW5jZQoKLSBTb3VyY2UgU0hBOiBgNDRlNWY0OWQyMDA0MzU3ODdlOGJmODQ2M2VmY2Y3MTJlODkzNjI1YWAKLSBEZWRpY2F0ZWQgd29ya2Zsb3cgcnVuOiBgMzEyMjY0NDg1MDdgCi0gUGh5c2ljYWwtZGV2aWNlIGpvYjogYDkzMDIxNjU2OTEwYAotIEV2aWRlbmNlIGFydGlmYWN0IElEOiBgOTAxMjY4MDU1MmAKLSBBcnRpZmFjdCBkaWdlc3Q6IGBzaGEyNTY6MmQ1MTdiNDk3ZjBkZDZjZTZkNWE2MmI4YzM2Y2EyOWVlYWQzNjJhN2ExOTFmMGM1NjM1YmI3Yzg0NjRjMzIyMmAKLSBEZXZpY2U6IGBMRy1IODcyYCwgQVJNNjQsIEFuZHJvaWQgQVBJIDI2Ci0gSG9zdGVkIENJIHJ1biBvbiB0aGUgc2FtZSBTSEE6IGAzMTIyNjQ0ODU0MGAsIHN1Y2Nlc3MKLSBTZWxlY3RvcjogYHN0YXR1cz1ub19jYW5kaWRhdGVfcGFzc2VkYCwgYHNlbGVjdGVkX2NhbmRpZGF0ZV9pZD1udWxsYAoKIyMgRnJvemVuIGdhdGVzCgotIDEyLzEyIGNvbXBsZXRlZCBjYXNlcwotIHNjaGVtYSByZWxpYWJpbGl0eTogMS4wCi0gc2VtYW50aWMgcXVhbGl0eTogYXQgbGVhc3QgODUvMTAwCi0gbWVhbiBkZWNvZGUgcmF0ZTogYXQgbGVhc3QgMSB0b2tlbi9zCi0gcGVhayBSU1M6IGF0IG1vc3QgMS41IEdCCi0gcGVhayBiYXR0ZXJ5IHRlbXBlcmF0dXJlOiBiZWxvdyA0NSBDCi0gYmF0dGVyeS10ZW1wZXJhdHVyZSByaXNlOiBhdCBtb3N0IDEwIEMKCiMjIE1lYXN1cmVkIHJlc3VsdHMKCiMjIyBRd2VuMyAwLjZCIFE0X0tfTQoKLSBjb21wbGV0ZWQgY2FzZXM6IDEyLzEyCi0gc2NoZW1hIHJlbGlhYmlsaXR5OiAwLzEyID0gMC4wMDAKLSBzZW1hbnRpYyBxdWFsaXR5OiAwLjAwLzEwMAotIGxvYWQgdGltZTogMTA1MS40ODcgbXMKLSBtZWFuIFRURlQ6IDM1MzY0Ljk4NiBtcwotIG1lYW4gZGVjb2RlOiA0LjMzMTEgdG9rL3MKLSBwZWFrIFJTUzogNjc1LDQ4Nyw3NDQgYnl0ZXMKLSBiYXR0ZXJ5OiAzMy4yIEMgYmVmb3JlLCAzOC4wIEMgcGVhay9hZnRlciwgKzQuOCBDCi0gZGlzcG9zaXRpb246IHJlamVjdGVkIG9uIHNjaGVtYSBhbmQgc2VtYW50aWMgZ2F0ZXMKCiMjIyBRd2VuMi41LUNvZGVyIDAuNUIgSW5zdHJ1Y3QgUTRfS19NCgotIGNvbXBsZXRlZCBjYXNlczogMTIvMTIKLSBzY2hlbWEgcmVsaWFiaWxpdHk6IDkvMTIgPSAwLjc1MAotIHNlbWFudGljIHF1YWxpdHk6IDYyLjUwLzEwMAotIGxvYWQgdGltZTogMjMwMS45NzkgbXMKLSBtZWFuIFRURlQ6IDMxNDcyLjM0NSBtcwotIG1lYW4gZGVjb2RlOiA4LjExODQgdG9rL3MKLSBwZWFrIFJTUzogNTYxLDI3MCw3ODQgYnl0ZXMKLSBiYXR0ZXJ5OiAzOC4xIEMgYmVmb3JlLCA0MC4wIEMgcGVhay9hZnRlciwgKzEuOSBDCi0gZGlzcG9zaXRpb246IHJlamVjdGVkIG9uIHNjaGVtYSBhbmQgc2VtYW50aWMgZ2F0ZXMKClRoZSBDb2RlciBjYW5kaWRhdGUgcHJvZHVjZWQgbmluZSBzY2hlbWEtdmFsaWQgb2JqZWN0cy4gVGhlIHJlbWFpbmluZyBmYWlsdXJlcyBpbmNsdWRlZCB0d28gcmVzcG9uc2VzIHRoYXQgd2VyZSBub3QgZXhhY3RseSBvbmUgSlNPTiBvYmplY3QgYW5kIG9uZSBtaXNzaW5nL2ludmFsaWQgc3BlZWNoIGZpZWxkLiBTZXZlcmFsIHNjaGVtYS12YWxpZCBjYXNlcyBzdGlsbCBsb3N0IHNlbWFudGljIGNyZWRpdCBmb3Igd2VhayBzcGVlY2ggc2VtYW50aWNzIG9yIGFuIHVuZXhwZWN0ZWQgZ2F6ZSBkZWNpc2lvbi4gVGhlIHBlcmZvcm1hbmNlLCBtZW1vcnksIGFuZCB0aGVybWFsIGdhdGVzIGFsbCBwYXNzZWQuCgojIyBEZWNpc2lvbgoKVjEgdGhyb3VnaCBWNCBlc3RhYmxpc2ggdGhhdCB0aGUgdGVzdGVkIEFwYWNoZS0yLjAgc3ViLTFCIGNhbmRpZGF0ZXMgaGF2ZSBhZGVxdWF0ZSBkZXZpY2UgcmVzb3VyY2UgY2hhcmFjdGVyaXN0aWNzIGJ1dCBkbyBub3Qgc2F0aXNmeSB0aGUgZnJvemVuIFJlYWNoeSBiZWhhdmlvci1pbnRlbnQgcmVsaWFiaWxpdHkvcXVhbGl0eSBjb250cmFjdC4gVGhlIG5leHQgZXhwZXJpbWVudCB0aGVyZWZvcmUgcmVsYXhlcyB0aGUgbW9kZWwtc2l6ZSBjb25zdHJhaW50IHdpdGhvdXQgd2Vha2VuaW5nIGFueSBiZWhhdmlvciwgc2FmZXR5LCByZXNvdXJjZSwgb3IgdGhlcm1hbCBhY2NlcHRhbmNlIGdhdGUuIENhbmRpZGF0ZS1zZXQgdjUgcmV0YWlucyB0aGUgUXdlbjMgY29udHJvbCBhbmQgdGVzdHMgdGhlIG9mZmljaWFsIFF3ZW4yLjUtQ29kZXItMS41Qi1JbnN0cnVjdCBRNF9LX00gYXJ0aWZhY3QgdW5kZXIgdGhlIHNhbWUgdjQgcHJvbXB0IGFuZCBydW50aW1lL3Njb3JpbmcgcG9saWN5Lgo='
+          (root / 'scripts/tests/test_rma133_candidate_set_v5.py').write_bytes(
+              base64.b64decode(test_b64)
+          )
+          (root / 'docs/validation/RMA_133_CANDIDATE_SET_V4_VALIDATION_2026-08-07.md').write_bytes(
+              base64.b64decode(doc_b64)
           )
 
           architecture = root / 'docs/architecture/RMA_133_LOCAL_LLM_BENCHMARK.md'
           architecture_text = architecture.read_text(encoding='utf-8')
           marker = '## Candidate-size policy relaxation (2026-08-08)'
           if marker not in architecture_text:
-              architecture_text += '''\n\n## Candidate-size policy relaxation (2026-08-08)\n\nCandidate sets v1 through v4 evaluated the original sub-1B scope. V4 improved Qwen2.5-Coder-0.5B-Instruct to 75% strict schema reliability and 62.5/100 semantic quality while remaining well inside the memory, decode-rate, and thermal envelopes. Because it still failed the frozen 100% schema and 85/100 semantic gates, RMA-133 now permits an up-to-2B-class follow-up candidate.\n\nThis is a size-scope change only. Candidate-set v5 keeps the v4 system prompt bytes, 12 behavior cases, Q4_K_M quantization, runtime profile, Apache-2.0 license policy, scorer, thresholds, ranking, raw byte evidence, no-repair rule, and fail-closed selector unchanged. The new benchmark lineage ID is `rma133-initial-local-model-v2`; historical `rma133-initial-sub1b-v1` configs remain valid and immutable.\n'''
+              architecture_text += (
+                  '\n\n## Candidate-size policy relaxation (2026-08-08)\n\n'
+                  'Candidate sets v1 through v4 evaluated the original sub-1B scope. V4 improved '
+                  'Qwen2.5-Coder-0.5B-Instruct to 75% strict schema reliability and 62.5/100 semantic '
+                  'quality while remaining well inside the memory, decode-rate, and thermal envelopes. '
+                  'Because it still failed the frozen 100% schema and 85/100 semantic gates, RMA-133 '
+                  'now permits an up-to-2B-class follow-up candidate.\n\n'
+                  'This is a size-scope change only. Candidate-set v5 keeps the v4 system prompt bytes, '
+                  '12 behavior cases, Q4_K_M quantization, runtime profile, Apache-2.0 license policy, '
+                  'scorer, thresholds, ranking, raw byte evidence, no-repair rule, and fail-closed '
+                  'selector unchanged. The new benchmark lineage ID is `rma133-initial-local-model-v2`; '
+                  'historical `rma133-initial-sub1b-v1` configs remain valid and immutable.\n'
+              )
               architecture.write_text(architecture_text, encoding='utf-8')
 
           roadmap = root / 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
           roadmap_text = roadmap.read_text(encoding='utf-8')
-          roadmap_text = roadmap_text.replace(
-              '## RMA-133 — Benchmark and select initial sub-1B model',
-              '## RMA-133 — Benchmark and select initial local model',
-              1,
+          old_title = '## RMA-133 — Benchmark and select initial sub-1B model'
+          new_title = '## RMA-133 — Benchmark and select initial local model'
+          if roadmap_text.count(old_title) != 1:
+              raise SystemExit('RMA-133 roadmap title did not match exactly once')
+          roadmap_text = roadmap_text.replace(old_title, new_title, 1)
+          old_item = '- [ ] Evaluate Qwen3-0.6B-class and at least one alternative under the selected license constraints.'
+          new_item = (
+              '- [ ] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; '
+              'after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without '
+              'weakening quality or safety gates.'
           )
-          roadmap_text = roadmap_text.replace(
-              '- [ ] Evaluate Qwen3-0.6B-class and at least one alternative under the selected license constraints.',
-              '- [ ] Evaluate Qwen3-0.6B-class and alternatives under the selected license constraints; after documented sub-1B rejection evidence, permit an up-to-2B-class candidate without weakening quality or safety gates.',
-              1,
-          )
-          roadmap.write_text(roadmap_text, encoding='utf-8')
+          if roadmap_text.count(old_item) != 1:
+              raise SystemExit('RMA-133 roadmap scope item did not match exactly once')
+          roadmap.write_text(roadmap_text.replace(old_item, new_item, 1), encoding='utf-8')
           PY
 
           python -m pip install --disable-pip-version-check ruff==0.12.0
