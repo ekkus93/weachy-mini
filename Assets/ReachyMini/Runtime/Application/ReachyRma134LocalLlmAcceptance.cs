@@ -21,6 +21,7 @@ namespace ReachyMini.Validation
         internal const string LaunchExtraName = "reachy_rma134_acceptance";
         internal const string ResultFileName = "rma134-local-llm-acceptance.json";
         internal const string ModelFileName = "rma134-qwen3-0.6b-q4_k_m.gguf";
+        internal const string CheckpointFilePrefix = "rma134-local-llm-checkpoint-";
 
         private const string SimulationModelResourcePath = "ReachyMiniRuntime/reachy_mini_mjb";
         private const double PhysicsStepSeconds = 0.002;
@@ -33,6 +34,8 @@ namespace ReachyMini.Validation
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
         private static string unhandledFailureMessage = string.Empty;
+        private static int checkpointSequence;
+        private static Stopwatch? checkpointStopwatch;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -55,9 +58,22 @@ namespace ReachyMini.Validation
             {
                 return;
             }
+
+            try
+            {
+                InitializeCheckpointRun();
+                WriteCheckpoint("bootstrap_started", "RMA-134 launch extra accepted.");
+            }
+            catch (Exception exception)
+            {
+                bootstrapError = "Failed to initialize RMA-134 checkpoints: " + exception.Message;
+                Debug.LogError(bootstrapError);
+            }
+
             GameObject host = new GameObject("ReachyRma134LocalLlmAcceptance");
             DontDestroyOnLoad(host);
             host.AddComponent<ReachyRma134LocalLlmAcceptance>();
+            TryWriteCheckpoint("bootstrap_component_installed", "Acceptance MonoBehaviour installed.");
         }
 
         private async void Start()
@@ -66,6 +82,7 @@ namespace ReachyMini.Validation
             string resultPath = Path.Combine(UnityEngine.Application.persistentDataPath, ResultFileName);
             try
             {
+                WriteCheckpoint("start_entered", "Acceptance Start entered.");
                 if (File.Exists(resultPath))
                 {
                     File.Delete(resultPath);
@@ -82,10 +99,12 @@ namespace ReachyMini.Validation
                 }
                 report.status = "passed";
                 WriteReport(resultPath, report);
+                WriteCheckpoint("passed", "Final acceptance report committed.");
                 Debug.Log("RMA-134 local LLM physical acceptance passed.");
             }
             catch (Exception exception)
             {
+                TryWriteCheckpoint("failed", Bound(exception.Message, 1024));
                 Rma134AcceptanceReport failure = new Rma134AcceptanceReport
                 {
                     status = "failed",
@@ -112,7 +131,12 @@ namespace ReachyMini.Validation
         private static async Task<Rma134AcceptanceReport> RunAcceptanceAsync()
         {
             string modelPath = Path.Combine(UnityEngine.Application.persistentDataPath, ModelFileName);
+            WriteCheckpoint("artifact_verification_started", "Verifying exact staged GGUF artifact.");
             ArtifactVerification artifact = await Task.Run(() => VerifyArtifact(modelPath)).ConfigureAwait(true);
+            WriteCheckpoint(
+                "artifact_verified",
+                "bytes=" + artifact.bytes.ToString(CultureInfo.InvariantCulture) + " sha256=" + artifact.sha256);
+
             LocalModelManifest manifest = CreateSelectedManifest();
             LocalModelApprovedArtifact approvedArtifact = new LocalModelApprovedArtifact(
                 LocalLlmBehaviorContract.ManifestId,
@@ -121,15 +145,25 @@ namespace ReachyMini.Validation
                 LocalLlmBehaviorContract.ArtifactBytes,
                 LocalLlmBehaviorContract.ArtifactSha256);
             LocalLlmExecutionProfile profile = LocalLlmExecutionProfile.CreateRma133V6Baseline();
+
+            WriteCheckpoint("baseline_observation_started", "Reading battery temperature and process RSS.");
             double initialBatteryTemperature = ReadBatteryTemperatureCelsius();
             long initialRssBytes = ReadSelfRssBytes();
+            WriteCheckpoint(
+                "baseline_observation_completed",
+                "rss_bytes=" + initialRssBytes.ToString(CultureInfo.InvariantCulture) +
+                " battery_c=" + initialBatteryTemperature.ToString("F1", CultureInfo.InvariantCulture));
+
+            WriteCheckpoint("abi_check_started", "Querying reachy_llama ABI version.");
             uint nativeAbi = NativeReachyLlama.AbiVersion();
             if (nativeAbi != 2U)
             {
                 throw new InvalidOperationException(
                     "Physical acceptance loaded reachy_llama ABI " + nativeAbi + " instead of ABI 2.");
             }
+            WriteCheckpoint("abi_verified", "reachy_llama ABI=2.");
 
+            WriteCheckpoint("model_load_started", "Creating managed provider with frozen RMA-133 V6 profile.");
             Stopwatch loadStopwatch = Stopwatch.StartNew();
             LocalLlmProviderCreationResult creation = await LocalLlmProvider.CreateAsync(
                 manifest,
@@ -143,26 +177,44 @@ namespace ReachyMini.Validation
                     "Managed local LLM provider creation failed: status=" + creation.Status +
                     " native=" + creation.NativeStatus + " detail=" + creation.Detail);
             }
+            WriteCheckpoint(
+                "model_loaded",
+                "load_ms=" + loadStopwatch.Elapsed.TotalMilliseconds.ToString("F3", CultureInfo.InvariantCulture));
 
             LocalLlmProvider provider = creation.Provider;
             ReachySimSession? simulationSession = null;
             try
             {
+                WriteCheckpoint("physics_session_started", "Creating native physics coexistence session.");
                 ReachySimSession activeSimulationSession = CreateSimulationSession();
                 simulationSession = activeSimulationSession;
+                WriteCheckpoint("physics_session_ready", "Native physics coexistence session created.");
+
                 CollectingSink firstSink = new CollectingSink();
                 using CancellationTokenSource physicsCancellation = new CancellationTokenSource();
                 Task<PhysicsTimingReport> physicsTask = Task.Run(
                     () => RunPhysicsLoop(activeSimulationSession, physicsCancellation.Token));
+                WriteCheckpoint("initial_generation_started", "Starting constrained initial behavior generation.");
                 LocalLlmGenerationResult first = await provider.GenerateAsync(
                     CreateRequest("rma134-success-1", SuccessPrompt),
                     firstSink,
                     CancellationToken.None).ConfigureAwait(true);
+                WriteCheckpoint(
+                    "initial_generation_completed",
+                    "status=" + first.Status + " text_events=" +
+                    firstSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
+
                 physicsCancellation.Cancel();
                 PhysicsTimingReport physics = await physicsTask.ConfigureAwait(true);
+                WriteCheckpoint(
+                    "physics_completed",
+                    "steps=" + physics.steps.ToString(CultureInfo.InvariantCulture) +
+                    " p95_us=" + physics.p95_microseconds.ToString("F3", CultureInfo.InvariantCulture));
                 ValidateSuccessfulGeneration(first, firstSink, "initial generation");
                 ValidatePhysicsTiming(physics);
+                WriteCheckpoint("initial_generation_validated", "Initial intent and physics gates passed.");
 
+                WriteCheckpoint("cancellation_started", "Starting cancellation acceptance generation.");
                 using CancellationTokenSource generationCancellation = new CancellationTokenSource();
                 CancelOnFirstTextSink cancellationSink = new CancelOnFirstTextSink(generationCancellation);
                 LocalLlmGenerationResult cancelled = await provider.GenerateAsync(
@@ -174,7 +226,12 @@ namespace ReachyMini.Validation
                     throw new InvalidOperationException(
                         "Managed cancellation did not terminate as Cancelled: " + cancelled.Status);
                 }
+                WriteCheckpoint(
+                    "cancellation_completed",
+                    "status=" + cancelled.Status + " text_events=" +
+                    cancellationSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
 
+                WriteCheckpoint("reset_started", "Starting conversation reset supersession acceptance.");
                 ulong previousEpoch = provider.ConversationEpoch;
                 CollectingSink resetSink = new CollectingSink();
                 Task<LocalLlmGenerationResult> resetTask = provider.GenerateAsync(
@@ -194,7 +251,13 @@ namespace ReachyMini.Validation
                     throw new InvalidOperationException(
                         "A superseded pre-reset generation emitted a validated-success terminal event.");
                 }
+                WriteCheckpoint(
+                    "reset_completed",
+                    "status=" + resetResult.Status + " epoch_before=" +
+                    previousEpoch.ToString(CultureInfo.InvariantCulture) + " epoch_after=" +
+                    newEpoch.ToString(CultureInfo.InvariantCulture));
 
+                WriteCheckpoint("reload_started", "Starting explicit in-process provider reload.");
                 LocalLlmReloadResult reload = await provider.ReloadAsync(CancellationToken.None).ConfigureAwait(true);
                 if (!reload.Succeeded)
                 {
@@ -202,16 +265,28 @@ namespace ReachyMini.Validation
                         "Explicit in-process local LLM reload failed: status=" + reload.Status +
                         " native=" + reload.NativeStatus + " detail=" + reload.Detail);
                 }
+                WriteCheckpoint("reload_completed", "status=" + reload.Status);
 
                 CollectingSink secondSink = new CollectingSink();
+                WriteCheckpoint("post_reload_generation_started", "Starting constrained post-reload generation.");
                 LocalLlmGenerationResult second = await provider.GenerateAsync(
                     CreateRequest("rma134-success-2", SuccessPrompt),
                     secondSink,
                     CancellationToken.None).ConfigureAwait(true);
+                WriteCheckpoint(
+                    "post_reload_generation_completed",
+                    "status=" + second.Status + " text_events=" +
+                    secondSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
                 ValidateSuccessfulGeneration(second, secondSink, "post-reload generation");
+                WriteCheckpoint("post_reload_generation_validated", "Post-reload intent gate passed.");
 
                 double finalBatteryTemperature = ReadBatteryTemperatureCelsius();
                 long finalRssBytes = ReadSelfRssBytes();
+                WriteCheckpoint(
+                    "final_observation_completed",
+                    "rss_bytes=" + finalRssBytes.ToString(CultureInfo.InvariantCulture) +
+                    " battery_c=" + finalBatteryTemperature.ToString("F1", CultureInfo.InvariantCulture));
+                WriteCheckpoint("acceptance_body_completed", "All behavioral acceptance operations completed.");
                 return new Rma134AcceptanceReport
                 {
                     status = "running",
@@ -255,8 +330,12 @@ namespace ReachyMini.Validation
             }
             finally
             {
+                TryWriteCheckpoint("cleanup_started", "Disposing physical acceptance resources.");
                 simulationSession?.Dispose();
+                TryWriteCheckpoint("simulation_disposed", "Physics session disposed.");
+                TryWriteCheckpoint("provider_dispose_started", "Disposing managed local LLM provider.");
                 await provider.DisposeAsync().ConfigureAwait(true);
+                TryWriteCheckpoint("provider_disposed", "Managed local LLM provider disposed.");
             }
         }
 
@@ -536,6 +615,72 @@ namespace ReachyMini.Validation
             unhandledFailureMessage = Bound(condition + "\n" + stackTrace, 2048);
         }
 
+        private static void InitializeCheckpointRun()
+        {
+            checkpointSequence = 0;
+            checkpointStopwatch = Stopwatch.StartNew();
+            string directory = UnityEngine.Application.persistentDataPath;
+            Directory.CreateDirectory(directory);
+            foreach (string path in Directory.GetFiles(directory, CheckpointFilePrefix + "*.json"))
+            {
+                File.Delete(path);
+            }
+            foreach (string path in Directory.GetFiles(directory, CheckpointFilePrefix + "*.tmp"))
+            {
+                File.Delete(path);
+            }
+        }
+
+        private static void WriteCheckpoint(string stage, string detail)
+        {
+            if (checkpointStopwatch == null)
+            {
+                checkpointStopwatch = Stopwatch.StartNew();
+            }
+            int sequence = Interlocked.Increment(ref checkpointSequence);
+            Rma134AcceptanceCheckpoint checkpoint = new Rma134AcceptanceCheckpoint
+            {
+                schema_version = 1,
+                sequence = sequence,
+                stage = stage,
+                elapsed_milliseconds = checkpointStopwatch.Elapsed.TotalMilliseconds,
+                managed_thread_id = Thread.CurrentThread.ManagedThreadId,
+                device_model = SystemInfo.deviceModel,
+                detail = Bound(detail, 1024),
+            };
+            string directory = UnityEngine.Application.persistentDataPath;
+            Directory.CreateDirectory(directory);
+            string finalPath = Path.Combine(
+                directory,
+                CheckpointFilePrefix + sequence.ToString("D3", CultureInfo.InvariantCulture) + ".json");
+            string temporaryPath = finalPath + ".tmp";
+            string json = JsonUtility.ToJson(checkpoint, true) + "\n";
+            File.WriteAllText(temporaryPath, json, new UTF8Encoding(false));
+            if (File.Exists(finalPath))
+            {
+                File.Delete(temporaryPath);
+                throw new IOException("RMA-134 checkpoint destination already exists: " + finalPath);
+            }
+            File.Move(temporaryPath, finalPath);
+            Debug.Log(
+                "RMA-134 checkpoint " + sequence.ToString(CultureInfo.InvariantCulture) +
+                " stage=" + stage + " elapsed_ms=" +
+                checkpoint.elapsed_milliseconds.ToString("F3", CultureInfo.InvariantCulture));
+        }
+
+        private static void TryWriteCheckpoint(string stage, string detail)
+        {
+            try
+            {
+                WriteCheckpoint(stage, detail);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "RMA-134 could not publish checkpoint '" + stage + "': " + Bound(exception.Message, 1024));
+            }
+        }
+
         private static void WriteReport(string path, Rma134AcceptanceReport report)
         {
             string json = JsonUtility.ToJson(report, true);
@@ -588,6 +733,18 @@ namespace ReachyMini.Validation
                 }
                 return default;
             }
+        }
+
+        [Serializable]
+        private sealed class Rma134AcceptanceCheckpoint
+        {
+            public int schema_version;
+            public int sequence;
+            public string stage = string.Empty;
+            public double elapsed_milliseconds;
+            public int managed_thread_id;
+            public string device_model = string.Empty;
+            public string detail = string.Empty;
         }
 
         [Serializable]

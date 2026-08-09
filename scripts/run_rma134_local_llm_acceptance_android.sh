@@ -11,6 +11,7 @@ PACKAGE_NAME="com.ekkus.weachymini"
 REMOTE_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
 REMOTE_RESULT_PATH="${REMOTE_FILES_DIR}/rma134-local-llm-acceptance.json"
 REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma134-qwen3-0.6b-q4_k_m.gguf"
+REMOTE_CHECKPOINT_GLOB="${REMOTE_FILES_DIR}/rma134-local-llm-checkpoint-*.json"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
 TIMEOUT_SECONDS="${RMA134_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
 EXPECTED_DEVICE_MODEL="${RMA134_EXPECTED_DEVICE_MODEL:-LG-H872}"
@@ -51,15 +52,32 @@ if [[ ! -e "${MODEL_CACHE_PATH}" ]]; then
 fi
 verify_model "${MODEL_CACHE_PATH}" || { printf '%s\n' 'Selected model cache preparation failed.' >&2; exit 1; }
 
+read_latest_checkpoint() {
+  "${ADB[@]}" shell \
+    "latest=\$(ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null | tail -n 1); if test -n \"\${latest}\"; then cat \"\${latest}\"; fi" \
+    2>/dev/null \
+    | tr -d '\r'
+}
+
 capture() {
   set +e
-  "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
+  timeout 10s "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
   "${ADB_BIN}" devices -l > "${REPORT_DIR}/adb-devices.txt" 2>&1
-  "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
-  "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" 2>&1
-  "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
-  "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
-  "${ADB[@]}" shell "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" | tr -d '\r' > "${REPORT_DIR}/rma134-local-llm-acceptance-latest.json" 2>/dev/null
+  timeout 10s "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
+  timeout 15s "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" 2>&1
+  timeout 15s "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
+  timeout 15s "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
+  timeout 15s "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt" 2>&1
+  timeout 15s "${ADB[@]}" shell dumpsys meminfo "${PACKAGE_NAME}" > "${REPORT_DIR}/meminfo.txt" 2>&1
+  timeout 10s "${ADB[@]}" shell pidof "${PACKAGE_NAME}" > "${REPORT_DIR}/pidof.txt" 2>&1
+  timeout 10s "${ADB[@]}" shell ps -A > "${REPORT_DIR}/processes.txt" 2>&1
+  timeout 10s "${ADB[@]}" shell \
+    "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \
+    | tr -d '\r' > "${REPORT_DIR}/checkpoint-files.txt" 2>&1
+  read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json" 2>/dev/null || true
+  timeout 10s "${ADB[@]}" shell \
+    "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
+    | tr -d '\r' > "${REPORT_DIR}/rma134-local-llm-acceptance-latest.json" 2>/dev/null
   set -e
 }
 
@@ -114,7 +132,8 @@ launch_component="$(awk '/android.intent.action.MAIN:/ {main=1; next} main && / 
 printf '%s\n' "${launch_component}" > "${REPORT_DIR}/launch-component.txt"
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"
-"${ADB[@]}" shell "mkdir -p '${REMOTE_FILES_DIR}' && rm -f '${REMOTE_RESULT_PATH}' '${REMOTE_MODEL_PATH}'"
+"${ADB[@]}" shell \
+  "mkdir -p '${REMOTE_FILES_DIR}' && rm -f '${REMOTE_RESULT_PATH}' '${REMOTE_MODEL_PATH}' ${REMOTE_CHECKPOINT_GLOB}"
 timeout --signal=TERM --kill-after=15s 240s "${ADB[@]}" push "${MODEL_CACHE_PATH}" "${REMOTE_MODEL_PATH}" > "${REPORT_DIR}/model-push.txt" 2>&1
 remote="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL_PATH}'; toybox stat -c '%s' '${REMOTE_MODEL_PATH}'" | tr -d '\r')"; printf '%s\n' "${remote}" > "${REPORT_DIR}/model-device-verification.txt"
 [[ "$(printf '%s\n' "${remote}" | sed -n '1s/[[:space:]].*$//p')" == "${MODEL_SHA256}" && "$(printf '%s\n' "${remote}" | sed -n '2p')" == "${MODEL_BYTES}" ]] || { printf '%s\n' 'On-device selected model verification failed.' >&2; exit 1; }
@@ -124,7 +143,33 @@ remote="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL_PATH}'; toybox sta
 cat "${REPORT_DIR}/launch.txt"; grep -Eq '(^|[[:space:]])(Error:|Exception)' "${REPORT_DIR}/launch.txt" && { printf '%s\n' 'RMA-134 Unity launch reported an error.' >&2; exit 1; }
 
 start="$(date +%s)"
+last_checkpoint_sequence=""
+last_checkpoint_stage="none"
+last_checkpoint_elapsed=""
 while true; do
+  checkpoint_json="$(read_latest_checkpoint || true)"
+  if [[ -n "${checkpoint_json}" ]]; then
+    printf '%s\n' "${checkpoint_json}" > "${REPORT_DIR}/checkpoint-latest.json"
+    mapfile -t checkpoint_fields < <(python3 - "${checkpoint_json}" <<'PY'
+import json, sys
+checkpoint=json.loads(sys.argv[1])
+print(checkpoint.get('sequence',''))
+print(checkpoint.get('stage',''))
+print(checkpoint.get('elapsed_milliseconds',''))
+PY
+)
+    checkpoint_sequence="${checkpoint_fields[0]:-}"
+    checkpoint_stage="${checkpoint_fields[1]:-unknown}"
+    checkpoint_elapsed="${checkpoint_fields[2]:-}"
+    if [[ "${checkpoint_sequence}" != "${last_checkpoint_sequence}" ]]; then
+      printf 'RMA-134 checkpoint sequence=%s stage=%s elapsed_ms=%s\n' \
+        "${checkpoint_sequence}" "${checkpoint_stage}" "${checkpoint_elapsed}"
+      last_checkpoint_sequence="${checkpoint_sequence}"
+      last_checkpoint_stage="${checkpoint_stage}"
+      last_checkpoint_elapsed="${checkpoint_elapsed}"
+    fi
+  fi
+
   json="$("${ADB[@]}" shell "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" | tr -d '\r' || true)"
   if [[ -n "${json}" ]]; then
     printf '%s\n' "${json}" > "${REPORT_DIR}/rma134-local-llm-acceptance.json"
@@ -132,8 +177,17 @@ while true; do
     [[ "${status}" == "passed" ]] && break
     printf 'RMA-134 device report status=%s: %s\n' "${status}" "${json}" >&2; exit 1
   fi
-  "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null || { printf '%s\n' 'Unity exited before RMA-134 report.' >&2; exit 1; }
-  (( $(date +%s) - start < TIMEOUT_SECONDS )) || { printf '%s\n' 'RMA-134 device acceptance timed out.' >&2; exit 1; }
+  "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null || {
+    printf 'Unity exited before RMA-134 report; last checkpoint=%s elapsed_ms=%s.\n' \
+      "${last_checkpoint_stage}" "${last_checkpoint_elapsed:-unknown}" >&2
+    exit 1
+  }
+  if (( $(date +%s) - start >= TIMEOUT_SECONDS )); then
+    printf 'RMA-134 device acceptance timed out; last checkpoint=%s sequence=%s elapsed_ms=%s.\n' \
+      "${last_checkpoint_stage}" "${last_checkpoint_sequence:-none}" \
+      "${last_checkpoint_elapsed:-unknown}" >&2
+    exit 1
+  fi
   sleep 2
 done
 
