@@ -2,6 +2,7 @@
 
 #if UNITY_ANDROID
 using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime.ExceptionServices;
 using UnityEngine;
@@ -10,18 +11,14 @@ namespace ReachyMini.Validation
 {
     /// <summary>
     /// Android-only SHA-256 implementation for the RMA-134 physical acceptance harness.
-    ///
-    /// This type is deliberately named SHA256 so that the existing acceptance-only
-    /// VerifyArtifact method binds to Android's platform MessageDigest on Android,
-    /// rather than System.Security.Cryptography.SHA256. The Unity/.NET SHA-256 path
-    /// was physically observed to remain inside ComputeHash for more than 600 seconds
-    /// on the LG-H872 for the frozen 396,704,416-byte GGUF. Production model approval
-    /// remains owned by RMA-132; this class exists only to independently verify the
-    /// exact staged artifact during RMA-134 physical acceptance.
+    /// The full file read/hash loop stays inside Java. Only the final 64-character
+    /// digest crosses JNI, avoiding repeated large byte-array marshalling on API 26.
     /// </summary>
     internal sealed class SHA256 : IDisposable
     {
-        private const int BufferBytes = 4 * 1024 * 1024;
+        private const string BridgeClassName =
+            "com.ekkus93.weachy.rma134.ReachyRma134Sha256Bridge";
+        private const string ProgressFileName = "rma134-local-llm-hash-progress.txt";
         private bool disposed;
 
         private SHA256()
@@ -58,48 +55,17 @@ namespace ReachyMini.Validation
                     attachStatus + ".");
             }
 
-            AndroidJavaObject? digest = null;
-            AndroidJavaObject? fileInput = null;
-            AndroidJavaObject? digestInput = null;
-            byte[]? result = null;
+            string? digestHex = null;
             Exception? failure = null;
             try
             {
-                using AndroidJavaClass digestClass = new AndroidJavaClass("java.security.MessageDigest");
-                digest = digestClass.CallStatic<AndroidJavaObject>("getInstance", "SHA-256");
-                if (digest == null)
-                {
+                string directory = Path.GetDirectoryName(fileStream.Name) ??
                     throw new InvalidOperationException(
-                        "Android java.security.MessageDigest returned null for SHA-256.");
-                }
-
-                fileInput = new AndroidJavaObject("java.io.FileInputStream", fileStream.Name);
-                digestInput = new AndroidJavaObject(
-                    "java.security.DigestInputStream",
-                    fileInput,
-                    digest);
-
-                byte[] buffer = new byte[BufferBytes];
-                while (true)
-                {
-                    int read = digestInput.Call<int>("read", buffer, 0, buffer.Length);
-                    if (read < 0)
-                    {
-                        break;
-                    }
-                    if (read == 0)
-                    {
-                        continue;
-                    }
-                }
-
-                result = digest.Call<byte[]>("digest");
-                if (result == null || result.Length != 32)
-                {
-                    throw new InvalidOperationException(
-                        "Android SHA-256 returned an invalid digest length: " +
-                        (result == null ? "null" : result.Length.ToString()) + ".");
-                }
+                        "RMA-134 staged model path has no parent directory.");
+                string progressPath = Path.Combine(directory, ProgressFileName);
+                using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
+                digestHex = bridge.CallStatic<string>("sha256", fileStream.Name, progressPath);
+                ValidateDigestHex(digestHex);
             }
             catch (Exception exception)
             {
@@ -107,42 +73,18 @@ namespace ReachyMini.Validation
             }
             finally
             {
-                if (digestInput != null)
-                {
-                    try
-                    {
-                        digestInput.Call("close");
-                    }
-                    catch (Exception closeException)
-                    {
-                        failure = CombineFailures(failure, closeException, "closing Android digest stream");
-                    }
-                }
-                else if (fileInput != null)
-                {
-                    try
-                    {
-                        fileInput.Call("close");
-                    }
-                    catch (Exception closeException)
-                    {
-                        failure = CombineFailures(failure, closeException, "closing Android file stream");
-                    }
-                }
-
-                digestInput?.Dispose();
-                fileInput?.Dispose();
-                digest?.Dispose();
-
                 int detachStatus = AndroidJNI.DetachCurrentThread();
                 if (detachStatus < 0)
                 {
-                    failure = CombineFailures(
-                        failure,
-                        new InvalidOperationException(
-                            "RMA-134 could not detach its artifact-verification worker from the Android JVM: " +
-                            detachStatus + "."),
-                        "detaching Android SHA worker");
+                    Exception detachFailure = new InvalidOperationException(
+                        "RMA-134 could not detach its artifact-verification worker from the Android JVM: " +
+                        detachStatus + ".");
+                    failure = failure == null
+                        ? detachFailure
+                        : new AggregateException(
+                            "RMA-134 SHA verification failed and JVM detach also failed.",
+                            failure,
+                            detachFailure);
                 }
             }
 
@@ -150,8 +92,8 @@ namespace ReachyMini.Validation
             {
                 ExceptionDispatchInfo.Capture(failure).Throw();
             }
-            return result ?? throw new InvalidOperationException(
-                "RMA-134 Android SHA verification completed without a digest.");
+            return DecodeHexDigest(digestHex ?? throw new InvalidOperationException(
+                "RMA-134 Android SHA verification completed without a digest."));
         }
 
         public void Dispose()
@@ -159,18 +101,43 @@ namespace ReachyMini.Validation
             disposed = true;
         }
 
-        private static Exception CombineFailures(Exception? primary, Exception secondary, string operation)
+        private static void ValidateDigestHex(string? value)
         {
-            if (primary == null)
+            if (value == null || value.Length != 64)
             {
-                return new InvalidOperationException(
-                    "RMA-134 failed while " + operation + ".",
-                    secondary);
+                throw new InvalidOperationException(
+                    "RMA-134 Android SHA helper returned an invalid SHA-256 string length.");
             }
-            return new AggregateException(
-                "RMA-134 encountered a primary verification failure and also failed while " + operation + ".",
-                primary,
-                secondary);
+            for (int index = 0; index < value.Length; ++index)
+            {
+                char character = value[index];
+                bool hexadecimal =
+                    (character >= '0' && character <= '9') ||
+                    (character >= 'a' && character <= 'f');
+                if (!hexadecimal)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-134 Android SHA helper returned non-lowercase-hexadecimal output.");
+                }
+            }
+        }
+
+        private static byte[] DecodeHexDigest(string value)
+        {
+            byte[] digest = new byte[32];
+            for (int index = 0; index < digest.Length; ++index)
+            {
+                if (!byte.TryParse(
+                    value.Substring(index * 2, 2),
+                    NumberStyles.AllowHexSpecifier,
+                    CultureInfo.InvariantCulture,
+                    out digest[index]))
+                {
+                    throw new InvalidOperationException(
+                        "RMA-134 Android SHA helper returned an invalid SHA-256 digest.");
+                }
+            }
+            return digest;
         }
     }
 }
