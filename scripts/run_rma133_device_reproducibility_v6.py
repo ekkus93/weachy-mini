@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -12,10 +13,13 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from scripts import run_rma133_device_benchmark_v6 as base  # noqa: E402
+BASE_PATH = ROOT / "scripts/run_rma133_device_benchmark_v6.py"
+BASE_SPEC = importlib.util.spec_from_file_location("run_rma133_device_benchmark_v6", BASE_PATH)
+if BASE_SPEC is None or BASE_SPEC.loader is None:
+    raise RuntimeError(f"Cannot load RMA-133 benchmark runner: {BASE_PATH}")
+base = importlib.util.module_from_spec(BASE_SPEC)
+sys.modules["run_rma133_device_benchmark_v6"] = base
+BASE_SPEC.loader.exec_module(base)
 
 SELECTED_CANDIDATE_ID = "qwen3-0.6b-q4-k-m"
 ACCEPTED_V6_SOURCE_SHA = "e3007579d0365d31f5d5efc378fc81a13f2d705e"

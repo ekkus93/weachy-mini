@@ -181,8 +181,11 @@ def main() -> int:
         f"serial={serial} model={model} ABI={abi} API={api_raw}\n", encoding="utf-8"
     )
     (RESULTS / "contract.txt").write_text(
-        f"benchmark_id={config['benchmark_id']}\nconstraint_type=GBNF\ngrammar_path={contract['grammar_path']}\n"
-        f"grammar_sha256={contract['grammar_sha256']}\ngrammar_root={contract['grammar_root']}\n",
+        f"benchmark_id={config['benchmark_id']}\n"
+        "constraint_type=GBNF\n"
+        f"grammar_path={contract['grammar_path']}\n"
+        f"grammar_sha256={contract['grammar_sha256']}\n"
+        f"grammar_root={contract['grammar_root']}\n",
         encoding="utf-8",
     )
 
@@ -316,7 +319,13 @@ def main() -> int:
         for report in data["candidate_reports"]:
             metrics = report["measurements"]
             lines.append(
-                f"candidate={report['candidate_id']} eligible={report['eligible']} constrained={report['constraint_evidence_valid']} quality={metrics['semantic_quality_score']:.2f} json={metrics['schema_reliability']:.3f} decode_tps={metrics['mean_decode_tokens_per_second']:.2f} peak_rss={metrics['peak_rss_bytes']}"  # noqa: E501
+                f"candidate={report['candidate_id']} "
+                f"eligible={report['eligible']} "
+                f"constrained={report['constraint_evidence_valid']} "
+                f"quality={metrics['semantic_quality_score']:.2f} "
+                f"json={metrics['schema_reliability']:.3f} "
+                f"decode_tps={metrics['mean_decode_tokens_per_second']:.2f} "
+                f"peak_rss={metrics['peak_rss_bytes']}"
             )
         (RESULTS / "summary.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
         print("\n".join(lines))
