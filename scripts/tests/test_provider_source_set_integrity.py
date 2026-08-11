@@ -79,6 +79,21 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
+    def test_rma146_fallback_policy_source_set_is_complete(self) -> None:
+        required = {
+            PROVIDERS / "ReachyProviderFallbackPolicyContracts.cs":
+                "class ReachyFallbackPolicy",
+            PROVIDERS / "ReachyProviderFallbackPolicyEngine.cs":
+                "class ReachyProviderFallbackPolicyEngine",
+            PROVIDERS / "ReachyAuthorizedProviderSelectionExtensions.cs":
+                "SelectFallback",
+            APPLICATION / "ReachyFallbackPolicyPersistence.cs":
+                "class ReachyFallbackPolicyPersistenceStore",
+        }
+        for path, symbol in required.items():
+            self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
+            self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
+
 
 if __name__ == "__main__":
     unittest.main()
