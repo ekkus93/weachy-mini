@@ -301,6 +301,7 @@ namespace ReachyMini.Providers
                                 Array.Empty<byte>(),
                                 statusCode,
                                 providerRequestId,
+                                null,
                                 1));
                     }
 
@@ -356,6 +357,8 @@ namespace ReachyMini.Providers
                                 "HTTP response stream could not be opened."));
                     }
 
+                    string? responseContentType =
+                        responseContent.Headers.ContentType?.MediaType;
                     using (stream)
                     {
                         if (request.ResponseMode ==
@@ -380,6 +383,7 @@ namespace ReachyMini.Providers
                                     buffered.Body,
                                     statusCode,
                                     providerRequestId,
+                                    responseContentType,
                                     1));
                         }
 
@@ -406,6 +410,7 @@ namespace ReachyMini.Providers
                                 null,
                                 statusCode,
                                 providerRequestId,
+                                responseContentType,
                                 1),
                             responseProgressObserved:
                                 sse.EventsDelivered > 0);
