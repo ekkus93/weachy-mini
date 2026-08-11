@@ -151,7 +151,6 @@ namespace ReachyMini.Validation
             }
             WriteCheckpoint("abi_verified", "reachy_llama ABI=2.");
 
-            ReachySimSession? simulationSession = null;
             ReachySimulationWorker? worker = null;
             LocalLlmProvider? provider = null;
             using var androidSignals = new ReachyAndroidLocalLlmResourceSignalSource();
@@ -160,7 +159,7 @@ namespace ReachyMini.Validation
                 WriteCheckpoint(
                     "physics_worker_started",
                     "Creating production-shape MuJoCo session, authoritative state reader, and ReachySimulationWorker.");
-                worker = CreateAndStartSimulationWorker(out simulationSession);
+                worker = CreateAndStartSimulationWorker();
                 var realPhysics = new ReachySimulationLocalLlmPhysicsBudgetSource(worker);
                 LocalLlmPhysicsBudgetState readyPhysics = await WaitForPhysicsBudgetAsync(realPhysics)
                     .ConfigureAwait(true);
@@ -427,23 +426,15 @@ namespace ReachyMini.Validation
                 }
                 if (worker != null)
                 {
-                    ReachySimulationControlResult shutdown = worker.Shutdown(WorkerControlTimeout);
-                    if (!shutdown.IsSuccess && worker.State != ReachySimulationRunState.Stopped)
-                    {
-                        Debug.LogError(
-                            "RMA-135 simulation worker shutdown failed: " + shutdown.Error.Code +
-                            ": " + shutdown.Error.Message);
-                    }
                     worker.Dispose();
-                    TryWriteCheckpoint("worker_disposed", "Authoritative simulation worker disposed.");
+                    TryWriteCheckpoint(
+                        "worker_disposed",
+                        "Authoritative simulation worker, state reader, and native session disposed by the worker owner.");
                 }
-                simulationSession?.Dispose();
-                TryWriteCheckpoint("simulation_disposed", "Native simulation session disposed.");
             }
         }
 
-        private static ReachySimulationWorker CreateAndStartSimulationWorker(
-            out ReachySimSession simulationSession)
+        private static ReachySimulationWorker CreateAndStartSimulationWorker()
         {
             TextAsset? modelAsset = Resources.Load<TextAsset>(SimulationModelResourcePath);
             if (modelAsset == null || modelAsset.bytes.Length == 0)
@@ -458,7 +449,7 @@ namespace ReachyMini.Validation
                     "RMA-135 could not create the production-shape native simulation session: " +
                     create.Error.Code + ": " + create.Error.Message);
             }
-            simulationSession = create.Session;
+            ReachySimSession simulationSession = create.Session;
             ReachySimAuthoritativeStateReader? reader = null;
             ReachySimulationWorker? worker = null;
             try
@@ -477,9 +468,15 @@ namespace ReachyMini.Validation
             }
             catch
             {
-                worker?.Dispose();
-                reader?.Dispose();
-                simulationSession.Dispose();
+                if (worker != null)
+                {
+                    worker.Dispose();
+                }
+                else
+                {
+                    reader?.Dispose();
+                    simulationSession.Dispose();
+                }
                 throw;
             }
         }
