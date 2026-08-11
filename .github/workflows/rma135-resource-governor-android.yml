@@ -43,21 +43,55 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Determine whether RMA-135 physical inputs changed
         id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           SHA="${{ github.event.workflow_run.head_sha }}"
-          changed="$(git diff-tree --no-commit-id --name-only -r "${SHA}")"
-          printf '%s\n' "${changed}" > artifacts-rma135-changed-files.txt
-          if printf '%s\n' "${changed}" | grep -Eq '^((Assets/ReachyMini/Runtime/Core/LocalModels/(LocalLlmResourceGovernor|LocalLlmGovernedGenerationCoordinator|ReachyLocalLlmProvider|ReachyLocalLlmContracts)\.cs)|(Assets/ReachyMini/Runtime/Core/Application/(ReachyLocalLlmPhysicsBudgetTracker|ReachySimulationLocalLlmPhysicsBudgetSource)\.cs)|(Assets/ReachyMini/Runtime/Application/(ReachyAndroidLocalLlmResourceSignalSource|ReachyRma135ResourceGovernorAcceptance)\.cs)|(Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker\.cs)|(Assets/ReachyMini/Runtime/Interop/(NativeReachyLlama|ReachyLlamaNativeTypes|ReachyMiniInteropAssemblyInfo|ReachySimAuthoritativeStateReader)\.cs)|(scripts/(run_rma135_resource_governor_acceptance_android\.sh|tests/test_rma135_android_acceptance_contracts\.py))|(benchmarks/rma133/(system_prompt-v4\.txt|behavior-output-v1\.gbnf|candidates-v6\.json))|(models/manifests/qwen3-0\.6b-q4-k-m\.local-llm\.json)|(docs/(RMA_135_RESOURCE_THERMAL_GOVERNOR_(SPEC|TODO)_2026-08-10\.md|validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_.*\.md))|(.github/workflows/rma135-(resource-thermal-governor|resource-governor-android)\.yml))'; then
-            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          baseline=""
+          mapfile -t successful_heads < <(
+            gh run list \
+              --repo "${GITHUB_REPOSITORY}" \
+              --workflow rma135-resource-governor-android.yml \
+              --status success \
+              --limit 50 \
+              --json headSha \
+              --jq '.[].headSha'
+          )
+          for candidate in "${successful_heads[@]}"; do
+            [[ -n "${candidate}" && "${candidate}" != "${SHA}" ]] || continue
+            if git cat-file -e "${candidate}^{commit}" 2>/dev/null && \
+               git merge-base --is-ancestor "${candidate}" "${SHA}"; then
+              baseline="${candidate}"
+              break
+            fi
+          done
+
+          if [[ -z "${baseline}" ]]; then
+            changed="$(git diff-tree --root --no-commit-id --name-only -r "${SHA}")"
+            relevant=true
+            scope_base=none
           else
-            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+            changed="$(git diff --name-only "${baseline}..${SHA}")"
+            scope_base="${baseline}"
+            if printf '%s\n' "${changed}" | grep -Eq '^((Assets/ReachyMini/Runtime/Core/LocalModels/(LocalLlmResourceGovernor|LocalLlmGovernedGenerationCoordinator|ReachyLocalLlmProvider|ReachyLocalLlmContracts)\.cs)|(Assets/ReachyMini/Runtime/Core/Application/(ReachyLocalLlmPhysicsBudgetTracker|ReachySimulationLocalLlmPhysicsBudgetSource)\.cs)|(Assets/ReachyMini/Runtime/Application/(ReachyAndroidLocalLlmResourceSignalSource|ReachyRma135ResourceGovernorAcceptance)\.cs)|(Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker\.cs)|(Assets/ReachyMini/Runtime/Interop/(NativeReachyLlama|ReachyLlamaNativeTypes|ReachyMiniInteropAssemblyInfo|ReachySimAuthoritativeStateReader)\.cs)|(scripts/(run_rma135_resource_governor_acceptance_android\.sh|tests/test_rma135_android_acceptance_contracts\.py))|(benchmarks/rma133/(system_prompt-v4\.txt|behavior-output-v1\.gbnf|candidates-v6\.json))|(models/manifests/qwen3-0\.6b-q4-k-m\.local-llm\.json)|(docs/(RMA_135_RESOURCE_THERMAL_GOVERNOR_(SPEC|TODO)_2026-08-10\.md|validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_.*\.md))|(.github/workflows/rma135-(resource-thermal-governor|resource-governor-android)\.yml))'; then
+              relevant=true
+            else
+              relevant=false
+            fi
           fi
+
+          printf 'scope_base=%s\nsource_sha=%s\n' "${scope_base}" "${SHA}" \
+            > artifacts-rma135-scope.txt
+          printf '%s\n' "${changed}" > artifacts-rma135-changed-files.txt
+          printf 'RMA-135 physical scope base=%s relevant=%s\n' "${scope_base}" "${relevant}"
+          echo "relevant=${relevant}" >> "$GITHUB_OUTPUT"
+          echo "scope_base=${scope_base}" >> "$GITHUB_OUTPUT"
 
       - name: Pin LG-H872 physical Android device
         if: steps.scope.outputs.relevant == 'true'
@@ -155,9 +189,12 @@ jobs:
           source_sha=${{ github.event.workflow_run.head_sha }}
           source_local_unity_run=${{ github.event.workflow_run.id }}
           source_local_unity_conclusion=${{ github.event.workflow_run.conclusion }}
+          scope_base=${{ steps.scope.outputs.scope_base }}
           rma135_android_run=${{ github.run_id }}
           rma135_android_attempt=${{ github.run_attempt }}
           EOF
+          cp artifacts-rma135-scope.txt \
+            artifacts/rma135-resource-governor-android/scope.txt
           cp artifacts-rma135-changed-files.txt \
             artifacts/rma135-resource-governor-android/changed-files.txt
 
@@ -190,5 +227,5 @@ jobs:
                 ? (succeeded
                     ? "Physical resource-governor acceptance passed"
                     : "Physical resource-governor acceptance failed")
-                : "No RMA-135 physical inputs changed; acceptance not required"
+                : "No RMA-135 physical inputs changed since the last successful device run"
             });
