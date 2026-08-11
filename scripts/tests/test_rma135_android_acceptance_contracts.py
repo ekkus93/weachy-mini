@@ -2,8 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs"
 )
 
 
@@ -20,11 +19,7 @@ def forbid(text: str, needle: str, label: str) -> None:
 def main() -> None:
     text = ACCEPTANCE.read_text(encoding="utf-8")
     require(text, "ReachySimulationWorker", "production simulation worker")
-    require(
-        text,
-        "ReachySimAuthoritativeStateReader",
-        "production authoritative state reader",
-    )
+    require(text, "ReachySimAuthoritativeStateReader", "production authoritative state reader")
     require(
         text,
         "ReachySimulationLocalLlmPhysicsBudgetSource",
@@ -40,21 +35,13 @@ def main() -> None:
         "LocalLlmGovernedGenerationCoordinator",
         "production governed generation coordinator",
     )
-    require(
-        text,
-        "controlled_one_shot_budget_exceeded",
-        "explicitly labeled fault injection",
-    )
+    require(text, "controlled_one_shot_budget_exceeded", "explicitly labeled fault injection")
     require(
         text,
         "ResourceCancelledDuringGeneration",
         "physics-priority cancellation assertion",
     )
-    require(
-        text,
-        "worker_steps_after_injection",
-        "worker continuity evidence",
-    )
+    require(text, "worker_steps_after_injection", "worker continuity evidence")
     require(text, "recovery_observations", "explicit recovery evidence")
     require(
         text,
