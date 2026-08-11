@@ -395,13 +395,21 @@ namespace ReachyMini.Providers
             byte[]? responseBody,
             int? httpStatusCode,
             string? providerRequestId,
+            string? contentType,
             int attempts,
             ReachyHttpTransportError? error)
         {
+            if (contentType != null && !IsSafeContentType(contentType))
+            {
+                throw new ArgumentException(
+                    "HTTP response content type must be bounded visible ASCII.",
+                    nameof(contentType));
+            }
             Succeeded = succeeded;
             this.responseBody = responseBody;
             HttpStatusCode = httpStatusCode;
             ProviderRequestId = providerRequestId;
+            ContentType = contentType;
             Attempts = attempts;
             Error = error;
         }
@@ -418,6 +426,8 @@ namespace ReachyMini.Providers
 
         public string? ProviderRequestId { get; }
 
+        public string? ContentType { get; }
+
         public int Attempts { get; }
 
         public ReachyHttpTransportError? Error { get; }
@@ -431,6 +441,7 @@ namespace ReachyMini.Providers
             byte[]? responseBody,
             int httpStatusCode,
             string? providerRequestId,
+            string? contentType,
             int attempts)
         {
             if (httpStatusCode < 200 || httpStatusCode > 299)
@@ -446,6 +457,7 @@ namespace ReachyMini.Providers
                 responseBody,
                 httpStatusCode,
                 providerRequestId,
+                contentType,
                 attempts,
                 null);
         }
@@ -463,8 +475,26 @@ namespace ReachyMini.Providers
                 null,
                 error?.HttpStatusCode,
                 error?.ProviderRequestId,
+                null,
                 attempts,
                 error ?? throw new ArgumentNullException(nameof(error)));
+        }
+
+        private static bool IsSafeContentType(string value)
+        {
+            if (value.Length == 0 || value.Length > 256)
+            {
+                return false;
+            }
+            for (int index = 0; index < value.Length; ++index)
+            {
+                char character = value[index];
+                if (character < 0x21 || character > 0x7e)
+                {
+                    return false;
+                }
+            }
+            return true;
         }
     }
 
