@@ -1,0 +1,120 @@
+name: RMA-135 bounded post-load stabilization
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma135-bounded-post-load-stabilization.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact repository Ruff
+        run: python -m pip install --disable-pip-version-check ruff==0.12.0
+      - name: Apply bounded device-evidence patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          acceptance = Path('Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs')
+          text = acceptance.read_text(encoding='utf-8')
+
+          def replace(old: str, new: str, count: int = 1) -> None:
+              global text
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'acceptance: expected {count} matches, found {actual}: {old[:120]!r}')
+              text = text.replace(old, new, count)
+
+          replace(
+              '''                var coordinator = new LocalLlmGovernedGenerationCoordinator(\n                    provider,\n                    baselineProfile,\n                    governor,\n                    androidSignals,\n                    faultPhysics,\n                    MonitorInterval);\n\n                ReachyPublishedSimulationSnapshot beforeInjection =\n''',
+              '''                var coordinator = new LocalLlmGovernedGenerationCoordinator(\n                    provider,\n                    baselineProfile,\n                    governor,\n                    androidSignals,\n                    faultPhysics,\n                    MonitorInterval);\n\n                WriteCheckpoint(\n                    "post_load_stabilization_started",\n                    "Re-evaluating the real physics/resource envelope after model load before any generation request.");\n                int postLoadStabilizationObservations = 0;\n                LocalLlmGovernorDecision? postLoadInitialDecision = null;\n                LocalLlmGovernorDecision? postLoadStabilizedDecision = null;\n                while (postLoadStabilizationObservations < 12)\n                {\n                    if (postLoadStabilizationObservations > 0)\n                    {\n                        await Task.Delay(30).ConfigureAwait(true);\n                    }\n                    ++postLoadStabilizationObservations;\n                    LocalLlmGovernorDecision observed = coordinator.EvaluateCurrentBudget();\n                    postLoadInitialDecision ??= observed;\n                    if (observed.InferenceAllowed && observed.EffectiveProfile != null &&\n                        LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(\n                            provider.ExecutionProfile, observed.EffectiveProfile))\n                    {\n                        postLoadStabilizedDecision = observed;\n                        break;\n                    }\n                }\n                if (postLoadInitialDecision == null || postLoadStabilizedDecision == null)\n                {\n                    throw new InvalidOperationException(\n                        "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +\n                        postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +\n                        " observations. No generation request was started.");\n                }\n                LocalLlmResourceSnapshot postLoadResources = androidSignals.Capture(\n                    LocalLlmPhysicsBudgetState.Healthy);\n                WriteCheckpoint(\n                    "post_load_stabilized",\n                    "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +\n                    " initial_mode=" + postLoadInitialDecision.Mode +\n                    " initial_reasons=" + postLoadInitialDecision.Reasons +\n                    " final_mode=" + postLoadStabilizedDecision.Mode +\n                    " final_reasons=" + postLoadStabilizedDecision.Reasons +\n                    " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(\n                        CultureInfo.InvariantCulture));\n\n                ReachyPublishedSimulationSnapshot beforeInjection =\n''')
+
+          replace(
+              '''                    effective_threads = effectiveProfile.Threads,\n                    effective_batch_threads = effectiveProfile.BatchThreads,\n                    physics_fault_injection_kind = "controlled_one_shot_budget_exceeded",\n''',
+              '''                    effective_threads = effectiveProfile.Threads,\n                    effective_batch_threads = effectiveProfile.BatchThreads,\n                    post_load_available_memory_bytes = postLoadResources.AvailableMemoryBytes,\n                    post_load_stabilization_observations = postLoadStabilizationObservations,\n                    post_load_initial_mode = postLoadInitialDecision.Mode.ToString(),\n                    post_load_initial_reasons = postLoadInitialDecision.Reasons.ToString(),\n                    post_load_stabilized_mode = postLoadStabilizedDecision.Mode.ToString(),\n                    post_load_stabilized_reasons = postLoadStabilizedDecision.Reasons.ToString(),\n                    physics_fault_injection_kind = "controlled_one_shot_budget_exceeded",\n''')
+
+          replace(
+              '''            public int effective_threads;\n            public int effective_batch_threads;\n            public string physics_fault_injection_kind = string.Empty;\n''',
+              '''            public int effective_threads;\n            public int effective_batch_threads;\n            public long post_load_available_memory_bytes;\n            public int post_load_stabilization_observations;\n            public string post_load_initial_mode = string.Empty;\n            public string post_load_initial_reasons = string.Empty;\n            public string post_load_stabilized_mode = string.Empty;\n            public string post_load_stabilized_reasons = string.Empty;\n            public string physics_fault_injection_kind = string.Empty;\n''')
+          acceptance.write_text(text, encoding='utf-8')
+
+          runner = Path('scripts/run_rma135_resource_governor_acceptance_android.sh')
+          shell = runner.read_text(encoding='utf-8')
+
+          def shell_replace(old: str, new: str, count: int = 1) -> None:
+              global shell
+              actual = shell.count(old)
+              if actual != count:
+                  raise SystemExit(f'runner: expected {count} matches, found {actual}: {old[:120]!r}')
+              shell = shell.replace(old, new, count)
+
+          shell_replace(
+              '''  timeout 10s "${ADB[@]}" shell \\\n    "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \\\n    | tr -d '\\r' > "${REPORT_DIR}/checkpoint-files.txt" 2>&1\n  read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json" 2>/dev/null || true\n''',
+              '''  timeout 10s "${ADB[@]}" shell \\\n    "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \\\n    | tr -d '\\r' > "${REPORT_DIR}/checkpoint-files.txt" 2>&1\n  mkdir -p "${REPORT_DIR}/checkpoints"\n  while IFS= read -r checkpoint_path; do\n    [[ -n "${checkpoint_path}" ]] || continue\n    checkpoint_name="$(basename -- "${checkpoint_path}")"\n    timeout 10s "${ADB[@]}" pull "${checkpoint_path}" \\\n      "${REPORT_DIR}/checkpoints/${checkpoint_name}" >/dev/null 2>&1 || true\n  done < "${REPORT_DIR}/checkpoint-files.txt"\n  read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json" 2>/dev/null || true\n''')
+
+          shell_replace(
+              '''assert r["effective_threads"] <= 2 and r["effective_batch_threads"] <= 2, r\nassert r["physics_fault_injection_kind"] == "controlled_one_shot_budget_exceeded", r\n''',
+              '''assert r["effective_threads"] <= 2 and r["effective_batch_threads"] <= 2, r\nassert 0 <= r["post_load_available_memory_bytes"] <= r["total_memory_bytes"], r\nassert 1 <= r["post_load_stabilization_observations"] <= 12, r\nassert r["post_load_stabilized_mode"] != "Suspended", r\nassert r["physics_fault_injection_kind"] == "controlled_one_shot_budget_exceeded", r\n''')
+          runner.write_text(shell, encoding='utf-8')
+
+          static = Path('scripts/tests/test_rma135_android_acceptance_contracts.py')
+          contract = static.read_text(encoding='utf-8')
+          marker = '    require(text, "worker_steps_after_injection", "worker continuity evidence")\n'
+          if contract.count(marker) != 1:
+              raise SystemExit('static contract insertion marker changed')
+          contract = contract.replace(
+              marker,
+              marker +
+              '    require(text, "post_load_stabilization_started", "real post-load stabilization")\n' +
+              '    require(text, "post_load_stabilized_mode", "post-load recovery evidence")\n' +
+              '    require(text, "ProfileFitsWithin", "loaded-profile post-load safety check")\n',
+              1,
+          )
+          static.write_text(contract, encoding='utf-8')
+          PY
+
+          ruff format scripts/tests/test_rma135_android_acceptance_contracts.py
+          python3 scripts/tests/test_rma135_android_acceptance_contracts.py
+          bash -n scripts/run_rma135_resource_governor_acceptance_android.sh
+          ruff check scripts
+          ruff format --check scripts
+          git diff --check
+          git add -N scripts/run_rma135_resource_governor_acceptance_android.sh \
+            scripts/tests/test_rma135_android_acceptance_contracts.py
+          mapfile -t changed < <(git diff --name-only)
+          expected=(
+            Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs
+            scripts/run_rma135_resource_governor_acceptance_android.sh
+            scripts/tests/test_rma135_android_acceptance_contracts.py
+          )
+          printf '%s\n' "${changed[@]}" | sort > /tmp/changed.txt
+          printf '%s\n' "${expected[@]}" | sort > /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+      - name: Commit bounded post-load stabilization
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs \
+            scripts/run_rma135_resource_governor_acceptance_android.sh \
+            scripts/tests/test_rma135_android_acceptance_contracts.py
+          git commit -m "RMA-135: stabilize real budget after model load"
+          git push origin HEAD:master
