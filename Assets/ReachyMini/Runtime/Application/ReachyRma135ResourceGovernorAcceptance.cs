@@ -490,7 +490,7 @@ namespace ReachyMini.Validation
             for (int attempt = 0; attempt < 250; ++attempt)
             {
                 ReachyProductionAuthoritativeRuntime? runtime =
-                    UnityEngine.Object.FindFirstObjectByType<ReachyProductionAuthoritativeRuntime>();
+                    UnityEngine.Object.FindAnyObjectByType<ReachyProductionAuthoritativeRuntime>();
                 if (runtime != null)
                 {
                     if (runtime.Status == ReachyProductionRuntimeStatus.Faulted)

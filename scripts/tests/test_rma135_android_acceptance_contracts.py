@@ -23,7 +23,7 @@ def main() -> None:
     require(text, "ReachyProductionAuthoritativeRuntime", "live production runtime")
     require(
         text,
-        "FindFirstObjectByType<ReachyProductionAuthoritativeRuntime>",
+        "FindAnyObjectByType<ReachyProductionAuthoritativeRuntime>",
         "production runtime discovery",
     )
     require(
