@@ -94,6 +94,19 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
+    def test_rma150_conversation_state_machine_source_set_is_complete(self) -> None:
+        required = {
+            ROOT / "Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateContracts.cs":
+                "enum ReachyConversationState",
+            ROOT / "Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs":
+                "class ReachyConversationStateMachine",
+            ROOT / "managed/ReachyMini.Core.Tests/Rma150ConversationStateMachineContractTests.cs":
+                "StaleCompletionAfterInterruptIsRejected",
+        }
+        for path, symbol in required.items():
+            self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
+            self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
+
 
 if __name__ == "__main__":
     unittest.main()
