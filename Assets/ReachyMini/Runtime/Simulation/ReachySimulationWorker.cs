@@ -156,7 +156,8 @@ namespace ReachyMini.Simulation
     }
 
     public sealed class ReachySimulationWorker : IDisposable,
-        IReachyPublishedAuthoritativeStateSource
+        IReachyPublishedAuthoritativeStateSource,
+        IReachySimulationTimingSource
     {
         private const int CommandHeaderSize = 24;
         private const int MaximumCatchUpStepsPerCycle = 8;
@@ -274,6 +275,8 @@ namespace ReachyMini.Simulation
                 throw;
             }
         }
+
+        public ReachySimulationRunState SimulationRunState => State;
 
         public ReachySimulationRunState State
         {
@@ -569,6 +572,18 @@ namespace ReachyMini.Simulation
             out ReachyPublishedSimulationSnapshot snapshot)
         {
             return snapshotBuffer.TryRead(out snapshot);
+        }
+
+        public bool TryGetLatestTimingSnapshot(
+            out ReachySimulationTimingSnapshot timing)
+        {
+            if (TryGetLatestSnapshot(out ReachyPublishedSimulationSnapshot snapshot))
+            {
+                timing = snapshot.Timing;
+                return true;
+            }
+            timing = default;
+            return false;
         }
 
         public void Dispose()

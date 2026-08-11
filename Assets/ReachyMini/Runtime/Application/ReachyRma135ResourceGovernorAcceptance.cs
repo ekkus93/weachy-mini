@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using ReachyMini.AppState;
 using ReachyMini.Interop;
 using ReachyMini.LocalModels;
+using ReachyMini.Rendering;
 using ReachyMini.Simulation;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -24,10 +25,8 @@ namespace ReachyMini.Validation
         internal const string ModelFileName = "rma135-qwen3-0.6b-q4_k_m.gguf";
         internal const string CheckpointFilePrefix = "rma135-resource-governor-checkpoint-";
 
-        private const string SimulationModelResourcePath = "ReachyMiniRuntime/reachy_mini_mjb";
         private const string SuccessPrompt =
             "The person says hello and asks you to greet them warmly. No gaze target is requested.";
-        private static readonly TimeSpan WorkerControlTimeout = TimeSpan.FromSeconds(10.0);
         private static readonly TimeSpan GenerationTimeout = TimeSpan.FromSeconds(180.0);
         private static readonly TimeSpan MonitorInterval = TimeSpan.FromMilliseconds(25.0);
 
@@ -151,26 +150,30 @@ namespace ReachyMini.Validation
             }
             WriteCheckpoint("abi_verified", "reachy_llama ABI=2.");
 
-            ReachySimulationWorker? worker = null;
             LocalLlmProvider? provider = null;
             using var androidSignals = new ReachyAndroidLocalLlmResourceSignalSource();
             try
             {
                 WriteCheckpoint(
-                    "physics_worker_started",
-                    "Creating production-shape MuJoCo session, authoritative state reader, and ReachySimulationWorker.");
-                worker = CreateAndStartSimulationWorker();
-                var realPhysics = new ReachySimulationLocalLlmPhysicsBudgetSource(worker);
-                LocalLlmPhysicsBudgetState readyPhysics = await WaitForPhysicsBudgetAsync(realPhysics)
-                    .ConfigureAwait(true);
-                ReachyPublishedSimulationSnapshot workerBeforeAdmission =
-                    await WaitForWorkerProgressAsync(worker, 5UL).ConfigureAwait(true);
+                    "production_physics_runtime_started",
+                    "Locating the live ReachyProductionAuthoritativeRuntime; the acceptance will not create a second MuJoCo worker.");
+                ReachyProductionAuthoritativeRuntime productionRuntime =
+                    await WaitForProductionRuntimeAsync().ConfigureAwait(true);
+                var realPhysics = new ReachySimulationLocalLlmPhysicsBudgetSource(productionRuntime);
+                PhysicsStartupStabilization startupPhysics =
+                    await WaitForPhysicsBudgetAsync(realPhysics).ConfigureAwait(true);
+                ReachySimulationTimingSnapshot workerBeforeAdmission =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        startupPhysics.MinimumObservedStepCount).ConfigureAwait(true);
                 WriteCheckpoint(
-                    "physics_worker_ready",
-                    "state=" + readyPhysics + " steps=" +
-                    workerBeforeAdmission.Timing.TotalStepCount.ToString(CultureInfo.InvariantCulture));
+                    "production_physics_runtime_ready",
+                    "state=" + startupPhysics.State +
+                    " observations=" + startupPhysics.Observations.ToString(CultureInfo.InvariantCulture) +
+                    " exceeded_observations=" + startupPhysics.ExceededObservations.ToString(CultureInfo.InvariantCulture) +
+                    " steps=" + workerBeforeAdmission.TotalStepCount.ToString(CultureInfo.InvariantCulture));
 
-                LocalLlmResourceSnapshot initialResources = androidSignals.Capture(readyPhysics);
+                LocalLlmResourceSnapshot initialResources = androidSignals.Capture(startupPhysics.State);
                 LocalLlmExecutionProfile baselineProfile =
                     LocalLlmExecutionProfile.CreateRma133V6Baseline();
                 var governor = new LocalLlmResourceGovernor();
@@ -276,10 +279,10 @@ namespace ReachyMini.Validation
                     " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(
                         CultureInfo.InvariantCulture));
 
-                ReachyPublishedSimulationSnapshot beforeInjection =
-                    await WaitForWorkerProgressAsync(
-                        worker,
-                        checked(workerBeforeAdmission.Timing.TotalStepCount + 5UL)).ConfigureAwait(true);
+                ReachySimulationTimingSnapshot beforeInjection =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(workerBeforeAdmission.TotalStepCount + 5UL)).ConfigureAwait(true);
                 faultPhysics.ArmOneShotExceededAfterPassThrough();
                 var cancellationSink = new CollectingSink();
                 WriteCheckpoint(
@@ -318,20 +321,20 @@ namespace ReachyMini.Validation
                         (injected.ProviderResult?.Status.ToString() ?? "none"));
                 }
 
-                ReachyPublishedSimulationSnapshot afterInjection =
-                    await WaitForWorkerProgressAsync(
-                        worker,
-                        checked(beforeInjection.Timing.TotalStepCount + 5UL)).ConfigureAwait(true);
-                if (afterInjection.Timing.TotalStepCount <= beforeInjection.Timing.TotalStepCount)
+                ReachySimulationTimingSnapshot afterInjection =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(beforeInjection.TotalStepCount + 5UL)).ConfigureAwait(true);
+                if (afterInjection.TotalStepCount <= beforeInjection.TotalStepCount)
                 {
                     throw new InvalidOperationException(
                         "The authoritative simulation worker did not advance across LLM cancellation.");
                 }
                 WriteCheckpoint(
                     "physics_continuity_verified",
-                    "worker_steps_before=" + beforeInjection.Timing.TotalStepCount.ToString(
+                    "worker_steps_before=" + beforeInjection.TotalStepCount.ToString(
                         CultureInfo.InvariantCulture) + " worker_steps_after=" +
-                    afterInjection.Timing.TotalStepCount.ToString(CultureInfo.InvariantCulture));
+                    afterInjection.TotalStepCount.ToString(CultureInfo.InvariantCulture));
 
                 int recoverySamples = 0;
                 LocalLlmGovernorDecision? recoveredDecision = null;
@@ -381,15 +384,15 @@ namespace ReachyMini.Validation
                     successSink,
                     "post-recovery governed generation");
 
-                ReachyPublishedSimulationSnapshot finalWorker =
-                    await WaitForWorkerProgressAsync(
-                        worker,
-                        checked(afterInjection.Timing.TotalStepCount + 5UL)).ConfigureAwait(true);
+                ReachySimulationTimingSnapshot finalWorker =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(afterInjection.TotalStepCount + 5UL)).ConfigureAwait(true);
                 LocalLlmPhysicsBudgetState finalPhysics = realPhysics.Capture();
                 LocalLlmResourceSnapshot finalResources = androidSignals.Capture(finalPhysics);
                 WriteCheckpoint(
                     "final_observation_completed",
-                    "steps=" + finalWorker.Timing.TotalStepCount.ToString(CultureInfo.InvariantCulture) +
+                    "steps=" + finalWorker.TotalStepCount.ToString(CultureInfo.InvariantCulture) +
                     " physics=" + finalPhysics + " thermal=" + finalResources.ThermalStatus +
                     " available_memory=" + finalResources.AvailableMemoryBytes.ToString(
                         CultureInfo.InvariantCulture));
@@ -425,6 +428,10 @@ namespace ReachyMini.Validation
                     effective_micro_batch_tokens = effectiveProfile.MicroBatchTokens,
                     effective_threads = effectiveProfile.Threads,
                     effective_batch_threads = effectiveProfile.BatchThreads,
+                    startup_physics_observations = startupPhysics.Observations,
+                    startup_physics_exceeded_observations = startupPhysics.ExceededObservations,
+                    startup_physics_state = startupPhysics.State.ToString(),
+                    production_runtime_model_hash = productionRuntime.ModelHash,
                     post_load_available_memory_bytes = postLoadResources.AvailableMemoryBytes,
                     post_load_stabilization_observations = postLoadStabilizationObservations,
                     post_load_initial_mode = postLoadInitialDecision.Mode.ToString(),
@@ -436,16 +443,16 @@ namespace ReachyMini.Validation
                     physics_underlying_state_at_injection = faultPhysics.UnderlyingStateAtInjection.ToString(),
                     fault_injection_governed_status = injected.Status.ToString(),
                     fault_injection_provider_status = injected.ProviderResult?.Status.ToString() ?? "none",
-                    worker_steps_before_injection = beforeInjection.Timing.TotalStepCount,
-                    worker_steps_after_injection = afterInjection.Timing.TotalStepCount,
-                    worker_deadline_misses_before_injection = beforeInjection.Timing.DeadlineMissCount,
-                    worker_deadline_misses_after_injection = afterInjection.Timing.DeadlineMissCount,
+                    worker_steps_before_injection = beforeInjection.TotalStepCount,
+                    worker_steps_after_injection = afterInjection.TotalStepCount,
+                    worker_deadline_misses_before_injection = beforeInjection.DeadlineMissCount,
+                    worker_deadline_misses_after_injection = afterInjection.DeadlineMissCount,
                     worker_accumulated_lag_seconds_after_injection =
-                        afterInjection.Timing.AccumulatedLagSeconds,
+                        afterInjection.AccumulatedLagSeconds,
                     worker_last_step_microseconds_after_injection =
-                        afterInjection.Timing.LastStepDurationSeconds * 1000000.0,
+                        afterInjection.LastStepDurationSeconds * 1000000.0,
                     worker_max_step_microseconds_after_injection =
-                        afterInjection.Timing.MaximumStepDurationSeconds * 1000000.0,
+                        afterInjection.MaximumStepDurationSeconds * 1000000.0,
                     recovery_observations = recoverySamples,
                     recovery_mode = recoveredDecision.Mode.ToString(),
                     post_recovery_governed_status = recoveredGeneration.Status.ToString(),
@@ -455,8 +462,8 @@ namespace ReachyMini.Validation
                     post_recovery_prompt_tokens = generationMetrics?.PromptTokens ?? 0UL,
                     post_recovery_generated_tokens = generationMetrics?.GeneratedTokens ?? 0UL,
                     final_physics_budget_state = finalPhysics.ToString(),
-                    final_worker_steps = finalWorker.Timing.TotalStepCount,
-                    final_worker_deadline_misses = finalWorker.Timing.DeadlineMissCount,
+                    final_worker_steps = finalWorker.TotalStepCount,
+                    final_worker_deadline_misses = finalWorker.DeadlineMissCount,
                     network_fallback_used = false,
                     automatic_retry_used = false,
                     physics_timestep_modified = false,
@@ -472,109 +479,98 @@ namespace ReachyMini.Validation
                     await provider.DisposeAsync().ConfigureAwait(true);
                     TryWriteCheckpoint("provider_disposed", "Managed local LLM provider disposed.");
                 }
-                if (worker != null)
-                {
-                    worker.Dispose();
-                    TryWriteCheckpoint(
-                        "worker_disposed",
-                        "Authoritative simulation worker, state reader, and native session disposed by the worker owner.");
-                }
+                TryWriteCheckpoint(
+                    "production_physics_runtime_preserved",
+                    "RMA-135 did not own or dispose the app's authoritative simulation worker.");
             }
         }
 
-        private static ReachySimulationWorker CreateAndStartSimulationWorker()
+        private static async Task<ReachyProductionAuthoritativeRuntime> WaitForProductionRuntimeAsync()
         {
-            TextAsset? modelAsset = Resources.Load<TextAsset>(SimulationModelResourcePath);
-            if (modelAsset == null || modelAsset.bytes.Length == 0)
+            for (int attempt = 0; attempt < 250; ++attempt)
             {
-                throw new InvalidOperationException(
-                    "The staged production MJB is unavailable for RMA-135 physical acceptance.");
-            }
-            ReachySimCreateResult create = ReachySimSession.Create(modelAsset.bytes);
-            if (!create.IsSuccess || create.Session == null)
-            {
-                throw new InvalidOperationException(
-                    "RMA-135 could not create the production-shape native simulation session: " +
-                    create.Error.Code + ": " + create.Error.Message);
-            }
-            ReachySimSession simulationSession = create.Session;
-            ReachySimAuthoritativeStateReader? reader = null;
-            ReachySimulationWorker? worker = null;
-            try
-            {
-                reader = new ReachySimAuthoritativeStateReader(simulationSession);
-                worker = new ReachySimulationWorker(simulationSession, reader);
-                reader = null;
-                ReachySimulationControlResult start = worker.Start(WorkerControlTimeout);
-                if (!start.IsSuccess)
+                ReachyProductionAuthoritativeRuntime? runtime =
+                    UnityEngine.Object.FindFirstObjectByType<ReachyProductionAuthoritativeRuntime>();
+                if (runtime != null)
                 {
-                    throw new InvalidOperationException(
-                        "RMA-135 authoritative simulation worker failed to start: " +
-                        start.Error.Code + ": " + start.Error.Message);
-                }
-                return worker;
-            }
-            catch
-            {
-                if (worker != null)
-                {
-                    worker.Dispose();
-                }
-                else
-                {
-                    reader?.Dispose();
-                    simulationSession.Dispose();
-                }
-                throw;
-            }
-        }
-
-        private static async Task<LocalLlmPhysicsBudgetState> WaitForPhysicsBudgetAsync(
-            ReachySimulationLocalLlmPhysicsBudgetSource source)
-        {
-            for (int attempt = 0; attempt < 100; ++attempt)
-            {
-                LocalLlmPhysicsBudgetState state = source.Capture();
-                if (state == LocalLlmPhysicsBudgetState.Healthy ||
-                    state == LocalLlmPhysicsBudgetState.AtRisk)
-                {
-                    return state;
-                }
-                if (state == LocalLlmPhysicsBudgetState.Exceeded)
-                {
-                    throw new InvalidOperationException(
-                        "The real authoritative simulation exceeded its timing budget before LLM acceptance began.");
+                    if (runtime.Status == ReachyProductionRuntimeStatus.Faulted)
+                    {
+                        throw new InvalidOperationException(
+                            "The production authoritative runtime faulted before RMA-135 acceptance: " +
+                            runtime.Fault);
+                    }
+                    if (runtime.Status == ReachyProductionRuntimeStatus.Running &&
+                        runtime.SimulationRunState == ReachySimulationRunState.Running)
+                    {
+                        return runtime;
+                    }
                 }
                 await Task.Delay(20).ConfigureAwait(true);
             }
             throw new TimeoutException(
-                "Timed out waiting for authoritative simulation physics timing to become available.");
+                "Timed out waiting for the app's production authoritative simulation runtime.");
         }
 
-        private static async Task<ReachyPublishedSimulationSnapshot> WaitForWorkerProgressAsync(
-            ReachySimulationWorker worker,
+        private static async Task<PhysicsStartupStabilization> WaitForPhysicsBudgetAsync(
+            ReachySimulationLocalLlmPhysicsBudgetSource source)
+        {
+            const int requiredConsecutiveAdmissible = 3;
+            int consecutiveAdmissible = 0;
+            int exceededObservations = 0;
+            ulong minimumObservedStepCount = 5UL;
+            for (int attempt = 1; attempt <= 100; ++attempt)
+            {
+                LocalLlmPhysicsBudgetState state = source.Capture();
+                if (state == LocalLlmPhysicsBudgetState.Exceeded)
+                {
+                    ++exceededObservations;
+                    consecutiveAdmissible = 0;
+                }
+                else if (state == LocalLlmPhysicsBudgetState.Healthy ||
+                    state == LocalLlmPhysicsBudgetState.AtRisk)
+                {
+                    ++consecutiveAdmissible;
+                    if (consecutiveAdmissible >= requiredConsecutiveAdmissible)
+                    {
+                        return new PhysicsStartupStabilization(
+                            state,
+                            attempt,
+                            exceededObservations,
+                            minimumObservedStepCount);
+                    }
+                }
+                else
+                {
+                    consecutiveAdmissible = 0;
+                }
+                await Task.Delay(20).ConfigureAwait(true);
+            }
+            throw new InvalidOperationException(
+                "The app's production authoritative simulation did not provide three consecutive admissible timing observations before local LLM acceptance; exceeded_observations=" +
+                exceededObservations.ToString(CultureInfo.InvariantCulture) + ".");
+        }
+
+        private static async Task<ReachySimulationTimingSnapshot> WaitForTimingProgressAsync(
+            IReachySimulationTimingSource timingSource,
             ulong minimumStepCount)
         {
             for (int attempt = 0; attempt < 250; ++attempt)
             {
-                if (worker.State == ReachySimulationRunState.Faulted)
+                if (timingSource.SimulationRunState == ReachySimulationRunState.Faulted)
                 {
-                    ReachySimulationFault? fault = worker.Fault;
                     throw new InvalidOperationException(
-                        fault == null
-                            ? "The RMA-135 simulation worker faulted without diagnostics."
-                            : "RMA-135 simulation worker faulted in " + fault.Operation + ": " +
-                              fault.Error.Code + ": " + fault.Error.Message);
+                        "The production authoritative simulation worker faulted during RMA-135 acceptance.");
                 }
-                if (worker.TryGetLatestSnapshot(out ReachyPublishedSimulationSnapshot snapshot) &&
-                    snapshot.Timing.TotalStepCount >= minimumStepCount)
+                if (timingSource.TryGetLatestTimingSnapshot(
+                    out ReachySimulationTimingSnapshot timing) &&
+                    timing.TotalStepCount >= minimumStepCount)
                 {
-                    return snapshot;
+                    return timing;
                 }
                 await Task.Delay(20).ConfigureAwait(true);
             }
             throw new TimeoutException(
-                "Timed out waiting for authoritative simulation worker progress to step " +
+                "Timed out waiting for production authoritative simulation progress to step " +
                 minimumStepCount.ToString(CultureInfo.InvariantCulture) + ".");
         }
 
@@ -815,6 +811,26 @@ namespace ReachyMini.Validation
                 : value.Substring(0, maximumCharacters);
         }
 
+        private sealed class PhysicsStartupStabilization
+        {
+            internal PhysicsStartupStabilization(
+                LocalLlmPhysicsBudgetState state,
+                int observations,
+                int exceededObservations,
+                ulong minimumObservedStepCount)
+            {
+                State = state;
+                Observations = observations;
+                ExceededObservations = exceededObservations;
+                MinimumObservedStepCount = minimumObservedStepCount;
+            }
+
+            internal LocalLlmPhysicsBudgetState State { get; }
+            internal int Observations { get; }
+            internal int ExceededObservations { get; }
+            internal ulong MinimumObservedStepCount { get; }
+        }
+
         private sealed class FaultInjectingPhysicsBudgetSource : ILocalLlmPhysicsBudgetSource
         {
             private readonly object gate = new object();
@@ -932,6 +948,10 @@ namespace ReachyMini.Validation
             public int effective_micro_batch_tokens;
             public int effective_threads;
             public int effective_batch_threads;
+            public int startup_physics_observations;
+            public int startup_physics_exceeded_observations;
+            public string startup_physics_state = string.Empty;
+            public ulong production_runtime_model_hash;
             public long post_load_available_memory_bytes;
             public int post_load_stabilization_observations;
             public string post_load_initial_mode = string.Empty;

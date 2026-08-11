@@ -10,14 +10,15 @@ namespace ReachyMini.AppState
         ILocalLlmPhysicsBudgetSource
     {
         private readonly object gate = new object();
-        private readonly ReachySimulationWorker worker;
+        private readonly IReachySimulationTimingSource timingSource;
         private readonly ReachyLocalLlmPhysicsBudgetTracker tracker;
 
         public ReachySimulationLocalLlmPhysicsBudgetSource(
-            ReachySimulationWorker worker,
+            IReachySimulationTimingSource timingSource,
             double timestepSeconds = ReachyMini.Core.ProjectMetadata.InitialPhysicsTimestepSeconds)
         {
-            this.worker = worker ?? throw new ArgumentNullException(nameof(worker));
+            this.timingSource = timingSource ??
+                throw new ArgumentNullException(nameof(timingSource));
             tracker = new ReachyLocalLlmPhysicsBudgetTracker(timestepSeconds);
         }
 
@@ -25,16 +26,17 @@ namespace ReachyMini.AppState
         {
             lock (gate)
             {
-                if (worker.State != ReachySimulationRunState.Running)
+                if (timingSource.SimulationRunState != ReachySimulationRunState.Running)
                 {
                     tracker.Reset();
                     return LocalLlmPhysicsBudgetState.Unavailable;
                 }
-                if (!worker.TryGetLatestSnapshot(out ReachyPublishedSimulationSnapshot snapshot))
+                if (!timingSource.TryGetLatestTimingSnapshot(
+                    out ReachySimulationTimingSnapshot timing))
                 {
                     return LocalLlmPhysicsBudgetState.Unavailable;
                 }
-                return tracker.Observe(snapshot.Timing);
+                return tracker.Observe(timing);
             }
         }
 

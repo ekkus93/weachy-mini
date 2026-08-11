@@ -295,6 +295,10 @@ assert r["effective_context_tokens"] <= 1024, r
 assert r["effective_batch_tokens"] <= 128, r
 assert r["effective_micro_batch_tokens"] <= 64, r
 assert r["effective_threads"] <= 2 and r["effective_batch_threads"] <= 2, r
+assert r["startup_physics_observations"] >= 3, r
+assert r["startup_physics_exceeded_observations"] >= 0, r
+assert r["startup_physics_state"] in {"Healthy", "AtRisk"}, r
+assert r["production_runtime_model_hash"] > 0, r
 assert 0 <= r["post_load_available_memory_bytes"] <= r["total_memory_bytes"], r
 assert 1 <= r["post_load_stabilization_observations"] <= 12, r
 assert r["post_load_stabilized_mode"] != "Suspended", r

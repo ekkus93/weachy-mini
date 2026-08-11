@@ -21,7 +21,8 @@ namespace ReachyMini.Rendering
     }
 
     [DisallowMultipleComponent]
-    public sealed class ReachyProductionAuthoritativeRuntime : MonoBehaviour
+    public sealed class ReachyProductionAuthoritativeRuntime : MonoBehaviour,
+        IReachySimulationTimingSource
     {
         private const string ModelResourcePath =
             "ReachyMiniRuntime/reachy_mini_mjb";
@@ -51,6 +52,21 @@ namespace ReachyMini.Rendering
 
         public ReachySimulationRunState SimulationState =>
             worker?.State ?? ReachySimulationRunState.Created;
+
+        public ReachySimulationRunState SimulationRunState => SimulationState;
+
+        public bool TryGetLatestTimingSnapshot(
+            out ReachySimulationTimingSnapshot timing)
+        {
+            ReachySimulationWorker? activeWorker = worker;
+            if (activeWorker != null &&
+                activeWorker.TryGetLatestTimingSnapshot(out timing))
+            {
+                return true;
+            }
+            timing = default;
+            return false;
+        }
 
         public ReachyAuthoritativeRendererStatus RendererStatus =>
             renderer?.Status ?? ReachyAuthoritativeRendererStatus.Unbound;

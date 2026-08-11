@@ -20,8 +20,12 @@ def forbid(text: str, needle: str, label: str) -> None:
 def main() -> None:
     text = ACCEPTANCE.read_text(encoding="utf-8")
     runner = RUNNER.read_text(encoding="utf-8")
-    require(text, "ReachySimulationWorker", "production simulation worker")
-    require(text, "ReachySimAuthoritativeStateReader", "production authoritative state reader")
+    require(text, "ReachyProductionAuthoritativeRuntime", "live production runtime")
+    require(
+        text,
+        "FindFirstObjectByType<ReachyProductionAuthoritativeRuntime>",
+        "production runtime discovery",
+    )
     require(
         text,
         "ReachySimulationLocalLlmPhysicsBudgetSource",
@@ -60,9 +64,11 @@ def main() -> None:
     )
     require(
         text,
-        "disposed by the worker owner",
-        "single simulation worker ownership checkpoint",
+        "production_physics_runtime_preserved",
+        "non-owning production simulation checkpoint",
     )
+    require(text, "requiredConsecutiveAdmissible = 3", "startup stabilization window")
+    require(text, "startup_physics_exceeded_observations", "startup miss evidence")
     require(runner, 'mkdir -p "${REPORT_DIR}/checkpoints"', "checkpoint evidence directory")
     require(runner, '"${ADB[@]}" pull "${checkpoint_path}"', "all-checkpoint device pull")
     require(
@@ -70,6 +76,9 @@ def main() -> None:
         'r["post_load_stabilization_observations"]',
         "post-load stabilization report validation",
     )
+    forbid(text, "CreateAndStartSimulationWorker", "duplicate simulation factory")
+    forbid(text, "ReachySimSession.Create", "duplicate native session creation")
+    forbid(text, "worker.Dispose()", "production worker disposal")
     forbid(text, "RunPhysicsLoop", "standalone stopwatch physics loop")
     forbid(text, "Thread.Sleep", "acceptance-owned physics scheduler")
     forbid(text, "simulationSession?.Dispose()", "duplicate outer session disposal")
