@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateContracts.cs"
 MACHINE = ROOT / "Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs"
+MANAGED = ROOT / "managed/ReachyMini.Core.Tests/Rma150ConversationStateMachineContractTests.cs"
 
 
 class Rma150ConversationStateMachineTests(unittest.TestCase):
@@ -63,6 +64,20 @@ class Rma150ConversationStateMachineTests(unittest.TestCase):
         self.assertNotIn(".Result", self.source)
         self.assertNotIn("Thread.Sleep", self.source)
         self.assertNotIn("Task.Run", self.source)
+
+    def test_managed_transition_matrix_covers_stale_and_barge_in_paths(self) -> None:
+        managed = MANAGED.read_text(encoding="utf-8")
+        for token in (
+            "HappyPathIsDeterministic",
+            "NoMatchReturnsToIdle",
+            "StaleCompletionAfterInterruptIsRejected",
+            "SpeakingBargeInCancelsPlaybackBeforeNextTurn",
+            "ConflictingSessionStartIsRejected",
+            "ErrorResetChangesSessionIdentity",
+        ):
+            self.assertIn(token, managed)
+        self.assertIn("CancellationToken.IsCancellationRequested", managed)
+        self.assertIn("ReachyStaleConversationCompletionException", managed)
 
 
 if __name__ == "__main__":
