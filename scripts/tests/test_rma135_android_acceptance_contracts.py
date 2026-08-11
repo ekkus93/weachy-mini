@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ACCEPTANCE = (
     ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs"
 )
+RUNNER = ROOT / "scripts/run_rma135_resource_governor_acceptance_android.sh"
 
 
 def require(text: str, needle: str, label: str) -> None:
@@ -18,6 +19,7 @@ def forbid(text: str, needle: str, label: str) -> None:
 
 def main() -> None:
     text = ACCEPTANCE.read_text(encoding="utf-8")
+    runner = RUNNER.read_text(encoding="utf-8")
     require(text, "ReachySimulationWorker", "production simulation worker")
     require(text, "ReachySimAuthoritativeStateReader", "production authoritative state reader")
     require(
@@ -60,6 +62,13 @@ def main() -> None:
         text,
         "disposed by the worker owner",
         "single simulation worker ownership checkpoint",
+    )
+    require(runner, 'mkdir -p "${REPORT_DIR}/checkpoints"', "checkpoint evidence directory")
+    require(runner, '"${ADB[@]}" pull "${checkpoint_path}"', "all-checkpoint device pull")
+    require(
+        runner,
+        'r["post_load_stabilization_observations"]',
+        "post-load stabilization report validation",
     )
     forbid(text, "RunPhysicsLoop", "standalone stopwatch physics loop")
     forbid(text, "Thread.Sleep", "acceptance-owned physics scheduler")
