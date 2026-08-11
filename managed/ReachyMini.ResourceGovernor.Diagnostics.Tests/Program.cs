@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.AppState;
 using ReachyMini.LocalModels;
 
 namespace ReachyMini.ResourceGovernor.Diagnostics.Tests
@@ -17,6 +18,11 @@ namespace ReachyMini.ResourceGovernor.Diagnostics.Tests
             Run("throttled diagnostics", ThrottledDiagnostics);
             Run("suspended diagnostics", SuspendedDiagnostics);
             Run("thermal unavailable explicit", ThermalUnavailableExplicit);
+            Run("throttled idle projection", ThrottledIdleProjection);
+            Run("throttled active conversation preserved", ThrottledActiveConversationPreserved);
+            Run("suspended becomes unavailable", SuspendedBecomesUnavailable);
+            Run("app error outranks suspension", AppErrorOutranksSuspension);
+            Run("governor recovery only clears owned state", GovernorRecoveryOnlyClearsOwnedState);
 
             Console.WriteLine(failures == 0
                 ? "RMA-135 governor diagnostic projection passed."
@@ -85,6 +91,98 @@ namespace ReachyMini.ResourceGovernor.Diagnostics.Tests
             Equal(false, snapshot.ThermalTelemetryAvailable);
             Contains(snapshot.DiagnosticLine, "thermal telemetry unavailable");
             Contains(snapshot.DiagnosticLine, "device=Conservative");
+        }
+
+        private static void ThrottledIdleProjection()
+        {
+            ReachyProviderGovernorMainScreenProjection projection =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    Snapshot(
+                        LocalLlmThermalStatus.Light,
+                        LocalLlmPhysicsBudgetState.Healthy,
+                        12L * GiB,
+                        8L * GiB),
+                    ReachyInteractionState.Idle,
+                    false);
+            Equal("Local LLM (throttled)", projection.ActiveProvider);
+            Equal(ReachyProviderLocation.Local, projection.ProviderLocation);
+            Equal(true, projection.OverrideInteraction);
+            Equal(ReachyInteractionState.Idle, projection.InteractionState);
+            Equal(true, projection.GovernorOwnsInteractionState);
+            Contains(projection.Detail, "resource-throttled");
+        }
+
+        private static void ThrottledActiveConversationPreserved()
+        {
+            ReachyProviderGovernorMainScreenProjection projection =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    Snapshot(
+                        LocalLlmThermalStatus.Light,
+                        LocalLlmPhysicsBudgetState.Healthy,
+                        12L * GiB,
+                        8L * GiB),
+                    ReachyInteractionState.Speaking,
+                    false);
+            Equal(false, projection.OverrideInteraction);
+            Equal(false, projection.GovernorOwnsInteractionState);
+            Equal("Local LLM (throttled)", projection.ActiveProvider);
+        }
+
+        private static void SuspendedBecomesUnavailable()
+        {
+            ReachyProviderGovernorMainScreenProjection projection =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    Snapshot(
+                        LocalLlmThermalStatus.None,
+                        LocalLlmPhysicsBudgetState.Exceeded,
+                        12L * GiB,
+                        8L * GiB),
+                    ReachyInteractionState.Thinking,
+                    false);
+            Equal(true, projection.OverrideInteraction);
+            Equal(ReachyInteractionState.Unavailable, projection.InteractionState);
+            Equal(true, projection.GovernorOwnsInteractionState);
+            Equal("Local LLM (suspended)", projection.ActiveProvider);
+        }
+
+        private static void AppErrorOutranksSuspension()
+        {
+            ReachyProviderGovernorMainScreenProjection projection =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    Snapshot(
+                        LocalLlmThermalStatus.None,
+                        LocalLlmPhysicsBudgetState.Exceeded,
+                        12L * GiB,
+                        8L * GiB),
+                    ReachyInteractionState.Error,
+                    false);
+            Equal(false, projection.OverrideInteraction);
+            Equal(false, projection.GovernorOwnsInteractionState);
+        }
+
+        private static void GovernorRecoveryOnlyClearsOwnedState()
+        {
+            LocalLlmGovernorDiagnosticsSnapshot ready = Snapshot(
+                LocalLlmThermalStatus.None,
+                LocalLlmPhysicsBudgetState.Healthy,
+                12L * GiB,
+                8L * GiB);
+            ReachyProviderGovernorMainScreenProjection owned =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    ready,
+                    ReachyInteractionState.Unavailable,
+                    true);
+            Equal(true, owned.OverrideInteraction);
+            Equal(ReachyInteractionState.Idle, owned.InteractionState);
+            Equal(false, owned.GovernorOwnsInteractionState);
+
+            ReachyProviderGovernorMainScreenProjection unrelated =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    ready,
+                    ReachyInteractionState.Speaking,
+                    false);
+            Equal(false, unrelated.OverrideInteraction);
+            Equal(false, unrelated.GovernorOwnsInteractionState);
         }
 
         private static LocalLlmGovernorDiagnosticsSnapshot Snapshot(
