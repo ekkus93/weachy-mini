@@ -8,8 +8,6 @@ namespace ReachyMini.AppState
     public interface IReachyProviderGovernorDiagnosticsSource
     {
         LocalLlmGovernorDiagnosticsSnapshot GovernorDiagnostics { get; }
-
-        event EventHandler? GovernorDiagnosticsChanged;
     }
 
     public sealed class ReachyProviderGovernorMainScreenProjection
