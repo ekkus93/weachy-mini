@@ -68,8 +68,13 @@ def main() -> None:
     require(coordinator, "ProfileFitsWithin", "loaded-profile safety comparison")
     forbid(coordinator, "ResetConversation()", "resource cancellation via conversation reset")
 
+    require(sim_source, "IReachySimulationTimingSource", "read-only simulation timing contract")
     require(sim_source, "ReachySimulationRunState.Running", "running-simulation requirement")
-    require(sim_source, "TryGetLatestSnapshot", "authoritative simulation snapshot source")
+    require(
+        sim_source,
+        "TryGetLatestTimingSnapshot",
+        "authoritative simulation timing snapshot source",
+    )
     require(sim_source, "tracker.Reset()", "stale physics reset")
 
     print("RMA-135 static resource-governor contracts passed.")
