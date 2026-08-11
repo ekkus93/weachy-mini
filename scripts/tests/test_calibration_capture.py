@@ -11,11 +11,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-for module_name in (
-    "calibration_data",
-    "capture_reachy_calibration",
-    "estimate_calibration_clock_offset",
-):
+
+
+def load_script_module(module_name: str):
     path = ROOT / "scripts" / f"{module_name}.py"
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:
@@ -23,10 +21,12 @@ for module_name in (
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
+    return module
 
-import calibration_data  # noqa: E402
-import capture_reachy_calibration as capture  # noqa: E402
-import estimate_calibration_clock_offset as clock_offset  # noqa: E402
+
+calibration_data = load_script_module("calibration_data")
+capture = load_script_module("capture_reachy_calibration")
+clock_offset = load_script_module("estimate_calibration_clock_offset")
 
 
 class CalibrationCaptureTests(unittest.TestCase):
