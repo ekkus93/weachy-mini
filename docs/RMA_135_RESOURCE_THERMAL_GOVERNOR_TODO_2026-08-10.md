@@ -55,11 +55,12 @@
 ## Phase 5 — Diagnostics and user-visible state
 
 - [x] Publish the latest governor decision from the governed coordinator.
-- [ ] Publish current governor mode, device profile, reason flags, and effective profile through application diagnostics.
-- [ ] Add governor details to the existing diagnostics provider output.
-- [ ] Surface suspended/throttled local-LLM state through the main-screen state rather than displaying ordinary success.
-- [ ] Include explicit thermal-unavailable labeling on API 28 and below.
-- [ ] Ensure diagnostics contain no prompt/response content.
+- [x] Project current governor mode, device profile, reason flags, and effective profile into a privacy-safe application diagnostic snapshot.
+- [x] Add an optional governor diagnostic source to the existing provider/main-screen diagnostics path without creating a parallel UI notification channel.
+- [x] Surface suspended local-LLM state as `Unavailable` and throttled local-LLM state as explicitly throttled without overwriting a higher-priority application `Error`.
+- [x] Include explicit `thermal telemetry unavailable` labeling for API 28 and below.
+- [x] Prove the governor diagnostics implementation and main-screen wiring cannot access prompt/chat/intent/response content.
+- [x] Keep `ReachyUnavailableProviderApplicationService` from implementing the governor diagnostic source; normal production composition remains truthfully unavailable until a real local-provider service is integrated.
 
 ## Phase 6 — OOM and cancellation cleanup
 
