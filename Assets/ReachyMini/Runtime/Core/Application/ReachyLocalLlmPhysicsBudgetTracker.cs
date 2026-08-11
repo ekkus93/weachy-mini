@@ -36,12 +36,17 @@ namespace ReachyMini.AppState
             }
 
             ValidateMonotonicCounters(previous, current);
+            ulong newSteps = current.TotalStepCount - previous.TotalStepCount;
             ulong newDeadlineMisses =
                 current.DeadlineMissCount - previous.DeadlineMissCount;
             double lagGrowth =
                 current.AccumulatedLagSeconds - previous.AccumulatedLagSeconds;
             previous = current;
 
+            if (newSteps == 0UL)
+            {
+                return LocalLlmPhysicsBudgetState.Unavailable;
+            }
             if (newDeadlineMisses > 0UL)
             {
                 return LocalLlmPhysicsBudgetState.Exceeded;

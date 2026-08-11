@@ -6,10 +6,13 @@ on:
       - master
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
+      - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
@@ -18,10 +21,13 @@ on:
   pull_request:
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
+      - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
@@ -86,6 +92,12 @@ jobs:
           --project managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj
           --configuration Release
 
+      - name: Run governed-generation integration contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.ResourceGovernor.Integration.Tests/ReachyMini.ResourceGovernor.Integration.Tests.csproj
+          --configuration Release
+
       - name: Run static resource-governor contracts
         run: python3 scripts/tests/test_rma135_resource_governor.py
 
@@ -100,11 +112,15 @@ jobs:
           mkdir -p "$OUT"
           sha256sum \
             Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs \
+            Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs \
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs \
             managed/ReachyMini.ResourceGovernor.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj \
+            managed/ReachyMini.ResourceGovernor.Integration.Tests/Program.cs \
+            managed/ReachyMini.ResourceGovernor.Integration.Tests/ReachyMini.ResourceGovernor.Integration.Tests.csproj \
             scripts/tests/test_rma135_resource_governor.py \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md \

@@ -14,7 +14,7 @@ The governor is not a quality-tuning system and must not conceal failures. It ma
 
 RMA-133 selected Qwen3-0.6B Q4_K_M. The accepted cool-start physical run stayed within the benchmark gates, but the warm closure run fell to approximately 0.57 token/s from a 34.9 C start and reached 43.0 C. That warm run is explicit evidence that production thermal governance is required.
 
-RMA-134 defines the local-provider execution profile and preserves a strict no-cloud/no-repair/no-hidden-queue boundary. RMA-135 may derive a smaller per-generation execution profile from that baseline, but it must preserve all non-resource behavior controls.
+RMA-134 defines the local-provider execution profile and preserves a strict no-cloud/no-repair/no-hidden-queue boundary. RMA-135 may derive a smaller execution profile from that baseline at explicit provider admission, but it must preserve all non-resource behavior controls. The loaded `LocalLlmProvider` profile remains immutable. If a later observation requires a smaller envelope, governed generation is cancelled or denied and explicit provider recreation is required; RMA-135 does not mutate or invisibly reload a live provider.
 
 ## 3. Priority invariant
 
@@ -114,7 +114,7 @@ Escalation is immediate. Recovery to a less restrictive mode requires three cons
 
 ## 9. Execution-profile integrity
 
-Resource adaptation may change only:
+The profile selected at explicit provider admission may change only:
 
 - context tokens;
 - batch tokens;
@@ -147,7 +147,9 @@ Production integration must surface the current decision in the diagnostics prov
 
 ## 11. Cancellation and cleanup
 
-When an in-flight generation receives a stronger resource decision than the profile under which it started, the integration layer cancels the generation. It does not retry automatically at the lower profile. The underlying RMA-134 cancellation/drain/release contract remains authoritative.
+Before provider creation, the integration layer evaluates admission and passes the reported effective profile to the existing `LocalLlmProvider.CreateAsync` path. Before every generation it samples again and refuses to start if the loaded provider profile exceeds the current safe envelope.
+
+When an in-flight generation receives a stronger resource decision than the loaded profile permits, the integration layer cancels through a linked cancellation token. It does not reset the conversation, retry automatically at the lower profile, or invisibly reload the model. Explicit provider recreation is required before a smaller profile can be used. The underlying RMA-134 cancellation/drain/release contract remains authoritative.
 
 If cleanup fails, the provider must remain faulted/unavailable rather than starting another generation on uncertain native state.
 

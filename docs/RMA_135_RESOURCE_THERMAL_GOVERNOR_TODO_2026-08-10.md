@@ -41,18 +41,21 @@
 
 ## Phase 4 — Production local-LLM integration
 
-- [ ] Add a governed generation entry point around `LocalLlmProvider`.
-- [ ] Allow an explicitly supplied per-generation resource profile without changing existing RMA-134 default behavior.
-- [ ] Sample resource state immediately before inference starts.
-- [ ] Refuse to start when the governor is suspended.
-- [ ] Monitor resource state during active generation.
-- [ ] Cancel active generation on a stronger resource decision.
-- [ ] Do not automatically retry the cancelled request at a smaller profile.
-- [ ] Preserve RMA-134 drain/release/fault semantics.
+- [x] Add a governed generation coordinator around `LocalLlmProvider`.
+- [x] Add explicit pre-creation admission that returns the safe execution profile.
+- [x] Keep the loaded RMA-134 provider profile immutable; do not introduce ambient/per-generation mutation.
+- [x] Sample resource state immediately before inference starts.
+- [x] Refuse to start when the governor is suspended or the loaded profile exceeds the current safe envelope.
+- [x] Monitor resource state during active generation.
+- [x] Cancel active generation through the ordinary provider cancellation token on a stronger resource decision.
+- [x] Do not reset the conversation or automatically retry the cancelled request at a smaller profile.
+- [x] Require explicit provider recreation before a more restrictive profile can be used.
+- [x] Preserve RMA-134 drain/release/fault semantics by leaving cancellation cleanup owned by `LocalLlmProvider`.
 
 ## Phase 5 — Diagnostics and user-visible state
 
-- [ ] Publish current governor mode, device profile, reason flags, and effective profile.
+- [x] Publish the latest governor decision from the governed coordinator.
+- [ ] Publish current governor mode, device profile, reason flags, and effective profile through application diagnostics.
 - [ ] Add governor details to the existing diagnostics provider output.
 - [ ] Surface suspended/throttled local-LLM state through the main-screen state rather than displaying ordinary success.
 - [ ] Include explicit thermal-unavailable labeling on API 28 and below.
@@ -71,7 +74,7 @@
 ## Phase 7 — Validation and physical evidence
 
 - [x] Add warnings-as-errors managed governor contract tests.
-- [x] Add deterministic static Android/physics contract tests.
+- [x] Add deterministic static Android/physics/coordinator contract tests.
 - [x] Add dedicated `RMA-135 Resource Governor` CI status workflow.
 - [ ] Pass hosted RMA-135 workflow on the exact implementation SHA.
 - [ ] Pass permanent repository CI on the exact implementation SHA.
