@@ -52,19 +52,18 @@ def test_no_unconstrained_generation_binding() -> None:
         "RMA-134 must bind constrained generation explicitly.",
     )
     require(
-        re.search(r'reachy_llama_generation_start(?!_constrained)', combined) is None,
+        re.search(r"reachy_llama_generation_start(?!_constrained)", combined) is None,
         "RMA-134 production code exposes unconstrained native generation.",
     )
     require(
-        re.search(r'\bGenerationStart\s*\(', combined) is None,
+        re.search(r"\bGenerationStart\s*\(", combined) is None,
         "RMA-134 production code exposes an unconstrained managed start call.",
     )
 
 
 def test_no_network_or_provider_fallback() -> None:
     sources = "\n".join(
-        read(path)
-        for path in (PROVIDER, RUNTIME, RUNTIME_CONTRACTS, BEHAVIOR, NATIVE)
+        read(path) for path in (PROVIDER, RUNTIME, RUNTIME_CONTRACTS, BEHAVIOR, NATIVE)
     )
     for prohibited in (
         "HttpClient",
@@ -210,8 +209,7 @@ def test_terminal_validation_and_consumer_failures_are_visible() -> None:
         "Terminal consumer notification failures can become silent.",
     )
     require(
-        "IsTrustedExecutableOutput = false"
-        in read(LOCAL_MODELS / "ReachyLocalLlmContracts.cs"),
+        "IsTrustedExecutableOutput = false" in read(LOCAL_MODELS / "ReachyLocalLlmContracts.cs"),
         "Partial stream text is not explicitly marked untrusted.",
     )
 
