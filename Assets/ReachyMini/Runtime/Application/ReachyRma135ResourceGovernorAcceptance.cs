@@ -234,6 +234,48 @@ namespace ReachyMini.Validation
                     faultPhysics,
                     MonitorInterval);
 
+                WriteCheckpoint(
+                    "post_load_stabilization_started",
+                    "Re-evaluating the real physics/resource envelope after model load before any generation request.");
+                int postLoadStabilizationObservations = 0;
+                LocalLlmGovernorDecision? postLoadInitialDecision = null;
+                LocalLlmGovernorDecision? postLoadStabilizedDecision = null;
+                while (postLoadStabilizationObservations < 12)
+                {
+                    if (postLoadStabilizationObservations > 0)
+                    {
+                        await Task.Delay(30).ConfigureAwait(true);
+                    }
+                    ++postLoadStabilizationObservations;
+                    LocalLlmGovernorDecision observed = coordinator.EvaluateCurrentBudget();
+                    postLoadInitialDecision ??= observed;
+                    if (observed.InferenceAllowed && observed.EffectiveProfile != null &&
+                        LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
+                            provider.ExecutionProfile, observed.EffectiveProfile))
+                    {
+                        postLoadStabilizedDecision = observed;
+                        break;
+                    }
+                }
+                if (postLoadInitialDecision == null || postLoadStabilizedDecision == null)
+                {
+                    throw new InvalidOperationException(
+                        "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
+                        postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                        " observations. No generation request was started.");
+                }
+                LocalLlmResourceSnapshot postLoadResources = androidSignals.Capture(
+                    LocalLlmPhysicsBudgetState.Healthy);
+                WriteCheckpoint(
+                    "post_load_stabilized",
+                    "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                    " initial_mode=" + postLoadInitialDecision.Mode +
+                    " initial_reasons=" + postLoadInitialDecision.Reasons +
+                    " final_mode=" + postLoadStabilizedDecision.Mode +
+                    " final_reasons=" + postLoadStabilizedDecision.Reasons +
+                    " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(
+                        CultureInfo.InvariantCulture));
+
                 ReachyPublishedSimulationSnapshot beforeInjection =
                     await WaitForWorkerProgressAsync(
                         worker,
@@ -383,6 +425,12 @@ namespace ReachyMini.Validation
                     effective_micro_batch_tokens = effectiveProfile.MicroBatchTokens,
                     effective_threads = effectiveProfile.Threads,
                     effective_batch_threads = effectiveProfile.BatchThreads,
+                    post_load_available_memory_bytes = postLoadResources.AvailableMemoryBytes,
+                    post_load_stabilization_observations = postLoadStabilizationObservations,
+                    post_load_initial_mode = postLoadInitialDecision.Mode.ToString(),
+                    post_load_initial_reasons = postLoadInitialDecision.Reasons.ToString(),
+                    post_load_stabilized_mode = postLoadStabilizedDecision.Mode.ToString(),
+                    post_load_stabilized_reasons = postLoadStabilizedDecision.Reasons.ToString(),
                     physics_fault_injection_kind = "controlled_one_shot_budget_exceeded",
                     physics_fault_injection_count = faultPhysics.InjectedCount,
                     physics_underlying_state_at_injection = faultPhysics.UnderlyingStateAtInjection.ToString(),
@@ -884,6 +932,12 @@ namespace ReachyMini.Validation
             public int effective_micro_batch_tokens;
             public int effective_threads;
             public int effective_batch_threads;
+            public long post_load_available_memory_bytes;
+            public int post_load_stabilization_observations;
+            public string post_load_initial_mode = string.Empty;
+            public string post_load_initial_reasons = string.Empty;
+            public string post_load_stabilized_mode = string.Empty;
+            public string post_load_stabilized_reasons = string.Empty;
             public string physics_fault_injection_kind = string.Empty;
             public int physics_fault_injection_count;
             public string physics_underlying_state_at_injection = string.Empty;

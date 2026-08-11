@@ -103,6 +103,13 @@ capture() {
   timeout 10s "${ADB[@]}" shell \
     "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \
     | tr -d '\r' > "${REPORT_DIR}/checkpoint-files.txt" 2>&1
+  mkdir -p "${REPORT_DIR}/checkpoints"
+  while IFS= read -r checkpoint_path; do
+    [[ -n "${checkpoint_path}" ]] || continue
+    checkpoint_name="$(basename -- "${checkpoint_path}")"
+    timeout 10s "${ADB[@]}" pull "${checkpoint_path}" \
+      "${REPORT_DIR}/checkpoints/${checkpoint_name}" >/dev/null 2>&1 || true
+  done < "${REPORT_DIR}/checkpoint-files.txt"
   read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json" 2>/dev/null || true
   timeout 10s "${ADB[@]}" shell \
     "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
@@ -288,6 +295,9 @@ assert r["effective_context_tokens"] <= 1024, r
 assert r["effective_batch_tokens"] <= 128, r
 assert r["effective_micro_batch_tokens"] <= 64, r
 assert r["effective_threads"] <= 2 and r["effective_batch_threads"] <= 2, r
+assert 0 <= r["post_load_available_memory_bytes"] <= r["total_memory_bytes"], r
+assert 1 <= r["post_load_stabilization_observations"] <= 12, r
+assert r["post_load_stabilized_mode"] != "Suspended", r
 assert r["physics_fault_injection_kind"] == "controlled_one_shot_budget_exceeded", r
 assert r["physics_fault_injection_count"] == 1, r
 assert r["fault_injection_governed_status"] == "ResourceCancelledDuringGeneration", r
