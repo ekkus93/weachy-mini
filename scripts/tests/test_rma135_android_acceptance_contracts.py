@@ -53,8 +53,16 @@ def main() -> None:
         "report_contains_prompt_or_response_content = false",
         "privacy-safe report marker",
     )
+    require(
+        text,
+        "disposed by the worker owner",
+        "single simulation worker ownership checkpoint",
+    )
     forbid(text, "RunPhysicsLoop", "standalone stopwatch physics loop")
     forbid(text, "Thread.Sleep", "acceptance-owned physics scheduler")
+    forbid(text, "simulationSession?.Dispose()", "duplicate outer session disposal")
+    forbid(text, "worker.Shutdown(WorkerControlTimeout)", "redundant outer worker shutdown")
+    forbid(text, "out ReachySimSession simulationSession", "escaping session ownership")
     forbid(text, "physics_timestep_modified = true", "physics timestep degradation")
     forbid(text, "network_fallback_used = true", "cloud fallback")
     forbid(text, "automatic_retry_used = true", "automatic request replay")
