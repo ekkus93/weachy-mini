@@ -1,0 +1,194 @@
+name: RMA-135 resource governor Android acceptance
+
+on:
+  workflow_run:
+    workflows:
+      - Local Unity Android Validation
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma135-resource-governor-android-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  physical-acceptance:
+    name: Validate RMA-135 on physical Android
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'master'
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 30
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.workflow_run.head_sha,
+              state: "pending",
+              context: "RMA-135 Resource Governor Android",
+              description: "Physical resource-governor acceptance is running"
+            });
+
+      - name: Check out exact validated source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Determine whether RMA-135 physical inputs changed
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          changed="$(git diff-tree --no-commit-id --name-only -r "${SHA}")"
+          printf '%s\n' "${changed}" > artifacts-rma135-changed-files.txt
+          if printf '%s\n' "${changed}" | grep -Eq '^((Assets/ReachyMini/Runtime/Core/LocalModels/(LocalLlmResourceGovernor|LocalLlmGovernedGenerationCoordinator|ReachyLocalLlmProvider|ReachyLocalLlmContracts)\.cs)|(Assets/ReachyMini/Runtime/Core/Application/(ReachyLocalLlmPhysicsBudgetTracker|ReachySimulationLocalLlmPhysicsBudgetSource)\.cs)|(Assets/ReachyMini/Runtime/Application/(ReachyAndroidLocalLlmResourceSignalSource|ReachyRma135ResourceGovernorAcceptance)\.cs)|(Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker\.cs)|(Assets/ReachyMini/Runtime/Interop/(NativeReachyLlama|ReachyLlamaNativeTypes|ReachyMiniInteropAssemblyInfo|ReachySimAuthoritativeStateReader)\.cs)|(scripts/(run_rma135_resource_governor_acceptance_android\.sh|tests/test_rma135_android_acceptance_contracts\.py))|(benchmarks/rma133/(system_prompt-v4\.txt|behavior-output-v1\.gbnf|candidates-v6\.json))|(models/manifests/qwen3-0\.6b-q4-k-m\.local-llm\.json)|(docs/(RMA_135_RESOURCE_THERMAL_GOVERNOR_(SPEC|TODO)_2026-08-10\.md|validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_.*\.md))|(.github/workflows/rma135-(resource-thermal-governor|resource-governor-android)\.yml))'; then
+            echo 'relevant=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'relevant=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pin LG-H872 physical Android device
+        if: steps.scope.outputs.relevant == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          adb_bin="${sdk_root}/platform-tools/adb"
+          if [[ ! -x "${adb_bin}" ]]; then
+            adb_bin="$(command -v adb || true)"
+          fi
+          [[ -n "${adb_bin}" && -x "${adb_bin}" ]] || {
+            printf '%s\n' 'adb is unavailable on the physical Android runner.' >&2
+            exit 1
+          }
+
+          mapfile -t serials < <(
+            "${adb_bin}" devices \
+              | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${serials[@]}"; do
+            state="$("${adb_bin}" -s "${serial}" get-state | tr -d '\r')"
+            model="$("${adb_bin}" -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+            abi="$("${adb_bin}" -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$("${adb_bin}" -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            qemu="$("${adb_bin}" -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' \
+              "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
+            if [[ "${state}" == "device" && "${model}" == "LG-H872" && \
+                  "${abi}" == "arm64-v8a" && "${sdk}" == "26" && "${qemu}" != "1" ]]; then
+              accepted+=("${serial}")
+            fi
+          done
+          if (( ${#accepted[@]} != 1 )); then
+            printf 'Expected exactly one LG-H872 arm64-v8a API-26 device; found %s.\n' \
+              "${#accepted[@]}" >&2
+            "${adb_bin}" devices -l >&2
+            exit 1
+          fi
+          serial="${accepted[0]}"
+          "${adb_bin}" -s "${serial}" wait-for-device
+          [[ "$("${adb_bin}" -s "${serial}" get-state | tr -d '\r')" == "device" ]] || {
+            printf 'Pinned Android device is not ready: %s\n' "${serial}" >&2
+            exit 1
+          }
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
+
+      - name: Download exact-SHA Unity Android artifacts
+        if: steps.scope.outputs.relevant == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ github.event.workflow_run.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/rma135-source-run
+          mkdir -p artifacts/rma135-source-run
+          gh run download "${SOURCE_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --dir artifacts/rma135-source-run
+          mapfile -t apks < <(
+            find artifacts/rma135-source-run \
+              -type f -name 'weachy-mini-device-arm64-api26.apk' -print
+          )
+          if (( ${#apks[@]} != 1 )); then
+            printf 'Expected exactly one exact-SHA ARM64/API-26 APK artifact; found %s.\n' \
+              "${#apks[@]}" >&2
+            find artifacts/rma135-source-run -maxdepth 4 -type f -print >&2 || true
+            exit 1
+          fi
+          mkdir -p artifacts/android
+          cp -- "${apks[0]}" artifacts/android/weachy-mini-device-arm64-api26.apk
+          sha256sum artifacts/android/weachy-mini-device-arm64-api26.apk \
+            > artifacts/android/weachy-mini-device-arm64-api26.apk.sha256
+
+      - name: Run physical resource-governor acceptance
+        if: steps.scope.outputs.relevant == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${REACHY_ANDROID_SERIAL:?The workflow must pin REACHY_ANDROID_SERIAL before acceptance.}"
+          bash scripts/run_rma135_resource_governor_acceptance_android.sh \
+            artifacts/android/weachy-mini-device-arm64-api26.apk \
+            artifacts/rma135-resource-governor-android
+
+      - name: Record exact workflow provenance
+        if: always() && steps.scope.outputs.relevant == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/rma135-resource-governor-android
+          cat > artifacts/rma135-resource-governor-android/workflow-provenance.txt <<EOF
+          source_sha=${{ github.event.workflow_run.head_sha }}
+          source_local_unity_run=${{ github.event.workflow_run.id }}
+          source_local_unity_conclusion=${{ github.event.workflow_run.conclusion }}
+          rma135_android_run=${{ github.run_id }}
+          rma135_android_attempt=${{ github.run_attempt }}
+          EOF
+          cp artifacts-rma135-changed-files.txt \
+            artifacts/rma135-resource-governor-android/changed-files.txt
+
+      - name: Upload RMA-135 physical evidence
+        if: always() && steps.scope.outputs.relevant == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma135-resource-governor-android-${{ github.event.workflow_run.head_sha }}
+          path: artifacts/rma135-resource-governor-android
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          RELEVANT: ${{ steps.scope.outputs.relevant }}
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const relevant = process.env.RELEVANT === "true";
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.workflow_run.head_sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-135 Resource Governor Android",
+              description: relevant
+                ? (succeeded
+                    ? "Physical resource-governor acceptance passed"
+                    : "Physical resource-governor acceptance failed")
+                : "No RMA-135 physical inputs changed; acceptance not required"
+            });

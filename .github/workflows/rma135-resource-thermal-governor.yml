@@ -13,17 +13,23 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
+      - 'scripts/run_rma135_resource_governor_acceptance_android.sh'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
+      - 'scripts/tests/test_rma135_android_acceptance_contracts.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
       - '.github/workflows/rma135-resource-thermal-governor.yml'
+      - '.github/workflows/rma135-resource-governor-android.yml'
   pull_request:
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
@@ -34,17 +40,23 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
+      - 'scripts/run_rma135_resource_governor_acceptance_android.sh'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
+      - 'scripts/tests/test_rma135_android_acceptance_contracts.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
       - '.github/workflows/rma135-resource-thermal-governor.yml'
+      - '.github/workflows/rma135-resource-governor-android.yml'
   workflow_dispatch:
 
 permissions:
@@ -121,6 +133,7 @@ jobs:
           python3 scripts/tests/test_rma135_resource_governor.py
           python3 scripts/tests/test_rma135_governor_diagnostics.py
           python3 scripts/tests/test_rma135_main_screen_governor_wiring.py
+          python3 scripts/tests/test_rma135_android_acceptance_contracts.py
 
       - name: Compile Python contracts
         run: >-
@@ -128,6 +141,10 @@ jobs:
           scripts/tests/test_rma135_resource_governor.py
           scripts/tests/test_rma135_governor_diagnostics.py
           scripts/tests/test_rma135_main_screen_governor_wiring.py
+          scripts/tests/test_rma135_android_acceptance_contracts.py
+
+      - name: Check physical runner shell syntax
+        run: bash -n scripts/run_rma135_resource_governor_acceptance_android.sh
 
       - name: Create exact-SHA evidence
         shell: bash
@@ -144,16 +161,22 @@ jobs:
             Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs \
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
             Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs \
+            Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs \
+            Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs \
             managed/ReachyMini.ResourceGovernor.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj \
             managed/ReachyMini.ResourceGovernor.Integration.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Integration.Tests/ReachyMini.ResourceGovernor.Integration.Tests.csproj \
             managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/ReachyMini.ResourceGovernor.Diagnostics.Tests.csproj \
+            scripts/run_rma135_resource_governor_acceptance_android.sh \
             scripts/tests/test_rma135_resource_governor.py \
             scripts/tests/test_rma135_governor_diagnostics.py \
             scripts/tests/test_rma135_main_screen_governor_wiring.py \
+            scripts/tests/test_rma135_android_acceptance_contracts.py \
+            .github/workflows/rma135-resource-governor-android.yml \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md \
             > "$OUT/source-sha256.txt"
@@ -173,6 +196,8 @@ jobs:
               "diagnostics_include_conversation_content": False,
               "main_screen_governor_projection_wired": True,
               "production_local_provider_activated": False,
+              "physical_acceptance_uses_reachy_simulation_worker": True,
+              "physical_fault_injection_labeled": True,
               "recovery_samples": 3,
           }
           Path("artifacts/rma135-resource-governor/report.json").write_text(
