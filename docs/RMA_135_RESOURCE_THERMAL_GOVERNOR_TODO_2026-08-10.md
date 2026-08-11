@@ -81,6 +81,7 @@
 - [x] Expose read-only authoritative timing through `IReachySimulationTimingSource` without exposing simulation ownership.
 - [x] Make `ReachySimulationWorker` and `ReachyProductionAuthoritativeRuntime` implement the same read-only timing contract used by the governor budget source.
 - [x] Make physical acceptance discover and observe the app's live `ReachyProductionAuthoritativeRuntime` instead of creating a second MuJoCo session/worker.
+- [x] Use Unity's unordered `FindAnyObjectByType<ReachyProductionAuthoritativeRuntime>()` discovery because acceptance requires the sole live production runtime and must not depend on instance-ID ordering or emit deprecated-API warnings.
 - [x] Require three consecutive admissible startup timing observations before model work while preserving and reporting any startup `Exceeded` observations.
 - [x] Keep the physical acceptance non-owning: it must never dispose, stop, or replace the production simulation worker.
 - [x] Harvest the complete physical checkpoint set into the workflow evidence artifact rather than retaining only the latest checkpoint.
