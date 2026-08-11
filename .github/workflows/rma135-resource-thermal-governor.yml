@@ -10,13 +10,16 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
+      - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -28,13 +31,16 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
+      - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -114,12 +120,14 @@ jobs:
         run: |
           python3 scripts/tests/test_rma135_resource_governor.py
           python3 scripts/tests/test_rma135_governor_diagnostics.py
+          python3 scripts/tests/test_rma135_main_screen_governor_wiring.py
 
       - name: Compile Python contracts
         run: >-
           python3 -m py_compile
           scripts/tests/test_rma135_resource_governor.py
           scripts/tests/test_rma135_governor_diagnostics.py
+          scripts/tests/test_rma135_main_screen_governor_wiring.py
 
       - name: Create exact-SHA evidence
         shell: bash
@@ -133,7 +141,9 @@ jobs:
             Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs \
+            Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs \
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs \
             managed/ReachyMini.ResourceGovernor.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj \
@@ -143,6 +153,7 @@ jobs:
             managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/ReachyMini.ResourceGovernor.Diagnostics.Tests.csproj \
             scripts/tests/test_rma135_resource_governor.py \
             scripts/tests/test_rma135_governor_diagnostics.py \
+            scripts/tests/test_rma135_main_screen_governor_wiring.py \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md \
             > "$OUT/source-sha256.txt"
@@ -160,6 +171,8 @@ jobs:
               "thermal_unknown_is_cool": False,
               "automatic_retry_after_throttle": False,
               "diagnostics_include_conversation_content": False,
+              "main_screen_governor_projection_wired": True,
+              "production_local_provider_activated": False,
               "recovery_samples": 3,
           }
           Path("artifacts/rma135-resource-governor/report.json").write_text(
