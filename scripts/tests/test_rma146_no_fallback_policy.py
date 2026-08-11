@@ -7,6 +7,7 @@ POLICY_FILES = [
     ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs",
 ]
 SELECTIONS = ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyAuthorizedProviderSelectionExtensions.cs"
+MANAGED = ROOT / "managed/ReachyMini.Core.Tests/Rma146ProviderFallbackPolicyContractTests.cs"
 
 
 class Rma146NoFallbackPolicyTests(unittest.TestCase):
@@ -90,6 +91,14 @@ class Rma146NoFallbackPolicyTests(unittest.TestCase):
         self.assertIn("selection.Current", selections)
         self.assertIn("sourceProvider.InstanceId", selections)
         self.assertNotIn("AutomaticProviderFallbackEnabled = true", self.source)
+
+    def test_managed_mock_failure_never_activates_unauthorized_provider(self) -> None:
+        managed = MANAGED.read_text(encoding="utf-8")
+        self.assertIn("MockFailureCannotActivateUnauthorizedProvider", managed)
+        self.assertIn("ReachyFallbackDecisionStatus.Denied", managed)
+        self.assertIn("selection.Current.ProviderInstanceId", managed)
+        self.assertIn("AuthorizedSameBoundaryFallbackConsumesOneTimeToken", managed)
+        self.assertIn("PrivacyBoundaryChangeRequiresMatchingConfirmation", managed)
 
 
 if __name__ == "__main__":
