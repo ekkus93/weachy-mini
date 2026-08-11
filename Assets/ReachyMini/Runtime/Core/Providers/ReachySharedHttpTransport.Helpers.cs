@@ -217,6 +217,7 @@ namespace ReachyMini.Providers
                     result.HttpStatusCode ?? throw new InvalidOperationException(
                         "Successful HTTP result omitted status code."),
                     result.ProviderRequestId,
+                    result.ContentType,
                     attempts);
             }
             return ReachyHttpTransportResult.Failure(
@@ -241,6 +242,7 @@ namespace ReachyMini.Providers
                 retryable,
                 detail);
         }
+
 
         private sealed class ZeroingByteArrayContent : ByteArrayContent
         {
