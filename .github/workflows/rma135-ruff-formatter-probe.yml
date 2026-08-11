@@ -6,10 +6,9 @@ on:
       - master
     paths:
       - '.github/workflows/rma135-ruff-formatter-probe.yml'
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
@@ -18,24 +17,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: master
+          fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install exact repository Ruff
         run: python -m pip install --disable-pip-version-check ruff==0.12.0
-      - name: Capture canonical Ruff diff
+      - name: Apply bounded canonical formatting
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p artifacts/rma135-ruff-probe
           ruff format scripts
-          git diff -- scripts > artifacts/rma135-ruff-probe/ruff-format.patch
-          git diff --name-only -- scripts > artifacts/rma135-ruff-probe/changed-files.txt
-      - name: Upload canonical diff
-        uses: actions/upload-artifact@v4
-        with:
-          name: rma135-ruff-diff-${{ github.sha }}
-          path: artifacts/rma135-ruff-probe
-          if-no-files-found: error
-          retention-days: 1
+          mapfile -t changed < <(git diff --name-only -- scripts)
+          if [[ "${#changed[@]}" -ne 1 || "${changed[0]}" != "scripts/tests/test_rma134_local_llm_provider.py" ]]; then
+            printf 'Unexpected Ruff change set:\n' >&2
+            printf '  %s\n' "${changed[@]}" >&2
+            exit 1
+          fi
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/tests/test_rma134_local_llm_provider.py
+          git commit -m "RMA-135: normalize inherited Ruff formatting"
+          git push origin HEAD:master
