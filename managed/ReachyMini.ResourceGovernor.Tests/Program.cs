@@ -159,8 +159,9 @@ namespace ReachyMini.ResourceGovernor.Tests
             Equal(LocalLlmPhysicsBudgetState.Unavailable, tracker.Observe(Timing(100, 0, 0.0, 0.001)));
             Equal(LocalLlmPhysicsBudgetState.Healthy, tracker.Observe(Timing(101, 0, 0.001, 0.001)));
             Equal(LocalLlmPhysicsBudgetState.AtRisk, tracker.Observe(Timing(102, 0, 0.007, 0.006)));
-            Equal(LocalLlmPhysicsBudgetState.Exceeded, tracker.Observe(Timing(103, 1, 0.008, 0.001)));
-            Throws<InvalidOperationException>(() => tracker.Observe(Timing(102, 1, 0.008, 0.001)));
+            Equal(LocalLlmPhysicsBudgetState.Healthy, tracker.Observe(Timing(103, 0, 0.002, 0.001)));
+            Equal(LocalLlmPhysicsBudgetState.Exceeded, tracker.Observe(Timing(104, 1, 0.003, 0.001)));
+            Throws<InvalidOperationException>(() => tracker.Observe(Timing(103, 1, 0.003, 0.001)));
         }
 
         private static void IncompatibleProfileSuspended()

@@ -57,6 +57,11 @@ def main() -> None:
     require(physics, "LastStepDurationSeconds", "authoritative step-duration input")
     require(physics, "LocalLlmPhysicsBudgetState.Exceeded", "physics suspension trigger")
     require(physics, "newSteps == 0UL", "stalled-physics visibility")
+    forbid(
+        physics,
+        "currentSnapshot.AccumulatedLagSeconds < previousSnapshot.AccumulatedLagSeconds",
+        "scheduler-lag gauge treated as monotonic counter",
+    )
     forbid(physics, "Thread.Sleep", "physics-governor sleep fallback")
 
     require(coordinator, "ResourceSuspendedBeforeStart", "preflight suspension")

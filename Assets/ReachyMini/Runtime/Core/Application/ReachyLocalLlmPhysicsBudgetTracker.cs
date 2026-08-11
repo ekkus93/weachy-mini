@@ -69,12 +69,14 @@ namespace ReachyMini.AppState
             ReachySimulationTimingSnapshot previousSnapshot,
             ReachySimulationTimingSnapshot currentSnapshot)
         {
+            // AccumulatedLagSeconds is the current scheduler backlog. It can
+            // legitimately decrease as the worker catches up, so it is not a
+            // monotonic lifetime counter.
             if (currentSnapshot.TotalStepCount < previousSnapshot.TotalStepCount ||
                 currentSnapshot.DeadlineMissCount < previousSnapshot.DeadlineMissCount ||
                 currentSnapshot.SolverWarningCount < previousSnapshot.SolverWarningCount ||
                 currentSnapshot.CommandQueueOverflowCount < previousSnapshot.CommandQueueOverflowCount ||
-                currentSnapshot.DiscardedCommandCount < previousSnapshot.DiscardedCommandCount ||
-                currentSnapshot.AccumulatedLagSeconds < previousSnapshot.AccumulatedLagSeconds)
+                currentSnapshot.DiscardedCommandCount < previousSnapshot.DiscardedCommandCount)
             {
                 throw new InvalidOperationException(
                     "Simulation timing counters regressed while evaluating the local LLM physics budget.");
