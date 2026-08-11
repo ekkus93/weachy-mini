@@ -7,13 +7,16 @@ on:
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
+      - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
+      - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -22,13 +25,16 @@ on:
     paths:
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
       - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'managed/ReachyMini.ResourceGovernor.Tests/**'
       - 'managed/ReachyMini.ResourceGovernor.Integration.Tests/**'
+      - 'managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/**'
       - 'scripts/tests/test_rma135_resource_governor.py'
+      - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -98,11 +104,22 @@ jobs:
           --project managed/ReachyMini.ResourceGovernor.Integration.Tests/ReachyMini.ResourceGovernor.Integration.Tests.csproj
           --configuration Release
 
-      - name: Run static resource-governor contracts
-        run: python3 scripts/tests/test_rma135_resource_governor.py
+      - name: Run governor diagnostic projection contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/ReachyMini.ResourceGovernor.Diagnostics.Tests.csproj
+          --configuration Release
 
-      - name: Compile Python contract
-        run: python3 -m py_compile scripts/tests/test_rma135_resource_governor.py
+      - name: Run static resource-governor contracts
+        run: |
+          python3 scripts/tests/test_rma135_resource_governor.py
+          python3 scripts/tests/test_rma135_governor_diagnostics.py
+
+      - name: Compile Python contracts
+        run: >-
+          python3 -m py_compile
+          scripts/tests/test_rma135_resource_governor.py
+          scripts/tests/test_rma135_governor_diagnostics.py
 
       - name: Create exact-SHA evidence
         shell: bash
@@ -113,6 +130,7 @@ jobs:
           sha256sum \
             Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs \
             Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs \
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
@@ -121,7 +139,10 @@ jobs:
             managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj \
             managed/ReachyMini.ResourceGovernor.Integration.Tests/Program.cs \
             managed/ReachyMini.ResourceGovernor.Integration.Tests/ReachyMini.ResourceGovernor.Integration.Tests.csproj \
+            managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/Program.cs \
+            managed/ReachyMini.ResourceGovernor.Diagnostics.Tests/ReachyMini.ResourceGovernor.Diagnostics.Tests.csproj \
             scripts/tests/test_rma135_resource_governor.py \
+            scripts/tests/test_rma135_governor_diagnostics.py \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md \
             docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md \
             > "$OUT/source-sha256.txt"
@@ -138,6 +159,7 @@ jobs:
               "silent_cloud_fallback": False,
               "thermal_unknown_is_cool": False,
               "automatic_retry_after_throttle": False,
+              "diagnostics_include_conversation_content": False,
               "recovery_samples": 3,
           }
           Path("artifacts/rma135-resource-governor/report.json").write_text(
