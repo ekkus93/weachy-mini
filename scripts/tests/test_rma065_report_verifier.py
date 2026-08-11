@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
 import json
 import sys
 import tempfile
@@ -8,10 +9,15 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
-
-# The scripts directory must be inserted before importing this standalone verifier.
-from verify_rma065_reports import Rma065ReportError, verify_reports  # noqa: E402
+VERIFIER_PATH = ROOT / "scripts/verify_rma065_reports.py"
+VERIFIER_SPEC = importlib.util.spec_from_file_location("verify_rma065_reports", VERIFIER_PATH)
+if VERIFIER_SPEC is None or VERIFIER_SPEC.loader is None:
+    raise RuntimeError(f"Cannot load RMA-065 verifier: {VERIFIER_PATH}")
+verifier = importlib.util.module_from_spec(VERIFIER_SPEC)
+sys.modules["verify_rma065_reports"] = verifier
+VERIFIER_SPEC.loader.exec_module(verifier)
+Rma065ReportError = verifier.Rma065ReportError
+verify_reports = verifier.verify_reports
 
 
 class Rma065ReportVerifierTests(unittest.TestCase):
