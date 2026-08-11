@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "scripts"))
-import score_rma133_benchmark_v6 as scorer  # noqa: E402
+SCORER_PATH = ROOT / "scripts/score_rma133_benchmark_v6.py"
+SCORER_SPEC = importlib.util.spec_from_file_location("score_rma133_benchmark_v6", SCORER_PATH)
+if SCORER_SPEC is None or SCORER_SPEC.loader is None:
+    raise RuntimeError(f"Cannot load RMA-133 scorer: {SCORER_PATH}")
+scorer = importlib.util.module_from_spec(SCORER_SPEC)
+sys.modules["score_rma133_benchmark_v6"] = scorer
+SCORER_SPEC.loader.exec_module(scorer)
 
 
 class Rma133ConstrainedV6Contracts(unittest.TestCase):
@@ -54,7 +60,10 @@ class Rma133ConstrainedV6Contracts(unittest.TestCase):
 
     def test_markdown_fence_is_still_schema_invalid(self) -> None:
         case = scorer.load_cases(ROOT / "benchmarks/rma133/behavior_cases-v2.tsv")[0]
-        body = '{"schema_version":1,"speech":"Hello","gaze_target":null,"expression":"pleased","gesture":"nod","urgency":"normal"}'  # noqa: E501
+        body = (
+            '{"schema_version":1,"speech":"Hello","gaze_target":null,'
+            '"expression":"pleased","gesture":"nod","urgency":"normal"}'
+        )
         record = {"response_bytes_hex": ("```json\n" + body + "\n```").encode().hex()}
         result = scorer.score_case(case, record)
         self.assertFalse(result["schema_valid"])
