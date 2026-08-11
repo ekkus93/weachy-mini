@@ -2,10 +2,18 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs"
-ANDROID = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs"
+ANDROID = (
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs"
+)
 PHYSICS = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs"
-COORDINATOR = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs"
-SIM_SOURCE = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs"
+COORDINATOR = (
+    ROOT
+    / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs"
+)
+SIM_SOURCE = (
+    ROOT
+    / "Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs"
+)
 
 
 def require(text: str, needle: str, label: str) -> None:
