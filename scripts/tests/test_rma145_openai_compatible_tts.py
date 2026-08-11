@@ -42,7 +42,7 @@ class Rma145OpenAiCompatibleTtsTests(unittest.TestCase):
         self.assertIn("MaximumInputCharactersLimit = 4096", provider)
 
     def test_supported_formats_are_explicit(self) -> None:
-        combined = source(PROVIDER_FILES + [AUDIO])
+        combined = source([*PROVIDER_FILES, AUDIO])
         for value in ("Mp3", "Opus", "Aac", "Flac", "Wav", "Pcm"):
             self.assertIn(f"TtsEncodedAudioFormat.{value}", combined)
         for wire in ('"mp3"', '"opus"', '"aac"', '"flac"', '"wav"', '"pcm"'):
@@ -72,7 +72,7 @@ class Rma145OpenAiCompatibleTtsTests(unittest.TestCase):
         self.assertNotIn("Path.GetTemp", provider)
 
     def test_async_handoff_and_cancellation_do_not_block(self) -> None:
-        combined = source(PROVIDER_FILES + [AUDIO])
+        combined = source([*PROVIDER_FILES, AUDIO])
         self.assertIn("await audioSink.PlayAsync", combined)
         self.assertIn("CancellationTokenSource.CreateLinkedTokenSource", combined)
         self.assertIn("TTS_AUDIO_SINK_FAILURE", combined)
@@ -89,7 +89,10 @@ class Rma145OpenAiCompatibleTtsTests(unittest.TestCase):
         self.assertIn("ReachyBearerCredentialTransportBinding.Create", provider)
         self.assertIn("explicitlyAuthorizeNonIdempotentRetry: false", provider)
         self.assertIn("idempotencyKey: null", provider)
-        self.assertNotIn("catch (Exception)\n                {\n                    return await", provider)
+        self.assertNotIn(
+            "catch (Exception)\n                {\n                    return await",
+            provider,
+        )
 
     def test_buffered_milestone_rejects_implicit_streaming(self) -> None:
         provider = source(PROVIDER_FILES)
