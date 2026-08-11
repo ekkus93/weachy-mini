@@ -336,8 +336,10 @@ namespace ReachyMini.AppState
     {
         private readonly ReachyMainScreen screen;
         private readonly IReachyApplicationService[] dependencies;
+        private readonly IReachyProviderGovernorDiagnosticsSource? providerGovernorDiagnostics;
         private readonly ReachyMainScreenStateStore stateStore =
             new ReachyMainScreenStateStore();
+        private bool governorOwnsInteractionState;
 
         public ReachyMainScreenApplicationService(
             ReachyMainScreen screen,
@@ -354,12 +356,16 @@ namespace ReachyMini.AppState
                 ReachyServiceCriticality.Required)
         {
             this.screen = screen ?? throw new ArgumentNullException(nameof(screen));
+            IReachyProviderService resolvedProvider = provider ??
+                throw new ArgumentNullException(nameof(provider));
+            providerGovernorDiagnostics =
+                resolvedProvider as IReachyProviderGovernorDiagnosticsSource;
             dependencies = new IReachyApplicationService[]
             {
                 simulation ?? throw new ArgumentNullException(nameof(simulation)),
                 camera ?? throw new ArgumentNullException(nameof(camera)),
                 audio ?? throw new ArgumentNullException(nameof(audio)),
-                provider ?? throw new ArgumentNullException(nameof(provider)),
+                resolvedProvider,
                 perception ?? throw new ArgumentNullException(nameof(perception)),
                 behavior ?? throw new ArgumentNullException(nameof(behavior)),
                 persistence ?? throw new ArgumentNullException(nameof(persistence)),
@@ -382,6 +388,7 @@ namespace ReachyMini.AppState
             stateStore.SetInteraction(
                 ReachyInteractionState.Idle,
                 "Robot view is ready. Voice, providers, perception, and behavior are not configured.");
+            ApplyProviderGovernorDiagnostics();
             screen.Bind(stateStore, BuildDiagnostics);
             SetReady("Main screen is bound to application state.");
         }
@@ -398,6 +405,12 @@ namespace ReachyMini.AppState
             object? sender,
             ReachyServiceHealthChangedEventArgs eventArgs)
         {
+            if (eventArgs.Health.Kind == ReachyServiceKind.Provider &&
+                providerGovernorDiagnostics != null)
+            {
+                ApplyProviderGovernorDiagnostics();
+            }
+
             if (eventArgs.Health.Criticality == ReachyServiceCriticality.Required &&
                 (eventArgs.Health.State == ReachyServiceState.Faulted ||
                  eventArgs.Health.State == ReachyServiceState.Unavailable))
@@ -408,9 +421,37 @@ namespace ReachyMini.AppState
             }
         }
 
+        private void ApplyProviderGovernorDiagnostics()
+        {
+            if (providerGovernorDiagnostics == null)
+            {
+                return;
+            }
+
+            ReachyMainScreenSnapshot current = stateStore.Current;
+            ReachyProviderGovernorMainScreenProjection projection =
+                ReachyProviderGovernorMainScreenProjection.Create(
+                    providerGovernorDiagnostics.GovernorDiagnostics,
+                    current.InteractionState,
+                    governorOwnsInteractionState);
+            stateStore.SetCapabilities(
+                current.ActiveCamera,
+                current.CameraSelectionAvailable,
+                projection.ActiveProvider,
+                projection.ProviderLocation,
+                current.MicrophoneAvailable);
+            if (projection.OverrideInteraction)
+            {
+                stateStore.SetInteraction(
+                    projection.InteractionState,
+                    projection.Detail);
+            }
+            governorOwnsInteractionState = projection.GovernorOwnsInteractionState;
+        }
+
         private string BuildDiagnostics()
         {
-            var lines = new List<string>(dependencies.Length + 1)
+            var lines = new List<string>(dependencies.Length + 2)
             {
                 "Application shell: active",
             };
@@ -419,6 +460,10 @@ namespace ReachyMini.AppState
                 ReachyServiceHealth health = dependencies[index].Health;
                 lines.Add(
                     $"{health.Kind}: {health.State} — {health.Message}");
+            }
+            if (providerGovernorDiagnostics != null)
+            {
+                lines.Add(providerGovernorDiagnostics.GovernorDiagnostics.DiagnosticLine);
             }
             return string.Join("\n", lines);
         }
