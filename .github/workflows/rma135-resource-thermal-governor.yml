@@ -1,0 +1,158 @@
+name: RMA-135 resource and thermal governor
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'managed/ReachyMini.ResourceGovernor.Tests/**'
+      - 'scripts/tests/test_rma135_resource_governor.py'
+      - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
+      - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
+      - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
+      - '.github/workflows/rma135-resource-thermal-governor.yml'
+  pull_request:
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
+      - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
+      - 'managed/ReachyMini.ResourceGovernor.Tests/**'
+      - 'scripts/tests/test_rma135_resource_governor.py'
+      - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
+      - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
+      - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
+      - '.github/workflows/rma135-resource-thermal-governor.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: rma135-resource-thermal-governor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Validate RMA-135 contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Publish pending status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "pending",
+              context: "RMA-135 Resource Governor",
+              description: "Resource and thermal governor validation is running"
+            });
+
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run managed resource-governor contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj
+          --configuration Release
+
+      - name: Run static resource-governor contracts
+        run: python3 scripts/tests/test_rma135_resource_governor.py
+
+      - name: Compile Python contract
+        run: python3 -m py_compile scripts/tests/test_rma135_resource_governor.py
+
+      - name: Create exact-SHA evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="artifacts/rma135-resource-governor"
+          mkdir -p "$OUT"
+          sha256sum \
+            Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs \
+            Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
+            Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs \
+            managed/ReachyMini.ResourceGovernor.Tests/Program.cs \
+            managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj \
+            scripts/tests/test_rma135_resource_governor.py \
+            docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md \
+            docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md \
+            > "$OUT/source-sha256.txt"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "rma": "RMA-135",
+              "physics_priority": True,
+              "silent_cloud_fallback": False,
+              "thermal_unknown_is_cool": False,
+              "automatic_retry_after_throttle": False,
+              "recovery_samples": 3,
+          }
+          Path("artifacts/rma135-resource-governor/report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload RMA-135 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma135-resource-governor-${{ github.sha }}
+          path: artifacts/rma135-resource-governor
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          JOB_STATUS: ${{ job.status }}
+        with:
+          script: |
+            const succeeded = process.env.JOB_STATUS === "success";
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: succeeded ? "success" : "failure",
+              context: "RMA-135 Resource Governor",
+              description: succeeded
+                ? "Resource and thermal governor contracts passed"
+                : "Resource and thermal governor contracts failed"
+            });
