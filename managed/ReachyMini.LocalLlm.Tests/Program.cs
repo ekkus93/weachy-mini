@@ -40,8 +40,9 @@ internal static class Program
         await TestOutOfMemoryBeforeNativeHandleAsync().ConfigureAwait(false);
         await TestOutOfMemoryAfterNativeStartAsync().ConfigureAwait(false);
         await TestOutOfMemoryCleanupFailureFaultsAsync().ConfigureAwait(false);
+        await TestOutOfMemoryReloadRecoveryAndSecondGenerationAsync().ConfigureAwait(false);
         await TestReloadRecoveryAndDisposeAsync().ConfigureAwait(false);
-        Console.WriteLine("RMA-134 local LLM managed contracts passed (20 groups).");
+        Console.WriteLine("RMA-134 local LLM managed contracts passed (21 groups).");
     }
 
     private static void TestNativeAbi2Layouts()
@@ -453,6 +454,51 @@ internal static class Program
             "OOM cleanup failure silently released or retried uncertain native state.");
     }
 
+    private static async Task TestOutOfMemoryReloadRecoveryAndSecondGenerationAsync()
+    {
+        using FakeRuntime runtime = new FakeRuntime { ThrowOutOfMemoryOnNextPoll = true };
+        LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
+        try
+        {
+            LocalLlmGenerationResult exhausted = await provider.GenerateAsync(
+                Request("req-oom-recover", "Allocate."), new CollectingSink(), CancellationToken.None)
+                .ConfigureAwait(false);
+            Require(exhausted.Status == LocalLlmGenerationStatus.ResourceExhausted,
+                "Recovery proof did not begin from typed resource exhaustion.");
+            Require(provider.State == LocalLlmProviderState.Faulted,
+                "OOM recovery proof did not fault the provider before explicit reload.");
+
+            LocalLlmReloadResult reload = await provider.ReloadAsync(CancellationToken.None)
+                .ConfigureAwait(false);
+            Require(reload.Status == LocalLlmReloadStatus.Reloaded,
+                "Explicit reload did not recover the provider after OOM: " + reload.Detail);
+            Require(provider.State == LocalLlmProviderState.Ready,
+                "Explicit post-OOM reload did not return the provider to Ready.");
+
+            runtime.EnqueueText(1UL, ValidIntent);
+            runtime.EnqueueCompleted(2UL);
+            LocalLlmGenerationResult recovered = await provider.GenerateAsync(
+                Request("req-after-oom-reload", "Recover."), new CollectingSink(), CancellationToken.None)
+                .ConfigureAwait(false);
+            Require(recovered.Status == LocalLlmGenerationStatus.Succeeded,
+                "Second generation after explicit OOM reload did not succeed: " + recovered.Detail);
+            Require(recovered.Intent != null,
+                "Second generation after explicit OOM reload lost the validated behavior intent.");
+            Require(runtime.StartCount == 2,
+                "OOM recovery replayed or skipped a generation unexpectedly.");
+            Require(runtime.CancelCount == 1,
+                "OOM recovery introduced an extra hidden cancellation or retry.");
+            Require(runtime.ReleaseCount == 2,
+                "OOM recovery did not release exactly the failed and recovered generation handles.");
+        }
+        finally
+        {
+            await provider.DisposeAsync().ConfigureAwait(false);
+        }
+        Require(runtime.LoadCount == 2 && runtime.UnloadCount == 2,
+            "Post-OOM recovery did not own exactly one initial and one explicitly reloaded model handle.");
+    }
+
     private static async Task TestReloadRecoveryAndDisposeAsync()
     {
         using FakeRuntime runtime = new FakeRuntime();
@@ -600,6 +646,7 @@ internal static class Program
         private readonly Queue<LocalLlmRuntimeLoadResult> loadResults = new Queue<LocalLlmRuntimeLoadResult>();
         private readonly Queue<LocalLlmRuntimePollResult> polls = new Queue<LocalLlmRuntimePollResult>();
         private bool staleAfterCancelEmitted;
+        private bool currentGenerationCancelled;
         private ulong nextHandle = 1000UL;
 
         internal uint AbiVersion { get; set; } = 2U;
@@ -689,6 +736,8 @@ internal static class Program
             Require(prompt == "templated-prompt", "Generation did not consume exact templated prompt.");
             Require(profile.ContextTokens == 2048, "Unexpected generation profile reached fake runtime.");
             ++StartCount;
+            currentGenerationCancelled = false;
+            staleAfterCancelEmitted = false;
             if (ThrowOutOfMemoryOnStart)
             {
                 ThrowOutOfMemoryOnStart = false;
@@ -718,7 +767,7 @@ internal static class Program
                 ThrowOnNextPoll = false;
                 throw new InvalidOperationException("synthetic poll threw");
             }
-            if (CancelCount > 0 && CancelStatus == 0)
+            if (currentGenerationCancelled && CancelStatus == 0)
             {
                 if (EmitStaleTextAfterCancel && !staleAfterCancelEmitted)
                 {
@@ -729,7 +778,7 @@ internal static class Program
                 return new LocalLlmRuntimePollResult(
                     0, string.Empty, LocalLlmRuntimePollKind.Cancelled, 13, 1000UL, string.Empty);
             }
-            if (CancelCount > 0 && CancelStatus != 0 && TerminalAfterFailedCancel)
+            if (currentGenerationCancelled && CancelStatus != 0 && TerminalAfterFailedCancel)
             {
                 return new LocalLlmRuntimePollResult(
                     0, string.Empty, LocalLlmRuntimePollKind.Completed, 0, 1000UL, string.Empty);
@@ -751,6 +800,7 @@ internal static class Program
         {
             Require(generationHandle != 0UL, "Cancel called with null generation handle.");
             ++CancelCount;
+            currentGenerationCancelled = true;
             return new LocalLlmRuntimeCallResult(
                 CancelStatus,
                 CancelStatus == 0 ? string.Empty : "synthetic cancel failure");
