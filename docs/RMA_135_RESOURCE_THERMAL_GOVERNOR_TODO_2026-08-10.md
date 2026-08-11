@@ -63,13 +63,14 @@
 
 ## Phase 6 — OOM and cancellation cleanup
 
-- [ ] Catch local-inference `OutOfMemoryException` at the governed boundary.
-- [ ] Cancel/drain/release any active generation before allowing recovery.
-- [ ] Latch suspension after OOM and require healthy observations before recovery.
-- [ ] Test OOM before native start.
-- [ ] Test OOM during generation/monitoring.
-- [ ] Test cancellation cleanup success.
-- [ ] Test cleanup failure leaves the provider faulted/unavailable.
+- [x] Catch local-inference `OutOfMemoryException` as typed `ResourceExhausted` rather than generic runtime failure.
+- [x] Cancel/drain/release an active generation after post-start OOM when cleanup can still be proven.
+- [x] Latch suspension after OOM and require three consecutive nominal observations before governor recovery.
+- [x] Test OOM before a native generation handle exists.
+- [x] Test OOM during active generation polling.
+- [x] Test post-start OOM cancellation/drain/release success.
+- [x] Test cleanup failure leaves the provider faulted/unavailable and does not fabricate release success.
+- [ ] Prove explicit provider reload/recovery after OOM followed by a successful second generation without app/process restart.
 
 ## Phase 7 — Validation and physical evidence
 
