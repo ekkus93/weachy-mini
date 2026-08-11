@@ -78,8 +78,12 @@
 - [x] Add warnings-as-errors managed governor contract tests.
 - [x] Add deterministic static Android/physics/coordinator contract tests.
 - [x] Add dedicated `RMA-135 Resource Governor` CI status workflow.
-- [x] Add a physical Android acceptance harness that uses `ReachySimulationWorker` plus the production physics-budget and Android resource-signal sources rather than a standalone stopwatch loop.
-- [x] Make `ReachySimulationWorker` the sole owner of the physical harness's authoritative state reader and native simulation session; permanently forbid duplicate outer cleanup in the acceptance contract.
+- [x] Expose read-only authoritative timing through `IReachySimulationTimingSource` without exposing simulation ownership.
+- [x] Make `ReachySimulationWorker` and `ReachyProductionAuthoritativeRuntime` implement the same read-only timing contract used by the governor budget source.
+- [x] Make physical acceptance discover and observe the app's live `ReachyProductionAuthoritativeRuntime` instead of creating a second MuJoCo session/worker.
+- [x] Require three consecutive admissible startup timing observations before model work while preserving and reporting any startup `Exceeded` observations.
+- [x] Keep the physical acceptance non-owning: it must never dispose, stop, or replace the production simulation worker.
+- [x] Harvest the complete physical checkpoint set into the workflow evidence artifact rather than retaining only the latest checkpoint.
 - [ ] Pass hosted RMA-135 workflow on the exact implementation SHA.
 - [ ] Pass permanent repository CI on the exact implementation SHA.
 - [ ] Pass Local Unity Android Validation on the exact implementation SHA.
