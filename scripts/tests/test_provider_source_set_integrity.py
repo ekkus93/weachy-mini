@@ -64,6 +64,21 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
+    def test_rma145_tts_source_set_is_complete(self) -> None:
+        required = {
+            PROVIDERS / "ReachyOpenAiCompatibleTtsOptions.cs":
+                "class ReachyOpenAiCompatibleTtsOptions",
+            PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Core.cs":
+                "partial class ReachyOpenAiCompatibleTtsProvider",
+            PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Helpers.cs":
+                "BuildRequestBody",
+            SPEECH / "BufferedTtsAudioContracts.cs":
+                "interface IBufferedTtsAudioSink",
+        }
+        for path, symbol in required.items():
+            self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
+            self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
+
 
 if __name__ == "__main__":
     unittest.main()
