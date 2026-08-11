@@ -78,6 +78,8 @@
 - [x] Add warnings-as-errors managed governor contract tests.
 - [x] Add deterministic static Android/physics/coordinator contract tests.
 - [x] Add dedicated `RMA-135 Resource Governor` CI status workflow.
+- [x] Add a physical Android acceptance harness that uses `ReachySimulationWorker` plus the production physics-budget and Android resource-signal sources rather than a standalone stopwatch loop.
+- [x] Make `ReachySimulationWorker` the sole owner of the physical harness's authoritative state reader and native simulation session; permanently forbid duplicate outer cleanup in the acceptance contract.
 - [ ] Pass hosted RMA-135 workflow on the exact implementation SHA.
 - [ ] Pass permanent repository CI on the exact implementation SHA.
 - [ ] Pass Local Unity Android Validation on the exact implementation SHA.
