@@ -1,9 +1,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DIAGNOSTICS = (
-    ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs"
-)
+DIAGNOSTICS = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs"
 
 
 def require(text: str, needle: str, label: str) -> None:
