@@ -70,7 +70,7 @@
 - [x] Test OOM during active generation polling.
 - [x] Test post-start OOM cancellation/drain/release success.
 - [x] Test cleanup failure leaves the provider faulted/unavailable and does not fabricate release success.
-- [ ] Prove explicit provider reload/recovery after OOM followed by a successful second generation without app/process restart.
+- [x] Prove explicit provider reload/recovery after OOM followed by a successful second generation without app/process restart.
 
 ## Phase 7 — Validation and physical evidence
 
