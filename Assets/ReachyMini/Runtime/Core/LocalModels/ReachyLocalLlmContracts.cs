@@ -61,6 +61,7 @@ namespace ReachyMini.LocalModels
         ConsumerFailure = 9,
         Unavailable = 10,
         Disposed = 11,
+        ResourceExhausted = 12,
     }
 
     public enum LocalLlmChatRole

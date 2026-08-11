@@ -13,6 +13,7 @@ namespace ReachyMini.LocalModels
         ResourceCancelledDuringGeneration = 2,
         SignalFailure = 3,
         Busy = 4,
+        ResourceExhausted = 5,
     }
 
     public enum LocalLlmProviderAdmissionStatus
@@ -327,6 +328,17 @@ namespace ReachyMini.LocalModels
 
                 LocalLlmGenerationResult providerResult =
                     await generationTask.ConfigureAwait(false);
+                if (providerResult.Status == LocalLlmGenerationStatus.ResourceExhausted)
+                {
+                    governor.RecordOutOfMemory();
+                    LocalLlmGovernorDecision exhausted = BuildOutOfMemoryDecision(CurrentDecision);
+                    PublishDecision(exhausted);
+                    return Result(
+                        LocalLlmGovernedGenerationStatus.ResourceExhausted,
+                        exhausted,
+                        providerResult,
+                        "Local LLM inference exhausted memory; the governor is latched suspended until three consecutive nominal observations.");
+                }
                 if (resourceCancellationIssued)
                 {
                     return Result(
@@ -396,6 +408,22 @@ namespace ReachyMini.LocalModels
             LocalLlmPhysicsBudgetState physics = physicsBudget.Capture();
             LocalLlmResourceSnapshot snapshot = resourceSignals.Capture(physics);
             return governor.Evaluate(baselineProfile, snapshot);
+        }
+
+        private static LocalLlmGovernorDecision BuildOutOfMemoryDecision(
+            LocalLlmGovernorDecision? previous)
+        {
+            LocalLlmDeviceProfile deviceProfile = previous?.DeviceProfile ??
+                LocalLlmDeviceProfile.Select(0L, 0);
+            LocalLlmGovernorReason reasons =
+                (previous?.Reasons ?? LocalLlmGovernorReason.None) |
+                LocalLlmGovernorReason.RecentOutOfMemory;
+            return new LocalLlmGovernorDecision(
+                LocalLlmGovernorMode.Suspended,
+                reasons,
+                deviceProfile,
+                null,
+                "Local LLM governor mode=Suspended; recent local inference out-of-memory is latched; explicit recovery is required after healthy observations.");
         }
 
         private static string? TryCancel(CancellationTokenSource cancellation)

@@ -81,6 +81,7 @@ namespace ReachyMini.ResourceGovernor.Tests
                 Equal(LocalLlmDeviceProfileKind.Conservative, d.DeviceProfile.Kind);
             });
             Run("recovery hysteresis", RecoveryHysteresis);
+            Run("latched OOM recovery", LatchedOomRecovery);
             Run("recent OOM suspended", () =>
             {
                 var governor = new LocalLlmResourceGovernor();
@@ -113,6 +114,27 @@ namespace ReachyMini.ResourceGovernor.Tests
             Reason(first, LocalLlmGovernorReason.RecoveryHold);
             Equal(LocalLlmGovernorMode.Suspended, governor.Evaluate(Baseline(), healthy).Mode);
             Equal(LocalLlmGovernorMode.Nominal, governor.Evaluate(Baseline(), healthy).Mode);
+        }
+
+        private static void LatchedOomRecovery()
+        {
+            var governor = new LocalLlmResourceGovernor();
+            governor.RecordOutOfMemory();
+            if (!governor.OutOfMemoryLatched)
+            {
+                throw new InvalidOperationException("OOM latch did not engage.");
+            }
+            LocalLlmResourceSnapshot healthy = Snapshot(
+                12, 8, 0.5, 8, LocalLlmThermalStatus.None, LocalLlmPhysicsBudgetState.Healthy);
+            LocalLlmGovernorDecision first = governor.Evaluate(Baseline(), healthy);
+            Equal(LocalLlmGovernorMode.Suspended, first.Mode);
+            Reason(first, LocalLlmGovernorReason.RecentOutOfMemory);
+            Equal(LocalLlmGovernorMode.Suspended, governor.Evaluate(Baseline(), healthy).Mode);
+            Equal(LocalLlmGovernorMode.Nominal, governor.Evaluate(Baseline(), healthy).Mode);
+            if (governor.OutOfMemoryLatched)
+            {
+                throw new InvalidOperationException("OOM latch did not clear after three nominal observations.");
+            }
         }
 
         private static void BehaviorControlsPreserved()

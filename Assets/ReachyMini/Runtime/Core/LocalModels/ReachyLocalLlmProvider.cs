@@ -556,6 +556,15 @@ namespace ReachyMini.LocalModels
                     epoch,
                     linkedCancellation.Token).ConfigureAwait(false);
             }
+            catch (OutOfMemoryException exception)
+            {
+                MarkFaulted();
+                return ResourceExhausted(
+                    request.RequestId,
+                    epoch,
+                    "Local LLM generation exhausted memory before a safe terminal result: " +
+                        exception.Message);
+            }
             catch (Exception exception)
             {
                 MarkFaulted();
@@ -627,6 +636,10 @@ namespace ReachyMini.LocalModels
                 // in the exact SHA-pinned GGUF, matching the accepted RMA-133 V6 path.
                 template = runtime.ApplyChatTemplate(modelHandle, null, messages);
             }
+            catch (OutOfMemoryException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return RuntimeFailure(
@@ -644,6 +657,10 @@ namespace ReachyMini.LocalModels
             try
             {
                 tokenCount = runtime.CountTokens(modelHandle, template.Prompt);
+            }
+            catch (OutOfMemoryException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -681,6 +698,10 @@ namespace ReachyMini.LocalModels
                     profile,
                     LocalLlmBehaviorContract.Grammar,
                     LocalLlmBehaviorContract.GrammarRoot);
+            }
+            catch (OutOfMemoryException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -848,6 +869,10 @@ namespace ReachyMini.LocalModels
                                 when (cancellationToken.IsCancellationRequested)
                             {
                             }
+                            catch (OutOfMemoryException)
+                            {
+                                throw;
+                            }
                             catch (Exception exception)
                             {
                                 consumerFailure = true;
@@ -1011,6 +1036,31 @@ namespace ReachyMini.LocalModels
                         intent,
                         metricsResult.Metrics)).ConfigureAwait(false);
             }
+            catch (OutOfMemoryException exception)
+            {
+                bool cleaned = generationReleased;
+                if (!generationReleased)
+                {
+                    try
+                    {
+                        cleaned = terminal == null
+                            ? await CancelDrainReleaseAsync(
+                                generationHandle).ConfigureAwait(false)
+                            : SafeRelease(generationHandle).Succeeded;
+                    }
+                    catch (Exception)
+                    {
+                        cleaned = false;
+                    }
+                }
+                MarkFaulted();
+                return ResourceExhausted(
+                    request.RequestId,
+                    epoch,
+                    cleaned
+                        ? "Local LLM generation exhausted memory; the generation handle was cleaned and the provider was faulted pending explicit recovery: " + exception.Message
+                        : "Local LLM generation exhausted memory and cleanup could not be proven complete; the provider was faulted: " + exception.Message);
+            }
             catch (Exception exception)
             {
                 bool cleaned = generationReleased;
@@ -1138,6 +1188,10 @@ namespace ReachyMini.LocalModels
             {
                 return runtime.Poll(generationHandle);
             }
+            catch (OutOfMemoryException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return new LocalLlmRuntimePollResult(
@@ -1156,6 +1210,10 @@ namespace ReachyMini.LocalModels
             {
                 return runtime.Cancel(generationHandle);
             }
+            catch (OutOfMemoryException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return new LocalLlmRuntimeCallResult(
@@ -1169,6 +1227,10 @@ namespace ReachyMini.LocalModels
             try
             {
                 return runtime.GetGenerationMetrics(generationHandle);
+            }
+            catch (OutOfMemoryException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -1184,6 +1246,10 @@ namespace ReachyMini.LocalModels
             try
             {
                 return runtime.Release(generationHandle);
+            }
+            catch (OutOfMemoryException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -1209,6 +1275,10 @@ namespace ReachyMini.LocalModels
                         baseResult.Detail),
                     CancellationToken.None).ConfigureAwait(false);
                 return baseResult;
+            }
+            catch (OutOfMemoryException)
+            {
+                throw;
             }
             catch (Exception exception)
             {
@@ -1282,6 +1352,21 @@ namespace ReachyMini.LocalModels
                     ? "The local LLM generation was cancelled."
                     : "The conversation reset superseded this generation.",
                 ReachyLlamaNativeContract.StatusCancelled);
+        }
+
+        private static LocalLlmGenerationResult ResourceExhausted(
+            string requestId,
+            ulong epoch,
+            string detail)
+        {
+            return Result(
+                LocalLlmGenerationStatus.ResourceExhausted,
+                requestId,
+                epoch,
+                detail.Length == 0
+                    ? "The local LLM exhausted available memory."
+                    : detail,
+                ReachyLlamaNativeContract.StatusInternalError);
         }
 
         private static LocalLlmGenerationResult RuntimeFailure(

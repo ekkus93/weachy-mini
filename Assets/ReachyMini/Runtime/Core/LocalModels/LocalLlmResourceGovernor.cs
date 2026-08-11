@@ -232,8 +232,10 @@ namespace ReachyMini.LocalModels
 
         private LocalLlmGovernorMode currentMode = LocalLlmGovernorMode.Nominal;
         private int recoverySamples;
+        private bool outOfMemoryLatched;
 
         public LocalLlmGovernorMode CurrentMode => currentMode;
+        public bool OutOfMemoryLatched => outOfMemoryLatched;
 
         public LocalLlmGovernorDecision Evaluate(
             LocalLlmExecutionProfile baselineProfile,
@@ -265,9 +267,29 @@ namespace ReachyMini.LocalModels
                 reasons |= LocalLlmGovernorReason.DeviceProfileLimit;
             }
 
-            LocalLlmGovernorMode appliedMode = ApplyHysteresis(
-                requestedMode,
-                ref reasons);
+            LocalLlmGovernorMode appliedMode;
+            if (outOfMemoryLatched && requestedMode != LocalLlmGovernorMode.Nominal)
+            {
+                reasons |= LocalLlmGovernorReason.RecentOutOfMemory;
+                currentMode = LocalLlmGovernorMode.Suspended;
+                recoverySamples = 0;
+                appliedMode = LocalLlmGovernorMode.Suspended;
+            }
+            else
+            {
+                appliedMode = ApplyHysteresis(requestedMode, ref reasons);
+                if (outOfMemoryLatched)
+                {
+                    if (appliedMode == LocalLlmGovernorMode.Suspended)
+                    {
+                        reasons |= LocalLlmGovernorReason.RecentOutOfMemory;
+                    }
+                    else
+                    {
+                        outOfMemoryLatched = false;
+                    }
+                }
+            }
             LocalLlmExecutionProfile? effectiveProfile = appliedMode == LocalLlmGovernorMode.Suspended
                 ? null
                 : BuildEffectiveProfile(
@@ -282,10 +304,18 @@ namespace ReachyMini.LocalModels
                 BuildDiagnostic(appliedMode, reasons, deviceProfile, effectiveProfile));
         }
 
+        public void RecordOutOfMemory()
+        {
+            currentMode = LocalLlmGovernorMode.Suspended;
+            recoverySamples = 0;
+            outOfMemoryLatched = true;
+        }
+
         public void Reset()
         {
             currentMode = LocalLlmGovernorMode.Nominal;
             recoverySamples = 0;
+            outOfMemoryLatched = false;
         }
 
         private static LocalLlmGovernorMode ClassifyPressure(

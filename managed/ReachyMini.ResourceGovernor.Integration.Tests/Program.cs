@@ -28,6 +28,8 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
                 MonitorSignalFailureCancels().GetAwaiter().GetResult());
             Run("coordinator rejects hidden queue", () =>
                 CoordinatorRejectsHiddenQueue().GetAwaiter().GetResult());
+            Run("provider OOM latches governor", () =>
+                ProviderOomLatchesGovernor().GetAwaiter().GetResult());
 
             Console.WriteLine(failures == 0
                 ? "RMA-135 governed-generation integration contracts passed."
@@ -125,6 +127,32 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
                 Request("signal-cancel"), new NullSink(), CancellationToken.None);
             Equal(LocalLlmGovernedGenerationStatus.SignalFailure, result.Status);
             Equal(LocalLlmGenerationStatus.Cancelled, result.ProviderResult?.Status);
+        }
+
+        private static async Task ProviderOomLatchesGovernor()
+        {
+            var governor = new LocalLlmResourceGovernor();
+            var executor = new FakeExecutor(Baseline(), (request, sink, token) =>
+                Task.FromResult(Generation(LocalLlmGenerationStatus.ResourceExhausted, request.RequestId)));
+            var coordinator = new LocalLlmGovernedGenerationCoordinator(
+                executor,
+                Baseline(),
+                governor,
+                new RepeatingResourceSignals(Snapshot(LocalLlmThermalStatus.None)),
+                new RepeatingPhysicsBudgetSource(LocalLlmPhysicsBudgetState.Healthy),
+                TimeSpan.FromMilliseconds(25));
+            LocalLlmGovernedGenerationResult result = await coordinator.GenerateAsync(
+                Request("oom-latch"), new NullSink(), CancellationToken.None);
+            Equal(LocalLlmGovernedGenerationStatus.ResourceExhausted, result.Status);
+            Equal(1, executor.InvocationCount);
+            if (!governor.OutOfMemoryLatched)
+            {
+                throw new InvalidOperationException("Coordinator did not latch provider OOM.");
+            }
+            Equal(LocalLlmGovernorMode.Suspended, coordinator.EvaluateCurrentBudget().Mode);
+            Equal(LocalLlmGovernorMode.Suspended, coordinator.EvaluateCurrentBudget().Mode);
+            Equal(LocalLlmGovernorMode.Nominal, coordinator.EvaluateCurrentBudget().Mode);
+            Equal(1, executor.InvocationCount);
         }
 
         private static async Task CoordinatorRejectsHiddenQueue()

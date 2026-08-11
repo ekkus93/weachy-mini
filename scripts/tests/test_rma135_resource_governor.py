@@ -35,6 +35,8 @@ def main() -> None:
     require(core, "LocalLlmGovernorMode.Suspended", "explicit suspension state")
     require(core, "PhysicsBudgetExceeded", "physics-priority reason")
     require(core, "RecentOutOfMemory", "OOM signal")
+    require(core, "RecordOutOfMemory", "explicit OOM latch")
+    require(core, "OutOfMemoryLatched", "OOM latch diagnostics")
     require(core, "RecoverySamplesRequired = 3", "recovery hysteresis")
     require(core, "case LocalLlmPhysicsBudgetState.Unavailable", "missing-physics branch")
     require(core, "DeviceProfileLimit", "device-profile diagnostics")
@@ -59,6 +61,7 @@ def main() -> None:
 
     require(coordinator, "ResourceSuspendedBeforeStart", "preflight suspension")
     require(coordinator, "ResourceCancelledDuringGeneration", "active resource cancellation")
+    require(coordinator, "ResourceExhausted", "typed OOM propagation")
     require(coordinator, "SignalFailure", "signal failure visibility")
     require(coordinator, "CompareExchange", "no hidden coordinator queue")
     require(coordinator, "explicit provider recreation", "explicit profile-change boundary")
