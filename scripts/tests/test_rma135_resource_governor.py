@@ -7,8 +7,7 @@ ANDROID = (
 )
 PHYSICS = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs"
 COORDINATOR = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernedGenerationCoordinator.cs"
 )
 SIM_SOURCE = (
     ROOT
