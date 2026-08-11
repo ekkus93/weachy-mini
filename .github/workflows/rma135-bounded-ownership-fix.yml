@@ -1,0 +1,97 @@
+name: RMA-135 bounded simulation ownership fix
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma135-bounded-ownership-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install exact repository Ruff
+        run: python -m pip install --disable-pip-version-check ruff==0.12.0
+      - name: Apply bounded ownership patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs')
+          text = path.read_text(encoding='utf-8')
+
+          def replace(old: str, new: str, count: int = 1) -> None:
+              global text
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f'expected {count} matches, found {actual}: {old[:120]!r}')
+              text = text.replace(old, new, count)
+
+          replace(
+              '            ReachySimSession? simulationSession = null;\n'
+              '            ReachySimulationWorker? worker = null;\n',
+              '            ReachySimulationWorker? worker = null;\n')
+          replace(
+              '                worker = CreateAndStartSimulationWorker(out simulationSession);\n',
+              '                worker = CreateAndStartSimulationWorker();\n')
+          replace(
+              '''                if (worker != null)\n                {\n                    ReachySimulationControlResult shutdown = worker.Shutdown(WorkerControlTimeout);\n                    if (!shutdown.IsSuccess && worker.State != ReachySimulationRunState.Stopped)\n                    {\n                        Debug.LogError(\n                            "RMA-135 simulation worker shutdown failed: " + shutdown.Error.Code +\n                            ": " + shutdown.Error.Message);\n                    }\n                    worker.Dispose();\n                    TryWriteCheckpoint("worker_disposed", "Authoritative simulation worker disposed.");\n                }\n                simulationSession?.Dispose();\n                TryWriteCheckpoint("simulation_disposed", "Native simulation session disposed.");\n''',
+              '''                if (worker != null)\n                {\n                    worker.Dispose();\n                    TryWriteCheckpoint(\n                        "worker_disposed",\n                        "Authoritative simulation worker, state reader, and native session disposed by the worker owner.");\n                }\n''')
+          replace(
+              '''        private static ReachySimulationWorker CreateAndStartSimulationWorker(\n            out ReachySimSession simulationSession)\n''',
+              '''        private static ReachySimulationWorker CreateAndStartSimulationWorker()\n''')
+          replace(
+              '''            simulationSession = create.Session;\n            ReachySimAuthoritativeStateReader? reader = null;\n            ReachySimulationWorker? worker = null;\n            try\n            {\n                reader = new ReachySimAuthoritativeStateReader(simulationSession);\n                worker = new ReachySimulationWorker(simulationSession, reader);\n''',
+              '''            ReachySimSession simulationSession = create.Session;\n            ReachySimAuthoritativeStateReader? reader = null;\n            ReachySimulationWorker? worker = null;\n            try\n            {\n                reader = new ReachySimAuthoritativeStateReader(simulationSession);\n                worker = new ReachySimulationWorker(simulationSession, reader);\n''')
+          replace(
+              '''            catch\n            {\n                worker?.Dispose();\n                reader?.Dispose();\n                simulationSession.Dispose();\n                throw;\n            }\n''',
+              '''            catch\n            {\n                if (worker != null)\n                {\n                    worker.Dispose();\n                }\n                else\n                {\n                    reader?.Dispose();\n                    simulationSession.Dispose();\n                }\n                throw;\n            }\n''')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs').read_text(encoding='utf-8')
+          if 'simulationSession?.Dispose()' in text:
+              raise SystemExit('outer duplicate session disposal remains')
+          if 'worker.Shutdown(WorkerControlTimeout)' in text:
+              raise SystemExit('outer redundant worker shutdown remains')
+          if 'out ReachySimSession simulationSession' in text:
+              raise SystemExit('session ownership still escapes worker factory')
+          if 'worker.Dispose();\n                    reader?.Dispose();' in text:
+              raise SystemExit('worker-owned reader is still double-disposed')
+          print('RMA-135 worker/session ownership is singular and explicit.')
+          PY
+          ruff check scripts
+          ruff format --check scripts
+          bash -n scripts/run_rma135_resource_governor_acceptance_android.sh
+          git diff --check
+          mapfile -t changed < <(git diff --name-only)
+          if [[ "${#changed[@]}" -ne 1 || "${changed[0]}" != "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs" ]]; then
+            printf 'Unexpected bounded patch change set:\n' >&2
+            printf '  %s\n' "${changed[@]}" >&2
+            exit 1
+          fi
+      - name: Commit bounded ownership fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs
+          git commit -m "RMA-135: make simulation worker sole session owner"
+          git push origin HEAD:master
