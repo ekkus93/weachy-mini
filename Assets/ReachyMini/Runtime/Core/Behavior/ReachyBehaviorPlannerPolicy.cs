@@ -117,6 +117,8 @@ namespace ReachyMini.Behavior
             double minimumValidCoverageFraction,
             long maximumWorldSnapshotAgeNanoseconds,
             int minimumSegmentMilliseconds,
+            int commandIntervalMilliseconds,
+            int maximumTrajectoryFrameCount,
             int maximumPlanDurationMilliseconds,
             double maximumGazeBodyYawRadians,
             double maximumGazeHeadYawRadians,
@@ -137,6 +139,18 @@ namespace ReachyMini.Behavior
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(minimumSegmentMilliseconds));
+            }
+            if (commandIntervalMilliseconds <= 0 ||
+                commandIntervalMilliseconds > minimumSegmentMilliseconds)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(commandIntervalMilliseconds));
+            }
+            if (maximumTrajectoryFrameCount <= 0 ||
+                maximumTrajectoryFrameCount > 512)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(maximumTrajectoryFrameCount));
             }
             if (maximumPlanDurationMilliseconds < minimumSegmentMilliseconds ||
                 maximumPlanDurationMilliseconds >
@@ -176,6 +190,8 @@ namespace ReachyMini.Behavior
             MinimumValidCoverageFraction = minimumValidCoverageFraction;
             MaximumWorldSnapshotAgeNanoseconds = maximumWorldSnapshotAgeNanoseconds;
             MinimumSegmentMilliseconds = minimumSegmentMilliseconds;
+            CommandIntervalMilliseconds = commandIntervalMilliseconds;
+            MaximumTrajectoryFrameCount = maximumTrajectoryFrameCount;
             MaximumPlanDurationMilliseconds = maximumPlanDurationMilliseconds;
             MaximumGazeBodyYawRadians = maximumGazeBodyYawRadians;
             MaximumGazeHeadYawRadians = maximumGazeHeadYawRadians;
@@ -190,6 +206,10 @@ namespace ReachyMini.Behavior
         public long MaximumWorldSnapshotAgeNanoseconds { get; }
 
         public int MinimumSegmentMilliseconds { get; }
+
+        public int CommandIntervalMilliseconds { get; }
+
+        public int MaximumTrajectoryFrameCount { get; }
 
         public int MaximumPlanDurationMilliseconds { get; }
 
@@ -210,6 +230,8 @@ namespace ReachyMini.Behavior
                 minimumValidCoverageFraction: 0.50,
                 maximumWorldSnapshotAgeNanoseconds: 1_000_000_000L,
                 minimumSegmentMilliseconds: 120,
+                commandIntervalMilliseconds: 50,
+                maximumTrajectoryFrameCount: 128,
                 maximumPlanDurationMilliseconds: 5_000,
                 maximumGazeBodyYawRadians: 0.35,
                 maximumGazeHeadYawRadians: 0.18,
