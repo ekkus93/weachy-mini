@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Behavior;
 
 namespace ReachyMini.LocalModels
 {
@@ -77,31 +78,6 @@ namespace ReachyMini.LocalModels
         Cancelled = 2,
         Superseded = 3,
         Error = 4,
-    }
-
-    public enum LocalLlmExpression
-    {
-        Neutral = 0,
-        Attentive = 1,
-        Curious = 2,
-        Pleased = 3,
-        Concerned = 4,
-        Surprised = 5,
-    }
-
-    public enum LocalLlmGesture
-    {
-        None = 0,
-        Nod = 1,
-        SmallHeadTilt = 2,
-        Recoil = 3,
-    }
-
-    public enum LocalLlmUrgency
-    {
-        Low = 0,
-        Normal = 1,
-        High = 2,
     }
 
     public sealed class LocalLlmExecutionProfile
@@ -317,43 +293,6 @@ namespace ReachyMini.LocalModels
         public IReadOnlyList<LocalLlmChatMessage> Messages => messages;
     }
 
-    public sealed class LocalLlmGazeTarget
-    {
-        internal LocalLlmGazeTarget(string entityId)
-        {
-            Kind = "tracked_entity";
-            EntityId = entityId;
-        }
-
-        public string Kind { get; }
-        public string EntityId { get; }
-    }
-
-    public sealed class LocalLlmBehaviorIntent
-    {
-        internal LocalLlmBehaviorIntent(
-            string speech,
-            LocalLlmGazeTarget? gazeTarget,
-            LocalLlmExpression expression,
-            LocalLlmGesture gesture,
-            LocalLlmUrgency urgency)
-        {
-            SchemaVersion = 1;
-            Speech = speech;
-            GazeTarget = gazeTarget;
-            Expression = expression;
-            Gesture = gesture;
-            Urgency = urgency;
-        }
-
-        public int SchemaVersion { get; }
-        public string Speech { get; }
-        public LocalLlmGazeTarget? GazeTarget { get; }
-        public LocalLlmExpression Expression { get; }
-        public LocalLlmGesture Gesture { get; }
-        public LocalLlmUrgency Urgency { get; }
-    }
-
     public sealed class LocalLlmStreamEvent
     {
         internal LocalLlmStreamEvent(
@@ -426,7 +365,7 @@ namespace ReachyMini.LocalModels
             ulong conversationEpoch,
             string detail,
             int nativeStatus,
-            LocalLlmBehaviorIntent? intent,
+            ReachyBehaviorIntent? intent,
             LocalLlmGenerationMetrics? metrics)
         {
             Status = status;
@@ -444,7 +383,7 @@ namespace ReachyMini.LocalModels
         public ulong ConversationEpoch { get; }
         public string Detail { get; }
         public int NativeStatus { get; }
-        public LocalLlmBehaviorIntent? Intent { get; }
+        public ReachyBehaviorIntent? Intent { get; }
         public LocalLlmGenerationMetrics? Metrics { get; }
 
         internal static string BoundDiagnostic(string? detail)
