@@ -529,8 +529,21 @@ namespace ReachyMini.WorldModel.Tests
 
         private static void SourceContractRemainsExplicit()
         {
-            const string path = "Assets/ReachyMini/Runtime/Core/Perception/ReachyBoundedWorldModel.cs";
-            string source = File.ReadAllText(path);
+            // ReachyBoundedWorldModel.cs was split (docs/LARGE_FILE_REFACTOR_TODO.md) into
+            // ReachyBoundedWorldModel*.cs (the partial-class pieces) and ReachyWorldModel*.cs
+            // (the extracted DTO/value types). Concatenate every split-out piece so this
+            // contract check keeps covering the same source, regardless of which file each
+            // token now lives in.
+            const string directory = "Assets/ReachyMini/Runtime/Core/Perception";
+            var sourceFiles = new List<string>();
+            sourceFiles.AddRange(Directory.GetFiles(directory, "ReachyBoundedWorldModel*.cs"));
+            sourceFiles.AddRange(Directory.GetFiles(directory, "ReachyWorldModel*.cs"));
+            var builder = new System.Text.StringBuilder();
+            foreach (string sourceFile in sourceFiles)
+            {
+                builder.Append(File.ReadAllText(sourceFile));
+            }
+            string source = builder.ToString();
             Contains(source, "unavailable_from_2d_tracking", "unknown position contract");
             Contains(source, "MaximumEntities", "entity bound contract");
             Contains(source, "MaximumScopeCursors", "cursor bound contract");
