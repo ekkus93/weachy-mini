@@ -56,7 +56,7 @@ namespace ReachyMini.Behavior
             MaximumLoopDurationMilliseconds = maximumLoopDurationMilliseconds;
         }
 
-        public string ContractId => CurrentContractId;
+        public static string ContractId => CurrentContractId;
 
         public double HorizontalToleranceNormalized { get; }
 
