@@ -89,19 +89,21 @@ namespace ReachyMini.Behavior
                 horizontal * 0.45,
                 -policy.MaximumGazeBodyYawRadians,
                 policy.MaximumGazeBodyYawRadians);
-            double headYaw = Clamp(
-                horizontal - bodyYaw,
-                -policy.MaximumGazeHeadYawRadians,
-                policy.MaximumGazeHeadYawRadians);
             double headPitch = Clamp(
                 vertical,
                 -policy.MaximumGazeHeadPitchRadians,
                 policy.MaximumGazeHeadPitchRadians);
 
             target[ReachyBehaviorPlannerActuators.BodyYaw] += bodyYaw;
+            // The Stewart horizontal basis is an uncalibrated engineering
+            // estimate. The RMA-154 Android physical gate demonstrated that
+            // applying it as head yaw can couple a horizontal correction into
+            // a large vertical camera excursion. Keep direct horizontal gaze
+            // on the model-verified body-yaw axis until calibrated head IK is
+            // available. Vertical correction remains separately bounded.
             ApplyHeadOffset(
                 target,
-                yawRadians: headYaw,
+                yawRadians: 0.0,
                 pitchRadians: headPitch,
                 rollRadians: 0.0);
             resolvedGazeEntityId = entity.EntityId;
