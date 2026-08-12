@@ -9,7 +9,9 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge*.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureFrameContracts.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureBridgeContracts.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
@@ -36,7 +38,9 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge*.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureFrameContracts.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureBridgeContracts.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
@@ -107,7 +111,27 @@ jobs:
                   )
               )
           )
-          texture_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs').read_text(encoding='utf-8')
+          # ReachyAndroidCameraTextureBridge.cs was split
+          # (docs/LARGE_FILE_REFACTOR_TODO_3.md, file #9) into several files
+          # in the same directory. Two of them (the contract types) don't
+          # share this file's name prefix, so list every planned target
+          # explicitly (existing and not-yet-created) and concatenate
+          # whichever currently exist, rather than a glob.
+          texture_bridge_dir = root / 'Assets/ReachyMini/Runtime/Application'
+          texture_bridge_files = [
+              'ReachyCameraTextureFrameContracts.cs',
+              'ReachyCameraTextureBridgeContracts.cs',
+              'ReachyAndroidCameraTextureBridge.cs',
+              'ReachyAndroidCameraTextureBridge.Pump.cs',
+              'ReachyAndroidCameraTextureBridge.Lifecycle.cs',
+              'ReachyAndroidCameraTextureBridge.TextureResources.cs',
+              'ReachyAndroidCameraTextureBridge.Diagnostics.cs',
+          ]
+          texture_unity = ''.join(
+              (texture_bridge_dir / name).read_text(encoding='utf-8')
+              for name in texture_bridge_files
+              if (texture_bridge_dir / name).exists()
+          )
           lease_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs').read_text(encoding='utf-8')
           texture_evidence = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureEvidence.cs').read_text(encoding='utf-8')
           reference = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraYuvReferenceConverter.cs').read_text(encoding='utf-8')
