@@ -174,7 +174,10 @@ jobs:
               raise SystemExit('ImageProxy must have one explicit close site.')
           if 'imageProxy.close();' in texture_java:
               raise SystemExit('The detached texture bridge must never own or close ImageProxy.')
-          analyzer = re.search(r'private static void analyzeFrame\(.*?\n    \}', java, re.S)
+          # analyzeFrame is package-private (not private) since
+          # ReachyCameraFrameBridge.java split it into ReachyCameraFrameAnalyzer.java,
+          # which is called from bindProvider's Analyzer callback in a different class.
+          analyzer = re.search(r'static void analyzeFrame\(.*?\n    \}', java, re.S)
           if analyzer is None:
               raise SystemExit('CameraX analyzer implementation is missing.')
           analyzer_body = analyzer.group(0)

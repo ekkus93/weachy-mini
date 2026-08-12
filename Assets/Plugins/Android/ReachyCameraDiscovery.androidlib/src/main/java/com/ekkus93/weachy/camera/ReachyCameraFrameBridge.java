@@ -29,9 +29,6 @@ import androidx.lifecycle.Observer;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -47,7 +44,12 @@ public final class ReachyCameraFrameBridge {
     // section 7 for why these fields and LOCK itself are widened instead of
     // wrapped in accessors.
     static final Object LOCK = new Object();
-    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+    // Package-private (not private): posted to directly by
+    // ReachyCameraFrameAnalyzer.analyzeFrame's failure path, which runs
+    // without LOCK held (it acquires LOCK itself for its two critical
+    // sections). See the "Tricky Shared State" guidance in
+    // docs/LARGE_FILE_REFACTOR_TODO.md section 7.
+    static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final Executor MAIN_EXECUTOR = new Executor() {
         @Override
         public void execute(Runnable command) {
@@ -104,7 +106,7 @@ public final class ReachyCameraFrameBridge {
                             "PermissionRevoked",
                             "permission_denied",
                             "Android camera permission is not granted.");
-                    return snapshotLocked();
+                    return ReachyCameraFrameAnalyzer.snapshotLocked();
                 }
             }
 
@@ -118,7 +120,7 @@ public final class ReachyCameraFrameBridge {
             final ListenableFuture<ProcessCameraProvider> providerFuture;
             synchronized (LOCK) {
                 if ("Stopping".equals(state)) {
-                    return snapshotLocked();
+                    return ReachyCameraFrameAnalyzer.snapshotLocked();
                 }
                 ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
                 ++generation;
@@ -156,7 +158,7 @@ public final class ReachyCameraFrameBridge {
                     },
                     MAIN_EXECUTOR);
             synchronized (LOCK) {
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
         } catch (SecurityException exception) {
             synchronized (LOCK) {
@@ -165,7 +167,7 @@ public final class ReachyCameraFrameBridge {
                         "PermissionRevoked",
                         "permission_denied",
                         ReachyCameraErrorUtil.safeMessage(exception));
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
         } catch (CameraAccessException exception) {
             synchronized (LOCK) {
@@ -174,7 +176,7 @@ public final class ReachyCameraFrameBridge {
                         "Unavailable",
                         ReachyCameraErrorUtil.cameraAccessCode(exception),
                         ReachyCameraErrorUtil.safeMessage(exception));
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
         } catch (RuntimeException exception) {
             synchronized (LOCK) {
@@ -183,7 +185,7 @@ public final class ReachyCameraFrameBridge {
                         "Faulted",
                         "camera_start_failed",
                         ReachyCameraErrorUtil.safeMessage(exception));
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
         }
     }
@@ -198,7 +200,7 @@ public final class ReachyCameraFrameBridge {
                 state = "Paused";
                 message = "CameraX lifecycle is paused and camera use cases are suspended.";
             }
-            return snapshotLocked();
+            return ReachyCameraFrameAnalyzer.snapshotLocked();
         }
     }
 
@@ -213,7 +215,7 @@ public final class ReachyCameraFrameBridge {
                         "PermissionRevoked",
                         "permission_denied",
                         "Camera permission was revoked while acquisition was paused.");
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
             if (lifecycleOwner != null && "Paused".equals(state)) {
                 lifecycleOwner.start();
@@ -222,7 +224,7 @@ public final class ReachyCameraFrameBridge {
                 message =
                         "CameraX lifecycle resumed; waiting for the camera device to reopen.";
             }
-            return snapshotLocked();
+            return ReachyCameraFrameAnalyzer.snapshotLocked();
         }
     }
 
@@ -232,7 +234,7 @@ public final class ReachyCameraFrameBridge {
         synchronized (LOCK) {
             if (!ReachyCameraFrameLifecycleController.isActiveState(state) ||
                     "Stopping".equals(state)) {
-                return snapshotLocked();
+                return ReachyCameraFrameAnalyzer.snapshotLocked();
             }
             state = "Stopping";
             message =
@@ -248,13 +250,13 @@ public final class ReachyCameraFrameBridge {
                         "camera_stop_failed",
                         ReachyCameraErrorUtil.safeMessage(exception));
             }
-            return snapshotLocked();
+            return ReachyCameraFrameAnalyzer.snapshotLocked();
         }
     }
 
     public static String snapshot() {
         synchronized (LOCK) {
-            return snapshotLocked();
+            return ReachyCameraFrameAnalyzer.snapshotLocked();
         }
     }
 
@@ -340,7 +342,9 @@ public final class ReachyCameraFrameBridge {
                         new ImageAnalysis.Analyzer() {
                             @Override
                             public void analyze(@NonNull ImageProxy imageProxy) {
-                                analyzeFrame(imageProxy, analyzerGeneration);
+                                ReachyCameraFrameAnalyzer.analyzeFrame(
+                                        imageProxy,
+                                        analyzerGeneration);
                             }
                         });
 
@@ -485,70 +489,6 @@ public final class ReachyCameraFrameBridge {
         }
     }
 
-    private static void analyzeFrame(
-            ImageProxy imageProxy,
-            long expectedGeneration) {
-        try {
-            final long frameSession;
-            final long frameSequence;
-            final ReachyCameraDescriptor frameDescriptor;
-            synchronized (LOCK) {
-                if (expectedGeneration != generation ||
-                        !"Running".equals(state) ||
-                        descriptor == null) {
-                    return;
-                }
-                frameSession = sessionId;
-                frameSequence = ++deliveredSequence;
-                frameDescriptor = descriptor;
-            }
-
-            ReachyFrameSnapshot frame = ReachyFrameSnapshot.from(
-                    imageProxy,
-                    frameSession,
-                    frameSequence,
-                    frameDescriptor);
-            ReachyCameraTextureFrameBridge.Publication texturePublication =
-                    ReachyCameraTextureFrameBridge.publish(
-                            imageProxy,
-                            expectedGeneration,
-                            frame.sessionId,
-                            frame.sequence,
-                            frame.timestampNanoseconds,
-                            frame.cameraId,
-                            frame.facing,
-                            frame.sensorOrientationDegrees,
-                            frame.rotationDegrees,
-                            frame.crop);
-            frame.applyTexturePublication(texturePublication);
-            synchronized (LOCK) {
-                if (expectedGeneration != generation ||
-                        !"Running".equals(state) ||
-                        frameSession != sessionId) {
-                    return;
-                }
-                latestFrame = frame;
-                message = texturePublication.textureFramePublished
-                        ? "Camera frame " + frameSequence +
-                            " copied once into a detached direct YUV texture slot."
-                        : texturePublication.detail;
-            }
-        } catch (RuntimeException exception) {
-            final String failureMessage = ReachyCameraErrorUtil.safeMessage(exception);
-            MAIN_HANDLER.post(new Runnable() {
-                @Override
-                public void run() {
-                    ReachyCameraFrameLifecycleController.failOnMain(
-                            expectedGeneration,
-                            "camera_frame_metadata_failed",
-                            failureMessage);
-                }
-            });
-        } finally {
-            imageProxy.close();
-        }
-    }
-
     @OptIn(markerClass = ExperimentalCamera2Interop.class)
     private static CameraSelector exactCameraSelector(final String selectedId) {
         CameraFilter filter = new CameraFilter() {
@@ -597,33 +537,6 @@ public final class ReachyCameraFrameBridge {
                 message =
                         "CameraX use cases are unbound; waiting for camera device CLOSED.";
                 break;
-        }
-    }
-
-    private static String snapshotLocked() {
-        try {
-            JSONObject root = new JSONObject();
-            root.put("status", "Faulted".equals(state) ? "error" : "ok");
-            root.put("state", state);
-            root.put("errorCode", errorCode);
-            root.put("message", message);
-            root.put("sessionId", sessionId);
-            root.put("cameraId", cameraId);
-            root.put("facing", descriptor == null ? "unknown" : descriptor.facing);
-            root.put("analysisBackpressure", "keep_only_latest");
-            root.put("previewSink", "analysis_yuv_gpu_texture_bridge");
-            root.put(
-                    "cpuPixelCopyPerformed",
-                    latestFrame != null && latestFrame.cpuPixelCopyPerformed);
-            root.put(
-                    "textureBridge",
-                    ReachyCameraTextureFrameBridge.snapshotJson());
-            root.put("latestFrame", latestFrame == null
-                    ? JSONObject.NULL
-                    : latestFrame.toJson());
-            return root.toString();
-        } catch (JSONException exception) {
-            return "{\"status\":\"error\",\"state\":\"Faulted\",\"errorCode\":\"json_encoding_failed\",\"message\":\"Camera acquisition failed while encoding diagnostics.\",\"sessionId\":0,\"cameraId\":\"\",\"facing\":\"unknown\",\"analysisBackpressure\":\"keep_only_latest\",\"previewSink\":\"analysis_yuv_gpu_texture_bridge\",\"cpuPixelCopyPerformed\":false,\"latestFrame\":null}";
         }
     }
 
