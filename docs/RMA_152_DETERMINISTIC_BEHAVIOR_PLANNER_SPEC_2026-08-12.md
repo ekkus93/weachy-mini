@@ -58,8 +58,9 @@ below those limits. If a requested duration is too short, planning fails.
 The planner does not merely delay a large position-target jump. Each motion segment is expanded
 into a fixed 50 ms setpoint stream using cubic smoothstep interpolation. The segment duration is
 chosen from the smoothstep peak-velocity factor (1.5) and peak-acceleration factor (6.0), rounded
-up to the command cadence. The resulting scheduled target stream is bounded to 128 frames and
-remains inside the same soft position envelope. This is an open-loop setpoint-slew contract; the
+up to the command cadence. The resulting scheduled target stream is bounded to 128 frames (6.4 seconds at the fixed cadence) and
+remains inside the same soft position envelope. The policy rejects a declared plan-duration cap that
+exceeds the duration representable by its frame budget. This is an open-loop setpoint-slew contract; the
 normal servo/MuJoCo path remains authoritative for actual physical state and RMA-154 later adds
 closed-loop visual feedback.
 
@@ -107,7 +108,9 @@ cancellation between trajectory frames. Once cancellation is observed, it submit
 A controller queue/unavailable/contract rejection stops execution immediately and is never retried.
 
 Safe rest is a separate `PlanSafeRest` operation using a fresh authoritative motion/safety snapshot.
-It creates a bounded position trajectory to the neutral nine-actuator target. This avoids assuming
+It creates a bounded position trajectory to the neutral nine-actuator target. The 6.4-second plan cap
+is sufficient to return every actuator from either endpoint of the full RMA-152 soft envelope under
+the configured smoothstep velocity/acceleration limits. This avoids assuming
 that the robot remains at the position predicted by a now-cancelled plan.
 
 ## Production routing

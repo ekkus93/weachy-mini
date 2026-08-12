@@ -15,7 +15,7 @@ boundary.
 - RMA-065-bound soft position limits;
 - conservative velocity and acceleration envelope;
 - cubic-smoothstep position-target slew at a fixed 50 ms cadence rather than delayed target steps;
-- explicit 128-frame trajectory budget;
+- explicit 128-frame / 6.4-second representable trajectory budget;
 - deterministic expression and gesture trajectories relative to the fresh authoritative pose;
 - explicit body-yaw, Stewart, and antenna coordination;
 - authoritative contact/hard-stop/load/warning safety mapping;
@@ -71,7 +71,7 @@ fixture covers:
 - in-flight cancellation stopping later frame submission;
 - controller rejection stopping without retry;
 - preservation of unrelated authoritative actuator state during expression/gaze planning;
-- bounded neutral safe-rest targets.
+- bounded neutral safe-rest targets, including full-soft-envelope endpoint recovery.
 
 Managed warnings-as-errors/Unity compilation and CI remain required before the roadmap checkbox is
 closed.

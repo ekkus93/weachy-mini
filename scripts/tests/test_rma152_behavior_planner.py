@@ -66,6 +66,12 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertEqual("rma152_deterministic_behavior_planner_v2", policy["contract_id"])
         self.assertEqual("engineering_estimate", policy["quality"])
         self.assertEqual(9, len(policy["actuator_order"]))
+        planning = policy["planning"]
+        self.assertLessEqual(
+            planning["maximum_plan_duration_milliseconds"],
+            planning["maximum_trajectory_frame_count"]
+            * planning["command_interval_milliseconds"],
+        )
         limits = {item["name"]: item for item in policy["actuator_limits"]}
         joints = {item["name"]: item for item in audit["joints"]}
         hard_stops = {item["joint"]: item for item in rma065["hard_stops"]}
@@ -264,6 +270,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertIn("TrajectoryFramesSlewInsteadOfDelayedTargetStep", fixture)
         self.assertIn("setpoint slew uses intermediate frames", fixture)
         self.assertIn("RecoilPreservesUnrelatedBodyYaw", fixture)
+        self.assertIn("SafeRestCoversFullSoftEnvelope", fixture)
 
     def test_cancellation_requires_fresh_explicit_safe_rest(self) -> None:
         planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(
