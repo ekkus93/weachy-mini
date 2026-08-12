@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:weachy-mini:schema:behavior-intent:v1",
+  "title": "Reachy Mini Behavior Intent v1",
+  "description": "Provider-neutral, high-level behavior intent. Raw actuator commands are intentionally outside this contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "minProperties": 1,
+  "maxProperties": 7,
+  "required": [
+    "schema_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "speech": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "gaze_target": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 2,
+          "maxProperties": 2,
+          "required": [
+            "kind",
+            "entity_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "tracked_entity"
+            },
+            "entity_id": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^entity-[0-9]+$"
+            }
+          }
+        }
+      ]
+    },
+    "expression": {
+      "type": "string",
+      "enum": [
+        "neutral",
+        "attentive",
+        "curious",
+        "pleased",
+        "concerned",
+        "surprised"
+      ]
+    },
+    "gesture": {
+      "type": "string",
+      "enum": [
+        "none",
+        "nod",
+        "small_head_tilt",
+        "recoil"
+      ]
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "low",
+        "normal",
+        "high"
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 2,
+      "properties": {
+        "start_delay_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5000
+        },
+        "maximum_duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        }
+      }
+    }
+  }
+}
