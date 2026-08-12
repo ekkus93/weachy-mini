@@ -15,6 +15,8 @@ namespace ReachyMini.Core.Tests
             CurrentHighConfidenceGazeTargetIsResolved();
             UnsafeGazeTargetsFailClosed();
             GestureTrajectoryIsDeterministicAndBounded();
+            TrajectoryFramesSlewInsteadOfDelayedTargetStep();
+            RecoilPreservesUnrelatedBodyYaw();
             MotionPlanningIsRelativeToAuthoritativeState();
             SafetyInterlocksBlockMotionWithoutBlockingSpeechOnlyIntent();
             AuthoritativeStateMapsIntoPlannerSafetyAndMotion();
