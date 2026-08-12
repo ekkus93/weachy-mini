@@ -58,6 +58,11 @@ jobs:
           openssl version
           python3 -m compileall -q \
             scripts/calibration_profile_approval.py \
+            scripts/calibration_profile_approval_validation.py \
+            scripts/calibration_profile_approval_evidence.py \
+            scripts/calibration_profile_approval_signing.py \
+            scripts/calibration_profile_approval_core.py \
+            scripts/calibration_profile_approval_labeling.py \
             scripts/approve_calibration_profile.py \
             scripts/resolve_calibration_mode.py
           python3 -m unittest \
