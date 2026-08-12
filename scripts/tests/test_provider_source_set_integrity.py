@@ -104,13 +104,10 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
         behavior = ROOT / "Assets/ReachyMini/Runtime/Core/Behavior"
         required = {
             behavior / "ReachyBehaviorIntentContracts.cs": "class ReachyBehaviorIntent",
-            behavior
-            / "ReachyBehaviorIntentJsonReader.cs": "class ReachyBehaviorIntentJsonReader",
-            behavior
-            / "ReachyBehaviorIntentJsonParser.cs": "class ReachyBehaviorIntentJsonParser",
+            behavior / "ReachyBehaviorIntentJsonReader.cs": "class ReachyBehaviorIntentJsonReader",
+            behavior / "ReachyBehaviorIntentJsonParser.cs": "class ReachyBehaviorIntentJsonParser",
             (
-                ROOT
-                / "managed/ReachyMini.Core.Tests/Rma151BehaviorIntentContractTests.cs"
+                ROOT / "managed/ReachyMini.Core.Tests/Rma151BehaviorIntentContractTests.cs"
             ): "RegenerationRequiresExplicitRma146Authorization",
         }
         for path, symbol in required.items():
