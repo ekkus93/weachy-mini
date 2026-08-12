@@ -1,6 +1,6 @@
 # RMA-133 V6 physical reproducibility protocol — 2026-08-08
 
-**Status:** Protocol candidate v2
+**Status:** Protocol candidate v3
 
 ## Purpose
 
@@ -27,7 +27,7 @@ The reproducibility run must use the exact V6 benchmark/runtime inputs accepted 
 - `third_party/llama-cpp-source.lock.json`
 - `toolchain.lock.json`
 
-Hosted validation must fetch the accepted source SHA and prove that these paths are byte-identical before a physical reproducibility run is eligible.
+Hosted validation must check out the accepted source SHA into an isolated `accepted-v6` source tree and verify that checkout resolves exactly to the accepted commit before a physical reproducibility run is eligible. Runtime/benchmark builds and source/toolchain pins must resolve from that isolated accepted tree. Immediately before the physical reproducibility harness runs, the workflow must bind the harness to byte-identical copies of the accepted V6 benchmark runner and scorer and verify those copies with `cmp`. The evolving `master` checkout is not a substitute and must never be used as an implicit fallback for frozen V6 inputs.
 
 The selected artifact remains exactly:
 
@@ -98,6 +98,8 @@ The first staging attempt used workflow run `31269855994`, physical job `9313388
 The physical attempt stopped **before temperature sampling or inference** because the stale-process probe matched its own remote shell command. The probe contained the literal glob `*rma133_benchmark_v6*`; therefore every verification invocation created new matching shell PIDs. The job correctly failed closed and uploaded artifact `9025291303`; it is protocol-development evidence only and says nothing about candidate reproducibility.
 
 Protocol candidate v2 fixes that defect by using the self-nonmatching glob `*rma133_benchmark_v[6]*`, adds a regression proving the scan command cannot match its own literal command line, restores the frozen V6 device free-space guard, and passes Ruff 0.12.0 formatting/lint plus the reproducibility unit contracts. No frozen V6 benchmark/runtime input changed.
+
+Protocol candidate v3 separates the immutable accepted V6 source from normal source-tree maintenance. The workflow checks out `e3007579d0365d31f5d5efc378fc81a13f2d705e` into `accepted-v6`, verifies that exact commit and a clean checkout, builds the frozen runtime/benchmark from that tree, and copies the accepted benchmark runner and scorer into the ephemeral execution workspace immediately before the reproducibility harness starts. `cmp` verifies those execution copies are byte-identical to the accepted checkout. This preserves the accepted execution bytes without requiring later lint-only maintenance on `master` to restore historical lint suppressions in the live source tree. No candidate, model artifact, runtime profile, benchmark case, grammar, prompt, scorer, or acceptance threshold changes.
 
 ## Interpretation
 
