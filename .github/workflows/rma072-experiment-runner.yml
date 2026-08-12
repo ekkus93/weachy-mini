@@ -9,7 +9,7 @@ on:
       - '.github/workflows/rma072-experiment-runner.yml'
       - 'calibration/experiments/**'
       - 'calibration/schemas/calibration-experiment-plan-v1.schema.json'
-      - 'scripts/calibration_experiment.py'
+      - 'scripts/calibration_experiment*.py'
       - 'scripts/run_calibration_experiment.py'
       - 'scripts/tests/test_calibration_experiment.py'
       - 'docs/architecture/CALIBRATION_EXPERIMENT_RUNNER.md'
@@ -21,7 +21,7 @@ on:
       - '.github/workflows/rma072-experiment-runner.yml'
       - 'calibration/experiments/**'
       - 'calibration/schemas/calibration-experiment-plan-v1.schema.json'
-      - 'scripts/calibration_experiment.py'
+      - 'scripts/calibration_experiment*.py'
       - 'scripts/run_calibration_experiment.py'
       - 'scripts/tests/test_calibration_experiment.py'
 
