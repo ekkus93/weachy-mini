@@ -10,6 +10,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma134*.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma134Acceptance*.cs'
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
       - 'scripts/run_rma134_local_llm_acceptance_android.sh'
@@ -30,6 +31,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma134*.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma134Acceptance*.cs'
       - 'managed/ReachyMini.LocalLlm.Tests/**'
       - 'scripts/tests/test_rma134_local_llm_provider.py'
       - 'scripts/run_rma134_local_llm_acceptance_android.sh'
@@ -130,6 +132,10 @@ jobs:
             Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.Diagnostics.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.Acceptance.cs \
+            Assets/ReachyMini/Runtime/Application/Rma134AcceptanceTestDoubles.cs \
+            Assets/ReachyMini/Runtime/Application/Rma134AcceptanceReportModels.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma134AndroidSha256.cs \
             managed/ReachyMini.LocalLlm.Tests/Program.cs \
             managed/ReachyMini.LocalLlm.Tests/Program.Assertions.cs \
