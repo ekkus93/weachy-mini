@@ -81,7 +81,7 @@ section before starting.
 | 4 | `scripts/calibration_profile_approval.py` | 875 | **Yes** (rma074 CI path trigger + `compileall` file list) | ☑ Done (commits `257f272`, `919acfa`) |
 | 5 | `native/llama_runtime/benchmark/rma133_benchmark.c` | 858 | **Yes — build script + Python contract test** | ☑ Done (commits `d69b191`, `7848238`) |
 | 6 | `managed/ReachyMini.LocalLlm.Tests/Program.cs` | 853 | **Yes** (rma134 `sha256sum` evidence list) | ☑ Done (commit `669592e`) |
-| 7 | `Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs` | 834 | **Yes — 2 workflows** (rma091, rma104 — one risks an uncaught `IndexError`) | ☐ Not started |
+| 7 | `Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs` | 834 | **Yes — 2 workflows** (rma091, rma104 — one risks an uncaught `IndexError`) | ☑ Done (commits `c5f5830`, `ee84ebd`) |
 | 8 | `managed/ReachyMini.AndroidOnDeviceAsr.Tests/AndroidOnDeviceAsrTests.cs` | 831 | No (CI check already directory-glob-based) | ☐ Not started |
 | 9 | `Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs` | 812 | **Yes** (rma091 workflow, single `read_text`) | ☐ Not started |
 | 10 | `Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs` | 807 | **Yes — 2 workflows + mandatory naming-collision rename** | ☐ Not started |
