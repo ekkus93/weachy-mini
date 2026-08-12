@@ -100,6 +100,23 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
+    def test_rma151_behavior_intent_source_set_is_complete(self) -> None:
+        behavior = ROOT / "Assets/ReachyMini/Runtime/Core/Behavior"
+        required = {
+            behavior / "ReachyBehaviorIntentContracts.cs": "class ReachyBehaviorIntent",
+            behavior
+            / "ReachyBehaviorIntentJsonReader.cs": "class ReachyBehaviorIntentJsonReader",
+            behavior
+            / "ReachyBehaviorIntentJsonParser.cs": "class ReachyBehaviorIntentJsonParser",
+            (
+                ROOT
+                / "managed/ReachyMini.Core.Tests/Rma151BehaviorIntentContractTests.cs"
+            ): "RegenerationRequiresExplicitRma146Authorization",
+        }
+        for path, symbol in required.items():
+            self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
+            self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
+
     def test_rma150_conversation_state_machine_source_set_is_complete(self) -> None:
         required = {
             (
