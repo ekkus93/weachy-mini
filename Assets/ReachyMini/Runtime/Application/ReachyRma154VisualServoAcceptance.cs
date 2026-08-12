@@ -138,6 +138,14 @@ namespace ReachyMini.AppState
                 OverallAcceptanceTimeoutMilliseconds);
             CancellationToken cancellationToken = overallTimeout.Token;
 
+            ReachySimAuthoritativeStateFrame beforeReset =
+                await WaitForAuthoritativeStateAsync(
+                        runtime,
+                        minimumSequenceExclusive: 0UL,
+                        cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            uint previousContinuityId = beforeReset.ContinuityId;
+
             ReachySimulationControlResult reset = runtime.ResetNeutral();
             if (!reset.IsSuccess)
             {
@@ -147,10 +155,10 @@ namespace ReachyMini.AppState
             }
 
             ReachySimAuthoritativeStateFrame baseline =
-                await WaitForAuthoritativeStateAsync(
+                await WaitForResetStateAsync(
                         runtime,
-                        minimumSequenceExclusive: 0UL,
-                        cancellationToken: cancellationToken)
+                        previousContinuityId,
+                        cancellationToken)
                     .ConfigureAwait(false);
             ReachyBehaviorMotionSnapshot baselineMotion =
                 ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot(
@@ -314,6 +322,35 @@ namespace ReachyMini.AppState
                 cancellationToken.ThrowIfCancellationRequested();
                 if (runtime.TryCaptureLatestAuthoritativeState(frame) &&
                     frame.Sequence > minimumSequenceExclusive)
+                {
+                    return frame;
+                }
+                await Task.Delay(
+                        StateAdvanceDelayMilliseconds,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        private static async Task<ReachySimAuthoritativeStateFrame>
+            WaitForResetStateAsync(
+                ReachyProductionAuthoritativeRuntime runtime,
+                uint previousContinuityId,
+                CancellationToken cancellationToken)
+        {
+            if (!runtime.TryCreateAuthoritativeStateFrame(
+                    out ReachySimAuthoritativeStateFrame frame))
+            {
+                throw new InvalidOperationException(
+                    "RMA-154 could not allocate a reset-state frame.");
+            }
+
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (runtime.TryCaptureLatestAuthoritativeState(frame) &&
+                    frame.ContinuityId != previousContinuityId &&
+                    frame.Sequence > 0UL)
                 {
                     return frame;
                 }

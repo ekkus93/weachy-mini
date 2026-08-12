@@ -157,6 +157,8 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
         )
         for required in (
             "ReachyProductionVisualServoFeedbackSource",
+            "WaitForResetStateAsync",
+            "frame.ContinuityId != previousContinuityId",
             "ReachyProductionBehaviorControllerTargetSink",
             "ReachyCameraRelativeRotationCalculator.Calculate",
             "ReachyCameraHomographyCalculator.Build",
