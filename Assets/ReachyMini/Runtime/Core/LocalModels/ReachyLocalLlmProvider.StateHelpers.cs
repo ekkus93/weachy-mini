@@ -1,5 +1,6 @@
 #nullable enable
 
+using ReachyMini.Behavior;
 using ReachyMini.Interop;
 
 namespace ReachyMini.LocalModels
@@ -106,7 +107,7 @@ namespace ReachyMini.LocalModels
             ulong epoch,
             string detail,
             int nativeStatus = 0,
-            LocalLlmBehaviorIntent? intent = null,
+            ReachyBehaviorIntent? intent = null,
             LocalLlmGenerationMetrics? metrics = null)
         {
             return new LocalLlmGenerationResult(
