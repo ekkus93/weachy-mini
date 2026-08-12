@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 
 namespace ReachyMini.RemoteVlm.Tests
@@ -10,14 +11,22 @@ namespace ReachyMini.RemoteVlm.Tests
         private static void SourceAndDocumentationDeclareFailClosedBoundary()
         {
             string root = RepoRoot();
-            string source = File.ReadAllText(Path.Combine(
-                root,
-                "Assets",
-                "ReachyMini",
-                "Runtime",
-                "Core",
-                "Perception",
-                "ReachyOpenAiVisionLanguageAdapters.cs"));
+            // ReachyOpenAiVisionLanguageAdapters.cs was split
+            // (docs/LARGE_FILE_REFACTOR_TODO.md, file #5) into
+            // ReachyOpenAiVision*.cs and ReachyRemoteVlm*.cs files. Concatenate every
+            // split-out piece so this contract check keeps covering the same source,
+            // regardless of which file each token now lives in.
+            string perceptionDirectory = Path.Combine(
+                root, "Assets", "ReachyMini", "Runtime", "Core", "Perception");
+            var sourceFiles = new List<string>();
+            sourceFiles.AddRange(Directory.GetFiles(perceptionDirectory, "ReachyOpenAiVision*.cs"));
+            sourceFiles.AddRange(Directory.GetFiles(perceptionDirectory, "ReachyRemoteVlm*.cs"));
+            var sourceBuilder = new System.Text.StringBuilder();
+            foreach (string sourceFile in sourceFiles)
+            {
+                sourceBuilder.Append(File.ReadAllText(sourceFile));
+            }
+            string source = sourceBuilder.ToString();
             string architecture = File.ReadAllText(Path.Combine(
                 root,
                 "docs",
