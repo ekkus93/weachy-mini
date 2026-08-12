@@ -68,7 +68,7 @@ the check to confirm nothing regressed before starting.
 | 4 | `Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs` | 1112 | **Yes** (rma082-settings.yml) | ☑ Done (commits `17717b7`, `22a1e7b`, `6f7ede5`, `559fe58`, `73aa2cd`, `91a9f75`, `29e0eab`, `f8b33aa`, `6cb9796`, `e64d173`, `c858db6`, `74710fe`, `ef3b2c5`, `e228efb`) |
 | 5 | `scripts/calibration_experiment.py` | 1101 | **Yes** (rma072 CI path trigger only — no in-file grep) | ☑ Done (commits `d313437`, `5673a3a`) |
 | 6 | `managed/ReachyMini.LocalVlm.Tests/Program.cs` | 1029 | No (but no case-count safety net — see notes) | ☑ Done (commit `4c2c58c`) |
-| 7 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs` | 1016 | **Yes** (rma114 workflow + `LocalVlm.Tests/Program.cs`) | ☐ Not started |
+| 7 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs` | 1016 | **Yes** (rma114 workflow + `LocalVlm.Tests/Program.cs`) | ☑ Done (commits `56971d0`, `91fbac2`, `edd6b24`, `950888d`, `00c47e6`, `4ece8c0`, `c575cfa`); renamed to `ReachyLocalVlmManifestContracts.cs` |
 | 8 | `Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs` | 996 | **Yes — 2 workflows + a Python test** | ☐ Not started |
 | 9 | `Assets/ReachyMini/Runtime/Core/Speech/AndroidOnDeviceAsrProvider.cs` | 989 | No | ☐ Not started |
 | 10 | `Assets/ReachyMini/Editor/ReachyPresentationBuilder.cs` | 957 | No (one duplicated-constants note, not a landmine) | ☐ Not started |
