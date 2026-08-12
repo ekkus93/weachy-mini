@@ -67,6 +67,8 @@ class SignatureError(RuntimeError):
 # Dependency order so far (extend this list as later extraction steps land):
 #   1. calibration_fitting_validation (pure stdlib, zero internal deps)
 #   2. calibration_fitting_numerics (needs only calibration_fitting_validation)
+#   3. calibration_fitting_jsonio (needs only calibration_fitting_validation;
+#      owns the calibration_data sibling-loading bootstrap)
 def _load_sibling(name: str, path: Path) -> Any:
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -114,42 +116,14 @@ _confidence = calibration_fitting_numerics._confidence
 _jackknife_sensitivity = calibration_fitting_numerics._jackknife_sensitivity
 _unsupported = calibration_fitting_numerics._unsupported
 
+calibration_fitting_jsonio = _load_sibling(
+    "calibration_fitting_jsonio",
+    Path(__file__).with_name("calibration_fitting_jsonio.py"),
+)
 
-def _load_calibration_data() -> Any:
-    try:
-        import calibration_data  # type: ignore
-
-        return calibration_data
-    except ModuleNotFoundError:
-        path = Path(__file__).with_name("calibration_data.py")
-        spec = importlib.util.spec_from_file_location("calibration_data", path)
-        if spec is None or spec.loader is None:
-            raise RuntimeError("cannot load sibling calibration_data.py") from None
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        return module
-
-
-calibration_data = _load_calibration_data()
-
-
-def strict_json_loads(text: str, *, source: str = "JSON") -> Any:
-    try:
-        return calibration_data.load_json_text(text, source=source)
-    except Exception as exc:
-        raise FittingValidationError(str(exc)) from exc
-
-
-def load_json_file(path: Path, *, limits: ImportLimits = DEFAULT_LIMITS) -> Any:
-    raw = path.read_bytes()
-    if len(raw) > limits.maximum_file_bytes:
-        raise _error(str(path), f"file size {len(raw)} exceeds {limits.maximum_file_bytes}")
-    try:
-        text = raw.decode("utf-8", errors="strict")
-    except UnicodeDecodeError as exc:
-        raise _error(str(path), "is not valid UTF-8") from exc
-    return strict_json_loads(text, source=str(path))
+calibration_data = calibration_fitting_jsonio.calibration_data
+strict_json_loads = calibration_fitting_jsonio.strict_json_loads
+load_json_file = calibration_fitting_jsonio.load_json_file
 
 
 def schema_descriptor(schema_root: Path) -> dict[str, Any]:
