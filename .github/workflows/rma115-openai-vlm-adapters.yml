@@ -5,8 +5,10 @@ on:
     branches:
       - master
     paths:
-      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs"
-      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVision*.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVision*.cs.meta"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyRemoteVlm*.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyRemoteVlm*.cs.meta"
       - "managed/ReachyMini.RemoteVlm.Tests/**"
       - "docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md"
       - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
@@ -16,8 +18,10 @@ on:
     branches:
       - master
     paths:
-      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs"
-      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs.meta"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVision*.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVision*.cs.meta"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyRemoteVlm*.cs"
+      - "Assets/ReachyMini/Runtime/Core/Perception/ReachyRemoteVlm*.cs.meta"
       - "managed/ReachyMini.RemoteVlm.Tests/**"
       - "docs/architecture/OPENAI_COMPATIBLE_VLM_ADAPTERS.md"
       - "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
