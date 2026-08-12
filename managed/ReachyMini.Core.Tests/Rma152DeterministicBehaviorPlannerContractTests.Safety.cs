@@ -52,6 +52,25 @@ namespace ReachyMini.Core.Tests
             Equal(true, safety.ActiveHardStop, "authoritative hard-stop interlock");
             Equal(true, safety.LoadLimitActive, "authoritative overload interlock");
             Equal(false, safety.AllowsMotion, "authoritative safety blocks motion");
+
+            state.ContactCount = 0U;
+            state.HealthFlags = 1U << 31;
+            ReachyBehaviorSafetySnapshot unknownHealth =
+                ReachyBehaviorAuthoritativeSafety.CreateSafetySnapshot(
+                    state,
+                    normalControllerAvailable: true,
+                    workspaceClear: true);
+            Equal(true, unknownHealth.ActiveFault, "unknown health bit fails closed");
+            Equal(false, unknownHealth.AllowsMotion, "unknown health blocks motion");
+
+            state.HealthFlags = 1U << 0;
+            ReachyBehaviorSafetySnapshot sleeping =
+                ReachyBehaviorAuthoritativeSafety.CreateSafetySnapshot(
+                    state,
+                    normalControllerAvailable: true,
+                    workspaceClear: true);
+            Equal(false, sleeping.MotionPathAvailable, "sleeping state blocks motion path");
+            Equal(false, sleeping.AllowsMotion, "sleeping state blocks motion");
         }
 
         private static void TooShortTimingCannotOverrideMotionLimits()
