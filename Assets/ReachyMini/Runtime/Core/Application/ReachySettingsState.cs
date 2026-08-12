@@ -4,7 +4,7 @@ using System;
 
 namespace ReachyMini.AppState
 {
-    public sealed class ReachySettingsStateStore
+    public sealed partial class ReachySettingsStateStore
     {
         private static readonly string[] SpeechLanguages =
         {
