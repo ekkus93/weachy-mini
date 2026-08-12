@@ -78,9 +78,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/rma114-local-vlm-extension
-          SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs"
+          # ReachyLocalVisionLanguageContracts.cs was split
+          # (docs/LARGE_FILE_REFACTOR_TODO_2.md, file #7) into several
+          # ReachyLocalVlm*.cs files. Hash their concatenation so this evidence
+          # field still covers the full implementation regardless of which
+          # file each part now lives in.
+          SOURCE_SHA256="$(cat \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmEnums.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmManifestContracts.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmArtifactManifest.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmAdapterConfiguration.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmAdapterRuntime.cs \
+            | sha256sum | awk '{print $1}')"
           SCHEMA="models/manifests/local-vlm-manifest.schema.json"
-          SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
           SCHEMA_SHA256="$(sha256sum "$SCHEMA" | awk '{print $1}')"
           export SOURCE_SHA256 SCHEMA_SHA256
           python3 - <<'PY'
@@ -116,7 +126,11 @@ jobs:
         run: |
           set -euo pipefail
           sha256sum \
-            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVisionLanguageContracts.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmEnums.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmManifestContracts.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmArtifactManifest.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmAdapterConfiguration.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyLocalVlmAdapterRuntime.cs \
             managed/ReachyMini.LocalVlm.Tests/Program.cs \
             managed/ReachyMini.LocalVlm.Tests/ReachyMini.LocalVlm.Tests.csproj \
             managed/ReachyMini.LocalVlm.Tests/README.md \
