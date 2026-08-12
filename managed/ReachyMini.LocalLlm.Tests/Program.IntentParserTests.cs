@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Behavior;
 using ReachyMini.LocalModels;
 
 internal static partial class Program
@@ -10,22 +11,22 @@ internal static partial class Program
         Require(
             LocalLlmBehaviorContract.TryParseIntent(
                 ValidIntent,
-                out LocalLlmBehaviorIntent? parsed,
+                out ReachyBehaviorIntent? parsed,
                 out string validDetail),
             "Valid behavior intent was rejected: " + validDetail);
-        LocalLlmBehaviorIntent valid = parsed ??
+        ReachyBehaviorIntent valid = parsed ??
             throw new InvalidOperationException("Valid behavior intent returned null.");
         Require(valid.SchemaVersion == 1, "Behavior schema version changed.");
-        Require(valid.Expression == LocalLlmExpression.Attentive, "Expression parse changed.");
-        Require(valid.Gesture == LocalLlmGesture.Nod, "Gesture parse changed.");
-        Require(valid.Urgency == LocalLlmUrgency.Normal, "Urgency parse changed.");
+        Require(valid.Expression == ReachyBehaviorExpression.Attentive, "Expression parse changed.");
+        Require(valid.Gesture == ReachyBehaviorGesture.Nod, "Gesture parse changed.");
+        Require(valid.Urgency == ReachyBehaviorUrgency.Normal, "Urgency parse changed.");
 
         const string withGaze =
             "{\"schema_version\":1,\"speech\":\"Looking.\",\"gaze_target\":{\"kind\":\"tracked_entity\",\"entity_id\":\"entity-12\"},\"expression\":\"curious\",\"gesture\":\"small_head_tilt\",\"urgency\":\"low\"}";
         Require(
             LocalLlmBehaviorContract.TryParseIntent(
                 withGaze,
-                out LocalLlmBehaviorIntent? gaze,
+                out ReachyBehaviorIntent? gaze,
                 out string gazeDetail),
             "Valid gaze intent was rejected: " + gazeDetail);
         Require(gaze?.GazeTarget?.EntityId == "entity-12", "Tracked gaze identity changed.");
