@@ -2,7 +2,7 @@
 
 ## Status
 
-Implementation candidate for `master`. Managed compilation/CI remains the closure gate.
+Implemented on `master`. Managed compilation/CI remains the closure gate.
 
 ## Purpose
 
