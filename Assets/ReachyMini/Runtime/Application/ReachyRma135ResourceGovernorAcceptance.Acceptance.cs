@@ -1,0 +1,580 @@
+#nullable enable
+
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using ReachyMini.AppState;
+using ReachyMini.Interop;
+using ReachyMini.LocalModels;
+using ReachyMini.Rendering;
+using ReachyMini.Simulation;
+using UnityEngine;
+
+namespace ReachyMini.Validation
+{
+    internal sealed partial class ReachyRma135ResourceGovernorAcceptance
+    {
+        private static async Task<Rma135AcceptanceReport> RunAcceptanceAsync()
+        {
+            string modelPath = Path.Combine(UnityEngine.Application.persistentDataPath, ModelFileName);
+            WriteCheckpoint("artifact_verification_started", "Verifying exact RMA-133 selected GGUF artifact.");
+            Rma135ArtifactVerification artifact = await Task.Run(() => VerifyArtifact(modelPath)).ConfigureAwait(true);
+            WriteCheckpoint(
+                "artifact_verified",
+                "bytes=" + artifact.bytes.ToString(CultureInfo.InvariantCulture) +
+                " sha256=" + artifact.sha256);
+
+            uint nativeAbi = NativeReachyLlama.AbiVersion();
+            if (nativeAbi != 2U)
+            {
+                throw new InvalidOperationException(
+                    "RMA-135 physical acceptance loaded reachy_llama ABI " + nativeAbi +
+                    " instead of ABI 2.");
+            }
+            WriteCheckpoint("abi_verified", "reachy_llama ABI=2.");
+
+            LocalLlmProvider? provider = null;
+            using var androidSignals = new ReachyAndroidLocalLlmResourceSignalSource();
+            try
+            {
+                WriteCheckpoint(
+                    "production_physics_runtime_started",
+                    "Locating the live ReachyProductionAuthoritativeRuntime; the acceptance will not create a second MuJoCo worker.");
+                ReachyProductionAuthoritativeRuntime productionRuntime =
+                    await WaitForProductionRuntimeAsync().ConfigureAwait(true);
+                var realPhysics = new ReachySimulationLocalLlmPhysicsBudgetSource(productionRuntime);
+                Rma135PhysicsStartupStabilization startupPhysics =
+                    await WaitForPhysicsBudgetAsync(realPhysics).ConfigureAwait(true);
+                ReachySimulationTimingSnapshot workerBeforeAdmission =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        startupPhysics.MinimumObservedStepCount).ConfigureAwait(true);
+                WriteCheckpoint(
+                    "production_physics_runtime_ready",
+                    "state=" + startupPhysics.State +
+                    " observations=" + startupPhysics.Observations.ToString(CultureInfo.InvariantCulture) +
+                    " exceeded_observations=" + startupPhysics.ExceededObservations.ToString(CultureInfo.InvariantCulture) +
+                    " steps=" + workerBeforeAdmission.TotalStepCount.ToString(CultureInfo.InvariantCulture));
+
+                LocalLlmResourceSnapshot initialResources = androidSignals.Capture(startupPhysics.State);
+                LocalLlmExecutionProfile baselineProfile =
+                    LocalLlmExecutionProfile.CreateRma133V6Baseline();
+                var governor = new LocalLlmResourceGovernor();
+                LocalLlmProviderAdmissionResult admission =
+                    LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                        baselineProfile,
+                        governor,
+                        androidSignals,
+                        realPhysics);
+                if (!admission.Succeeded || admission.Decision == null ||
+                    admission.EffectiveProfile == null)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 provider admission refused local inference: status=" +
+                        admission.Status + " detail=" + admission.Detail);
+                }
+                LocalLlmExecutionProfile effectiveProfile = admission.EffectiveProfile;
+                WriteCheckpoint(
+                    "resource_admission_ready",
+                    "mode=" + admission.Decision.Mode + " device=" +
+                    admission.Decision.DeviceProfile.Kind + " thermal=" +
+                    initialResources.ThermalStatus + " ctx=" +
+                    effectiveProfile.ContextTokens.ToString(CultureInfo.InvariantCulture) +
+                    " threads=" + effectiveProfile.Threads.ToString(CultureInfo.InvariantCulture));
+
+                LocalModelManifest manifest = CreateSelectedManifest();
+                LocalModelApprovedArtifact approvedArtifact = new LocalModelApprovedArtifact(
+                    LocalLlmBehaviorContract.ManifestId,
+                    LocalLlmBehaviorContract.ModelId,
+                    modelPath,
+                    LocalLlmBehaviorContract.ArtifactBytes,
+                    LocalLlmBehaviorContract.ArtifactSha256);
+                WriteCheckpoint(
+                    "model_load_started",
+                    "Creating provider with the governor-selected execution profile; no ambient profile mutation is allowed.");
+                Stopwatch loadStopwatch = Stopwatch.StartNew();
+                LocalLlmProviderCreationResult creation = await LocalLlmProvider.CreateAsync(
+                    manifest,
+                    approvedArtifact,
+                    effectiveProfile,
+                    CancellationToken.None).ConfigureAwait(true);
+                loadStopwatch.Stop();
+                if (!creation.Succeeded || creation.Provider == null)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 local LLM provider creation failed: status=" + creation.Status +
+                        " native=" + creation.NativeStatus + " detail=" + creation.Detail);
+                }
+                provider = creation.Provider;
+                WriteCheckpoint(
+                    "model_loaded",
+                    "load_ms=" + loadStopwatch.Elapsed.TotalMilliseconds.ToString(
+                        "F3", CultureInfo.InvariantCulture));
+
+                var faultPhysics = new Rma135FaultInjectingPhysicsBudgetSource(realPhysics);
+                var coordinator = new LocalLlmGovernedGenerationCoordinator(
+                    provider,
+                    baselineProfile,
+                    governor,
+                    androidSignals,
+                    faultPhysics,
+                    MonitorInterval);
+
+                WriteCheckpoint(
+                    "post_load_stabilization_started",
+                    "Re-evaluating the real physics/resource envelope after model load before any generation request.");
+                int postLoadStabilizationObservations = 0;
+                LocalLlmGovernorDecision? postLoadInitialDecision = null;
+                LocalLlmGovernorDecision? postLoadStabilizedDecision = null;
+                while (postLoadStabilizationObservations < 12)
+                {
+                    if (postLoadStabilizationObservations > 0)
+                    {
+                        await Task.Delay(30).ConfigureAwait(true);
+                    }
+                    ++postLoadStabilizationObservations;
+                    LocalLlmGovernorDecision observed = coordinator.EvaluateCurrentBudget();
+                    postLoadInitialDecision ??= observed;
+                    if (observed.InferenceAllowed && observed.EffectiveProfile != null &&
+                        LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
+                            provider.ExecutionProfile, observed.EffectiveProfile))
+                    {
+                        postLoadStabilizedDecision = observed;
+                        break;
+                    }
+                }
+                if (postLoadInitialDecision == null || postLoadStabilizedDecision == null)
+                {
+                    throw new InvalidOperationException(
+                        "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
+                        postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                        " observations. No generation request was started.");
+                }
+                LocalLlmResourceSnapshot postLoadResources = androidSignals.Capture(
+                    LocalLlmPhysicsBudgetState.Healthy);
+                WriteCheckpoint(
+                    "post_load_stabilized",
+                    "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                    " initial_mode=" + postLoadInitialDecision.Mode +
+                    " initial_reasons=" + postLoadInitialDecision.Reasons +
+                    " final_mode=" + postLoadStabilizedDecision.Mode +
+                    " final_reasons=" + postLoadStabilizedDecision.Reasons +
+                    " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(
+                        CultureInfo.InvariantCulture));
+
+                ReachySimulationTimingSnapshot beforeInjection =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(workerBeforeAdmission.TotalStepCount + 5UL)).ConfigureAwait(true);
+                faultPhysics.ArmOneShotExceededAfterPassThrough();
+                var cancellationSink = new Rma135CollectingSink();
+                WriteCheckpoint(
+                    "physics_fault_injection_generation_started",
+                    "Controlled one-shot PhysicsBudgetState.Exceeded is armed after the real preflight sample.");
+                LocalLlmGovernedGenerationResult injected;
+                using (var injectedTimeout = new CancellationTokenSource(GenerationTimeout))
+                {
+                    injected = await coordinator.GenerateAsync(
+                        CreateRequest(
+                            "rma135-physics-fault",
+                            "Please give a friendly short acknowledgment."),
+                        cancellationSink,
+                        injectedTimeout.Token).ConfigureAwait(true);
+                }
+                WriteCheckpoint(
+                    "physics_fault_injection_generation_completed",
+                    "governed_status=" + injected.Status + " provider_status=" +
+                    (injected.ProviderResult?.Status.ToString() ?? "none") +
+                    " injected_count=" + faultPhysics.InjectedCount.ToString(CultureInfo.InvariantCulture));
+                if (injected.Status != LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration)
+                {
+                    throw new InvalidOperationException(
+                        "Controlled physics-budget violation did not cancel local inference: status=" +
+                        injected.Status + " detail=" + injected.Detail);
+                }
+                if (faultPhysics.InjectedCount != 1)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 physics fault injection was not consumed exactly once.");
+                }
+                if (injected.ProviderResult?.Status != LocalLlmGenerationStatus.Cancelled)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 governed cancellation did not terminate the provider as Cancelled: " +
+                        (injected.ProviderResult?.Status.ToString() ?? "none"));
+                }
+
+                ReachySimulationTimingSnapshot afterInjection =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(beforeInjection.TotalStepCount + 5UL)).ConfigureAwait(true);
+                if (afterInjection.TotalStepCount <= beforeInjection.TotalStepCount)
+                {
+                    throw new InvalidOperationException(
+                        "The authoritative simulation worker did not advance across LLM cancellation.");
+                }
+                WriteCheckpoint(
+                    "physics_continuity_verified",
+                    "worker_steps_before=" + beforeInjection.TotalStepCount.ToString(
+                        CultureInfo.InvariantCulture) + " worker_steps_after=" +
+                    afterInjection.TotalStepCount.ToString(CultureInfo.InvariantCulture));
+
+                int recoverySamples = 0;
+                LocalLlmGovernorDecision? recoveredDecision = null;
+                WriteCheckpoint(
+                    "governor_recovery_started",
+                    "Waiting for explicit healthy observations after injected suspension; no request is replayed.");
+                while (recoverySamples < 8)
+                {
+                    await Task.Delay(30).ConfigureAwait(true);
+                    ++recoverySamples;
+                    LocalLlmGovernorDecision decision = coordinator.EvaluateCurrentBudget();
+                    if (decision.Mode != LocalLlmGovernorMode.Suspended)
+                    {
+                        recoveredDecision = decision;
+                        break;
+                    }
+                }
+                if (recoveredDecision == null)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 governor did not recover from the controlled suspension after eight observations.");
+                }
+                WriteCheckpoint(
+                    "governor_recovered",
+                    "samples=" + recoverySamples.ToString(CultureInfo.InvariantCulture) +
+                    " mode=" + recoveredDecision.Mode);
+
+                var successSink = new Rma135CollectingSink();
+                WriteCheckpoint(
+                    "post_recovery_generation_started",
+                    "Starting a new governed request without app/process restart; the cancelled request is not replayed.");
+                LocalLlmGovernedGenerationResult recoveredGeneration;
+                using (var successTimeout = new CancellationTokenSource(GenerationTimeout))
+                {
+                    recoveredGeneration = await coordinator.GenerateAsync(
+                        CreateRequest("rma135-recovered-success", SuccessPrompt),
+                        successSink,
+                        successTimeout.Token).ConfigureAwait(true);
+                }
+                WriteCheckpoint(
+                    "post_recovery_generation_completed",
+                    "governed_status=" + recoveredGeneration.Status + " provider_status=" +
+                    (recoveredGeneration.ProviderResult?.Status.ToString() ?? "none") +
+                    " text_events=" + successSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
+                ValidateSuccessfulGeneration(
+                    recoveredGeneration,
+                    successSink,
+                    "post-recovery governed generation");
+
+                ReachySimulationTimingSnapshot finalWorker =
+                    await WaitForTimingProgressAsync(
+                        productionRuntime,
+                        checked(afterInjection.TotalStepCount + 5UL)).ConfigureAwait(true);
+                LocalLlmPhysicsBudgetState finalPhysics = realPhysics.Capture();
+                LocalLlmResourceSnapshot finalResources = androidSignals.Capture(finalPhysics);
+                WriteCheckpoint(
+                    "final_observation_completed",
+                    "steps=" + finalWorker.TotalStepCount.ToString(CultureInfo.InvariantCulture) +
+                    " physics=" + finalPhysics + " thermal=" + finalResources.ThermalStatus +
+                    " available_memory=" + finalResources.AvailableMemoryBytes.ToString(
+                        CultureInfo.InvariantCulture));
+
+                LocalLlmGenerationMetrics? generationMetrics = recoveredGeneration.ProviderResult?.Metrics;
+                return new Rma135AcceptanceReport
+                {
+                    status = "running",
+                    error = string.Empty,
+                    device_model = SystemInfo.deviceModel,
+                    operating_system = SystemInfo.operatingSystem,
+                    android_api_level = ReadApiLevel(),
+                    reachy_llama_abi = checked((int)nativeAbi),
+                    manifest_id = LocalLlmBehaviorContract.ManifestId,
+                    model_id = LocalLlmBehaviorContract.ModelId,
+                    artifact_sha256 = artifact.sha256,
+                    artifact_bytes = artifact.bytes,
+                    model_load_milliseconds = loadStopwatch.Elapsed.TotalMilliseconds,
+                    total_memory_bytes = initialResources.TotalMemoryBytes,
+                    initial_available_memory_bytes = initialResources.AvailableMemoryBytes,
+                    final_available_memory_bytes = finalResources.AvailableMemoryBytes,
+                    low_memory_threshold_bytes = initialResources.LowMemoryThresholdBytes,
+                    android_low_memory_initial = initialResources.SystemReportsLowMemory,
+                    android_low_memory_final = finalResources.SystemReportsLowMemory,
+                    logical_processor_count = initialResources.LogicalProcessorCount,
+                    thermal_status_initial = initialResources.ThermalStatus.ToString(),
+                    thermal_status_final = finalResources.ThermalStatus.ToString(),
+                    admission_mode = admission.Decision.Mode.ToString(),
+                    admission_device_profile = admission.Decision.DeviceProfile.Kind.ToString(),
+                    admission_reasons = admission.Decision.Reasons.ToString(),
+                    effective_context_tokens = effectiveProfile.ContextTokens,
+                    effective_batch_tokens = effectiveProfile.BatchTokens,
+                    effective_micro_batch_tokens = effectiveProfile.MicroBatchTokens,
+                    effective_threads = effectiveProfile.Threads,
+                    effective_batch_threads = effectiveProfile.BatchThreads,
+                    startup_physics_observations = startupPhysics.Observations,
+                    startup_physics_exceeded_observations = startupPhysics.ExceededObservations,
+                    startup_physics_state = startupPhysics.State.ToString(),
+                    production_runtime_model_hash = productionRuntime.ModelHash,
+                    post_load_available_memory_bytes = postLoadResources.AvailableMemoryBytes,
+                    post_load_stabilization_observations = postLoadStabilizationObservations,
+                    post_load_initial_mode = postLoadInitialDecision.Mode.ToString(),
+                    post_load_initial_reasons = postLoadInitialDecision.Reasons.ToString(),
+                    post_load_stabilized_mode = postLoadStabilizedDecision.Mode.ToString(),
+                    post_load_stabilized_reasons = postLoadStabilizedDecision.Reasons.ToString(),
+                    physics_fault_injection_kind = "controlled_one_shot_budget_exceeded",
+                    physics_fault_injection_count = faultPhysics.InjectedCount,
+                    physics_underlying_state_at_injection = faultPhysics.UnderlyingStateAtInjection.ToString(),
+                    fault_injection_governed_status = injected.Status.ToString(),
+                    fault_injection_provider_status = injected.ProviderResult?.Status.ToString() ?? "none",
+                    worker_steps_before_injection = beforeInjection.TotalStepCount,
+                    worker_steps_after_injection = afterInjection.TotalStepCount,
+                    worker_deadline_misses_before_injection = beforeInjection.DeadlineMissCount,
+                    worker_deadline_misses_after_injection = afterInjection.DeadlineMissCount,
+                    worker_accumulated_lag_seconds_after_injection =
+                        afterInjection.AccumulatedLagSeconds,
+                    worker_last_step_microseconds_after_injection =
+                        afterInjection.LastStepDurationSeconds * 1000000.0,
+                    worker_max_step_microseconds_after_injection =
+                        afterInjection.MaximumStepDurationSeconds * 1000000.0,
+                    recovery_observations = recoverySamples,
+                    recovery_mode = recoveredDecision.Mode.ToString(),
+                    post_recovery_governed_status = recoveredGeneration.Status.ToString(),
+                    post_recovery_provider_status =
+                        recoveredGeneration.ProviderResult?.Status.ToString() ?? "none",
+                    post_recovery_stream_text_events = successSink.TextEventCount,
+                    post_recovery_prompt_tokens = generationMetrics?.PromptTokens ?? 0UL,
+                    post_recovery_generated_tokens = generationMetrics?.GeneratedTokens ?? 0UL,
+                    final_physics_budget_state = finalPhysics.ToString(),
+                    final_worker_steps = finalWorker.TotalStepCount,
+                    final_worker_deadline_misses = finalWorker.DeadlineMissCount,
+                    network_fallback_used = false,
+                    automatic_retry_used = false,
+                    physics_timestep_modified = false,
+                    json_repair_used = false,
+                    report_contains_prompt_or_response_content = false,
+                };
+            }
+            finally
+            {
+                TryWriteCheckpoint("cleanup_started", "Disposing RMA-135 physical acceptance resources.");
+                if (provider != null)
+                {
+                    await provider.DisposeAsync().ConfigureAwait(true);
+                    TryWriteCheckpoint("provider_disposed", "Managed local LLM provider disposed.");
+                }
+                TryWriteCheckpoint(
+                    "production_physics_runtime_preserved",
+                    "RMA-135 did not own or dispose the app's authoritative simulation worker.");
+            }
+        }
+
+        private static async Task<ReachyProductionAuthoritativeRuntime> WaitForProductionRuntimeAsync()
+        {
+            for (int attempt = 0; attempt < 250; ++attempt)
+            {
+                ReachyProductionAuthoritativeRuntime? runtime =
+                    UnityEngine.Object.FindAnyObjectByType<ReachyProductionAuthoritativeRuntime>();
+                if (runtime != null)
+                {
+                    if (runtime.Status == ReachyProductionRuntimeStatus.Faulted)
+                    {
+                        throw new InvalidOperationException(
+                            "The production authoritative runtime faulted before RMA-135 acceptance: " +
+                            runtime.Fault);
+                    }
+                    if (runtime.Status == ReachyProductionRuntimeStatus.Running &&
+                        runtime.SimulationRunState == ReachySimulationRunState.Running)
+                    {
+                        return runtime;
+                    }
+                }
+                await Task.Delay(20).ConfigureAwait(true);
+            }
+            throw new TimeoutException(
+                "Timed out waiting for the app's production authoritative simulation runtime.");
+        }
+
+        private static async Task<Rma135PhysicsStartupStabilization> WaitForPhysicsBudgetAsync(
+            ReachySimulationLocalLlmPhysicsBudgetSource source)
+        {
+            const int requiredConsecutiveAdmissible = 3;
+            int consecutiveAdmissible = 0;
+            int exceededObservations = 0;
+            ulong minimumObservedStepCount = 5UL;
+            for (int attempt = 1; attempt <= 100; ++attempt)
+            {
+                LocalLlmPhysicsBudgetState state = source.Capture();
+                if (state == LocalLlmPhysicsBudgetState.Exceeded)
+                {
+                    ++exceededObservations;
+                    consecutiveAdmissible = 0;
+                }
+                else if (state == LocalLlmPhysicsBudgetState.Healthy ||
+                    state == LocalLlmPhysicsBudgetState.AtRisk)
+                {
+                    ++consecutiveAdmissible;
+                    if (consecutiveAdmissible >= requiredConsecutiveAdmissible)
+                    {
+                        return new Rma135PhysicsStartupStabilization(
+                            state,
+                            attempt,
+                            exceededObservations,
+                            minimumObservedStepCount);
+                    }
+                }
+                else
+                {
+                    consecutiveAdmissible = 0;
+                }
+                await Task.Delay(20).ConfigureAwait(true);
+            }
+            throw new InvalidOperationException(
+                "The app's production authoritative simulation did not provide three consecutive admissible timing observations before local LLM acceptance; exceeded_observations=" +
+                exceededObservations.ToString(CultureInfo.InvariantCulture) + ".");
+        }
+
+        private static async Task<ReachySimulationTimingSnapshot> WaitForTimingProgressAsync(
+            IReachySimulationTimingSource timingSource,
+            ulong minimumStepCount)
+        {
+            for (int attempt = 0; attempt < 250; ++attempt)
+            {
+                if (timingSource.SimulationRunState == ReachySimulationRunState.Faulted)
+                {
+                    throw new InvalidOperationException(
+                        "The production authoritative simulation worker faulted during RMA-135 acceptance.");
+                }
+                if (timingSource.TryGetLatestTimingSnapshot(
+                    out ReachySimulationTimingSnapshot timing) &&
+                    timing.TotalStepCount >= minimumStepCount)
+                {
+                    return timing;
+                }
+                await Task.Delay(20).ConfigureAwait(true);
+            }
+            throw new TimeoutException(
+                "Timed out waiting for production authoritative simulation progress to step " +
+                minimumStepCount.ToString(CultureInfo.InvariantCulture) + ".");
+        }
+
+        private static void ValidateSuccessfulGeneration(
+            LocalLlmGovernedGenerationResult result,
+            Rma135CollectingSink sink,
+            string label)
+        {
+            if (!result.Succeeded || result.ProviderResult?.Intent == null)
+            {
+                throw new InvalidOperationException(
+                    label + " did not produce a validated intent: governed_status=" + result.Status +
+                    " provider_status=" + (result.ProviderResult?.Status.ToString() ?? "none") +
+                    " detail=" + result.Detail);
+            }
+            if (!sink.TerminalValidated || sink.TextEventCount <= 0)
+            {
+                throw new InvalidOperationException(
+                    label + " did not demonstrate ordered streaming followed by validated completion.");
+            }
+            if (sink.SawTrustedPartialOutput)
+            {
+                throw new InvalidOperationException(
+                    label + " marked partial generated text as trusted/executable.");
+            }
+        }
+
+        private static Rma135ArtifactVerification VerifyArtifact(string modelPath)
+        {
+            FileInfo file = new FileInfo(modelPath);
+            if (!file.Exists)
+            {
+                throw new FileNotFoundException(
+                    "The exact RMA-133 selected model was not staged for RMA-135 acceptance.",
+                    modelPath);
+            }
+            if (file.Length != LocalLlmBehaviorContract.ArtifactBytes)
+            {
+                throw new InvalidOperationException(
+                    "RMA-135 staged model size mismatch: expected " +
+                    LocalLlmBehaviorContract.ArtifactBytes + ", received " + file.Length + ".");
+            }
+            string hash;
+            using (FileStream stream = new FileStream(
+                modelPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                1024 * 1024,
+                FileOptions.SequentialScan))
+            using (SHA256 sha = SHA256.Create())
+            {
+                byte[] digest = sha.ComputeHash(stream);
+                StringBuilder builder = new StringBuilder(digest.Length * 2);
+                for (int index = 0; index < digest.Length; ++index)
+                {
+                    builder.Append(digest[index].ToString("x2", CultureInfo.InvariantCulture));
+                }
+                hash = builder.ToString();
+            }
+            if (!string.Equals(
+                hash,
+                LocalLlmBehaviorContract.ArtifactSha256,
+                StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "RMA-135 staged model SHA-256 mismatch: " + hash + ".");
+            }
+            return new Rma135ArtifactVerification { bytes = file.Length, sha256 = hash };
+        }
+
+        private static LocalModelManifest CreateSelectedManifest()
+        {
+            return new LocalModelManifest(
+                1,
+                new LocalModelIdentity(
+                    LocalLlmBehaviorContract.ManifestId,
+                    LocalLlmBehaviorContract.ModelId,
+                    "Qwen3 0.6B Q4_K_M",
+                    "q4_k_m-8e42d41",
+                    new Uri("https://huggingface.co/Qwen/Qwen3-0.6B-GGUF"),
+                    "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+                    "Apache-2.0",
+                    false,
+                    string.Empty),
+                new LocalModelRuntimeRequirement("reachy_llama", 2, false),
+                new LocalModelArtifact(
+                    "qwen3/qwen3-0.6b-q4_k_m.gguf",
+                    LocalLlmBehaviorContract.ArtifactBytes,
+                    LocalLlmBehaviorContract.ArtifactSha256),
+                new LocalModelGgufMetadata(
+                    3,
+                    "qwen3",
+                    "Q4_K_M",
+                    596049920L,
+                    "gpt2",
+                    "qwen2"),
+                new LocalModelInferenceProfile(
+                    40960,
+                    "GGUF-embedded template is authoritative for RMA-134 generation.",
+                    new[] { "<|im_end|>", "<|endoftext|>" },
+                    new LocalModelMemoryEstimate(740380672L, 2048, 256),
+                    4),
+                new LocalModelDeviceCompatibility(
+                    new[] { "arm64-v8a" },
+                    26,
+                    Array.Empty<string>(),
+                    740380672L,
+                    2));
+        }
+
+        private static LocalLlmGenerationRequest CreateRequest(string requestId, string prompt)
+        {
+            return new LocalLlmGenerationRequest(
+                requestId,
+                new[] { new LocalLlmChatMessage(LocalLlmChatRole.User, prompt) });
+        }
+    }
+}
