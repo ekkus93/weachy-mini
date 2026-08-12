@@ -68,6 +68,35 @@ namespace ReachyMini.Rendering
             return false;
         }
 
+        public bool TryCreateAuthoritativeStateFrame(
+            out ReachySimAuthoritativeStateFrame frame)
+        {
+            ReachySimulationWorker? activeWorker = worker;
+            if (activeWorker == null ||
+                Status != ReachyProductionRuntimeStatus.Running)
+            {
+                frame = null!;
+                return false;
+            }
+
+            frame = activeWorker.CreateAuthoritativeStateFrame();
+            return true;
+        }
+
+        public bool TryCaptureLatestAuthoritativeState(
+            ReachySimAuthoritativeStateFrame destination)
+        {
+            if (destination == null)
+            {
+                throw new ArgumentNullException(nameof(destination));
+            }
+
+            ReachySimulationWorker? activeWorker = worker;
+            return activeWorker != null &&
+                Status == ReachyProductionRuntimeStatus.Running &&
+                activeWorker.TryCaptureLatestAuthoritativeState(destination);
+        }
+
         public ReachyAuthoritativeRendererStatus RendererStatus =>
             renderer?.Status ?? ReachyAuthoritativeRendererStatus.Unbound;
 

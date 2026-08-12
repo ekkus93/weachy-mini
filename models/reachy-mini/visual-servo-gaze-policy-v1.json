@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma154_visual_servo_gaze_v1",
+  "quality": "engineering_estimate",
+  "purpose": "Deterministic transformed-image visual-servo convergence policy layered over the bounded RMA-152 position-controller path without repeated expressive offsets.",
+  "tracking": {
+    "coordinate_source": "transformed_reachy_eye_normalized_bounds_center",
+    "horizontal_tolerance_normalized": 0.06,
+    "vertical_tolerance_normalized": 0.06,
+    "minimum_valid_coverage_fraction": 0.5
+  },
+  "authoritative_feedback": {
+    "minimum_observed_motion_radians": 0.00001,
+    "requires_newer_transformed_source_sequence": true,
+    "requires_newer_transformed_timestamp": true,
+    "requires_newer_transformed_authoritative_sequence": true,
+    "requires_frame_authoritative_sequence_at_or_after_observed_motion": true,
+    "requested_target_is_motion_evidence": false
+  },
+  "loop": {
+    "feedback_poll_delay_milliseconds": 20,
+    "maximum_iterations": 8,
+    "maximum_loop_duration_milliseconds": 15000
+  },
+  "stop_conditions": [
+    "tolerance_reached",
+    "target_lost",
+    "invalid_transformed_image_coverage",
+    "timeout",
+    "authoritative_load_limit",
+    "authoritative_safety_interlock",
+    "cancellation",
+    "tracking_frame_discontinuity",
+    "feedback_unavailable"
+  ],
+  "forbidden_shortcuts": [
+    "requested_position_target_as_motion_proof",
+    "direct_mujoco_state_write",
+    "direct_native_submit",
+    "raw_joint_command",
+    "torque_command",
+    "silent_feedback_fallback",
+    "stale_world_model_reuse"
+  ]
+}
