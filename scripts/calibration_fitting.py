@@ -6,16 +6,12 @@ import base64
 import copy
 import hashlib
 import importlib.util
-import json
 import math
-import re
 import statistics
 import subprocess
 import sys
 import tempfile
 from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -30,9 +26,6 @@ SIGNATURE_ALGORITHM = "ed25519"
 PROFILE_KIND = "fit_candidate_unapproved"
 APPROVAL_STATE = "unapproved_fit_candidate"
 GENERATOR_VERSION = "1.0.0"
-ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
-GIT_COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 PARAMETER_FAMILIES = (
     "friction",
     "backlash",
@@ -44,23 +37,69 @@ PARAMETER_FAMILIES = (
 )
 
 
-class FittingValidationError(ValueError):
-    """Raised when untrusted fitting input violates the contract."""
-
-
 class SignatureError(RuntimeError):
     """Raised when profile signing or verification fails."""
 
 
-@dataclass(frozen=True)
-class ImportLimits:
-    maximum_file_bytes: int = 64 * 1024 * 1024
-    maximum_string_length: int = 4096
-    maximum_datasets: int = 64
-    maximum_samples_per_window: int = 1_000_000
+# --- Sibling-module bootstrap -------------------------------------------------
+#
+# This file is loaded two different ways across the codebase:
+#   1. `import calibration_fitting` (from fit_calibration_profile.py,
+#      verify_calibration_profile.py) -- scripts/ is on sys.path.
+#   2. `importlib.util.spec_from_file_location(...)` by explicit path (from
+#      scripts/tests/test_calibration_fitting.py,
+#      scripts/generate_rma073_synthetic_data.py,
+#      scripts/calibration_profile_approval.py) -- scripts/ is NOT
+#      necessarily on sys.path in this case.
+#
+# Because of (2), a plain `import calibration_fitting_x` at this module's own
+# top level would not reliably resolve. Instead, `_load_sibling` below loads
+# each calibration_fitting_* submodule by a path relative to *this* file
+# (`Path(__file__).with_name(...)`, never relying on scripts/ being on
+# sys.path) and registers it into `sys.modules` under its plain module name.
+# Submodules must be loaded here in dependency order, so that any submodule
+# which itself does a plain `import calibration_fitting_y` for an
+# already-loaded sibling resolves it from the sys.modules cache instead of
+# needing its own bootstrap. After loading, every public name the submodule
+# used to define directly is re-exported here by binding it at module level,
+# so the rest of calibration_fitting.py (and external consumers) can keep
+# referencing it unqualified.
+#
+# Dependency order so far (extend this list as later extraction steps land):
+#   1. calibration_fitting_validation (pure stdlib, zero internal deps)
+def _load_sibling(name: str, path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
-DEFAULT_LIMITS = ImportLimits()
+calibration_fitting_validation = _load_sibling(
+    "calibration_fitting_validation",
+    Path(__file__).with_name("calibration_fitting_validation.py"),
+)
+
+FittingValidationError = calibration_fitting_validation.FittingValidationError
+ID_PATTERN = calibration_fitting_validation.ID_PATTERN
+SHA256_PATTERN = calibration_fitting_validation.SHA256_PATTERN
+GIT_COMMIT_PATTERN = calibration_fitting_validation.GIT_COMMIT_PATTERN
+ImportLimits = calibration_fitting_validation.ImportLimits
+DEFAULT_LIMITS = calibration_fitting_validation.DEFAULT_LIMITS
+_error = calibration_fitting_validation._error
+_require_dict = calibration_fitting_validation._require_dict
+_require_list = calibration_fitting_validation._require_list
+_require_exact_keys = calibration_fitting_validation._require_exact_keys
+_require_string = calibration_fitting_validation._require_string
+_require_id = calibration_fitting_validation._require_id
+_require_integer = calibration_fitting_validation._require_integer
+_require_number = calibration_fitting_validation._require_number
+_require_hash = calibration_fitting_validation._require_hash
+_require_git_commit = calibration_fitting_validation._require_git_commit
+_validate_utc = calibration_fitting_validation._validate_utc
+canonical_json_bytes = calibration_fitting_validation.canonical_json_bytes
 
 
 def _load_calibration_data() -> Any:
@@ -80,121 +119,6 @@ def _load_calibration_data() -> Any:
 
 
 calibration_data = _load_calibration_data()
-
-
-def canonical_json_bytes(value: Any) -> bytes:
-    return (
-        json.dumps(
-            value,
-            ensure_ascii=False,
-            allow_nan=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        + "\n"
-    ).encode("utf-8")
-
-
-def _error(path: str, message: str) -> FittingValidationError:
-    return FittingValidationError(f"{path}: {message}")
-
-
-def _require_dict(value: Any, path: str) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise _error(path, "must be an object")
-    return value
-
-
-def _require_list(value: Any, path: str) -> list[Any]:
-    if not isinstance(value, list):
-        raise _error(path, "must be an array")
-    return value
-
-
-def _require_exact_keys(
-    value: dict[str, Any], required: set[str], optional: set[str], path: str
-) -> None:
-    missing = required - value.keys()
-    if missing:
-        raise _error(path, f"missing keys: {sorted(missing)}")
-    unexpected = value.keys() - required - optional
-    if unexpected:
-        raise _error(path, f"unexpected keys: {sorted(unexpected)}")
-
-
-def _require_string(value: Any, path: str, limits: ImportLimits) -> str:
-    if not isinstance(value, str) or not value:
-        raise _error(path, "must be a non-empty string")
-    if len(value) > limits.maximum_string_length:
-        raise _error(path, "exceeds maximum string length")
-    return value
-
-
-def _require_id(value: Any, path: str, limits: ImportLimits) -> str:
-    text = _require_string(value, path, limits)
-    if ID_PATTERN.fullmatch(text) is None:
-        raise _error(path, "contains unsupported characters or is too long")
-    return text
-
-
-def _require_integer(
-    value: Any,
-    path: str,
-    *,
-    minimum: int | None = None,
-    maximum: int | None = None,
-) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise _error(path, "must be an integer")
-    if minimum is not None and value < minimum:
-        raise _error(path, f"must be >= {minimum}")
-    if maximum is not None and value > maximum:
-        raise _error(path, f"must be <= {maximum}")
-    return value
-
-
-def _require_number(
-    value: Any,
-    path: str,
-    *,
-    minimum: float | None = None,
-    maximum: float | None = None,
-) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        raise _error(path, "must be numeric")
-    number = float(value)
-    if not math.isfinite(number):
-        raise _error(path, "must be finite")
-    if minimum is not None and number < minimum:
-        raise _error(path, f"must be >= {minimum}")
-    if maximum is not None and number > maximum:
-        raise _error(path, f"must be <= {maximum}")
-    return number
-
-
-def _require_hash(value: Any, path: str) -> str:
-    if not isinstance(value, str) or SHA256_PATTERN.fullmatch(value) is None:
-        raise _error(path, "must be a lowercase SHA-256 digest")
-    return value
-
-
-def _require_git_commit(value: Any, path: str) -> str:
-    if not isinstance(value, str) or GIT_COMMIT_PATTERN.fullmatch(value) is None:
-        raise _error(path, "must be a lowercase 40- or 64-hex Git commit")
-    return value
-
-
-def _validate_utc(value: Any, path: str, limits: ImportLimits) -> str:
-    text = _require_string(value, path, limits)
-    if not text.endswith("Z"):
-        raise _error(path, "must be an RFC 3339 UTC timestamp ending in Z")
-    try:
-        parsed = datetime.fromisoformat(text[:-1] + "+00:00")
-    except ValueError as exc:
-        raise _error(path, "is not a valid RFC 3339 timestamp") from exc
-    if parsed.utcoffset() is None or parsed.utcoffset().total_seconds() != 0:
-        raise _error(path, "must use UTC")
-    return text
 
 
 def strict_json_loads(text: str, *, source: str = "JSON") -> Any:
