@@ -6,7 +6,7 @@ on:
     paths:
       - '.github/workflows/rma074-approval-contract.yml'
       - 'calibration/schemas/unit-calibrated-profile-v1.schema.json'
-      - 'scripts/calibration_profile_approval.py'
+      - 'scripts/calibration_profile_approval*.py'
       - 'scripts/approve_calibration_profile.py'
       - 'scripts/resolve_calibration_mode.py'
       - 'scripts/tests/test_rma074_calibration_profile_approval.py'
