@@ -51,9 +51,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ReachyCameraFrameBridge {
     private static final Object LOCK = new Object();
@@ -154,7 +152,7 @@ public final class ReachyCameraFrameBridge {
                 lifecycleOwner = new CameraLifecycleOwner();
                 lifecycleOwner.start();
                 analyzerExecutor = Executors.newSingleThreadExecutor(
-                        new NamedThreadFactory("reachy-camera-analysis"));
+                        new ReachyCameraFrameThreadFactory("reachy-camera-analysis"));
                 providerFuture = ProcessCameraProvider.getInstance(activity);
             }
 
@@ -1360,24 +1358,6 @@ public final class ReachyCameraFrameBridge {
                 reader.setOnImageAvailableListener(null, null);
                 reader.close();
             }
-        }
-    }
-
-    private static final class NamedThreadFactory implements ThreadFactory {
-        private final String baseName;
-        private final AtomicInteger count = new AtomicInteger();
-
-        NamedThreadFactory(String baseName) {
-            this.baseName = baseName;
-        }
-
-        @Override
-        public Thread newThread(Runnable runnable) {
-            Thread thread = new Thread(
-                    runnable,
-                    baseName + "-" + count.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
         }
     }
 }
