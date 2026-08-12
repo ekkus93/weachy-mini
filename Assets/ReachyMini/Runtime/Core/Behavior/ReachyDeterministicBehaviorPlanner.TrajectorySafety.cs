@@ -14,7 +14,7 @@ namespace ReachyMini.Behavior
             int maximumDurationMilliseconds,
             string? resolvedGazeEntityId,
             IReadOnlyList<double> initialPositions,
-            IReadOnlyList<double[]> poses,
+            List<double[]> poses,
             double urgencyScale,
             out ReachyBehaviorTrajectoryPlan? plan)
         {
@@ -100,7 +100,7 @@ namespace ReachyMini.Behavior
         private void AppendSmoothStepFrames(
             List<ReachyBehaviorTrajectoryFrame> frames,
             IReadOnlyList<double> from,
-            IReadOnlyList<double> to,
+            double[] to,
             int startOffsetMilliseconds,
             int stepCount)
         {
@@ -130,7 +130,7 @@ namespace ReachyMini.Behavior
 
         private int MinimumSafeSegmentMilliseconds(
             IReadOnlyList<double> from,
-            IReadOnlyList<double> to,
+            double[] to,
             double urgencyScale)
         {
             double minimumSeconds = policy.MinimumSegmentMilliseconds / 1000.0;
@@ -163,7 +163,7 @@ namespace ReachyMini.Behavior
 
         private static bool HasMotion(
             IReadOnlyList<double> from,
-            IReadOnlyList<double> to)
+            double[] to)
         {
             for (int index = 0;
                 index < ReachyBehaviorPlannerActuators.Count;
@@ -199,9 +199,9 @@ namespace ReachyMini.Behavior
             return true;
         }
 
-        private bool ValidateTarget(IReadOnlyList<double> target)
+        private bool ValidateTarget(double[] target)
         {
-            if (target.Count != ReachyBehaviorPlannerActuators.Count)
+            if (target.Length != ReachyBehaviorPlannerActuators.Count)
             {
                 return false;
             }
