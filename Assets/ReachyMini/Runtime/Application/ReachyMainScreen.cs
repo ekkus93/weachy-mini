@@ -24,6 +24,13 @@ namespace ReachyMini.AppState
             ReachySettingsSection.Privacy,
             ReachySettingsSection.Licenses,
         };
+        private static readonly ReachyProviderKind[] ProviderKinds =
+        {
+            ReachyProviderKind.Asr,
+            ReachyProviderKind.Tts,
+            ReachyProviderKind.Llm,
+            ReachyProviderKind.Vlm,
+        };
 
         [SerializeField]
         private Camera? presentationCamera;
@@ -690,13 +697,7 @@ namespace ReachyMini.AppState
                 "A stored preference does not mean the runtime is installed.",
                 panelBodyStyle!);
             float y = area.y + 62f;
-            foreach (ReachyProviderKind kind in new[]
-                     {
-                         ReachyProviderKind.Asr,
-                         ReachyProviderKind.Tts,
-                         ReachyProviderKind.Llm,
-                         ReachyProviderKind.Vlm,
-                     })
+            foreach (ReachyProviderKind kind in ProviderKinds)
             {
                 ReachyProviderSelection provider = current.GetProvider(kind);
                 string label =
