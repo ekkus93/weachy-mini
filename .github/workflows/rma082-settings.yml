@@ -5,7 +5,18 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma082-settings.yml'
-      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettings*.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsEnums.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderSelection.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyLicenseNotice.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyDurableSettings.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsSnapshot.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Sequencing.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.DerivedText.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.ProviderBuilders.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Labels.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Persistence.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Mutators.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsPanel.cs'
@@ -79,15 +90,31 @@ jobs:
           from pathlib import Path
           import re
 
-          # ReachySettingsState.cs is planned to split (docs/LARGE_FILE_REFACTOR_TODO_2.md,
-          # file #4) into several ReachySettings*.cs / ReachySettingsStateStore*.cs files in
-          # the same directory. Concatenate the whole directory so this check still covers
+          # ReachySettingsState.cs is being split (docs/LARGE_FILE_REFACTOR_TODO_2.md,
+          # file #4) into several files in the same directory. Their names don't share a
+          # single glob-able prefix (value types get plain names like
+          # ReachyProviderSelection.cs), so list every planned target explicitly and read
+          # whichever of them currently exist. Concatenate them so this check still covers
           # the full implementation regardless of which file each member lives in.
+          app_dir = Path('Assets/ReachyMini/Runtime/Core/Application')
+          settings_state_files = [
+              'ReachySettingsEnums.cs',
+              'ReachyProviderSelection.cs',
+              'ReachyLicenseNotice.cs',
+              'ReachyDurableSettings.cs',
+              'ReachySettingsSnapshot.cs',
+              'ReachySettingsState.cs',
+              'ReachySettingsStateStore.Sequencing.cs',
+              'ReachySettingsStateStore.DerivedText.cs',
+              'ReachySettingsStateStore.ProviderBuilders.cs',
+              'ReachySettingsStateStore.Labels.cs',
+              'ReachySettingsStateStore.Persistence.cs',
+              'ReachySettingsStateStore.Mutators.cs',
+          ]
           state = ''.join(
-              path.read_text(encoding='utf-8')
-              for path in sorted(
-                  Path('Assets/ReachyMini/Runtime/Core/Application').glob('ReachySettings*.cs')
-              )
+              (app_dir / name).read_text(encoding='utf-8')
+              for name in settings_state_files
+              if (app_dir / name).exists()
           )
           screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
           persistence = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8')
