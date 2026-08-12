@@ -14,6 +14,10 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma135AcceptanceTestDoubles.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma135AcceptanceReportModels.cs'
       - 'Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs'
@@ -41,6 +45,10 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma135AcceptanceTestDoubles.cs'
+      - 'Assets/ReachyMini/Runtime/Application/Rma135AcceptanceReportModels.cs'
       - 'Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs'
       - 'Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs'
@@ -162,6 +170,10 @@ jobs:
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
             Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs \
+            Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs \
+            Assets/ReachyMini/Runtime/Application/Rma135AcceptanceTestDoubles.cs \
+            Assets/ReachyMini/Runtime/Application/Rma135AcceptanceReportModels.cs \
             Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyMiniInteropAssemblyInfo.cs \
             Assets/ReachyMini/Runtime/Interop/ReachySimAuthoritativeStateReader.cs \
