@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma153_baseline_behavior_library_v1",
+  "quality": "engineering_estimate",
+  "purpose": "Deterministic expressive behavior parameters for the bounded RMA-152 planner.",
+  "idle": {
+    "pitch_amplitude_radians": 0.01,
+    "roll_amplitude_radians": 0.006,
+    "antenna_amplitude_radians": 0.02,
+    "returns_to_source_pose": true
+  },
+  "speaking": {
+    "timing_intensity": 0.55,
+    "maximum_pitch_radians": 0.025,
+    "maximum_roll_radians": 0.018,
+    "maximum_antenna_radians": 0.055,
+    "audio_energy_range": [
+      0.0,
+      1.0
+    ],
+    "returns_to_source_pose": true
+  },
+  "gaze_search": {
+    "minimum_confidence": 0.35,
+    "maximum_target_age_nanoseconds": 2000000000,
+    "center_body_yaw_radians": 0.18,
+    "center_head_yaw_radians": 0.1,
+    "center_head_pitch_radians": 0.08,
+    "body_yaw_amplitude_radians": 0.06,
+    "head_yaw_amplitude_radians": 0.045,
+    "returns_to_source_pose": true,
+    "requires_current_coverage_timestamp": true
+  },
+  "wake": {
+    "neutral_position_tolerance_radians": 0.025,
+    "neutral_velocity_tolerance_radians_per_second": 0.05,
+    "head_pitch_radians": 0.025,
+    "antenna_radians": 0.07,
+    "required_pre_planning_lifecycle_action": "wake_neutral"
+  },
+  "sleep_rest": {
+    "required_post_execution_lifecycle_action": "enter_sleep_rest"
+  },
+  "behavior_catalog": {
+    "neutral_idle": {
+      "motion": "idle_micro_cycle"
+    },
+    "listening": {
+      "expression": "attentive"
+    },
+    "speaking": {
+      "motion": "speaking_micro_cycle"
+    },
+    "acknowledgment": {
+      "gesture": "nod"
+    },
+    "curiosity": {
+      "expression": "curious",
+      "gesture": "small_head_tilt"
+    },
+    "surprise": {
+      "expression": "surprised",
+      "gesture": "recoil"
+    },
+    "gaze_acquisition": {
+      "expression": "attentive",
+      "gaze": "exact_visible_entity"
+    },
+    "gaze_search": {
+      "motion": "bounded_recently_seen_entity_search"
+    },
+    "unavailable_error": {
+      "expression": "concerned"
+    },
+    "sleep_rest": {
+      "planner": "safe_rest",
+      "post_action": "enter_sleep_rest"
+    },
+    "wake": {
+      "motion": "wake_posture",
+      "pre_action": "wake_neutral"
+    }
+  }
+}
