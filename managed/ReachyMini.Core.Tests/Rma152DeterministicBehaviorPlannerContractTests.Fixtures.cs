@@ -123,49 +123,7 @@ namespace ReachyMini.Core.Tests
             IReadOnlyList<double> initialPositions,
             ReachyBehaviorPlannerPolicy policy)
         {
-            IReadOnlyList<double> previous = initialPositions;
-            int previousOffset = 0;
-            for (int frameIndex = 0;
-                frameIndex < plan.Frames.Count;
-                ++frameIndex)
-            {
-                ReachyBehaviorTrajectoryFrame frame = plan.Frames[frameIndex];
-                int durationMilliseconds =
-                    frame.OffsetMilliseconds - previousOffset;
-                if (frameIndex == 0)
-                {
-                    durationMilliseconds -= plan.SpeechStartOffsetMilliseconds;
-                }
-                Equal(
-                    true,
-                    durationMilliseconds > 0,
-                    "positive trajectory segment duration");
-                double seconds = durationMilliseconds / 1000.0;
-                for (int actuator = 0;
-                    actuator < ReachyBehaviorPlannerActuators.Count;
-                    ++actuator)
-                {
-                    ReachyBehaviorActuatorLimit limit =
-                        policy.ActuatorLimits[actuator];
-                    double target = frame.TargetPositionsRadians[actuator];
-                    Equal(true, limit.Contains(target), "actuator soft envelope");
-                    double distance = Math.Abs(target - previous[actuator]);
-                    double velocity = distance / seconds;
-                    double conservativeAcceleration =
-                        4.0 * distance / (seconds * seconds);
-                    Equal(
-                        true,
-                        velocity <= limit.MaximumVelocityRadiansPerSecond + 1e-12,
-                        "actuator velocity envelope");
-                    Equal(
-                        true,
-                        conservativeAcceleration <=
-                            limit.MaximumAccelerationRadiansPerSecondSquared + 1e-12,
-                        "actuator acceleration envelope");
-                }
-                previous = frame.TargetPositionsRadians;
-                previousOffset = frame.OffsetMilliseconds;
-            }
+            AssertScheduledPlanWithinPolicy(plan, initialPositions, policy);
         }
 
         private static void Equal<T>(T expected, T actual, string description)
