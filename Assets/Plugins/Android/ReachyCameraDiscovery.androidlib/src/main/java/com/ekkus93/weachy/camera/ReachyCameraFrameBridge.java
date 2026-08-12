@@ -40,7 +40,13 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class ReachyCameraFrameBridge {
-    private static final Object LOCK = new Object();
+    // Package-private (not private): read/written directly by
+    // ReachyCameraFrameLifecycleController's *Locked helpers, which are
+    // always invoked while holding this same LOCK instance. See the
+    // "Tricky Shared State" guidance in docs/LARGE_FILE_REFACTOR_TODO.md
+    // section 7 for why these fields and LOCK itself are widened instead of
+    // wrapped in accessors.
+    static final Object LOCK = new Object();
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     private static final Executor MAIN_EXECUTOR = new Executor() {
         @Override
@@ -48,23 +54,23 @@ public final class ReachyCameraFrameBridge {
             MAIN_HANDLER.post(command);
         }
     };
-    private static long generation;
-    private static long sessionId;
-    private static long deliveredSequence;
-    private static String state = "Stopped";
-    private static String message = "Camera frame acquisition is stopped.";
-    private static String errorCode = "";
-    private static String cameraId = "";
-    private static ReachyCameraDescriptor descriptor;
-    private static ReachyFrameSnapshot latestFrame;
-    private static ProcessCameraProvider cameraProvider;
-    private static Camera boundCamera;
-    private static Observer<CameraState> cameraStateObserver;
-    private static ReachyCameraLifecycleOwner lifecycleOwner;
-    private static Preview preview;
-    private static ImageAnalysis imageAnalysis;
-    private static ReachyDiscardingPreviewSurfaceProvider previewSurfaceProvider;
-    private static ExecutorService analyzerExecutor;
+    static long generation;
+    static long sessionId;
+    static long deliveredSequence;
+    static String state = "Stopped";
+    static String message = "Camera frame acquisition is stopped.";
+    static String errorCode = "";
+    static String cameraId = "";
+    static ReachyCameraDescriptor descriptor;
+    static ReachyFrameSnapshot latestFrame;
+    static ProcessCameraProvider cameraProvider;
+    static Camera boundCamera;
+    static Observer<CameraState> cameraStateObserver;
+    static ReachyCameraLifecycleOwner lifecycleOwner;
+    static Preview preview;
+    static ImageAnalysis imageAnalysis;
+    static ReachyDiscardingPreviewSurfaceProvider previewSurfaceProvider;
+    static ExecutorService analyzerExecutor;
 
     private ReachyCameraFrameBridge() {
     }
@@ -93,8 +99,8 @@ public final class ReachyCameraFrameBridge {
             if (activity.checkSelfPermission(Manifest.permission.CAMERA)
                     != PackageManager.PERMISSION_GRANTED) {
                 synchronized (LOCK) {
-                    stopBoundUseCasesLocked();
-                    setInactiveLocked(
+                    ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                    ReachyCameraFrameLifecycleController.setInactiveLocked(
                             "PermissionRevoked",
                             "permission_denied",
                             "Android camera permission is not granted.");
@@ -114,7 +120,7 @@ public final class ReachyCameraFrameBridge {
                 if ("Stopping".equals(state)) {
                     return snapshotLocked();
                 }
-                stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
                 ++generation;
                 expectedGeneration = generation;
                 sessionId = requestedSessionId;
@@ -154,8 +160,8 @@ public final class ReachyCameraFrameBridge {
             }
         } catch (SecurityException exception) {
             synchronized (LOCK) {
-                stopBoundUseCasesLocked();
-                setInactiveLocked(
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.setInactiveLocked(
                         "PermissionRevoked",
                         "permission_denied",
                         ReachyCameraErrorUtil.safeMessage(exception));
@@ -163,8 +169,8 @@ public final class ReachyCameraFrameBridge {
             }
         } catch (CameraAccessException exception) {
             synchronized (LOCK) {
-                stopBoundUseCasesLocked();
-                setInactiveLocked(
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.setInactiveLocked(
                         "Unavailable",
                         ReachyCameraErrorUtil.cameraAccessCode(exception),
                         ReachyCameraErrorUtil.safeMessage(exception));
@@ -172,8 +178,8 @@ public final class ReachyCameraFrameBridge {
             }
         } catch (RuntimeException exception) {
             synchronized (LOCK) {
-                stopBoundUseCasesLocked();
-                setInactiveLocked(
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.setInactiveLocked(
                         "Faulted",
                         "camera_start_failed",
                         ReachyCameraErrorUtil.safeMessage(exception));
@@ -202,8 +208,8 @@ public final class ReachyCameraFrameBridge {
         synchronized (LOCK) {
             if (activity.checkSelfPermission(Manifest.permission.CAMERA)
                     != PackageManager.PERMISSION_GRANTED) {
-                stopBoundUseCasesLocked();
-                setInactiveLocked(
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.setInactiveLocked(
                         "PermissionRevoked",
                         "permission_denied",
                         "Camera permission was revoked while acquisition was paused.");
@@ -224,7 +230,8 @@ public final class ReachyCameraFrameBridge {
         requireMainThread();
         requireActivity(activity);
         synchronized (LOCK) {
-            if (!isActiveState(state) || "Stopping".equals(state)) {
+            if (!ReachyCameraFrameLifecycleController.isActiveState(state) ||
+                    "Stopping".equals(state)) {
                 return snapshotLocked();
             }
             state = "Stopping";
@@ -233,10 +240,10 @@ public final class ReachyCameraFrameBridge {
             errorCode = "";
             ++generation;
             try {
-                beginGracefulStopLocked();
+                ReachyCameraFrameLifecycleController.beginGracefulStopLocked();
             } catch (RuntimeException exception) {
-                stopBoundUseCasesLocked();
-                setInactiveLocked(
+                ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                ReachyCameraFrameLifecycleController.setInactiveLocked(
                         "Faulted",
                         "camera_stop_failed",
                         ReachyCameraErrorUtil.safeMessage(exception));
@@ -275,8 +282,8 @@ public final class ReachyCameraFrameBridge {
         requireActivity(activity);
         synchronized (LOCK) {
             ++generation;
-            stopBoundUseCasesLocked();
-            setInactiveLocked(
+            ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+            ReachyCameraFrameLifecycleController.setInactiveLocked(
                     "Stopped",
                     "",
                     "Camera frame acquisition shut down.");
@@ -329,7 +336,7 @@ public final class ReachyCameraFrameBridge {
                         nextSurfaceProvider);
                 final long analyzerGeneration = expectedGeneration;
                 nextAnalysis.setAnalyzer(
-                        requireAnalyzerExecutorLocked(),
+                        ReachyCameraFrameLifecycleController.requireAnalyzerExecutorLocked(),
                         new ImageAnalysis.Analyzer() {
                             @Override
                             public void analyze(@NonNull ImageProxy imageProxy) {
@@ -339,7 +346,7 @@ public final class ReachyCameraFrameBridge {
 
                 CameraSelector selector = exactCameraSelector(requestedCameraId);
                 Camera nextCamera = provider.bindToLifecycle(
-                        requireLifecycleOwnerLocked(),
+                        ReachyCameraFrameLifecycleController.requireLifecycleOwnerLocked(),
                         selector,
                         nextPreview,
                         nextAnalysis);
@@ -369,7 +376,7 @@ public final class ReachyCameraFrameBridge {
                         .observeForever(nextObserver);
             }
         } catch (ExecutionException exception) {
-            failOnMain(
+            ReachyCameraFrameLifecycleController.failOnMain(
                     expectedGeneration,
                     "camera_provider_failed",
                     ReachyCameraErrorUtil.safeMessage(exception.getCause() == null
@@ -377,12 +384,12 @@ public final class ReachyCameraFrameBridge {
                             : exception.getCause()));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            failOnMain(
+            ReachyCameraFrameLifecycleController.failOnMain(
                     expectedGeneration,
                     "camera_provider_interrupted",
                     ReachyCameraErrorUtil.safeMessage(exception));
         } catch (RuntimeException exception) {
-            failOnMain(
+            ReachyCameraFrameLifecycleController.failOnMain(
                     expectedGeneration,
                     "camera_bind_failed",
                     ReachyCameraErrorUtil.safeMessage(exception));
@@ -403,7 +410,7 @@ public final class ReachyCameraFrameBridge {
             }
             if (expectedGeneration != generation ||
                     sessionId == 0L ||
-                    !isActiveState(state)) {
+                    !ReachyCameraFrameLifecycleController.isActiveState(state)) {
                 return;
             }
 
@@ -414,8 +421,8 @@ public final class ReachyCameraFrameBridge {
                 String detail = ReachyCameraErrorUtil.cameraStateErrorDetail(cameraError);
                 if (cameraError.getType() == CameraState.ErrorType.CRITICAL) {
                     ++generation;
-                    stopBoundUseCasesLocked();
-                    setInactiveLocked(
+                    ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+                    ReachyCameraFrameLifecycleController.setInactiveLocked(
                             ReachyCameraErrorUtil.cameraStateErrorIsUnavailable(cameraError.getCode())
                                     ? "Unavailable"
                                     : "Faulted",
@@ -531,7 +538,7 @@ public final class ReachyCameraFrameBridge {
             MAIN_HANDLER.post(new Runnable() {
                 @Override
                 public void run() {
-                    failOnMain(
+                    ReachyCameraFrameLifecycleController.failOnMain(
                             expectedGeneration,
                             "camera_frame_metadata_failed",
                             failureMessage);
@@ -539,21 +546,6 @@ public final class ReachyCameraFrameBridge {
             });
         } finally {
             imageProxy.close();
-        }
-    }
-
-    private static void failOnMain(
-            long expectedGeneration,
-            String code,
-            String detail) {
-        requireMainThread();
-        synchronized (LOCK) {
-            if (expectedGeneration != generation) {
-                return;
-            }
-            ++generation;
-            stopBoundUseCasesLocked();
-            setInactiveLocked("Faulted", code, detail);
         }
     }
 
@@ -579,59 +571,14 @@ public final class ReachyCameraFrameBridge {
                 .build();
     }
 
-    private static void beginGracefulStopLocked() {
-        if (boundCamera == null) {
-            stopBoundUseCasesLocked();
-            setInactiveLocked(
-                    "Stopped",
-                    "",
-                    "No CameraX device was bound; stop completed without a close transition.");
-            return;
-        }
-
-        ReachyCameraTextureFrameBridge.endSession(generation);
-        if (imageAnalysis != null) {
-            imageAnalysis.clearAnalyzer();
-        }
-        if (preview != null) {
-            preview.setSurfaceProvider((Preview.SurfaceProvider) null);
-        }
-        if (lifecycleOwner != null) {
-            lifecycleOwner.destroy();
-        }
-        if (cameraProvider != null) {
-            if (preview != null && imageAnalysis != null) {
-                cameraProvider.unbind(preview, imageAnalysis);
-            } else if (preview != null) {
-                cameraProvider.unbind(preview);
-            } else if (imageAnalysis != null) {
-                cameraProvider.unbind(imageAnalysis);
-            }
-        }
-
-        descriptor = null;
-        latestFrame = null;
-        deliveredSequence = 0L;
-        if (!"Stopping".equals(state) || boundCamera == null) {
-            return;
-        }
-        CameraState current = boundCamera.getCameraInfo()
-                .getCameraState()
-                .getValue();
-        if (current != null &&
-                current.getType() == CameraState.Type.CLOSED) {
-            completeGracefulStopLocked();
-        }
-    }
-
     private static void handleStoppingCameraStateLocked(
             CameraState cameraState) {
         CameraState.StateError cameraError = cameraState.getError();
         if (cameraError != null &&
                 cameraError.getType() == CameraState.ErrorType.CRITICAL) {
             String detail = ReachyCameraErrorUtil.cameraStateErrorDetail(cameraError);
-            stopBoundUseCasesLocked();
-            setInactiveLocked(
+            ReachyCameraFrameLifecycleController.stopBoundUseCasesLocked();
+            ReachyCameraFrameLifecycleController.setInactiveLocked(
                     "Faulted",
                     "camera_close_failed",
                     "CameraX failed while closing the camera device: " + detail);
@@ -644,99 +591,13 @@ public final class ReachyCameraFrameBridge {
                         "CameraX camera device is closing; restart remains blocked.";
                 break;
             case CLOSED:
-                completeGracefulStopLocked();
+                ReachyCameraFrameLifecycleController.completeGracefulStopLocked();
                 break;
             default:
                 message =
                         "CameraX use cases are unbound; waiting for camera device CLOSED.";
                 break;
         }
-    }
-
-    private static void completeGracefulStopLocked() {
-        if (boundCamera != null && cameraStateObserver != null) {
-            boundCamera.getCameraInfo()
-                    .getCameraState()
-                    .removeObserver(cameraStateObserver);
-        }
-        cameraStateObserver = null;
-        boundCamera = null;
-        if (previewSurfaceProvider != null) {
-            previewSurfaceProvider.close();
-        }
-        if (analyzerExecutor != null) {
-            analyzerExecutor.shutdownNow();
-        }
-        cameraProvider = null;
-        lifecycleOwner = null;
-        preview = null;
-        imageAnalysis = null;
-        previewSurfaceProvider = null;
-        analyzerExecutor = null;
-        setInactiveLocked(
-                "Stopped",
-                "",
-                "CameraX camera device reached CLOSED; Preview and ImageAnalysis are fully released.");
-    }
-
-    private static void stopBoundUseCasesLocked() {
-        if (boundCamera != null && cameraStateObserver != null) {
-            boundCamera.getCameraInfo()
-                    .getCameraState()
-                    .removeObserver(cameraStateObserver);
-        }
-        cameraStateObserver = null;
-        boundCamera = null;
-        if (imageAnalysis != null) {
-            imageAnalysis.clearAnalyzer();
-        }
-        if (preview != null) {
-            preview.setSurfaceProvider((Preview.SurfaceProvider) null);
-        }
-        if (cameraProvider != null) {
-            if (preview != null && imageAnalysis != null) {
-                cameraProvider.unbind(preview, imageAnalysis);
-            } else if (preview != null) {
-                cameraProvider.unbind(preview);
-            } else if (imageAnalysis != null) {
-                cameraProvider.unbind(imageAnalysis);
-            }
-        }
-        if (lifecycleOwner != null) {
-            lifecycleOwner.destroy();
-        }
-        if (previewSurfaceProvider != null) {
-            previewSurfaceProvider.close();
-        }
-        if (analyzerExecutor != null) {
-            analyzerExecutor.shutdownNow();
-        }
-        ReachyCameraTextureFrameBridge.endSession(generation);
-        cameraProvider = null;
-        lifecycleOwner = null;
-        preview = null;
-        imageAnalysis = null;
-        previewSurfaceProvider = null;
-        analyzerExecutor = null;
-        descriptor = null;
-        latestFrame = null;
-        deliveredSequence = 0L;
-    }
-
-    private static void setInactiveLocked(
-            String nextState,
-            String nextErrorCode,
-            String nextMessage) {
-        state = nextState;
-        errorCode = nextErrorCode == null ? "" : nextErrorCode;
-        message = nextMessage == null || nextMessage.trim().isEmpty()
-                ? "Camera acquisition changed state without diagnostics."
-                : nextMessage;
-        sessionId = 0L;
-        cameraId = "";
-        descriptor = null;
-        latestFrame = null;
-        deliveredSequence = 0L;
     }
 
     private static String snapshotLocked() {
@@ -766,36 +627,16 @@ public final class ReachyCameraFrameBridge {
         }
     }
 
-    private static boolean isActiveState(String value) {
-        return "Starting".equals(value) ||
-                "Running".equals(value) ||
-                "Paused".equals(value) ||
-                "Stopping".equals(value);
-    }
-
-    private static ExecutorService requireAnalyzerExecutorLocked() {
-        if (analyzerExecutor == null) {
-            throw new IllegalStateException(
-                    "The CameraX analyzer executor is unavailable.");
-        }
-        return analyzerExecutor;
-    }
-
-    private static ReachyCameraLifecycleOwner requireLifecycleOwnerLocked() {
-        if (lifecycleOwner == null) {
-            throw new IllegalStateException(
-                    "The CameraX lifecycle owner is unavailable.");
-        }
-        return lifecycleOwner;
-    }
-
     private static void requireActivity(Activity activity) {
         if (activity == null) {
             throw new IllegalArgumentException("The Unity activity is required.");
         }
     }
 
-    private static void requireMainThread() {
+    // Package-private (not private): called directly by
+    // ReachyCameraFrameLifecycleController.failOnMain, which is the one
+    // moved method that is not called with LOCK already held.
+    static void requireMainThread() {
         if (Looper.myLooper() != Looper.getMainLooper()) {
             throw new IllegalStateException(
                     "CameraX lifecycle operations must run on the Android main thread.");
