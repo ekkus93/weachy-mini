@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -102,6 +106,36 @@ class Rma133ReproducibilityTests(unittest.TestCase):
         self.assertNotIn("*rma133_benchmark_v6*", scan_script)
         self.assertIn("*rma133_benchmark_v[6]*", scan_script)
 
+    def test_explicit_accepted_root_binds_base_module_to_isolated_tree(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            accepted_root = Path(temporary) / "accepted-v6"
+            scripts = accepted_root / "scripts"
+            scripts.mkdir(parents=True)
+            shutil.copyfile(
+                reproduce.ROOT / "scripts/run_rma133_device_benchmark_v6.py",
+                scripts / "run_rma133_device_benchmark_v6.py",
+            )
+            env = os.environ.copy()
+            env["RMA133_ACCEPTED_V6_ROOT"] = str(accepted_root)
+            probe = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "from scripts import run_rma133_device_reproducibility_v6 as r; "
+                        "print(r.BASE_PATH); print(r.base.ROOT)"
+                    ),
+                ],
+                cwd=reproduce.ROOT,
+                env=env,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            )
+            lines = probe.stdout.splitlines()
+            self.assertEqual(Path(lines[0]), scripts / "run_rma133_device_benchmark_v6.py")
+            self.assertEqual(Path(lines[1]), accepted_root)
+
     def test_reproducibility_targets_only_frozen_selected_candidate(self) -> None:
         config = json.loads(reproduce.base.CONFIG.read_text(encoding="utf-8"))
         candidate = reproduce.selected_candidate(config)
@@ -126,6 +160,12 @@ class Rma133ReproducibilityTests(unittest.TestCase):
         self.assertIn("base.SCORER", source)
         self.assertIn('"candidate_gate_failure"', source)
         self.assertIn('"invalid_environment"', source)
+        self.assertIn("RMA133_ACCEPTED_V6_ROOT", source)
+        workflow = (reproduce.ROOT / ".github/workflows/rma133-v6-reproducibility.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("RMA133_ACCEPTED_V6_ROOT: ${{ github.workspace }}/accepted-v6", workflow)
+        self.assertNotIn("Bind reproducibility harness to accepted V6 Python bytes", workflow)
 
 
 if __name__ == "__main__":
