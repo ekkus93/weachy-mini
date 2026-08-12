@@ -49,12 +49,12 @@ namespace ReachyMini.Core.Tests
             {
                 Near(
                     0.0,
-                    sink.Submitted[frame][ReachyBehaviorPlannerActuators.AntennaLeft],
+                    sink.Submitted[frame][ReachyBehaviorPlannerActuators.LeftAntenna],
                     0.0,
                     "visual servo does not accumulate left expressive antenna offset");
                 Near(
                     0.0,
-                    sink.Submitted[frame][ReachyBehaviorPlannerActuators.AntennaRight],
+                    sink.Submitted[frame][ReachyBehaviorPlannerActuators.RightAntenna],
                     0.0,
                     "visual servo does not accumulate right expressive antenna offset");
             }
