@@ -139,6 +139,15 @@ namespace ReachyMini.Core.Tests
                 ReachyBaselineLifecycleAction.EnterSleepRest,
                 sleep.ResolvePostExecutionLifecycleAction(completed),
                 "completed safe-rest execution releases sleep reset");
+            var wrongCompleted = new ReachyBehaviorTrajectoryExecutionResult(
+                ReachyBehaviorTrajectoryExecutionStatus.Completed,
+                "test-wrong-completed",
+                RequirePlan(sleep, "sleep safe-rest plan").Frames.Count + 1,
+                submissionStatus: null);
+            Equal(
+                ReachyBaselineLifecycleAction.None,
+                sleep.ResolvePostExecutionLifecycleAction(wrongCompleted),
+                "different completed trajectory cannot release sleep reset");
             var rejected = new ReachyBehaviorTrajectoryExecutionResult(
                 ReachyBehaviorTrajectoryExecutionStatus.SubmissionRejected,
                 "test-rejected",
