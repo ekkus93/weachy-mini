@@ -132,6 +132,18 @@ jobs:
             Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma134AndroidSha256.cs \
             managed/ReachyMini.LocalLlm.Tests/Program.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.Assertions.cs \
+            managed/ReachyMini.LocalLlm.Tests/Fakes.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.Fixtures.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.AbiAndProfileTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.IntentParserTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.ProviderCreationTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.IntentAndOutputLimitTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.ContextAndConcurrencyTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.ConsumerAndRuntimeFailureTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.ReloadAndDisposeTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.OutOfMemoryTests.cs \
+            managed/ReachyMini.LocalLlm.Tests/Program.GenerationSuccessTests.cs \
             managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj \
             scripts/tests/test_rma134_local_llm_provider.py \
             scripts/run_rma134_local_llm_acceptance_android.sh \
