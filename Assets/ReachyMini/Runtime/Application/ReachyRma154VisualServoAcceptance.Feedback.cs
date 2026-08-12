@@ -19,7 +19,7 @@ namespace ReachyMini.AppState
             private readonly BoundedWorldModel worldModel;
             private readonly ReachyProductionVisualServoFeedbackSource
                 productionFeedback;
-            private readonly ReachyCameraCalibrationProfile calibration;
+            private ReachyCameraCalibrationProfile? calibration;
             private readonly ReachySimAuthoritativeStateFrame transformState;
             private ReachyVisualServoFeedbackSample? initialSample;
             private ReachyVector3D fixedPhonePixel;
@@ -46,7 +46,6 @@ namespace ReachyMini.AppState
                         "RMA-154 could not allocate its homography state frame.");
                 }
                 transformState = createdTransformState;
-                calibration = CreateCalibration();
                 productionFeedback =
                     new ReachyProductionVisualServoFeedbackSource(
                         runtime,
@@ -97,6 +96,11 @@ namespace ReachyMini.AppState
                         transformState);
                 bool movedSincePrevious = UpdateMotionObservation(
                     transformMotion);
+
+                if (calibration == null)
+                {
+                    calibration = CreateBaselineCalibration(transformState);
+                }
 
                 sourceSequence = checked(sourceSequence + 1UL);
                 latestTimestampNanoseconds = checked(
@@ -247,6 +251,9 @@ namespace ReachyMini.AppState
                 ulong nextSourceSequence,
                 long timestampNanoseconds)
             {
+                ReachyCameraCalibrationProfile activeCalibration = calibration ??
+                    throw new InvalidOperationException(
+                        "RMA-154 synthetic camera calibration is unavailable.");
                 ReachySimBodyPoseSnapshot cameraPose =
                     FindCameraPose(transformState);
                 var cameraQuaternion = new ReachyQuaternionD(
@@ -260,7 +267,7 @@ namespace ReachyMini.AppState
                 ReachyCameraRelativeRotationSample rotation =
                     ReachyCameraRelativeRotationCalculator.Calculate(
                         ReachyCameraMujocoOpticalBinding.PinnedReachyMini,
-                        calibration,
+                        activeCalibration,
                         transformState.Layout.ModelHash,
                         transformState.Sequence,
                         transformState.SimulationTime,
@@ -269,7 +276,7 @@ namespace ReachyMini.AppState
                         phoneOrientation);
                 ReachyCameraHomographyBuildResult build =
                     ReachyCameraHomographyCalculator.Build(
-                        calibration,
+                        activeCalibration,
                         rotation,
                         SourceSessionId,
                         nextSourceSequence,
@@ -335,8 +342,28 @@ namespace ReachyMini.AppState
                 return state.GetBodyPose(match);
             }
 
-            private static ReachyCameraCalibrationProfile CreateCalibration()
+            private static ReachyCameraCalibrationProfile
+                CreateBaselineCalibration(
+                    ReachySimAuthoritativeStateFrame baselineState)
             {
+                ReachySimBodyPoseSnapshot cameraPose =
+                    FindCameraPose(baselineState);
+                var cameraQuaternion = new ReachyQuaternionD(
+                    cameraPose.QuaternionX,
+                    cameraPose.QuaternionY,
+                    cameraPose.QuaternionZ,
+                    cameraPose.QuaternionW);
+                ReachyCameraMujocoOpticalBinding binding =
+                    ReachyCameraMujocoOpticalBinding.PinnedReachyMini;
+                ReachyMatrix3x3 currentWorldFromOptical =
+                    cameraQuaternion.ToRotationMatrix() *
+                    binding.CameraBodyFromOptical;
+                ReachyMatrix3x3 baselineReachyFromPhone =
+                    binding.NeutralMujocoWorldFromOptical.Transposed() *
+                    currentWorldFromOptical;
+                ReachyQuaternionD baselineReachyFromPhoneRotation =
+                    QuaternionFromRotationMatrix(baselineReachyFromPhone);
+
                 var normalization = new ReachyCameraImageNormalization(
                     ImageWidth,
                     ImageHeight,
@@ -371,7 +398,61 @@ namespace ReachyMini.AppState
                     imageNormalization: normalization,
                     phoneIntrinsics: intrinsics,
                     reachyIntrinsics: intrinsics,
-                    neutralReachyFromPhoneRotation: ReachyQuaternionD.Identity);
+                    neutralReachyFromPhoneRotation:
+                        baselineReachyFromPhoneRotation);
+            }
+
+            private static ReachyQuaternionD QuaternionFromRotationMatrix(
+                ReachyMatrix3x3 rotation)
+            {
+                if (!rotation.IsProperRotation())
+                {
+                    throw new InvalidOperationException(
+                        "RMA-154 baseline camera alignment is not a proper rotation.");
+                }
+
+                double trace = rotation.M00 + rotation.M11 + rotation.M22;
+                double x;
+                double y;
+                double z;
+                double w;
+                if (trace > 0.0)
+                {
+                    double scale = 2.0 * Math.Sqrt(trace + 1.0);
+                    w = 0.25 * scale;
+                    x = (rotation.M21 - rotation.M12) / scale;
+                    y = (rotation.M02 - rotation.M20) / scale;
+                    z = (rotation.M10 - rotation.M01) / scale;
+                }
+                else if (rotation.M00 > rotation.M11 &&
+                    rotation.M00 > rotation.M22)
+                {
+                    double scale = 2.0 * Math.Sqrt(
+                        1.0 + rotation.M00 - rotation.M11 - rotation.M22);
+                    w = (rotation.M21 - rotation.M12) / scale;
+                    x = 0.25 * scale;
+                    y = (rotation.M01 + rotation.M10) / scale;
+                    z = (rotation.M02 + rotation.M20) / scale;
+                }
+                else if (rotation.M11 > rotation.M22)
+                {
+                    double scale = 2.0 * Math.Sqrt(
+                        1.0 + rotation.M11 - rotation.M00 - rotation.M22);
+                    w = (rotation.M02 - rotation.M20) / scale;
+                    x = (rotation.M01 + rotation.M10) / scale;
+                    y = 0.25 * scale;
+                    z = (rotation.M12 + rotation.M21) / scale;
+                }
+                else
+                {
+                    double scale = 2.0 * Math.Sqrt(
+                        1.0 + rotation.M22 - rotation.M00 - rotation.M11);
+                    w = (rotation.M10 - rotation.M01) / scale;
+                    x = (rotation.M02 + rotation.M20) / scale;
+                    y = (rotation.M12 + rotation.M21) / scale;
+                    z = 0.25 * scale;
+                }
+                return new ReachyQuaternionD(x, y, z, w);
             }
 
             private static VisionCoverageState ToVisionCoverageState(

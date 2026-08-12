@@ -159,6 +159,10 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             "ReachyProductionVisualServoFeedbackSource",
             "WaitForResetStateAsync",
             "frame.ContinuityId != previousContinuityId",
+            "if (calibration == null)",
+            "CreateBaselineCalibration(transformState)",
+            "binding.NeutralMujocoWorldFromOptical.Transposed()",
+            "QuaternionFromRotationMatrix",
             "ReachyProductionBehaviorControllerTargetSink",
             "ReachyCameraRelativeRotationCalculator.Calculate",
             "ReachyCameraHomographyCalculator.Build",
@@ -171,6 +175,11 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             "maximumPhysicalMotion",
         ):
             self.assertIn(required, acceptance)
+        self.assertNotIn(
+            "neutralReachyFromPhoneRotation: ReachyQuaternionD.Identity",
+            acceptance,
+        )
+
         for forbidden in (
             "NativeReachySim",
             "ReachySimSession",
