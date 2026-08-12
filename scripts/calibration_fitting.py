@@ -6,7 +6,6 @@ import base64
 import copy
 import hashlib
 import importlib.util
-import math
 import subprocess
 import sys
 import tempfile
@@ -56,6 +55,8 @@ class SignatureError(RuntimeError):
 #      calibration_fitting_jsonio, and calibration_fitting_contracts)
 #   6. calibration_fitting_estimators (needs calibration_fitting_numerics and
 #      calibration_fitting_contracts)
+#   7. calibration_fitting_heldout (needs calibration_fitting_numerics,
+#      calibration_fitting_contracts, and calibration_fitting_estimators)
 def _load_sibling(name: str, path: Path) -> Any:
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -151,125 +152,12 @@ _fit_thermal = calibration_fitting_estimators._fit_thermal
 _FITTERS = calibration_fitting_estimators._FITTERS
 fit_parameters = calibration_fitting_estimators.fit_parameters
 
+calibration_fitting_heldout = _load_sibling(
+    "calibration_fitting_heldout",
+    Path(__file__).with_name("calibration_fitting_heldout.py"),
+)
 
-def _prediction_error(
-    family: str,
-    result: dict[str, Any],
-    datasets: list[dict[str, Any]],
-    window: dict[str, int],
-    actuator: str,
-) -> tuple[float | None, int, str]:
-    if result["status"] != "fitted":
-        return None, 0, "parameter_not_fitted"
-    values = result["values"]
-    if family == "friction":
-        joints = _samples(datasets, "joint", **window, actuator_id=actuator)
-        observations = [sample for sample in joints if abs(float(sample["velocity_rad_s"])) >= 0.03]
-        errors = []
-        for sample in observations:
-            velocity = float(sample["velocity_rad_s"])
-            prediction = (
-                values["coulomb_friction_nm"] * math.copysign(1.0, velocity)
-                + values["viscous_friction_nm_s_per_rad"] * velocity
-            )
-            errors.append(float(sample["applied_torque_nm"]) - prediction)
-        return _rmse(errors), len(errors), "rmse_nm"
-    if family == "controller":
-        commands = _samples(datasets, "command", **window, actuator_id=actuator)
-        joints = _samples(datasets, "joint", **window, actuator_id=actuator)
-        pairs = _nearest_by_timestamp(commands, joints, tolerance_ns=2_000_000)
-        errors = []
-        for command, joint in pairs:
-            target = command.get("target_position_rad")
-            if target is None:
-                continue
-            prediction = values["position_gain_nm_per_rad"] * (
-                float(target) - float(joint["position_rad"])
-            ) - values["velocity_gain_nm_s_per_rad"] * float(joint["velocity_rad_s"])
-            errors.append(float(joint["applied_torque_nm"]) - prediction)
-        return _rmse(errors), len(errors), "rmse_nm"
-    if family == "voltage":
-        currents = _samples(datasets, "current_load", **window, actuator_id=actuator)
-        voltages = _samples(datasets, "voltage", **window)
-        pairs = _nearest_by_timestamp(currents, voltages, tolerance_ns=2_000_000)
-        errors = [
-            float(voltage["voltage_v"])
-            - (
-                values["open_circuit_voltage_v"]
-                - values["source_impedance_ohm"] * float(current["current_a"])
-            )
-            for current, voltage in pairs
-        ]
-        return _rmse(errors), len(errors), "rmse_v"
-    if family == "thermal":
-        temporary = _fit_thermal(datasets, window, actuator)
-        if temporary["status"] != "fitted":
-            return None, 0, "heldout_estimate_unavailable"
-        expected = temporary["values"]
-        relative = max(
-            abs(values[key] - expected[key]) / max(abs(expected[key]), 1e-12)
-            for key in ("heating_c_per_a2_s", "cooling_per_s")
-        )
-        return (
-            relative,
-            temporary["metrics"]["observation_count"],
-            "maximum_relative_parameter_error",
-        )
-    temporary = _FITTERS[family](datasets, window, actuator)
-    if temporary["status"] != "fitted":
-        return None, 0, "heldout_estimate_unavailable"
-    key = next(iter(values))
-    expected = temporary["values"][key]
-    relative = abs(values[key] - expected) / max(abs(expected), 1e-12)
-    return relative, temporary["metrics"]["observation_count"], "relative_parameter_error"
-
-
-def _rmse(errors: list[float]) -> float | None:
-    if not errors:
-        return None
-    return math.sqrt(sum(value * value for value in errors) / len(errors))
-
-
-def validate_heldout(
-    parameter_results: dict[str, dict[str, Any]],
-    heldout_datasets: list[dict[str, Any]],
-    plan: dict[str, Any],
-) -> dict[str, Any]:
-    summary = validate_fit_plan(plan)
-    family_results: dict[str, dict[str, Any]] = {}
-    all_supported_passed = True
-    supported_count = 0
-    for family in PARAMETER_FAMILIES:
-        error, count, metric = _prediction_error(
-            family,
-            parameter_results[family],
-            heldout_datasets,
-            summary["windows"][family],
-            summary["actuator_id"],
-        )
-        threshold = summary["thresholds"][family]
-        if error is None:
-            status = "unsupported"
-            passed = None
-        else:
-            supported_count += 1
-            passed = error <= threshold
-            status = "passed" if passed else "failed"
-            all_supported_passed = all_supported_passed and passed
-        family_results[family] = {
-            "status": status,
-            "metric": metric,
-            "value": error,
-            "threshold": threshold,
-            "observation_count": count,
-            "passed": passed,
-        }
-    return {
-        "split_policy": "heldout datasets are loaded only after fitting results are frozen",
-        "supported_family_count": supported_count,
-        "all_supported_passed": all_supported_passed and supported_count > 0,
-        "families": family_results,
-    }
+validate_heldout = calibration_fitting_heldout.validate_heldout
 
 
 def build_profile_manifest(
