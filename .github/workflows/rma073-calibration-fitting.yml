@@ -9,7 +9,7 @@ on:
       - 'calibration/fixtures/keys/rma073-test-ed25519-*.pem'
       - 'calibration/schemas/calibration-fit-plan-v1.schema.json'
       - 'calibration/schemas/calibration-profile-manifest-v1.schema.json'
-      - 'scripts/calibration_fitting.py'
+      - 'scripts/calibration_fitting*.py'
       - 'scripts/fit_calibration_profile.py'
       - 'scripts/generate_rma073_synthetic_data.py'
       - 'scripts/verify_calibration_profile.py'
