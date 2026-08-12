@@ -2,14 +2,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ACCEPTANCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.cs"
-)
-NATIVE_RESET = (
-    ROOT
-    / "native/reachy_sim/src/reachy_sim_backend_mujoco/model_and_reset.inc"
-)
+ACCEPTANCE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.cs"
+NATIVE_RESET = ROOT / "native/reachy_sim/src/reachy_sim_backend_mujoco/model_and_reset.inc"
 
 
 class Rma154ResetSettleBarrierContracts(unittest.TestCase):
