@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -128,7 +129,7 @@ namespace ReachyMini.Providers
                     hash ^= requestBytes[index];
                     hash *= 1099511628211UL;
                 }
-                return "reachy-asr-" + hash.ToString("x16");
+                return "reachy-asr-" + hash.ToString("x16", CultureInfo.InvariantCulture);
             }
             finally
             {

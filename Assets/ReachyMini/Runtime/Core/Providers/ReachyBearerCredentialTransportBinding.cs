@@ -131,14 +131,14 @@ namespace ReachyMini.Providers
                 inner.Put(reference, secretUtf8);
             }
 
-            public byte[] Get(string reference)
+            public byte[] GetSecret(string reference)
             {
                 if (!string.Equals(reference, internalReference, StringComparison.Ordinal))
                 {
-                    return inner.Get(reference);
+                    return inner.GetSecret(reference);
                 }
 
-                byte[] source = inner.Get(sourceReference) ??
+                byte[] source = inner.GetSecret(sourceReference) ??
                     throw new InvalidOperationException(
                         "Provider secret store returned null credential material.");
                 try

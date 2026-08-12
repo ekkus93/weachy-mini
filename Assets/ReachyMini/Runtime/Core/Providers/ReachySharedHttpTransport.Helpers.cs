@@ -276,7 +276,23 @@ namespace ReachyMini.Providers
 
         private static HttpClient CreateProductionClient()
         {
-            return CreateClient(new HttpClientHandler());
+            HttpClientHandler? handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+            };
+            try
+            {
+                HttpClient client = new HttpClient(handler, disposeHandler: true)
+                {
+                    Timeout = Timeout.InfiniteTimeSpan,
+                };
+                handler = null; // Ownership transferred to the HttpClient (disposeHandler: true).
+                return client;
+            }
+            finally
+            {
+                handler?.Dispose();
+            }
         }
 
         private static HttpClient CreateClient(HttpMessageHandler handler)

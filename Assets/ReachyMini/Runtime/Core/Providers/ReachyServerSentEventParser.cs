@@ -16,9 +16,10 @@ namespace ReachyMini.Providers
     {
         private const int MaximumLineCharacters = 64 * 1024;
 
-        private readonly Decoder decoder = new UTF8Encoding(
+        private readonly UTF8Encoding encoding = new UTF8Encoding(
             encoderShouldEmitUTF8Identifier: false,
-            throwOnInvalidBytes: true).GetDecoder();
+            throwOnInvalidBytes: true);
+        private readonly Decoder decoder;
         private readonly int maximumEventCharacters;
         private readonly StringBuilder line = new StringBuilder();
         private readonly StringBuilder data = new StringBuilder();
@@ -35,6 +36,7 @@ namespace ReachyMini.Providers
                 throw new ArgumentOutOfRangeException(nameof(maximumEventCharacters));
             }
             this.maximumEventCharacters = maximumEventCharacters;
+            decoder = encoding.GetDecoder();
         }
 
         public IReadOnlyList<ReachyServerSentEvent> Append(
@@ -54,7 +56,7 @@ namespace ReachyMini.Providers
             _ = statusCode;
             _ = providerRequestId;
 
-            int maximumChars = decoder.GetMaxCharCount(count);
+            int maximumChars = encoding.GetMaxCharCount(count);
             char[] chars = new char[maximumChars];
             decoder.Convert(
                 buffer,

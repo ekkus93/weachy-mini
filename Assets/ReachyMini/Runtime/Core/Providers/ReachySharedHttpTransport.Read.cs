@@ -17,9 +17,7 @@ namespace ReachyMini.Providers
         private HttpRequestMessage CreateRequestMessage(
             ReachyHttpTransportRequest request)
         {
-            string baseUrl = profile.BaseUri.AbsoluteUri.EndsWith(
-                "/",
-                StringComparison.Ordinal)
+            string baseUrl = profile.BaseUri.AbsoluteUri.EndsWith('/')
                 ? profile.BaseUri.AbsoluteUri
                 : profile.BaseUri.AbsoluteUri + "/";
             var message = new HttpRequestMessage(
@@ -94,7 +92,7 @@ namespace ReachyMini.Providers
                 IReachyProviderSecretStore store = secretStore ??
                     throw new InvalidOperationException(
                         "Provider profile requires secret-backed headers but no secret store is configured.");
-                byte[] secretBytes = store.Get(
+                byte[] secretBytes = store.GetSecret(
                         binding.ValueOrSecretReference) ??
                     throw new InvalidOperationException(
                         "Provider secret store returned null credential material.");
@@ -104,8 +102,8 @@ namespace ReachyMini.Providers
                         encoderShouldEmitUTF8Identifier: false,
                         throwOnInvalidBytes: true).GetString(secretBytes);
                     if (string.IsNullOrWhiteSpace(secretValue) ||
-                        secretValue.IndexOf('\r') >= 0 ||
-                        secretValue.IndexOf('\n') >= 0)
+                        secretValue.Contains('\r') ||
+                        secretValue.Contains('\n'))
                     {
                         throw new InvalidOperationException(
                             "Provider secret header value is empty or contains forbidden line breaks.");
@@ -322,9 +320,7 @@ namespace ReachyMini.Providers
             try
             {
                 int count = await stream.ReadAsync(
-                        buffer,
-                        0,
-                        buffer.Length,
+                        buffer.AsMemory(0, buffer.Length),
                         readTimeout.Token)
                     .ConfigureAwait(false);
                 return TimedReadResult.Success(count);

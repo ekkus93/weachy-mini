@@ -140,7 +140,7 @@ namespace ReachyMini.Providers
     {
         void Put(string reference, byte[] secretUtf8);
 
-        byte[] Get(string reference);
+        byte[] GetSecret(string reference);
 
         bool Contains(string reference);
 
@@ -520,7 +520,7 @@ namespace ReachyMini.Providers
                 bool valid = character >= 'a' && character <= 'z' ||
                     character >= 'A' && character <= 'Z' ||
                     character >= '0' && character <= '9' ||
-                    extraTokenCharacters.IndexOf(character) >= 0;
+                    extraTokenCharacters.Contains(character);
                 if (!valid)
                 {
                     return false;

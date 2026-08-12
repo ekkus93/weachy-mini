@@ -10,6 +10,8 @@ namespace ReachyMini.Core.Tests
 {
     internal static class Rma146ProviderFallbackPolicyContractTests
     {
+        private static readonly string[] TtsCloudBackupCandidates = { "tts-cloud" };
+
         [ModuleInitializer]
         internal static void Run()
         {
@@ -99,7 +101,7 @@ namespace ReachyMini.Core.Tests
                     false,
                     true,
                     true,
-                    new[] { "tts-cloud" }));
+                    TtsCloudBackupCandidates));
             var request = new ReachyProviderSwitchRequest(
                 Endpoint(ReachyProviderWorkloadKind.Tts, "tts-local", ReachyProviderPrivacyBoundary.OnDevice),
                 Endpoint(ReachyProviderWorkloadKind.Tts, "tts-cloud", ReachyProviderPrivacyBoundary.Cloud),

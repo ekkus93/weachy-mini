@@ -190,29 +190,29 @@ namespace ReachyMini.Providers
             IReachyServerSentEventSink? eventSink,
             CancellationToken cancellationToken)
         {
-            HttpRequestMessage message;
+            HttpRequestMessage? message = null;
             try
             {
-                message = CreateRequestMessage(request);
-            }
-            catch (Exception exception) when (
-                exception is ArgumentException ||
-                exception is InvalidOperationException ||
-                exception is KeyNotFoundException ||
-                exception is DecoderFallbackException)
-            {
-                return AttemptResult.Failure(
-                    Error(
-                        ReachyHttpErrorCategory.Configuration,
-                        ReachyHttpTimeoutPhase.None,
-                        null,
-                        null,
-                        false,
-                        "HTTP provider configuration or credential material is unavailable or invalid."));
-            }
+                try
+                {
+                    message = CreateRequestMessage(request);
+                }
+                catch (Exception exception) when (
+                    exception is ArgumentException ||
+                    exception is InvalidOperationException ||
+                    exception is KeyNotFoundException ||
+                    exception is DecoderFallbackException)
+                {
+                    return AttemptResult.Failure(
+                        Error(
+                            ReachyHttpErrorCategory.Configuration,
+                            ReachyHttpTimeoutPhase.None,
+                            null,
+                            null,
+                            false,
+                            "HTTP provider configuration or credential material is unavailable or invalid."));
+                }
 
-            using (message)
-            {
                 HttpResponseMessage response;
                 using (var connectionTimeout =
                     CancellationTokenSource.CreateLinkedTokenSource(
@@ -416,6 +416,10 @@ namespace ReachyMini.Providers
                                 sse.EventsDelivered > 0);
                     }
                 }
+            }
+            finally
+            {
+                message?.Dispose();
             }
         }
 

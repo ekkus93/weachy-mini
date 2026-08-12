@@ -263,10 +263,10 @@ namespace ReachyMini.Providers
             if (string.IsNullOrWhiteSpace(relativePath) ||
                 relativePath.Length > 512 ||
                 relativePath[0] == '/' ||
-                relativePath.IndexOf("\\", StringComparison.Ordinal) >= 0 ||
-                relativePath.IndexOf("..", StringComparison.Ordinal) >= 0 ||
-                relativePath.IndexOf("?", StringComparison.Ordinal) >= 0 ||
-                relativePath.IndexOf("#", StringComparison.Ordinal) >= 0 ||
+                relativePath.Contains('\\') ||
+                relativePath.Contains("..", StringComparison.Ordinal) ||
+                relativePath.Contains('?') ||
+                relativePath.Contains('#') ||
                 Uri.TryCreate(relativePath, UriKind.Absolute, out _))
             {
                 throw new ArgumentException(

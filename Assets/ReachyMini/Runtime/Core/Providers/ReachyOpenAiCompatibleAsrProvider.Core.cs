@@ -105,12 +105,12 @@ namespace ReachyMini.Providers
         public AsrCapabilities Capabilities { get; }
 
         public ValueTask<SpeechProviderAvailability> CheckAvailabilityAsync(
-            AsrOptions asrOptions,
+            AsrOptions options,
             CancellationToken cancellationToken)
         {
-            if (asrOptions == null)
+            if (options == null)
             {
-                throw new ArgumentNullException(nameof(asrOptions));
+                throw new ArgumentNullException(nameof(options));
             }
             if (Volatile.Read(ref disposed) != 0)
             {
@@ -124,14 +124,14 @@ namespace ReachyMini.Providers
                 return new ValueTask<SpeechProviderAvailability>(
                     Task.FromCanceled<SpeechProviderAvailability>(cancellationToken));
             }
-            if (asrOptions.RequestPartialResults)
+            if (options.RequestPartialResults)
             {
                 return new ValueTask<SpeechProviderAvailability>(
                     new SpeechProviderAvailability(
                         SpeechAvailabilityState.Unavailable,
                         "Buffered OpenAI-compatible ASR does not provide partial results."));
             }
-            if (!SupportsLanguage(asrOptions.LanguageTag))
+            if (!SupportsLanguage(options.LanguageTag))
             {
                 return new ValueTask<SpeechProviderAvailability>(
                     new SpeechProviderAvailability(

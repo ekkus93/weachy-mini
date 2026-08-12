@@ -32,7 +32,7 @@ namespace ReachyMini.AppState
             bridge.CallStatic("put", activity, reference, secretUtf8);
         }
 
-        public byte[] Get(string reference)
+        public byte[] GetSecret(string reference)
         {
             ReachyProviderSecretReference.Validate(reference);
             using AndroidJavaObject activity = GetCurrentActivity();

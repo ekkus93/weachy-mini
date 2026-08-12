@@ -163,10 +163,10 @@ namespace ReachyMini.Providers
             if (string.IsNullOrWhiteSpace(path) ||
                 path.Length > 256 ||
                 path[0] == '/' ||
-                path.IndexOf("..", StringComparison.Ordinal) >= 0 ||
-                path.IndexOf('\\') >= 0 ||
-                path.IndexOf('?') >= 0 ||
-                path.IndexOf('#') >= 0 ||
+                path.Contains("..", StringComparison.Ordinal) ||
+                path.Contains('\\') ||
+                path.Contains('?') ||
+                path.Contains('#') ||
                 Uri.TryCreate(path, UriKind.Absolute, out _))
             {
                 throw new ArgumentException(
