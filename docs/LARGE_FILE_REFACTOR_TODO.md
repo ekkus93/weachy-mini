@@ -36,7 +36,7 @@ skill) and dispatching one analysis pass per file.
 | 3 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyBoundedWorldModel.cs` | 1705 | ☑ Done (commits `71dd368`, `d818190`, `8b0d160`, `be542f6`, `388e1c7`, `f8da25c`, `6508e94`, `15579bb`, `82d9b03`) |
 | 4 | `managed/ReachyMini.RemoteVlm.Tests/Program.cs` | 1659 | ☑ Done (commits `7ab1cb6`, `6fcd6aa`, `12102cf`, `39b717a`, `7424a00`, `307f74a`, `b6134e3`, `00f477c`, `417332c`, `dd6893e`, `af8866c`, `d049187`) |
 | 5 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs` (renamed to `ReachyOpenAiVisionLanguageProviders.cs`) | 1516 | ☑ Done (commits `591f2e6`, `a7f7aff`, `ee59c50`, `0a51f40`, `86a1a95`, `02d2b32`, `827f9c9`, `68bc402`) |
-| 6 | `Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs` | 1438 | ☐ Not started |
+| 6 | `Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs` (renamed to `ReachyLocalLlmProvider.Core.cs`) | 1438 | ☑ Done (commits `a960a60`, `ac550aa`, `578c3df`, `755bfc5`, `747f4e9`) |
 | 7 | `Assets/Plugins/Android/.../ReachyCameraFrameBridge.java` | 1383 | ☐ Not started |
 | 8 | `Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs` | 1363 | ☐ Not started |
 | 9 | `scripts/calibration_fitting.py` | 1342 | ☐ Not started |
