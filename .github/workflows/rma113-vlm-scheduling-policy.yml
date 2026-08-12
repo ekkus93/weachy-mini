@@ -70,8 +70,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/rma113-vlm-scheduling-policy
-          SOURCE="Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs"
-          SOURCE_SHA256="$(sha256sum "$SOURCE" | awk '{print $1}')"
+          # ReachyVlmSchedulingPolicy.cs was split (docs/LARGE_FILE_REFACTOR_TODO.md,
+          # file #10) into several ReachyVlm*.cs files. Hash their concatenation so this
+          # evidence field still covers the full implementation regardless of which file
+          # each part now lives in.
+          SOURCE_SHA256="$(cat \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingTypes.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmDisclosureSnapshot.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduleSignal.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingResults.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduleLease.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs \
+            | sha256sum | awk '{print $1}')"
           export SOURCE_SHA256
           python3 - <<'PY'
           import json
@@ -109,6 +120,12 @@ jobs:
           set -euo pipefail
           sha256sum \
             Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingTypes.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmDisclosureSnapshot.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduleSignal.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingResults.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduleLease.cs \
+            Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs \
             managed/ReachyMini.VlmScheduling.Tests/Program.cs \
             managed/ReachyMini.VlmScheduling.Tests/ReachyMini.VlmScheduling.Tests.csproj \
             > artifacts/rma113-vlm-scheduling-policy/source-sha256.txt
