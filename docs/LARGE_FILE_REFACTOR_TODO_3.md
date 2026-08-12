@@ -77,7 +77,7 @@ section before starting.
 |---|---|---|---|---|
 | 1 | `Assets/ReachyMini/Runtime/Core/Speech/AndroidSystemTtsProvider.cs` | 953 | No | ☑ Done (commit `af99fbe`) |
 | 2 | `managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs` | 921 | No (CI check already directory-glob-based) | ☑ Done (commit `33a43d3`) |
-| 3 | `scripts/calibration_data.py` | 919 | Soft only (rma070 CI path trigger — no in-file grep) | ☐ Not started |
+| 3 | `scripts/calibration_data.py` | 919 | Soft only (rma070 CI path trigger — no in-file grep) | ☑ Done (commits `8ebcfe4`, `076c197`) |
 | 4 | `scripts/calibration_profile_approval.py` | 875 | **Yes** (rma074 CI path trigger + `compileall` file list) | ☐ Not started |
 | 5 | `native/llama_runtime/benchmark/rma133_benchmark.c` | 858 | **Yes — build script + Python contract test** | ☐ Not started |
 | 6 | `managed/ReachyMini.LocalLlm.Tests/Program.cs` | 853 | **Yes** (rma134 `sha256sum` evidence list) | ☐ Not started |
