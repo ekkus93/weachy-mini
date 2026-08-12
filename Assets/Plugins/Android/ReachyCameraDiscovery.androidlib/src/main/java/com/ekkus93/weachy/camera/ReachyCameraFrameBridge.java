@@ -2,13 +2,10 @@ package com.ekkus93.weachy.camera;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
@@ -72,7 +69,7 @@ public final class ReachyCameraFrameBridge {
     private static String message = "Camera frame acquisition is stopped.";
     private static String errorCode = "";
     private static String cameraId = "";
-    private static CameraDescriptor descriptor;
+    private static ReachyCameraDescriptor descriptor;
     private static FrameSnapshot latestFrame;
     private static ProcessCameraProvider cameraProvider;
     private static Camera boundCamera;
@@ -119,8 +116,8 @@ public final class ReachyCameraFrameBridge {
                 }
             }
 
-            CameraDescriptor requestedDescriptor =
-                    CameraDescriptor.load(activity, requestedCameraId);
+            ReachyCameraDescriptor requestedDescriptor =
+                    ReachyCameraDescriptor.load(activity, requestedCameraId);
             int targetRotation = activity.getWindowManager()
                     .getDefaultDisplay()
                     .getRotation();
@@ -501,7 +498,7 @@ public final class ReachyCameraFrameBridge {
         try {
             final long frameSession;
             final long frameSequence;
-            final CameraDescriptor frameDescriptor;
+            final ReachyCameraDescriptor frameDescriptor;
             synchronized (LOCK) {
                 if (expectedGeneration != generation ||
                         !"Running".equals(state) ||
@@ -895,81 +892,6 @@ public final class ReachyCameraFrameBridge {
         }
     }
 
-    private static final class CameraDescriptor {
-        final String cameraId;
-        final String facing;
-        final int sensorOrientationDegrees;
-        final Rect activeArray;
-        final ReachyFrameIntrinsics intrinsics;
-
-        CameraDescriptor(
-                String cameraId,
-                String facing,
-                int sensorOrientationDegrees,
-                Rect activeArray,
-                ReachyFrameIntrinsics intrinsics) {
-            this.cameraId = cameraId;
-            this.facing = facing;
-            this.sensorOrientationDegrees = sensorOrientationDegrees;
-            this.activeArray = new Rect(activeArray);
-            this.intrinsics = intrinsics;
-        }
-
-        static CameraDescriptor load(
-                Activity activity,
-                String selectedCameraId) throws CameraAccessException {
-            CameraManager manager = (CameraManager) activity.getSystemService(
-                    Context.CAMERA_SERVICE);
-            if (manager == null) {
-                throw new IllegalStateException(
-                        "Android returned no camera service.");
-            }
-            CameraCharacteristics characteristics =
-                    manager.getCameraCharacteristics(selectedCameraId);
-            Integer facingValue = characteristics.get(
-                    CameraCharacteristics.LENS_FACING);
-            Integer orientationValue = characteristics.get(
-                    CameraCharacteristics.SENSOR_ORIENTATION);
-            Rect activeArrayValue = characteristics.get(
-                    CameraCharacteristics.SENSOR_INFO_ACTIVE_ARRAY_SIZE);
-            if (activeArrayValue == null ||
-                    activeArrayValue.width() <= 0 ||
-                    activeArrayValue.height() <= 0) {
-                throw new IllegalStateException(
-                        "The selected camera exposes no valid active sensor array.");
-            }
-            int orientation = orientationValue == null ? 0 : orientationValue;
-            if (orientation != 0 && orientation != 90 &&
-                    orientation != 180 && orientation != 270) {
-                throw new IllegalStateException(
-                        "The selected camera exposes an invalid sensor orientation: " +
-                        orientation);
-            }
-            return new CameraDescriptor(
-                    selectedCameraId,
-                    facingLabel(facingValue),
-                    orientation,
-                    activeArrayValue,
-                    ReachyFrameIntrinsics.from(characteristics, activeArrayValue));
-        }
-
-        private static String facingLabel(Integer facing) {
-            if (facing == null) {
-                return "unknown";
-            }
-            if (facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                return "front";
-            }
-            if (facing == CameraCharacteristics.LENS_FACING_BACK) {
-                return "rear";
-            }
-            if (facing == CameraCharacteristics.LENS_FACING_EXTERNAL) {
-                return "external";
-            }
-            return "unknown";
-        }
-    }
-
     private static final class FrameSnapshot {
         final long sessionId;
         final long sequence;
@@ -1023,7 +945,7 @@ public final class ReachyCameraFrameBridge {
                 ImageProxy imageProxy,
                 long frameSessionId,
                 long frameSequence,
-                CameraDescriptor cameraDescriptor) {
+                ReachyCameraDescriptor cameraDescriptor) {
             if (imageProxy.getFormat() != ImageFormat.YUV_420_888) {
                 throw new IllegalStateException(
                         "CameraX ImageAnalysis returned unexpected format " +
