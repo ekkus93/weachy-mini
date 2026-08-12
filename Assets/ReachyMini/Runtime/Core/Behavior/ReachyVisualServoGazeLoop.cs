@@ -63,11 +63,11 @@ namespace ReachyMini.Behavior
                     when (loopToken.IsCancellationRequested)
                 {
                     return CancellationResult(
-                        cancellationToken,
                         adjustmentCount,
                         submittedFrameCount,
                         0.0,
-                        0.0);
+                        0.0,
+                        cancellationToken);
                 }
                 catch (ReachyVisualServoFeedbackUnavailableException exception)
                 {
@@ -136,11 +136,11 @@ namespace ReachyMini.Behavior
                             ReachyBehaviorPlannerStatus.Cancelled)
                         {
                             return CancellationResult(
-                                cancellationToken,
                                 adjustmentCount,
                                 submittedFrameCount,
                                 horizontalError,
-                                verticalError);
+                                verticalError,
+                                cancellationToken);
                         }
                         return PlannerFailure(
                             planResult,
@@ -179,11 +179,11 @@ namespace ReachyMini.Behavior
                         when (loopToken.IsCancellationRequested)
                     {
                         return CancellationResult(
-                            cancellationToken,
                             adjustmentCount,
                             submittedFrameCount,
                             horizontalError,
-                            verticalError);
+                            verticalError,
+                            cancellationToken);
                     }
 
                     submittedFrameCount = checked(
@@ -194,11 +194,11 @@ namespace ReachyMini.Behavior
                             ReachyBehaviorTrajectoryExecutionStatus.Cancelled)
                         {
                             return CancellationResult(
-                                cancellationToken,
                                 adjustmentCount,
                                 submittedFrameCount,
                                 horizontalError,
-                                verticalError);
+                                verticalError,
+                                cancellationToken);
                         }
                         return Result(
                             ReachyVisualServoStatus.ExecutionRejected,
@@ -227,11 +227,11 @@ namespace ReachyMini.Behavior
                         when (loopToken.IsCancellationRequested)
                     {
                         return CancellationResult(
-                            cancellationToken,
                             adjustmentCount,
                             submittedFrameCount,
                             horizontalError,
-                            verticalError);
+                            verticalError,
+                            cancellationToken);
                     }
 
                     if (waitResult.StopResult != null)
@@ -409,7 +409,7 @@ namespace ReachyMini.Behavior
             return null;
         }
 
-        private ReachyVisualServoResult PlannerFailure(
+        private static ReachyVisualServoResult PlannerFailure(
             ReachyBehaviorPlanResult plannerResult,
             int adjustmentCount,
             int submittedFrameCount,
@@ -439,12 +439,12 @@ namespace ReachyMini.Behavior
                 verticalError);
         }
 
-        private ReachyVisualServoResult CancellationResult(
-            CancellationToken callerToken,
+        private static ReachyVisualServoResult CancellationResult(
             int adjustmentCount,
             int submittedFrameCount,
             double horizontalError,
-            double verticalError)
+            double verticalError,
+            CancellationToken callerToken)
         {
             return callerToken.IsCancellationRequested
                 ? Result(
