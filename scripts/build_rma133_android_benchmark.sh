@@ -6,7 +6,19 @@ ROOT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 TOOLCHAIN_FILE="${ROOT_DIR}/toolchain.lock.json"
 RUNTIME_DIR="${RMA133_RUNTIME_DIR:-${ROOT_DIR}/build/rma133/runtime}"
 OUTPUT_DIR="${RMA133_BENCHMARK_OUTPUT_DIR:-${ROOT_DIR}/build/rma133/benchmark}"
-SOURCE_FILE="${ROOT_DIR}/native/llama_runtime/benchmark/rma133_benchmark.c"
+BENCHMARK_DIR="${ROOT_DIR}/native/llama_runtime/benchmark"
+# rma133_benchmark.c was split (docs/LARGE_FILE_REFACTOR_TODO_3.md, file #5)
+# into several files in this directory. List every one explicitly so the
+# compiler receives all of them -- clang links only the translation units it
+# is given, so omitting one here would silently fail with undefined
+# references for whatever moved out of the (now much smaller) anchor.
+SOURCE_FILES=(
+    "${BENCHMARK_DIR}/rma133_benchmark.c"
+    "${BENCHMARK_DIR}/rma133_benchmark_args.c"
+    "${BENCHMARK_DIR}/rma133_benchmark_platform.c"
+    "${BENCHMARK_DIR}/rma133_benchmark_output.c"
+    "${BENCHMARK_DIR}/rma133_benchmark_generation.c"
+)
 HEADER_DIR="${ROOT_DIR}/native/llama_runtime/include"
 
 mapfile -t pins < <(
@@ -54,10 +66,16 @@ if [[ ! -s "${RUNTIME_LIBRARY}" ]]; then
     printf 'RMA-133 requires the RMA-130 Android runtime at %s.\n' "${RUNTIME_LIBRARY}" >&2
     exit 1
 fi
-if [[ ! -f "${SOURCE_FILE}" || ! -f "${HEADER_DIR}/reachy_llama.h" ]]; then
-    printf '%s\n' 'RMA-133 benchmark source/header is missing.' >&2
+if [[ ! -f "${HEADER_DIR}/reachy_llama.h" ]]; then
+    printf '%s\n' 'RMA-133 benchmark header is missing.' >&2
     exit 1
 fi
+for source_file in "${SOURCE_FILES[@]}"; do
+    if [[ ! -f "${source_file}" ]]; then
+        printf 'RMA-133 benchmark source is missing: %s\n' "${source_file}" >&2
+        exit 1
+    fi
+done
 
 HOST_TAG="$(python3 - "${NDK_ROOT}" <<'PY'
 from pathlib import Path
@@ -91,7 +109,7 @@ mkdir -p "${OUTPUT_DIR}"
     -Wshadow \
     -Werror \
     -I"${HEADER_DIR}" \
-    "${SOURCE_FILE}" \
+    "${SOURCE_FILES[@]}" \
     -L"${RUNTIME_DIR}" \
     -Wl,--no-undefined \
     -Wl,-rpath,\$ORIGIN \
