@@ -152,7 +152,10 @@ namespace ReachyMini.Behavior
                 throw new ArgumentOutOfRangeException(
                     nameof(maximumTrajectoryFrameCount));
             }
+            int representablePlanDurationMilliseconds = checked(
+                maximumTrajectoryFrameCount * commandIntervalMilliseconds);
             if (maximumPlanDurationMilliseconds < minimumSegmentMilliseconds ||
+                maximumPlanDurationMilliseconds > representablePlanDurationMilliseconds ||
                 maximumPlanDurationMilliseconds >
                     ReachyBehaviorIntentPolicy.MaximumDurationMilliseconds)
             {
@@ -232,7 +235,7 @@ namespace ReachyMini.Behavior
                 minimumSegmentMilliseconds: 120,
                 commandIntervalMilliseconds: 50,
                 maximumTrajectoryFrameCount: 128,
-                maximumPlanDurationMilliseconds: 5_000,
+                maximumPlanDurationMilliseconds: 6_400,
                 maximumGazeBodyYawRadians: 0.35,
                 maximumGazeHeadYawRadians: 0.18,
                 maximumGazeHeadPitchRadians: 0.16,

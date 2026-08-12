@@ -23,7 +23,7 @@
     "minimum_segment_milliseconds": 120,
     "command_interval_milliseconds": 50,
     "maximum_trajectory_frame_count": 128,
-    "maximum_plan_duration_milliseconds": 5000,
+    "maximum_plan_duration_milliseconds": 6400,
     "maximum_gaze_body_yaw_radians": 0.35,
     "maximum_gaze_head_yaw_radians": 0.18,
     "maximum_gaze_head_pitch_radians": 0.16,
