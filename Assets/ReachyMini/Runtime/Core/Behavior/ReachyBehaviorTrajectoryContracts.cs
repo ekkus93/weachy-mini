@@ -36,7 +36,7 @@ namespace ReachyMini.Behavior
             return copy;
         }
 
-        private static ReadOnlyCollection<doubl> CopyTargets(
+        private static ReadOnlyCollection<double> CopyTargets(
             IReadOnlyList<double> source)
         {
             if (source == null ||
