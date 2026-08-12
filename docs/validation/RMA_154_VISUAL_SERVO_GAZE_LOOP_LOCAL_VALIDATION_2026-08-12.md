@@ -30,11 +30,11 @@ unavailable. Network access is unavailable, so the missing SDK cannot be install
 
 ```text
 python3 -m unittest scripts.tests.test_rma154_visual_servo_gaze -v
-Ran 6 tests
+Ran 7 tests
 OK
 ```
 
-The six checks cover source-set completeness, machine policy/runtime-default drift, the dual
+The seven checks cover source-set completeness, machine policy/runtime-default drift, the dual
 physical-motion/post-motion-frame gate, explicit fail-closed stops, read-only production feedback,
 and deterministic replay coverage.
 
@@ -43,7 +43,7 @@ The broader RMA-150 through RMA-154 focused source-contract matrix also passed:
 ```text
 python3 -m compileall -q scripts
 python3 -m unittest discover -s scripts/tests -p 'test_rma15*.py' -v
-Ran 38 tests
+Ran 40 tests
 OK
 ```
 
@@ -91,3 +91,34 @@ normal compiler/integration environment:
    simulated robot and is recentered through a transformed post-motion tracking frame.
 
 The roadmap checkboxes should remain open until those closure gates pass.
+
+## Dedicated Android physical acceptance gate
+
+A permanent RMA-154 device gate is now wired into
+`.github/workflows/local-unity-android-validation.yml` through
+`scripts/run_rma154_visual_servo_acceptance_android.sh`. The Android runtime acceptance uses a fixed
+synthetic optical target so tracker variability cannot hide a control defect, but all control and
+feedback machinery under test remains production machinery:
+
+- real `ReachyProductionAuthoritativeRuntime` MuJoCo state;
+- RMA-101 camera-relative rotation from authoritative camera-body pose;
+- RMA-102 homography and valid-coverage calculation;
+- bounded RMA-112 world-model updates;
+- `ReachyProductionVisualServoFeedbackSource`;
+- the RMA-152 deterministic planner and trajectory executor;
+- `ReachyProductionBehaviorControllerTargetSink`; and
+- the normal production position-target command path.
+
+The report is accepted only when the target starts outside tolerance, authoritative state advances,
+body/head actuator state actually changes, a post-motion transformed frame is observed, the visual
+error decreases into tolerance, at least one bounded trajectory is submitted, and the forbidden
+requested-target/raw-joint/torque evidence fields remain false. The shell gate also archives logcat,
+package/activity state, screen capture, environment, APK digest, and report digest.
+
+The same review exposed and corrected the pre-existing RMA-152 horizontal sign mismatch: image-right
+requires negative physical `yaw_body` for the pinned RMA-101/MuJoCo basis. Focused static coverage now
+guards that sign in both exact gaze and lost-target search-center planning.
+
+This sandbox cannot run the physical Android gate or compile Unity/.NET. Therefore this document still
+does **not** claim RMA-154 closed; device and managed compiler evidence must come from the normal
+validation environment.

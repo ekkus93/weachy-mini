@@ -32,6 +32,12 @@ The visual error is calculated only from transformed normalized image bounds:
 The loop does not infer success from planner targets, desired poses, queue acceptance, or command
 completion.
 
+During physical-loop integration, the RMA-152 horizontal gaze sign was corrected against the pinned
+RMA-101/MuJoCo coordinate contract. A transformed-image target to the right now commands negative
+physical body/head horizontal correction because neutral image-right is world `-Y` while positive
+`yaw_body` turns the robot toward world `+Y`. This correction is protected in the RMA-152 managed and
+static contracts; RMA-154 does not add an adaptive or hidden sign-flip fallback.
+
 ## Closed-loop iteration
 
 For each visible off-center target:
@@ -126,8 +132,13 @@ The integrated acceptance scenario is:
 7. the face converges into the configured center tolerance or the loop stops explicitly.
 
 A managed deterministic contract fixture simulates this causal sequence and separately proves that
-a fresh-looking frame with no physical actuator motion cannot unlock another adjustment. The final
-Unity/MuJoCo behavior gate must still execute the real integrated path.
+a fresh-looking frame with no physical actuator motion cannot unlock another adjustment. A dedicated
+Android physical gate (`ReachyRma154VisualServoAcceptance` plus
+`scripts/run_rma154_visual_servo_acceptance_android.sh`) uses a fixed synthetic optical target to avoid
+tracker variance while exercising the real production MuJoCo state, camera-relative rotation,
+homography, coverage, world model, production feedback adapter, RMA-152 planner/executor, and normal
+position-controller sink. The gate requires actual authoritative actuator motion and a transformed
+frame produced from that moved state before it accepts centering.
 
 ## Closure requirements
 

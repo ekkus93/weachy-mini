@@ -176,6 +176,32 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         ):
             self.assertIn(required, source)
 
+    def test_gaze_horizontal_sign_matches_pinned_optical_and_body_yaw_axes(self) -> None:
+        gaze = (
+            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs"
+        ).read_text(encoding="utf-8")
+        search = (
+            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.BaselineGaze.cs"
+        ).read_text(encoding="utf-8")
+        managed = (
+            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Planning.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "double horizontal = -Math.Atan2(direction.X, direction.Z);", gaze
+        )
+        self.assertIn(
+            "double horizontal = -Math.Atan2(direction.X, direction.Z);", search
+        )
+        self.assertIn(
+            "right-side entity produces negative physical body yaw", managed
+        )
+        self.assertIn(
+            "right-side gaze applies negative physical body-yaw delta", managed
+        )
+        self.assertNotIn(
+            "gazeYaw > positions[ReachyBehaviorPlannerActuators.BodyYaw]", managed
+        )
+
     def test_motion_is_relative_to_authoritative_state(self) -> None:
         planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(
             encoding="utf-8"

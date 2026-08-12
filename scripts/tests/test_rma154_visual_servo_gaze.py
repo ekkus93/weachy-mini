@@ -7,7 +7,10 @@ ROOT = Path(__file__).resolve().parents[2]
 BEHAVIOR = ROOT / "Assets/ReachyMini/Runtime/Core/Behavior"
 RENDERING = ROOT / "Assets/ReachyMini/Runtime/Rendering"
 MANAGED = ROOT / "managed/ReachyMini.Core.Tests"
+APPLICATION = ROOT / "Assets/ReachyMini/Runtime/Application"
 POLICY = ROOT / "models/reachy-mini/visual-servo-gaze-policy-v1.json"
+WORKFLOW = ROOT / ".github/workflows/local-unity-android-validation.yml"
+DEVICE_SCRIPT = ROOT / "scripts/run_rma154_visual_servo_acceptance_android.sh"
 
 
 class Rma154VisualServoGazeContracts(unittest.TestCase):
@@ -21,6 +24,15 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             BEHAVIOR / "ReachyVisualServoGazeLoop.cs": "class ReachyVisualServoGazeLoop",
             RENDERING / "ReachyProductionVisualServoFeedbackSource.cs": (
                 "class ReachyProductionVisualServoFeedbackSource"
+            ),
+            APPLICATION / "ReachyRma154VisualServoAcceptance.cs": (
+                "partial class ReachyRma154VisualServoAcceptance"
+            ),
+            APPLICATION / "ReachyRma154VisualServoAcceptance.Feedback.cs": (
+                "class SyntheticOpticalTargetFeedbackSource"
+            ),
+            APPLICATION / "ReachyRma154VisualServoAcceptance.Report.cs": (
+                "private sealed class Report"
             ),
             MANAGED / "Rma154VisualServoGazeLoopContractTests.cs": (
                 "EdgeTargetRecentersOnlyAfterAuthoritativeMotionAndNewFrame"
@@ -147,9 +159,63 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             "SubmitCommandsRaw",
             "ReachySimulationCommandBatch",
             "SetQpos",
-            "torque",
+            "SubmitTorque",
+            "TorqueCommand",
         ):
             self.assertNotIn(forbidden, combined)
+
+
+    def test_physical_android_acceptance_closes_real_feedback_path(self) -> None:
+        acceptance = "\n".join(
+            (APPLICATION / filename).read_text(encoding="utf-8")
+            for filename in (
+                "ReachyRma154VisualServoAcceptance.cs",
+                "ReachyRma154VisualServoAcceptance.Feedback.cs",
+                "ReachyRma154VisualServoAcceptance.Report.cs",
+            )
+        )
+        for required in (
+            "ReachyProductionVisualServoFeedbackSource",
+            "ReachyProductionBehaviorControllerTargetSink",
+            "ReachyCameraRelativeRotationCalculator.Calculate",
+            "ReachyCameraHomographyCalculator.Build",
+            "ReachyCameraValidCoverageCalculator.Calculate",
+            "ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot",
+            "runtime.TryCaptureLatestAuthoritativeState",
+            "ObservedPhysicalMotion",
+            "ObservedPostMotionTransformedFrame",
+            "result.Centered",
+            "maximumPhysicalMotion",
+        ):
+            self.assertIn(required, acceptance)
+        for forbidden in (
+            "NativeReachySim",
+            "ReachySimSession",
+            "SubmitCommandsRaw",
+            "SetQpos",
+            "SubmitTorque",
+            "TorqueCommand",
+        ):
+            self.assertNotIn(forbidden, acceptance)
+
+        script = DEVICE_SCRIPT.read_text(encoding="utf-8")
+        for required in (
+            "--ez reachy_rma154_acceptance true",
+            '"centered",',
+            '"actual_motion_observed",',
+            '"post_motion_frame_observed",',
+            '"requested_target_used_as_motion_proof",',
+            '"raw_joint_command_used",',
+            '"torque_command_used",',
+            'report.get("maximum_authoritative_motion_radians"',
+        ):
+            self.assertIn(required, script)
+
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "run_rma154_visual_servo_acceptance_android.sh", workflow
+        )
+        self.assertIn("rma154-visual-servo-report-${{ github.sha }}", workflow)
 
     def test_replay_contract_is_covered(self) -> None:
         test_source = (

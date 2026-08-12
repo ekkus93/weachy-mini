@@ -324,6 +324,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Install and run RMA-154 visual-servo acceptance
+        id: visual_servo_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA154_VISUAL_SERVO_REPORT_DIR: ${{ runner.temp }}/rma154-visual-servo-report
+        run: bash scripts/run_rma154_visual_servo_acceptance_android.sh
+
+      - name: Upload RMA-154 visual-servo evidence
+        if: ${{ always() && steps.visual_servo_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma154-visual-servo-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma154-visual-servo-report
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Install and run RMA-022 lifecycle acceptance
         id: lifecycle_acceptance
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}

@@ -44,8 +44,8 @@ namespace ReachyMini.Core.Tests
             Equal(
                 true,
                 plan.Frames[0].TargetPositionsRadians[
-                    ReachyBehaviorPlannerActuators.BodyYaw] > 0.0,
-                "right-side entity produces positive bounded body yaw");
+                    ReachyBehaviorPlannerActuators.BodyYaw] < 0.0,
+                "right-side entity produces negative physical body yaw toward optical image-right");
             AssertPlanWithinPolicy(
                 plan,
                 NeutralMotion().PositionsRadians,
@@ -268,8 +268,8 @@ namespace ReachyMini.Core.Tests
                 ReachyBehaviorPlannerActuators.BodyYaw] ?? double.NaN;
             Equal(
                 true,
-                gazeYaw > positions[ReachyBehaviorPlannerActuators.BodyYaw],
-                "gaze applies body-yaw delta to authoritative pose");
+                gazeYaw < positions[ReachyBehaviorPlannerActuators.BodyYaw],
+                "right-side gaze applies negative physical body-yaw delta to authoritative pose");
         }
 
         private static void SafetyInterlocksBlockMotionWithoutBlockingSpeechOnlyIntent()

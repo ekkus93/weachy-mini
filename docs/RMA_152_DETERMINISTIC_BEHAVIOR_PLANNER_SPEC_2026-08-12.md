@@ -78,6 +78,13 @@ RMA-152 provides a small deterministic baseline only:
   velocity requirement, and smoothstep peak acceleration requirement;
 - no segment is represented as one delayed final-target step.
 
+RMA-154 physical-loop integration fixes the horizontal sign against the pinned camera/body convention:
+transformed optical `+X` is image-right/world `-Y` at neutral, while positive `yaw_body` rotates the
+robot forward axis toward world `+Y`. Therefore a right-side image target must produce negative
+body/head horizontal correction. The same sign is used by exact gaze acquisition and bounded
+gaze-search centering. This is a semantic correction only; position, velocity, acceleration, and
+controller-path safety limits are unchanged.
+
 The Stewart basis is explicitly labeled an engineering estimate. It is not a calibrated inverse
 kinematics claim. RMA-154 later closes the gaze loop using transformed-image feedback.
 

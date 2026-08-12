@@ -31,7 +31,7 @@ Post-hardening focused static contract suite:
 
 ```text
 python3 -m unittest -v scripts.tests.test_rma152_behavior_planner
-Ran 12 tests
+Ran 13 tests
 OK
 ```
 
@@ -75,3 +75,17 @@ fixture covers:
 
 Managed warnings-as-errors/Unity compilation and CI remain required before the roadmap checkbox is
 closed.
+
+## RMA-154 physical-loop sign correction
+
+RMA-154 integration review found that the original managed gaze fixture asserted a right-side image
+target should produce **positive** `yaw_body`. That was internally deterministic but physically inverted
+for the pinned model/camera convention: the RMA-101 optical basis has image-right along neutral world
+`-Y`, while the pinned MuJoCo `yaw_body` hinge is `+Z`, so positive body yaw turns the robot forward
+axis toward world `+Y`.
+
+The planner now negates the horizontal transformed-image angle before splitting it between body yaw
+and the Stewart yaw estimate. The lost-target search-center helper uses the same sign. The managed
+fixture was corrected to require negative physical body yaw for a right-side target, and the permanent
+RMA-152 static contract now guards this sign. No safety envelope, cadence, acceleration limit, or
+production command route was relaxed.

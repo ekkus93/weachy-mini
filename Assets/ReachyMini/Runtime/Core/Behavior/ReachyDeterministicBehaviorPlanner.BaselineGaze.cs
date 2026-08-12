@@ -137,7 +137,12 @@ namespace ReachyMini.Behavior
             double[] target,
             ReachyBaselineBehaviorPolicy baselinePolicy)
         {
-            double horizontal = Math.Atan2(direction.X, direction.Z);
+            // RMA-101 fixes Reachy optical +X as image-right. In the
+            // pinned MuJoCo model, positive yaw_body rotates the robot's
+            // forward +X axis toward world +Y, while optical image-right is
+            // world -Y at neutral. Negate the image-space horizontal angle
+            // so a target to the right commands physical yaw toward it.
+            double horizontal = -Math.Atan2(direction.X, direction.Z);
             double horizontalNorm = Math.Sqrt(
                 (direction.X * direction.X) +
                 (direction.Z * direction.Z));
