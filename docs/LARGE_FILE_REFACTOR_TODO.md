@@ -32,7 +32,7 @@ skill) and dispatching one analysis pass per file.
 | # | File | Lines (before) | Status |
 |---|---|---|---|
 | 1 | `Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs` | 2102 | ☑ Done (commits `4193bdb`, `7b5c778`, `6dc3ff2`, `52fc48e`, `0b48dfe`) |
-| 2 | `Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs` | 1794 | ☐ Not started |
+| 2 | `Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.cs` | 1794 | ☑ Done (commits `a9edbf9`, `c688dab`, `c08cfc0`, `4e716ca`, `73ad983`, `2d4b4cc`, `19d2082`, `14fabba`, `cc37623`) |
 | 3 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyBoundedWorldModel.cs` | 1705 | ☐ Not started |
 | 4 | `managed/ReachyMini.RemoteVlm.Tests/Program.cs` | 1659 | ☐ Not started |
 | 5 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs` | 1516 | ☐ Not started |
