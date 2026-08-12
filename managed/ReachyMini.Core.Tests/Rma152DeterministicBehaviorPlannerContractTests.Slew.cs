@@ -95,6 +95,49 @@ namespace ReachyMini.Core.Tests
             }
         }
 
+        private static void SafeRestCoversFullSoftEnvelope()
+        {
+            ReachyBehaviorPlannerPolicy policy =
+                ReachyBehaviorPlannerPolicy.CreateMobileDefault();
+            var planner = new ReachyDeterministicBehaviorPlanner(policy);
+            var positions = new double[ReachyBehaviorPlannerActuators.Count];
+            for (int index = 0; index < positions.Length; ++index)
+            {
+                ReachyBehaviorActuatorLimit limit = policy.ActuatorLimits[index];
+                positions[index] = Math.Abs(limit.MinimumPositionRadians) >=
+                    Math.Abs(limit.MaximumPositionRadians)
+                        ? limit.MinimumPositionRadians
+                        : limit.MaximumPositionRadians;
+            }
+            var motion = new ReachyBehaviorMotionSnapshot(
+                positions,
+                new double[ReachyBehaviorPlannerActuators.Count]);
+
+            ReachyBehaviorPlanResult result = planner.PlanSafeRest(
+                motion,
+                SafeMotion());
+            Equal(true, result.Succeeded, "full-envelope safe-rest plan");
+            ReachyBehaviorTrajectoryPlan plan = result.Plan ??
+                throw new InvalidOperationException(
+                    "Full-envelope safe-rest plan was null.");
+            Equal(
+                true,
+                plan.Frames.Count <= policy.MaximumTrajectoryFrameCount,
+                "full-envelope safe-rest frame budget");
+            ReachyBehaviorTrajectoryFrame finalFrame =
+                plan.Frames[plan.Frames.Count - 1];
+            for (int index = 0;
+                index < ReachyBehaviorPlannerActuators.Count;
+                ++index)
+            {
+                Equal(
+                    0.0,
+                    finalFrame.TargetPositionsRadians[index],
+                    "full-envelope safe-rest neutral target");
+            }
+            AssertScheduledPlanWithinPolicy(plan, positions, policy);
+        }
+
         private static void AssertScheduledPlanWithinPolicy(
             ReachyBehaviorTrajectoryPlan plan,
             IReadOnlyList<double> initialPositions,

@@ -17,6 +17,7 @@ namespace ReachyMini.Core.Tests
             GestureTrajectoryIsDeterministicAndBounded();
             TrajectoryFramesSlewInsteadOfDelayedTargetStep();
             RecoilPreservesUnrelatedBodyYaw();
+            SafeRestCoversFullSoftEnvelope();
             MotionPlanningIsRelativeToAuthoritativeState();
             SafetyInterlocksBlockMotionWithoutBlockingSpeechOnlyIntent();
             AuthoritativeStateMapsIntoPlannerSafetyAndMotion();
