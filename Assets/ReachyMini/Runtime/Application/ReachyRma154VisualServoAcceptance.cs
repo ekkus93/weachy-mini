@@ -74,6 +74,8 @@ namespace ReachyMini.AppState
         private const int RuntimeWaitMilliseconds = 60_000;
         private const int OverallAcceptanceTimeoutMilliseconds = 45_000;
         private const int StateAdvanceDelayMilliseconds = 5;
+        private const int ResetSettleSampleDelayMilliseconds = 20;
+        private const int ResetSettleConsecutiveSamples = 8;
         private const int ImageWidth = 640;
         private const int ImageHeight = 480;
         private const double FocalLengthPixels = 320.0;
@@ -82,6 +84,8 @@ namespace ReachyMini.AppState
         private const double TargetWidthNormalized = 0.08;
         private const double TargetHeightNormalized = 0.08;
         private const double MotionThresholdRadians = 1.0e-5;
+        private const double ResetSettleMaximumMotionRadians = 5.0e-4;
+        private const double ResetSettleMaximumVelocityRadiansPerSecond = 2.0e-2;
         private const string CameraId = "rma154-synthetic-optical-target";
         private const string ProviderId = "rma154-acceptance-tracker";
         private const string LocalTrackId = "face-154";
@@ -345,17 +349,62 @@ namespace ReachyMini.AppState
                     "RMA-154 could not allocate a reset-state frame.");
             }
 
+            ReachyBehaviorMotionSnapshot? previousMotion = null;
+            uint? resetContinuityId = null;
+            ulong lastSequence = 0UL;
+            int stableSampleCount = 0;
+
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (runtime.TryCaptureLatestAuthoritativeState(frame) &&
-                    frame.ContinuityId != previousContinuityId &&
-                    frame.Sequence > 0UL)
+                if (!runtime.TryCaptureLatestAuthoritativeState(frame) ||
+                    frame.ContinuityId == previousContinuityId ||
+                    frame.Sequence == 0UL)
+                {
+                    await Task.Delay(
+                            StateAdvanceDelayMilliseconds,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+
+                if (resetContinuityId.HasValue &&
+                    frame.ContinuityId != resetContinuityId.Value)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-154 reset continuity changed while waiting for the neutral mechanism to settle.");
+                }
+                resetContinuityId ??= frame.ContinuityId;
+
+                if (frame.Sequence <= lastSequence)
+                {
+                    await Task.Delay(
+                            StateAdvanceDelayMilliseconds,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+
+                ReachyBehaviorMotionSnapshot currentMotion =
+                    ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot(
+                        frame);
+                bool settled = previousMotion != null &&
+                    MaximumHeadBodyMotion(previousMotion, currentMotion) <=
+                        ResetSettleMaximumMotionRadians &&
+                    MaximumHeadBodyVelocity(currentMotion) <=
+                        ResetSettleMaximumVelocityRadiansPerSecond;
+                stableSampleCount = settled
+                    ? checked(stableSampleCount + 1)
+                    : 0;
+                if (stableSampleCount >= ResetSettleConsecutiveSamples)
                 {
                     return frame;
                 }
+
+                previousMotion = currentMotion;
+                lastSequence = frame.Sequence;
                 await Task.Delay(
-                        StateAdvanceDelayMilliseconds,
+                        ResetSettleSampleDelayMilliseconds,
                         cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -386,6 +435,22 @@ namespace ReachyMini.AppState
                     Math.Abs(
                         after.PositionsRadians[index] -
                         before.PositionsRadians[index]));
+            }
+            return maximum;
+        }
+
+        private static double MaximumHeadBodyVelocity(
+            ReachyBehaviorMotionSnapshot motion)
+        {
+            double maximum = 0.0;
+            for (int index = ReachyBehaviorPlannerActuators.BodyYaw;
+                index <= ReachyBehaviorPlannerActuators.Stewart6;
+                ++index)
+            {
+                maximum = Math.Max(
+                    maximum,
+                    Math.Abs(
+                        motion.VelocitiesRadiansPerSecond[index]));
             }
             return maximum;
         }
