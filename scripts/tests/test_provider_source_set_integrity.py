@@ -116,7 +116,7 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
 
     def test_rma152_behavior_planner_source_set_is_complete(self) -> None:
         behavior = ROOT / "Assets/ReachyMini/Runtime/Core/Behavior"
-        managed = ROOT / "models/ReachyMini.Core.Tests"
+        managed = ROOT / "managed/ReachyMini.Core.Tests"
         required = {
             behavior / "ReachyBehaviorPlannerPolicy.cs": "class ReachyBehaviorPlannerPolicy",
             behavior / "ReachyBehaviorPlannerState.cs": "class ReachyBehaviorMotionSnapshot",
