@@ -1,6 +1,6 @@
 # RMA-133 V6 physical reproducibility protocol — 2026-08-08
 
-**Status:** Protocol candidate v3
+**Status:** Protocol candidate v4
 
 ## Purpose
 
@@ -27,7 +27,7 @@ The reproducibility run must use the exact V6 benchmark/runtime inputs accepted 
 - `third_party/llama-cpp-source.lock.json`
 - `toolchain.lock.json`
 
-Hosted validation must check out the accepted source SHA into an isolated `accepted-v6` source tree and verify that checkout resolves exactly to the accepted commit before a physical reproducibility run is eligible. Runtime/benchmark builds and source/toolchain pins must resolve from that isolated accepted tree. Immediately before the physical reproducibility harness runs, the workflow must bind the harness to byte-identical copies of the accepted V6 benchmark runner and scorer and verify those copies with `cmp`. The evolving `master` checkout is not a substitute and must never be used as an implicit fallback for frozen V6 inputs.
+Hosted validation must check out the accepted source SHA into an isolated `accepted-v6` source tree and verify that checkout resolves exactly to the accepted commit before a physical reproducibility run is eligible. Runtime/benchmark builds and source/toolchain pins must resolve from that isolated accepted tree. The physical reproducibility harness must import the accepted V6 benchmark runner directly from that isolated tree; the accepted runner must therefore resolve its scorer and frozen contract inputs relative to the same accepted root. The evolving `master` checkout is not a substitute and must never be used as an implicit fallback for frozen V6 inputs.
 
 The selected artifact remains exactly:
 
@@ -100,6 +100,8 @@ The physical attempt stopped **before temperature sampling or inference** becaus
 Protocol candidate v2 fixes that defect by using the self-nonmatching glob `*rma133_benchmark_v[6]*`, adds a regression proving the scan command cannot match its own literal command line, restores the frozen V6 device free-space guard, and passes Ruff 0.12.0 formatting/lint plus the reproducibility unit contracts. No frozen V6 benchmark/runtime input changed.
 
 Protocol candidate v3 separates the immutable accepted V6 source from normal source-tree maintenance. The workflow checks out `e3007579d0365d31f5d5efc378fc81a13f2d705e` into `accepted-v6`, verifies that exact commit and a clean checkout, builds the frozen runtime/benchmark from that tree, and copies the accepted benchmark runner and scorer into the ephemeral execution workspace immediately before the reproducibility harness starts. `cmp` verifies those execution copies are byte-identical to the accepted checkout. This preserves the accepted execution bytes without requiring later lint-only maintenance on `master` to restore historical lint suppressions in the live source tree. No candidate, model artifact, runtime profile, benchmark case, grammar, prompt, scorer, or acceptance threshold changes.
+
+Protocol candidate v4 fixes the accepted-source root binding exposed by the first v3 physical attempt. Instead of copying the accepted runner and scorer into live `scripts/`, the workflow sets `RMA133_ACCEPTED_V6_ROOT` and the reproducibility harness imports the accepted runner directly from `accepted-v6/scripts`. The runner then derives `ROOT`, `SCORER`, and the frozen cases/config paths from the same accepted checkout, so the scorer's fail-closed path contract remains valid. No candidate, model artifact, runtime profile, benchmark case, grammar, prompt, scorer, or acceptance threshold changes.
 
 ## Interpretation
 
