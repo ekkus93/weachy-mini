@@ -58,29 +58,15 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             feedback["requires_frame_authoritative_sequence_at_or_after_observed_motion"]
         )
 
-        runtime = (BEHAVIOR / "ReachyVisualServoPolicy.cs").read_text(
-            encoding="utf-8"
-        )
+        runtime = (BEHAVIOR / "ReachyVisualServoPolicy.cs").read_text(encoding="utf-8")
         named_values = {
-            "horizontalToleranceNormalized": policy["tracking"][
-                "horizontal_tolerance_normalized"
-            ],
-            "verticalToleranceNormalized": policy["tracking"][
-                "vertical_tolerance_normalized"
-            ],
-            "minimumValidCoverageFraction": policy["tracking"][
-                "minimum_valid_coverage_fraction"
-            ],
-            "minimumObservedMotionRadians": feedback[
-                "minimum_observed_motion_radians"
-            ],
-            "feedbackPollDelayMilliseconds": policy["loop"][
-                "feedback_poll_delay_milliseconds"
-            ],
+            "horizontalToleranceNormalized": policy["tracking"]["horizontal_tolerance_normalized"],
+            "verticalToleranceNormalized": policy["tracking"]["vertical_tolerance_normalized"],
+            "minimumValidCoverageFraction": policy["tracking"]["minimum_valid_coverage_fraction"],
+            "minimumObservedMotionRadians": feedback["minimum_observed_motion_radians"],
+            "feedbackPollDelayMilliseconds": policy["loop"]["feedback_poll_delay_milliseconds"],
             "maximumIterations": policy["loop"]["maximum_iterations"],
-            "maximumLoopDurationMilliseconds": policy["loop"][
-                "maximum_loop_duration_milliseconds"
-            ],
+            "maximumLoopDurationMilliseconds": policy["loop"]["maximum_loop_duration_milliseconds"],
         }
         for name, expected in named_values.items():
             match = re.search(rf"{name}:\s*([0-9_.]+)(?:e-?[0-9]+)?", runtime)
