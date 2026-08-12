@@ -12,7 +12,20 @@ CONFIG = ROOT / "benchmarks" / "rma133" / "candidates.json"
 CASES = ROOT / "benchmarks" / "rma133" / "behavior_cases.tsv"
 SCORER = ROOT / "scripts" / "score_rma133_benchmark.py"
 SYSTEM_PROMPT = ROOT / "benchmarks" / "rma133" / "system_prompt.txt"
-BENCHMARK_SOURCE = ROOT / "native" / "llama_runtime" / "benchmark" / "rma133_benchmark.c"
+# rma133_benchmark.c is split (docs/LARGE_FILE_REFACTOR_TODO_3.md, file #5)
+# into several files in the same directory. List every target explicitly
+# (rather than a glob) so this check doesn't accidentally pull in the
+# unrelated rma133_benchmark_v6.c sibling, and concatenate whichever of them
+# currently exist so it still covers the full implementation regardless of
+# which file each part now lives in.
+BENCHMARK_DIR = ROOT / "native" / "llama_runtime" / "benchmark"
+BENCHMARK_SOURCE_FILES = [
+    "rma133_benchmark.c",
+    "rma133_benchmark_args.c",
+    "rma133_benchmark_platform.c",
+    "rma133_benchmark_output.c",
+    "rma133_benchmark_generation.c",
+]
 DEVICE_RUNNER = ROOT / "scripts" / "run_rma133_device_benchmark.sh"
 
 spec = importlib.util.spec_from_file_location("rma133_scorer", SCORER)
@@ -272,7 +285,11 @@ class Rma133BenchmarkContractTests(unittest.TestCase):
                 )
 
     def test_benchmark_has_no_network_or_model_fallback_path(self) -> None:
-        source = BENCHMARK_SOURCE.read_text(encoding="utf-8")
+        source = "".join(
+            (BENCHMARK_DIR / name).read_text(encoding="utf-8")
+            for name in BENCHMARK_SOURCE_FILES
+            if (BENCHMARK_DIR / name).exists()
+        )
         runner = DEVICE_RUNNER.read_text(encoding="utf-8")
         prompt = SYSTEM_PROMPT.read_text(encoding="utf-8")
         self.assertNotIn("http://", source)
