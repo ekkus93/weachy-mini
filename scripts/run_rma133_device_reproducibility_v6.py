@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE_PATH = ROOT / "scripts/run_rma133_device_benchmark_v6.py"
+ACCEPTED_V6_ROOT = Path(os.environ.get("RMA133_ACCEPTED_V6_ROOT", ROOT)).resolve()
+BASE_PATH = ACCEPTED_V6_ROOT / "scripts/run_rma133_device_benchmark_v6.py"
 BASE_SPEC = importlib.util.spec_from_file_location("run_rma133_device_benchmark_v6", BASE_PATH)
 if BASE_SPEC is None or BASE_SPEC.loader is None:
     raise RuntimeError(f"Cannot load RMA-133 benchmark runner: {BASE_PATH}")
