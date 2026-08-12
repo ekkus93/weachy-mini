@@ -5,7 +5,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACTS = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs"
-MANAGER = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs"
+# ReachyLocalModelPackageManager.cs was split (docs/LARGE_FILE_REFACTOR_TODO.md) into
+# several partial ReachyLocalModelPackageManager.*.cs files. Concatenate them so this
+# check still covers the full implementation regardless of which file each member lives
+# in.
+LOCAL_MODELS_DIR = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels"
+MANAGER_PARTS = [
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.cs",
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.Download.cs",
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.Installation.cs",
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.Maintenance.cs",
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.Paths.cs",
+    LOCAL_MODELS_DIR / "ReachyLocalModelPackageManager.Readiness.cs",
+]
 HTTP = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs"
 SETTINGS = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs"
 
@@ -17,7 +29,7 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> None:
     contracts = CONTRACTS.read_text(encoding="utf-8")
-    manager = MANAGER.read_text(encoding="utf-8")
+    manager = "\n".join(part.read_text(encoding="utf-8") for part in MANAGER_PARTS)
     http = HTTP.read_text(encoding="utf-8")
     settings = SETTINGS.read_text(encoding="utf-8")
 

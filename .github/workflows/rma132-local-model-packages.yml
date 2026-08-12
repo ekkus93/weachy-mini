@@ -92,9 +92,18 @@ jobs:
           set -euo pipefail
           OUT="artifacts/rma132-local-model-packages"
           mkdir -p "$OUT"
+          # ReachyLocalModelPackageManager.cs was split (docs/LARGE_FILE_REFACTOR_TODO.md)
+          # into several ReachyLocalModelPackageManager.*.cs files. Hash them all so this
+          # evidence field still covers the full implementation regardless of which file
+          # each member now lives in.
           sha256sum \
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs \
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Download.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Readiness.cs \
             Assets/ReachyMini/Runtime/Core/LocalModels/HttpLocalModelDownloadTransport.cs \
             managed/ReachyMini.LocalModelPackages.Tests/Program.cs \
             managed/ReachyMini.LocalModelPackages.Tests/ReachyMini.LocalModelPackages.Tests.csproj \
