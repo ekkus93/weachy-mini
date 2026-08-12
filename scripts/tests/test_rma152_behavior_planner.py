@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -88,10 +89,78 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
                 limits[name]["maximum_position_radians"],
             )
 
+    def test_runtime_policy_matches_machine_readable_policy(self) -> None:
+        policy = json.loads(POLICY.read_text(encoding="utf-8"))
+        source = (BEHAVIOR / "ReachyBehaviorPlannerPolicy.cs").read_text(encoding="utf-8")
+
+        named_values = {
+            "minimumGazeConfidence": policy["world_model"]["minimum_gaze_confidence"],
+            "minimumValidCoverageFraction": policy["world_model"][
+                "minimum_valid_coverage_fraction"
+            ],
+            "maximumWorldSnapshotAgeNanoseconds": policy["world_model"][
+                "maximum_snapshot_age_nanoseconds"
+            ],
+            "minimumSegmentMilliseconds": policy["planning"][
+                "minimum_segment_milliseconds"
+            ],
+            "maximumPlanDurationMilliseconds": policy["planning"][
+                "maximum_plan_duration_milliseconds"
+            ],
+            "maximumGazeBodyYawRadians": policy["planning"][
+                "maximum_gaze_body_yaw_radians"
+            ],
+            "maximumGazeHeadYawRadians": policy["planning"][
+                "maximum_gaze_head_yaw_radians"
+            ],
+            "maximumGazeHeadPitchRadians": policy["planning"][
+                "maximum_gaze_head_pitch_radians"
+            ],
+        }
+        for name, expected in named_values.items():
+            match = re.search(rf"{name}:\s*([0-9_.]+)L?", source)
+            if match is None:
+                self.fail(f"runtime planner policy value missing: {name}")
+            raw = match.group(1).replace("_", "")
+            actual = float(raw)
+            self.assertAlmostEqual(float(expected), actual, places=12, msg=name)
+
+        blocks = re.findall(
+            r"new ReachyBehaviorActuatorLimit\((.*?)\)",
+            source,
+            flags=re.DOTALL,
+        )
+        self.assertEqual(9, len(blocks))
+        runtime_limits = []
+        for block in blocks:
+            values = [item.strip() for item in block.split(",")]
+            self.assertEqual(4, len(values))
+            evaluated = []
+            for value in values:
+                if value.endswith("+ inset"):
+                    evaluated.append(float(value[: -len("+ inset")].strip()) + 0.015)
+                elif value.endswith("- inset"):
+                    evaluated.append(float(value[: -len("- inset")].strip()) - 0.015)
+                else:
+                    evaluated.append(float(value))
+            runtime_limits.append(evaluated)
+
+        for machine, runtime in zip(policy["actuator_limits"], runtime_limits, strict=True):
+            self.assertAlmostEqual(machine["minimum_position_radians"], runtime[0], places=12)
+            self.assertAlmostEqual(machine["maximum_position_radians"], runtime[1], places=12)
+            self.assertAlmostEqual(
+                machine["maximum_velocity_radians_per_second"], runtime[2], places=12
+            )
+            self.assertAlmostEqual(
+                machine["maximum_acceleration_radians_per_second_squared"],
+                runtime[3],
+                places=12,
+            )
+
     def test_gaze_resolution_is_fail_closed(self) -> None:
-        source = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs"
-        ).read_text(encoding="utf-8")
+        source = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs").read_text(
+            encoding="utf-8"
+        )
         for required in (
             "WorldSnapshotStale",
             "GazeTargetNotFound",
@@ -106,14 +175,12 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             self.assertIn(required, source)
 
     def test_motion_is_relative_to_authoritative_state(self) -> None:
-        planner = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs"
-        ).read_text(
+        planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(
             encoding="utf-8"
         )
-        gaze = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs"
-        ).read_text(encoding="utf-8")
+        gaze = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("CopyTarget(\n                motionSnapshot.PositionsRadians)", planner)
         self.assertIn(
             "target[ReachyBehaviorPlannerActuators.BodyYaw] += bodyYaw", gaze
@@ -128,9 +195,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
                 "ReachyBehaviorTrajectoryContracts.cs",
             )
         )
-        planner = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs"
-        ).read_text(
+        planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(
             encoding="utf-8"
         )
         trajectory = (
@@ -157,6 +222,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             "HardStopHealthFlag",
             "CreateMotionSnapshot",
             "CreateSafetySnapshot",
+            "~KnownHealthFlags",
         ):
             self.assertIn(required, authoritative)
         self.assertIn("ValidateMotionSnapshot", planner)
@@ -164,25 +230,23 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertIn("MinimumSafeSegmentMilliseconds", trajectory)
 
     def test_timing_cannot_relax_safety_limits(self) -> None:
-        source = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.TrajectorySafety.cs"
-        ).read_text(encoding="utf-8")
+        source = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.TrajectorySafety.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("behavior-duration-cannot-meet-velocity-acceleration-limits", source)
         self.assertNotIn("Math.Min(segmentMilliseconds", source)
-        fixture = (
-            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.cs"
-        ).read_text(encoding="utf-8")
+        fixture = (MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("TooShortTimingCannotOverrideMotionLimits", fixture)
 
     def test_cancellation_requires_fresh_explicit_safe_rest(self) -> None:
-        planner = (
-            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs"
-        ).read_text(
+        planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(
             encoding="utf-8"
         )
-        fixture = (
-            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.cs"
-        ).read_text(encoding="utf-8")
+        fixture = (MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("cancelled-safe-rest-replan-required", planner)
         self.assertIn("PlanSafeRest", planner)
         self.assertIn("CancellationRequiresExplicitFreshSafeRestPlan", fixture)
@@ -201,9 +265,9 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertNotIn("PlanSafeRest", source)
 
     def test_production_sink_uses_only_normal_controller_path(self) -> None:
-        source = (
-            RENDERING / "ReachyProductionBehaviorControllerTargetSink.cs"
-        ).read_text(encoding="utf-8")
+        source = (RENDERING / "ReachyProductionBehaviorControllerTargetSink.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("runtime.SubmitPositionTargets(targets)", source)
         for forbidden in (
             "NativeReachySim",
