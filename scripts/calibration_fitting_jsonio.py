@@ -38,7 +38,7 @@ _error = calibration_fitting_validation._error
 
 def _load_calibration_data() -> Any:
     try:
-        import calibration_data  # type: ignore
+        import calibration_data
 
         return calibration_data
     except ModuleNotFoundError:
