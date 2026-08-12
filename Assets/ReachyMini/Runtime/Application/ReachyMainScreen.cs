@@ -6,7 +6,7 @@ using UnityEngine;
 namespace ReachyMini.AppState
 {
     [DisallowMultipleComponent]
-    public sealed class ReachyMainScreen : MonoBehaviour
+    public sealed partial class ReachyMainScreen : MonoBehaviour
     {
         private const float ReferenceWidth = 1080f;
         private const float EdgePadding = 28f;
