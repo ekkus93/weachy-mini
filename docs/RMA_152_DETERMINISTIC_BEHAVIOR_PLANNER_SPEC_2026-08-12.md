@@ -44,7 +44,7 @@ Each failure has a distinct fail-visible planner status. No different entity is 
 ## Motion envelope
 
 The authoritative policy is `models/reachy-mini/behavior-planner-policy.json` with contract ID
-`rma152_deterministic_behavior_planner_v1`.
+`rma152_deterministic_behavior_planner_v2`.
 
 Position limits are bound to the RMA-065 soft command envelopes:
 
@@ -55,6 +55,14 @@ Planner velocity and acceleration limits are deliberately conservative engineeri
 not calibration claims. A requested `maximum_duration_ms` is never allowed to compress motion
 below those limits. If a requested duration is too short, planning fails.
 
+The planner does not merely delay a large position-target jump. Each motion segment is expanded
+into a fixed 50 ms setpoint stream using cubic smoothstep interpolation. The segment duration is
+chosen from the smoothstep peak-velocity factor (1.5) and peak-acceleration factor (6.0), rounded
+up to the command cadence. The resulting scheduled target stream is bounded to 128 frames and
+remains inside the same soft position envelope. This is an open-loop setpoint-slew contract; the
+normal servo/MuJoCo path remains authoritative for actual physical state and RMA-154 later adds
+closed-loop visual feedback.
+
 ## Deterministic pose mapping
 
 RMA-152 provides a small deterministic baseline only:
@@ -64,8 +72,10 @@ RMA-152 provides a small deterministic baseline only:
 - expressions add small bounded Stewart/antenna offsets;
 - `nod`, `small_head_tilt`, and `recoil` expand to fixed parameterized keyframe sequences;
 - every plan starts from the supplied authoritative actuator state;
-- segment duration is the conservative maximum of the minimum segment time, velocity requirement,
-  and zero-endpoint acceleration requirement.
+- each segment is sampled as a cubic smoothstep trajectory at a fixed 50 ms command cadence;
+- segment duration is the conservative maximum of the minimum segment time, smoothstep peak
+  velocity requirement, and smoothstep peak acceleration requirement;
+- no segment is represented as one delayed final-target step.
 
 The Stewart basis is explicitly labeled an engineering estimate. It is not a calibrated inverse
 kinematics claim. RMA-154 later closes the gaze loop using transformed-image feedback.

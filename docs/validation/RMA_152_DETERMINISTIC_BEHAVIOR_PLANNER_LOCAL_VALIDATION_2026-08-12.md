@@ -14,6 +14,8 @@ boundary.
 - fixed nine-actuator canonical order;
 - RMA-065-bound soft position limits;
 - conservative velocity and acceleration envelope;
+- cubic-smoothstep position-target slew at a fixed 50 ms cadence rather than delayed target steps;
+- explicit 128-frame trajectory budget;
 - deterministic expression and gesture trajectories relative to the fresh authoritative pose;
 - explicit body-yaw, Stewart, and antenna coordination;
 - authoritative contact/hard-stop/load/warning safety mapping;
@@ -25,29 +27,26 @@ boundary.
 
 ## Local results
 
-Focused static contract suite:
+Post-hardening focused static contract suite:
 
 ```text
 python3 -m unittest -v scripts.tests.test_rma152_behavior_planner
-Ran 11 tests
+Ran 12 tests
 OK
 ```
 
 The focused suite verifies source-set completeness, gaze fail-closed behavior, authoritative-pose
-relative planning, safety interlocks, velocity/acceleration timing policy, planning and execution
-cancellation, no-retry controller failure behavior, RMA-065 position-range provenance,
-runtime/machine-policy drift, absence of nondeterministic clocks/randomness, and the production
-controller path.
+relative planning, safety interlocks, fixed-cadence smoothstep setpoint slew, frame-budget bounds,
+velocity/acceleration timing policy, planning and execution cancellation, no-retry controller
+failure behavior, RMA-065 position-range provenance, runtime/machine-policy drift, absence of
+nondeterministic clocks/randomness, and the production controller path.
 
-Broader script test discovery on the supplied refactored snapshot:
+Before this setpoint-slew hardening, the same supplied refactored snapshot completed the broader
+script discovery at 272/272. After the hardening, the focused RMA-152 suite and Python compilation
+were rerun successfully. A repeat of the entire repository discovery exceeded this sandbox's
+execution window, so this record does not relabel that prior 272/272 run as post-hardening evidence.
 
-```text
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-Ran 272 tests
-OK
-```
-
-`python3 -m compileall -q scripts` also completed without a Python syntax failure.
+`python3 -m compileall -q scripts` completed without a Python syntax failure after the hardening.
 
 The supplied ZIP predates the later `master` cleanup of an existing
 `scripts/calibration_fitting_jsonio.py` `type: ignore`; that stale local copy was not changed or
@@ -62,7 +61,8 @@ fixture covers:
 - successful high-confidence current gaze resolution;
 - rejection of missing, recently-seen/expired, low-confidence, coverage-blocked, and stale targets;
 - deterministic repeated trajectory generation;
-- position, velocity, and acceleration envelope checks;
+- intermediate setpoint-slew frames instead of one delayed position step;
+- scheduled position, velocity, acceleration, cadence, and endpoint-hold envelope checks;
 - controller/workspace/fault/contact/hard-stop/load interlocks;
 - speech-only operation while motion is interlocked;
 - authoritative-state motion/safety mapping;

@@ -45,6 +45,9 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Planning.cs": (
                 "GestureTrajectoryIsDeterministicAndBounded"
             ),
+            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Slew.cs": (
+                "TrajectoryFramesSlewInsteadOfDelayedTargetStep"
+            ),
             MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Safety.cs": (
                 "CancellationRequiresExplicitFreshSafeRestPlan"
             ),
@@ -60,7 +63,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         rma065 = json.loads(RMA065.read_text(encoding="utf-8"))
         audit = json.loads(AUDIT.read_text(encoding="utf-8"))
-        self.assertEqual("rma152_deterministic_behavior_planner_v1", policy["contract_id"])
+        self.assertEqual("rma152_deterministic_behavior_planner_v2", policy["contract_id"])
         self.assertEqual("engineering_estimate", policy["quality"])
         self.assertEqual(9, len(policy["actuator_order"]))
         limits = {item["name"]: item for item in policy["actuator_limits"]}
@@ -102,6 +105,10 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
                 "maximum_snapshot_age_nanoseconds"
             ],
             "minimumSegmentMilliseconds": policy["planning"]["minimum_segment_milliseconds"],
+            "commandIntervalMilliseconds": policy["planning"]["command_interval_milliseconds"],
+            "maximumTrajectoryFrameCount": policy["planning"][
+                "maximum_trajectory_frame_count"
+            ],
             "maximumPlanDurationMilliseconds": policy["planning"][
                 "maximum_plan_duration_milliseconds"
             ],
@@ -218,17 +225,45 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertIn("ValidateMotionSnapshot", planner)
         self.assertIn("ValidateTarget", trajectory)
         self.assertIn("MinimumSafeSegmentMilliseconds", trajectory)
+        self.assertIn("AppendSmoothStepFrames", trajectory)
+        self.assertIn("policy.CommandIntervalMilliseconds", trajectory)
+        self.assertIn("policy.MaximumTrajectoryFrameCount", trajectory)
 
     def test_timing_cannot_relax_safety_limits(self) -> None:
         source = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.TrajectorySafety.cs").read_text(
             encoding="utf-8"
         )
         self.assertIn("behavior-duration-cannot-meet-velocity-acceleration-limits", source)
+        self.assertIn("1.5 * distance / velocity", source)
+        self.assertIn("Math.Sqrt(6.0 * distance / acceleration)", source)
+        self.assertIn("progress * progress * (3.0 - (2.0 * progress))", source)
         self.assertNotIn("Math.Min(segmentMilliseconds", source)
         fixture = (MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.cs").read_text(
             encoding="utf-8"
         )
         self.assertIn("TooShortTimingCannotOverrideMotionLimits", fixture)
+
+    def test_trajectory_is_scheduled_as_bounded_setpoint_slew(self) -> None:
+        policy = json.loads(POLICY.read_text(encoding="utf-8"))
+        planning = policy["planning"]
+        self.assertEqual(50, planning["command_interval_milliseconds"])
+        self.assertEqual(128, planning["maximum_trajectory_frame_count"])
+        self.assertEqual(
+            "cubic_smoothstep_zero_endpoint_velocity",
+            planning["trajectory_profile"],
+        )
+        trajectory = (
+            BEHAVIOR / "ReachyDeterministicBehaviorPlanner.TrajectorySafety.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("AppendSmoothStepFrames", trajectory)
+        self.assertIn("frames.Count + stepCount", trajectory)
+        self.assertIn("behavior-trajectory-frame-budget-exceeded", trajectory)
+        fixture = (
+            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Slew.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("TrajectoryFramesSlewInsteadOfDelayedTargetStep", fixture)
+        self.assertIn("setpoint slew uses intermediate frames", fixture)
+        self.assertIn("RecoilPreservesUnrelatedBodyYaw", fixture)
 
     def test_cancellation_requires_fresh_explicit_safe_rest(self) -> None:
         planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Planning.cs").read_text(

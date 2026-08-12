@@ -114,6 +114,40 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
+    def test_rma152_behavior_planner_source_set_is_complete(self) -> None:
+        behavior = ROOT / "Assets/ReachyMini/Runtime/Core/Behavior"
+        managed = ROOT / "models/ReachyMini.Core.Tests"
+        required = {
+            behavior / "ReachyBehaviorPlannerPolicy.cs": "class ReachyBehaviorPlannerPolicy",
+            behavior / "ReachyBehaviorPlannerState.cs": "class ReachyBehaviorMotionSnapshot",
+            behavior / "ReachyBehaviorTrajectoryContracts.cs": "class ReachyBehaviorTrajectoryPlan",
+            behavior / "ReachyBehaviorTrajectoryExecutor.cs": (
+                "class ReachyBehaviorTrajectoryExecutor"
+            ),
+            behavior / "ReachyBehaviorAuthoritativeSafety.cs": (
+                "class ReachyBehaviorAuthoritativeSafety"
+            ),
+            behavior / "ReachyDeterministicBehaviorPlanner.cs": (
+                "class ReachyDeterministicBehaviorPlanner"
+            ),
+            behavior / "ReachyDeterministicBehaviorPlanner.Planning.cs": (
+                "public ReachyBehaviorPlanResult Plan"
+            ),
+            behavior / "ReachyDeterministicBehaviorPlanner.GazeAndPoses.cs": "ResolveAndApplyGaze",
+            behavior / "ReachyDeterministicBehaviorPlanner.TrajectorySafety.cs": (
+                "AppendSmoothStepFrames"
+            ),
+            managed / "Rma152DeterministicBehaviorPlannerContractTests.cs": (
+                "TrajectoryFramesSlewInsteadOfDelayedTargetStep"
+            ),
+            managed / "Rma152DeterministicBehaviorPlannerContractTests.Slew.cs": (
+                "RecoilPreservesUnrelatedBodyYaw"
+            ),
+        }
+        for path, symbol in required.items():
+            self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
+            self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
+
     def test_rma150_conversation_state_machine_source_set_is_complete(self) -> None:
         required = {
             (
