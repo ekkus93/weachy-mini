@@ -58,7 +58,7 @@ skill) and dispatching one analysis pass per file.
 | 7 | `Assets/Plugins/Android/.../ReachyCameraFrameBridge.java` | 1383 | ☑ Done (commits `8e61c06`, `86cb5c9`, `f545a30`, `7d741ca`, `32ec510`, `d7e42dd`, `f41536f`, `d6f355f`, `d99f9be`, `e7b914f`, `ba34a2d`) |
 | 8 | `Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs` (deleted, split into 5 files) | 1363 | ☑ Done (commits `dbb1463`, `d11f2a1`, `d5ce69e`, `5cca40a`, `e30acd4`) |
 | 9 | `scripts/calibration_fitting.py` | 1342 | ☑ Done (commits `6ab698f`, `593ed94`, `abb580c`, `fc59a82`, `6535704`, `1a28890`, `5c90196`, `9eed6ef`, `e84c970`) |
-| 10 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs` | 1166 | ☐ Not started |
+| 10 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs` | 1166 | ☑ Done (commits `940b973`, `fd9f2f1`, `2a1da69`, `3e91f9b`, `f385fbf`, `e7a9ce3`, `0ad4314`, `ff022f4`) |
 
 Mark each row `☑ Done (commit <hash>)` as it lands.
 
