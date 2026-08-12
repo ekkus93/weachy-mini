@@ -20,7 +20,7 @@ namespace ReachyMini.Behavior
             this.planner.ValidateBaselinePolicy(this.policy);
         }
 
-        public string ContractId => ReachyBaselineBehaviorPolicy.CurrentContractId;
+        public static string ContractId => ReachyBaselineBehaviorPolicy.CurrentContractId;
 
         public ReachyBaselineBehaviorPlanResult Plan(
             ReachyBaselineBehaviorRequest request,
