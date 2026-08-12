@@ -53,6 +53,8 @@ class SignatureError(RuntimeError):
 #      owns the calibration_data sibling-loading bootstrap)
 #   4. calibration_fitting_contracts (needs calibration_fitting_validation and
 #      calibration_fitting_jsonio)
+#   5. calibration_fitting_datasets (needs calibration_fitting_validation,
+#      calibration_fitting_jsonio, and calibration_fitting_contracts)
 def _load_sibling(name: str, path: Path) -> Any:
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -131,48 +133,13 @@ _validate_compatibility = calibration_fitting_contracts._validate_compatibility
 validate_fit_plan = calibration_fitting_contracts.validate_fit_plan
 load_fit_plan = calibration_fitting_contracts.load_fit_plan
 
+calibration_fitting_datasets = _load_sibling(
+    "calibration_fitting_datasets",
+    Path(__file__).with_name("calibration_fitting_datasets.py"),
+)
 
-def _resolve_dataset_path(dataset_root: Path, relative: str) -> Path:
-    root = dataset_root.resolve(strict=True)
-    candidate = (root / relative).resolve(strict=True)
-    try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise _error("dataset.path", "resolves outside dataset root") from exc
-    if not candidate.is_file():
-        raise _error("dataset.path", "must resolve to a regular file")
-    return candidate
-
-
-def load_datasets(
-    plan: dict[str, Any], dataset_root: Path, *, limits: ImportLimits = DEFAULT_LIMITS
-) -> dict[str, list[dict[str, Any]]]:
-    validate_fit_plan(plan, limits=limits)
-    result: dict[str, list[dict[str, Any]]] = {"fitting": [], "heldout": []}
-    identity: tuple[Any, ...] | None = None
-    for index, entry in enumerate(plan["datasets"]):
-        path = _resolve_dataset_path(dataset_root, entry["path"])
-        dataset = calibration_data.load_json_file(path)
-        summary = calibration_data.validate_dataset(dataset)
-        if summary["dataset_id"] != entry["dataset_id"]:
-            raise _error(f"plan.datasets[{index}].dataset_id", "does not match loaded dataset")
-        if summary["dataset_sha256"] != entry["dataset_sha256"]:
-            raise _error(f"plan.datasets[{index}].dataset_sha256", "does not match loaded dataset")
-        robot = dataset["robot"]
-        current_identity = (
-            robot["robot_id"],
-            robot["hardware_revision"],
-            robot["firmware_version"],
-            robot["register_configuration_sha256"],
-        )
-        if identity is None:
-            identity = current_identity
-        elif current_identity != identity:
-            raise _error(
-                f"plan.datasets[{index}]", "robot identity/configuration differs across split"
-            )
-        result[entry["role"]].append(dataset)
-    return result
+_resolve_dataset_path = calibration_fitting_datasets._resolve_dataset_path
+load_datasets = calibration_fitting_datasets.load_datasets
 
 
 def _fit_friction(
