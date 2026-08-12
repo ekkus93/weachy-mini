@@ -131,7 +131,7 @@ namespace ReachyMini.Core.Tests
                 droppedObservationCount: 0L,
                 droppedDescriptionCount: 0L);
             var diagnostics = new WorldModelDiagnosticsSnapshot(
-                acceptedTrackingBatchCount: sourceSequence,
+                acceptedTrackingBatchCount: checked((long)sourceSequence),
                 duplicateTrackingBatchCount: 0L,
                 staleTrackingBatchCount: 0L,
                 invalidCoverageBatchCount: 0L,
@@ -224,7 +224,7 @@ namespace ReachyMini.Core.Tests
         {
             private readonly List<double[]> submitted = new List<double[]>();
 
-            internal IReadOnlyList<double[]> Submitted => submitted;
+            internal List<double[]> Submitted => submitted;
 
             public ReachyBehaviorTargetSubmissionStatus Submit(
                 ReachyBehaviorTrajectoryFrame frame)
