@@ -107,9 +107,10 @@ class Rma151BehaviorIntentTests(unittest.TestCase):
         contracts = (BEHAVIOR / "ReachyBehaviorIntentContracts.cs").read_text(encoding="utf-8")
         self.assertIn("MaximumRegenerationAttempts = 1", contracts)
         self.assertIn("ReachyBehaviorIntentRecoveryAction.Regenerate", contracts)
-        self.assertNotIn("ReachyBehaviorIntent? Intent { get; }", contracts.split(
-            "public sealed class ReachyBehaviorIntentRecoveryDecision", 1
-        )[1])
+        self.assertNotIn(
+            "ReachyBehaviorIntent? Intent { get; }",
+            contracts.split("public sealed class ReachyBehaviorIntentRecoveryDecision", 1)[1],
+        )
 
 
 if __name__ == "__main__":
