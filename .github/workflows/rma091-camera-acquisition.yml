@@ -183,7 +183,17 @@ jobs:
           analyzer_body = analyzer.group(0)
           if 'finally {' not in analyzer_body or 'imageProxy.close();' not in analyzer_body:
               raise SystemExit('ImageProxy close must remain in the analyzer finally block.')
-          if '++generation' not in java or 'expectedGeneration != generation' not in java:
+          # The split's ReachyCameraFrameBinder.java/ReachyCameraFrameAnalyzer.java/
+          # ReachyCameraFrameLifecycleController.java access these fields qualified
+          # as ReachyCameraFrameBridge.generation (matching the convention already
+          # established in step 8/9's cross-file field access), while
+          # ReachyCameraFrameBridge.java itself still uses the unqualified form —
+          # accept either spelling.
+          if (re.search(r'\+\+(ReachyCameraFrameBridge\.)?generation', java) is None
+                  or re.search(
+                      r'expectedGeneration != (ReachyCameraFrameBridge\.)?generation', java
+                  )
+                  is None):
               raise SystemExit('Async CameraX callbacks are not session-invalidated.')
 
           for token in [
