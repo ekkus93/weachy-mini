@@ -94,7 +94,6 @@ jobs:
               'renderer': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs',
               'pipeline': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs',
               'acquisition': root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs',
-              'java': root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java',
               'close_tests': root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs',
               'acceptance': root / 'scripts/run_rma092_camera_texture_acceptance_android.sh',
               'architecture': root / 'docs/architecture/REPROJECTION_TEST_SUITE.md',
@@ -108,6 +107,31 @@ jobs:
           text['managed'] = '\n'.join(
               path.read_text(encoding='utf-8')
               for path in sorted((root / 'managed/ReachyMini.Camera.Tests').glob('Rma104*.cs'))
+          )
+          # ReachyCameraFrameBridge.java was split (docs/LARGE_FILE_REFACTOR_TODO.md, file
+          # #7) into several top-level ReachyCameraFrame*/ReachyFrame* helper classes.
+          # Concatenate every piece so this contract check keeps covering the same source,
+          # regardless of which file each token now lives in. Excludes
+          # ReachyCameraTextureFrameBridge.java, ReachyCameraDiscoveryBridge.java, and
+          # ReachyMlKitTrackingBridge.java, which are unrelated bridges in the same package.
+          java_dir = root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera'
+          bridge_split_files = [
+              'ReachyCameraFrameBridge.java',
+              'ReachyCameraFrameBinder.java',
+              'ReachyCameraFrameLifecycleController.java',
+              'ReachyCameraFrameAnalyzer.java',
+              'ReachyCameraDescriptor.java',
+              'ReachyFrameIntrinsics.java',
+              'ReachyFrameSnapshot.java',
+              'ReachyDiscardingPreviewSurfaceProvider.java',
+              'ReachyCameraLifecycleOwner.java',
+              'ReachyCameraFrameThreadFactory.java',
+              'ReachyCameraErrorUtil.java',
+          ]
+          text['java'] = ''.join(
+              (java_dir / name).read_text(encoding='utf-8')
+              for name in bridge_split_files
+              if (java_dir / name).is_file()
           )
 
           required = {

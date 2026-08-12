@@ -104,7 +104,31 @@ jobs:
           shader = (root / 'Assets/ReachyMini/Runtime/Resources/ReachyCameraYuv420ToRgb.shader').read_text(encoding='utf-8')
           acceptance_script = (root / 'scripts/run_rma092_camera_texture_acceptance_android.sh').read_text(encoding='utf-8')
           java_dir = root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera'
-          java = (java_dir / 'ReachyCameraFrameBridge.java').read_text(encoding='utf-8')
+          # ReachyCameraFrameBridge.java was split (docs/LARGE_FILE_REFACTOR_TODO.md, file
+          # #7) into several top-level ReachyCameraFrame*/ReachyFrame* helper classes.
+          # Concatenate every piece so this contract check keeps covering the same source,
+          # regardless of which file each token now lives in. Excludes
+          # ReachyCameraTextureFrameBridge.java (tracked separately as texture_java) and
+          # ReachyCameraDiscoveryBridge.java / ReachyMlKitTrackingBridge.java, which are
+          # unrelated bridges in the same package.
+          bridge_split_files = [
+              'ReachyCameraFrameBridge.java',
+              'ReachyCameraFrameBinder.java',
+              'ReachyCameraFrameLifecycleController.java',
+              'ReachyCameraFrameAnalyzer.java',
+              'ReachyCameraDescriptor.java',
+              'ReachyFrameIntrinsics.java',
+              'ReachyFrameSnapshot.java',
+              'ReachyDiscardingPreviewSurfaceProvider.java',
+              'ReachyCameraLifecycleOwner.java',
+              'ReachyCameraFrameThreadFactory.java',
+              'ReachyCameraErrorUtil.java',
+          ]
+          java = ''.join(
+              (java_dir / name).read_text(encoding='utf-8')
+              for name in bridge_split_files
+              if (java_dir / name).is_file()
+          )
           texture_java = (java_dir / 'ReachyCameraTextureFrameBridge.java').read_text(encoding='utf-8')
           gradle = (root / 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/build.gradle').read_text(encoding='utf-8')
           tests = (root / 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraAcquisitionTests.cs').read_text(encoding='utf-8')
