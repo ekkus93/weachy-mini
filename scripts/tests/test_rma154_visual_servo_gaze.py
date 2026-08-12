@@ -158,7 +158,7 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
         for required in (
             "ReachyProductionVisualServoFeedbackSource",
             "WaitForResetStateAsync",
-            "frame.ContinuityId != previousContinuityId",
+            "frame.ContinuityId == previousContinuityId",
             "if (calibration == null)",
             "CreateBaselineCalibration(transformState)",
             "binding.NeutralMujocoWorldFromOptical.Transposed()",
