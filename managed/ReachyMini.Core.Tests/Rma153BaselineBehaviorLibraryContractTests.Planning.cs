@@ -52,7 +52,10 @@ namespace ReachyMini.Core.Tests
                 () => ReachyBaselineBehaviorRequest.GazeSearch(
                     "entity-10",
                     coverageTimestampNanoseconds: 0L,
-                    Coverage(VisionCoverageState.Normal, 0.9, stopTurning: false)),
+                    currentCoverage: Coverage(
+                        VisionCoverageState.Normal,
+                        0.9,
+                        stopTurning: false)),
                 "nonpositive gaze-search coverage timestamp");
         }
 
