@@ -92,7 +92,7 @@ jobs:
                 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
                   {
                     printf '### Commit status publication warning\n\n'
-                    printf -- '- Phase: `%s`\n' "${phase}"
+                    printf -- '- Phase: %s\n' "${phase}"
                     printf -- '- GitHub API endpoint was unreachable after %s bounded attempts.\n' \
                       "${max_attempts}"
                     printf -- '- Validation continues; this reporting failure does not replace the validation result.\n'
@@ -481,7 +481,7 @@ jobs:
                 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
                   {
                     printf '### Commit status publication warning\n\n'
-                    printf -- '- Phase: `%s`\n' "${phase}"
+                    printf -- '- Phase: %s\n' "${phase}"
                     printf -- '- GitHub API endpoint was unreachable after %s bounded attempts.\n' \
                       "${max_attempts}"
                     printf -- '- Validation continues; this reporting failure does not replace the validation result.\n'
