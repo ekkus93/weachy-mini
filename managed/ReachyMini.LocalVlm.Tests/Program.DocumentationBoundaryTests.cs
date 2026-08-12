@@ -44,15 +44,33 @@ namespace ReachyMini.LocalVlm.Tests
 
         private static void SourceContractContainsNoDownloadOrFallbackExecution()
         {
-            string source = File.ReadAllText(
-                Path.Combine(
-                    RepoRoot(),
-                    "Assets",
-                    "ReachyMini",
-                    "Runtime",
-                    "Core",
-                    "Perception",
-                    "ReachyLocalVisionLanguageContracts.cs"));
+            // ReachyLocalVisionLanguageContracts.cs is planned to split
+            // (docs/LARGE_FILE_REFACTOR_TODO_2.md, file #7) into several
+            // ReachyLocalVlm*.cs files in the same directory. Concatenate every
+            // planned target that currently exists so this check still covers
+            // the full implementation regardless of which file each member
+            // lives in.
+            string perceptionDirectory = Path.Combine(
+                RepoRoot(),
+                "Assets",
+                "ReachyMini",
+                "Runtime",
+                "Core",
+                "Perception");
+            string[] localVlmSourceFiles =
+            {
+                "ReachyLocalVisionLanguageContracts.cs",
+                "ReachyLocalVlmEnums.cs",
+                "ReachyLocalVlmManifestContracts.cs",
+                "ReachyLocalVlmArtifactManifest.cs",
+                "ReachyLocalVlmAdapterConfiguration.cs",
+                "ReachyLocalVlmAdapterRuntime.cs",
+            };
+            string source = string.Concat(
+                localVlmSourceFiles
+                    .Select(name => Path.Combine(perceptionDirectory, name))
+                    .Where(File.Exists)
+                    .Select(File.ReadAllText));
             Contains(
                 "AutomaticModelDownloadEnabled => false",
                 source,
