@@ -46,49 +46,55 @@ class ProviderSourceSetIntegrityTests(unittest.TestCase):
             self.assertIn(symbol, path.read_text(encoding="utf-8"), filename)
 
     def test_rma144_asr_source_set_is_complete(self) -> None:
-        required = {
-            PROVIDERS / "ReachyOpenAiCompatibleAsrOptions.cs":
+        required = (
+            (
+                PROVIDERS / "ReachyOpenAiCompatibleAsrOptions.cs",
                 "class ReachyOpenAiCompatibleAsrOptions",
-            PROVIDERS / "ReachyOpenAiCompatibleAsrProvider.Core.cs":
+            ),
+            (
+                PROVIDERS / "ReachyOpenAiCompatibleAsrProvider.Core.cs",
                 "partial class ReachyOpenAiCompatibleAsrProvider",
-            PROVIDERS / "ReachyOpenAiCompatibleAsrProvider.Helpers.cs":
-                "BuildMultipartBody",
-            PROVIDERS / "ReachyAsrTranscriptionProtocolParser.cs":
+            ),
+            (PROVIDERS / "ReachyOpenAiCompatibleAsrProvider.Helpers.cs", "BuildMultipartBody"),
+            (
+                PROVIDERS / "ReachyAsrTranscriptionProtocolParser.cs",
                 "class ReachyAsrTranscriptionProtocolParser",
-            PROVIDERS / "ReachyBearerCredentialTransportBinding.cs":
+            ),
+            (
+                PROVIDERS / "ReachyBearerCredentialTransportBinding.cs",
                 "class ReachyBearerCredentialTransportBinding",
-            SPEECH / "BufferedAsrUtteranceContracts.cs":
-                "interface IBufferedAsrUtteranceSource",
-        }
-        for path, symbol in required.items():
+            ),
+            (SPEECH / "BufferedAsrUtteranceContracts.cs", "interface IBufferedAsrUtteranceSource"),
+        )
+        for path, symbol in required:
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
     def test_rma145_tts_source_set_is_complete(self) -> None:
-        required = {
-            PROVIDERS / "ReachyOpenAiCompatibleTtsOptions.cs":
+        required = (
+            (
+                PROVIDERS / "ReachyOpenAiCompatibleTtsOptions.cs",
                 "class ReachyOpenAiCompatibleTtsOptions",
-            PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Core.cs":
+            ),
+            (
+                PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Core.cs",
                 "partial class ReachyOpenAiCompatibleTtsProvider",
-            PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Helpers.cs":
-                "BuildRequestBody",
-            SPEECH / "BufferedTtsAudioContracts.cs":
-                "interface IBufferedTtsAudioSink",
-        }
-        for path, symbol in required.items():
+            ),
+            (PROVIDERS / "ReachyOpenAiCompatibleTtsProvider.Helpers.cs", "BuildRequestBody"),
+            (SPEECH / "BufferedTtsAudioContracts.cs", "interface IBufferedTtsAudioSink"),
+        )
+        for path, symbol in required:
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))
             self.assertIn(symbol, path.read_text(encoding="utf-8"), str(path))
 
     def test_rma146_fallback_policy_source_set_is_complete(self) -> None:
         required = {
-            PROVIDERS / "ReachyProviderFallbackPolicyContracts.cs":
-                "class ReachyFallbackPolicy",
-            PROVIDERS / "ReachyProviderFallbackPolicyEngine.cs":
-                "class ReachyProviderFallbackPolicyEngine",
-            PROVIDERS / "ReachyAuthorizedProviderSelectionExtensions.cs":
-                "SelectFallback",
-            APPLICATION / "ReachyFallbackPolicyPersistence.cs":
-                "class ReachyFallbackPolicyPersistenceStore",
+            PROVIDERS / "ReachyProviderFallbackPolicyContracts.cs": "class ReachyFallbackPolicy",
+            PROVIDERS
+            / "ReachyProviderFallbackPolicyEngine.cs": "class ReachyProviderFallbackPolicyEngine",
+            PROVIDERS / "ReachyAuthorizedProviderSelectionExtensions.cs": "SelectFallback",
+            APPLICATION
+            / "ReachyFallbackPolicyPersistence.cs": "class ReachyFallbackPolicyPersistenceStore",
         }
         for path, symbol in required.items():
             self.assertTrue(path.is_file(), str(path.relative_to(ROOT)))

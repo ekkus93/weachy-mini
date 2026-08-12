@@ -7,8 +7,7 @@ POLICY_FILES = [
     ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs",
 ]
 SELECTIONS = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Providers/ReachyAuthorizedProviderSelectionExtensions.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyAuthorizedProviderSelectionExtensions.cs"
 )
 MANAGED = ROOT / "managed/ReachyMini.Core.Tests/Rma146ProviderFallbackPolicyContractTests.cs"
 
