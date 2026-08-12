@@ -82,7 +82,7 @@ section before starting.
 | 5 | `native/llama_runtime/benchmark/rma133_benchmark.c` | 858 | **Yes — build script + Python contract test** | ☑ Done (commits `d69b191`, `7848238`) |
 | 6 | `managed/ReachyMini.LocalLlm.Tests/Program.cs` | 853 | **Yes** (rma134 `sha256sum` evidence list) | ☑ Done (commit `669592e`) |
 | 7 | `Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs` | 834 | **Yes — 2 workflows** (rma091, rma104 — one risks an uncaught `IndexError`) | ☑ Done (commits `c5f5830`, `ee84ebd`) |
-| 8 | `managed/ReachyMini.AndroidOnDeviceAsr.Tests/AndroidOnDeviceAsrTests.cs` | 831 | No (CI check already directory-glob-based) | ☐ Not started |
+| 8 | `managed/ReachyMini.AndroidOnDeviceAsr.Tests/AndroidOnDeviceAsrTests.cs` | 831 | No (CI check already directory-glob-based) | ☑ Done (commit `2f1b8e5`) |
 | 9 | `Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs` | 812 | **Yes** (rma091 workflow, single `read_text`) | ☐ Not started |
 | 10 | `Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs` | 807 | **Yes — 2 workflows + mandatory naming-collision rename** | ☐ Not started |
 
