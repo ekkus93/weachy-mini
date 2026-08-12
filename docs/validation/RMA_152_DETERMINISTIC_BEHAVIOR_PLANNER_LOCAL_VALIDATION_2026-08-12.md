@@ -29,20 +29,21 @@ Focused static contract suite:
 
 ```text
 python3 -m unittest -v scripts.tests.test_rma152_behavior_planner
-Ran 10 tests
+Ran 11 tests
 OK
 ```
 
 The focused suite verifies source-set completeness, gaze fail-closed behavior, authoritative-pose
 relative planning, safety interlocks, velocity/acceleration timing policy, planning and execution
-cancellation, no-retry controller failure behavior, RMA-065 position-range provenance, absence of
-nondeterministic clocks/randomness, and the production controller path.
+cancellation, no-retry controller failure behavior, RMA-065 position-range provenance,
+runtime/machine-policy drift, absence of nondeterministic clocks/randomness, and the production
+controller path.
 
 Broader script test discovery on the supplied refactored snapshot:
 
 ```text
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
-Ran 271 tests
+Ran 272 tests
 OK
 ```
 
