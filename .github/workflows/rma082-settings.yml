@@ -5,7 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/rma082-settings.yml'
-      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettings*.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsPanel.cs'
@@ -79,7 +79,16 @@ jobs:
           from pathlib import Path
           import re
 
-          state = Path('Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs').read_text(encoding='utf-8')
+          # ReachySettingsState.cs is planned to split (docs/LARGE_FILE_REFACTOR_TODO_2.md,
+          # file #4) into several ReachySettings*.cs / ReachySettingsStateStore*.cs files in
+          # the same directory. Concatenate the whole directory so this check still covers
+          # the full implementation regardless of which file each member lives in.
+          state = ''.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted(
+                  Path('Assets/ReachyMini/Runtime/Core/Application').glob('ReachySettings*.cs')
+              )
+          )
           screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
           persistence = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8')
           composition = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs').read_text(encoding='utf-8')
