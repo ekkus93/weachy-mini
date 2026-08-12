@@ -69,8 +69,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         planning = policy["planning"]
         self.assertLessEqual(
             planning["maximum_plan_duration_milliseconds"],
-            planning["maximum_trajectory_frame_count"]
-            * planning["command_interval_milliseconds"],
+            planning["maximum_trajectory_frame_count"] * planning["command_interval_milliseconds"],
         )
         limits = {item["name"]: item for item in policy["actuator_limits"]}
         joints = {item["name"]: item for item in audit["joints"]}
@@ -112,9 +111,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             ],
             "minimumSegmentMilliseconds": policy["planning"]["minimum_segment_milliseconds"],
             "commandIntervalMilliseconds": policy["planning"]["command_interval_milliseconds"],
-            "maximumTrajectoryFrameCount": policy["planning"][
-                "maximum_trajectory_frame_count"
-            ],
+            "maximumTrajectoryFrameCount": policy["planning"]["maximum_trajectory_frame_count"],
             "maximumPlanDurationMilliseconds": policy["planning"][
                 "maximum_plan_duration_milliseconds"
             ],
@@ -264,9 +261,9 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertIn("AppendSmoothStepFrames", trajectory)
         self.assertIn("frames.Count + stepCount", trajectory)
         self.assertIn("behavior-trajectory-frame-budget-exceeded", trajectory)
-        fixture = (
-            MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Slew.cs"
-        ).read_text(encoding="utf-8")
+        fixture = (MANAGED / "Rma152DeterministicBehaviorPlannerContractTests.Slew.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("TrajectoryFramesSlewInsteadOfDelayedTargetStep", fixture)
         self.assertIn("setpoint slew uses intermediate frames", fixture)
         self.assertIn("RecoilPreservesUnrelatedBodyYaw", fixture)
