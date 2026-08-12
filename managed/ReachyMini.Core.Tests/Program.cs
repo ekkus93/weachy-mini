@@ -10,7 +10,7 @@ using ReachyMini.Simulation;
 
 namespace ReachyMini.Core.Tests
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static int Main()
         {
