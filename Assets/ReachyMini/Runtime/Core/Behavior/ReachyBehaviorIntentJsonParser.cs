@@ -209,14 +209,6 @@ namespace ReachyMini.Behavior
                     reader.Expect(',');
                 }
                 first = false;
-                ++propertyCount;
-                if (propertyCount > ReachyBehaviorIntentPolicy.MaximumGazeTargetProperties)
-                {
-                    throw ReachyBehaviorIntentJsonReader.Failure(
-                        ReachyBehaviorIntentValidationStatus.BoundExceeded,
-                        "too-many-gaze-properties",
-                        "Behavior intent gaze_target contains too many properties.");
-                }
 
                 string property = reader.ReadString();
                 reader.Expect(':');
@@ -237,6 +229,15 @@ namespace ReachyMini.Behavior
                             ReachyBehaviorIntentValidationStatus.UnknownProperty,
                             "unknown-gaze-property",
                             "Behavior intent gaze_target contains an unknown property.");
+                }
+
+                ++propertyCount;
+                if (propertyCount > ReachyBehaviorIntentPolicy.MaximumGazeTargetProperties)
+                {
+                    throw ReachyBehaviorIntentJsonReader.Failure(
+                        ReachyBehaviorIntentValidationStatus.BoundExceeded,
+                        "too-many-gaze-properties",
+                        "Behavior intent gaze_target contains too many properties.");
                 }
             }
 
