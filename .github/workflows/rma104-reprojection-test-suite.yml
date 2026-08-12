@@ -10,7 +10,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs'
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs'
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
       - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/src/main/java/com/ekkus93/weachy/camera/ReachyCameraFrameBridge.java'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraReprojection*.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs'
@@ -93,7 +93,6 @@ jobs:
               'routing': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyVisionFrameRoutingPolicy.cs',
               'renderer': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs',
               'pipeline': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs',
-              'acquisition': root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs',
               'close_tests': root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs',
               'acceptance': root / 'scripts/run_rma092_camera_texture_acceptance_android.sh',
               'architecture': root / 'docs/architecture/REPROJECTION_TEST_SUITE.md',
@@ -107,6 +106,18 @@ jobs:
           text['managed'] = '\n'.join(
               path.read_text(encoding='utf-8')
               for path in sorted((root / 'managed/ReachyMini.Camera.Tests').glob('Rma104*.cs'))
+          )
+          # ReachyAndroidCameraAcquisition.cs was split (docs/LARGE_FILE_REFACTOR_TODO_3.md,
+          # file #7) into an anchor plus partial-class/type files sharing the same
+          # filename prefix. Concatenate every piece so this contract check keeps
+          # covering the same source, regardless of which file each token now lives in.
+          text['acquisition'] = ''.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted(
+                  (root / 'Assets/ReachyMini/Runtime/Application').glob(
+                      'ReachyAndroidCameraAcquisition*.cs'
+                  )
+              )
           )
           # ReachyCameraFrameBridge.java was split (docs/LARGE_FILE_REFACTOR_TODO.md, file
           # #7) into several top-level ReachyCameraFrame*/ReachyFrame* helper classes.

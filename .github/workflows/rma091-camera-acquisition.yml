@@ -8,7 +8,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
@@ -35,7 +35,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs'
@@ -95,7 +95,18 @@ jobs:
 
           root = Path('.')
           core = (root / 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs').read_text(encoding='utf-8')
-          unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.cs').read_text(encoding='utf-8')
+          # ReachyAndroidCameraAcquisition.cs was split (docs/LARGE_FILE_REFACTOR_TODO_3.md,
+          # file #7) into an anchor plus partial-class/type files sharing the same
+          # filename prefix. Concatenate every piece so this contract check keeps
+          # covering the same source, regardless of which file each token now lives in.
+          unity = ''.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted(
+                  (root / 'Assets/ReachyMini/Runtime/Application').glob(
+                      'ReachyAndroidCameraAcquisition*.cs'
+                  )
+              )
+          )
           texture_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraTextureBridge.cs').read_text(encoding='utf-8')
           lease_unity = (root / 'Assets/ReachyMini/Runtime/Application/ReachyAndroidJavaCameraTextureFrameLease.cs').read_text(encoding='utf-8')
           texture_evidence = (root / 'Assets/ReachyMini/Runtime/Application/ReachyCameraTextureEvidence.cs').read_text(encoding='utf-8')
