@@ -193,21 +193,10 @@ jobs:
           RMA133_REPRO_SAMPLE_INTERVAL_SECONDS: '10'
           RMA133_REPRO_TIMEOUT_SECONDS: '3600'
         run: python3 scripts/prepare_rma133_reproducibility_device.py
-      - name: Bind reproducibility harness to accepted V6 Python bytes
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp accepted-v6/scripts/run_rma133_device_benchmark_v6.py \
-            scripts/run_rma133_device_benchmark_v6.py
-          cp accepted-v6/scripts/score_rma133_benchmark_v6.py \
-            scripts/score_rma133_benchmark_v6.py
-          cmp -s accepted-v6/scripts/run_rma133_device_benchmark_v6.py \
-            scripts/run_rma133_device_benchmark_v6.py
-          cmp -s accepted-v6/scripts/score_rma133_benchmark_v6.py \
-            scripts/score_rma133_benchmark_v6.py
       - name: Reproduce selected Qwen3 with unchanged V6 gates
         shell: bash
         env:
+          RMA133_ACCEPTED_V6_ROOT: ${{ github.workspace }}/accepted-v6
           RMA133_CONFIG: ${{ github.workspace }}/accepted-v6/benchmarks/rma133/candidates-v6.json
           RMA133_CASES: ${{ github.workspace }}/accepted-v6/benchmarks/rma133/behavior_cases-v2.tsv
           RMA133_SYSTEM_PROMPT: ${{ github.workspace }}/accepted-v6/benchmarks/rma133/system_prompt-v4.txt
