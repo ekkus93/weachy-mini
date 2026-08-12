@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Behavior;
 using ReachyMini.Interop;
 
 namespace ReachyMini.LocalModels
@@ -275,7 +276,7 @@ namespace ReachyMini.LocalModels
 
                 if (!LocalLlmBehaviorContract.TryParseIntent(
                         response.ToString(),
-                        out LocalLlmBehaviorIntent? intent,
+                        out ReachyBehaviorIntent? intent,
                         out string parseDetail) || intent == null)
                 {
                     return await PublishTerminalResultAsync(
