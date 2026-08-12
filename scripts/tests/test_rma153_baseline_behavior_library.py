@@ -181,9 +181,7 @@ class Rma153BaselineBehaviorLibraryContracts(unittest.TestCase):
         poses = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.BaselinePoses.cs").read_text(
             encoding="utf-8"
         )
-        contracts = (BEHAVIOR / "ReachyBaselineBehaviorContracts.cs").read_text(
-            encoding="utf-8"
-        )
+        contracts = (BEHAVIOR / "ReachyBaselineBehaviorContracts.cs").read_text(encoding="utf-8")
         self.assertIn("SpeakingFromAudioEnergy", contracts)
         self.assertGreaterEqual(poses.count("CopyTarget(baseTarget)"), 4)
         for forbidden in (
@@ -197,9 +195,7 @@ class Rma153BaselineBehaviorLibraryContracts(unittest.TestCase):
             self.assertNotIn(forbidden, poses)
 
     def test_sleep_and_wake_lifecycle_actions_are_explicit_and_fail_safe(self) -> None:
-        contracts = (BEHAVIOR / "ReachyBaselineBehaviorContracts.cs").read_text(
-            encoding="utf-8"
-        )
+        contracts = (BEHAVIOR / "ReachyBaselineBehaviorContracts.cs").read_text(encoding="utf-8")
         planner = (BEHAVIOR / "ReachyDeterministicBehaviorPlanner.Baseline.cs").read_text(
             encoding="utf-8"
         )
@@ -212,9 +208,7 @@ class Rma153BaselineBehaviorLibraryContracts(unittest.TestCase):
             "Succeeded",
         ):
             self.assertIn(required, contracts)
-        mapping = (BEHAVIOR / "ReachyBaselineLifecycleResetMapping.cs").read_text(
-            encoding="utf-8"
-        )
+        mapping = (BEHAVIOR / "ReachyBaselineLifecycleResetMapping.cs").read_text(encoding="utf-8")
         self.assertIn("ReachySimResetPose.SleepRest", mapping)
         self.assertIn("ReachySimResetPose.NeutralAwake", mapping)
         self.assertIn("PlanSafeRest(", planner)
