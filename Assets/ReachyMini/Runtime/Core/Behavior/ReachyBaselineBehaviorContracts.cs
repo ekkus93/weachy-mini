@@ -277,7 +277,11 @@ namespace ReachyMini.Behavior
             {
                 throw new ArgumentNullException(nameof(executionResult));
             }
-            if (!Succeeded || !executionResult.Completed)
+            ReachyBehaviorTrajectoryPlan? plan = PlannerResult.Plan;
+            if (!Succeeded ||
+                plan == null ||
+                !executionResult.Completed ||
+                executionResult.SubmittedFrameCount != plan.Frames.Count)
             {
                 return ReachyBaselineLifecycleAction.None;
             }
