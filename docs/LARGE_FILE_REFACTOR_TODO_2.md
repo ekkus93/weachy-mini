@@ -62,7 +62,7 @@ the check to confirm nothing regressed before starting.
 
 | # | File | Lines | Landmine? | Status |
 |---|---|---|---|---|
-| 1 | `managed/ReachyMini.Core.Tests/Program.cs` | 1161 | No (but see `InternalsVisibleTo` note) | ☐ Not started |
+| 1 | `managed/ReachyMini.Core.Tests/Program.cs` | 1161 | No (but see `InternalsVisibleTo` note) | ☑ Done (commits `d7ec94b`, `edb03bf`, `279fbf4`, `cd773a1`, `269812c`, `75795bd`, `225e97f`, `139863e`) |
 | 2 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyVisionProviderContracts.cs` | 1158 | No (CI check already directory-wide) | ☐ Not started |
 | 3 | `Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs` | 1115 | **Yes — 4 separate checks** (rma081, rma082, rma090, test_rma132) | ☐ Not started |
 | 4 | `Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs` | 1112 | **Yes** (rma082-settings.yml) | ☐ Not started |
