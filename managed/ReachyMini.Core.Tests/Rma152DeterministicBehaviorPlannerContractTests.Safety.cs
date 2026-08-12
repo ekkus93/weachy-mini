@@ -243,10 +243,7 @@ namespace ReachyMini.Core.Tests
             public ReachyBehaviorTargetSubmissionStatus Submit(
                 ReachyBehaviorTrajectoryFrame frame)
             {
-                if (frame == null)
-                {
-                    throw new ArgumentNullException(nameof(frame));
-                }
+                ArgumentNullException.ThrowIfNull(frame);
                 ++SubmissionCount;
                 return status;
             }
