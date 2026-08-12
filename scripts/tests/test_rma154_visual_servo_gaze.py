@@ -91,9 +91,7 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             self.assertAlmostEqual(float(expected), actual, places=12, msg=name)
 
     def test_loop_requires_actual_motion_then_post_motion_transformed_frame(self) -> None:
-        source = (BEHAVIOR / "ReachyVisualServoGazeLoop.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (BEHAVIOR / "ReachyVisualServoGazeLoop.cs").read_text(encoding="utf-8")
         for required in (
             "HasObservedPhysicalMotion(beforeMotion, next.MotionSnapshot)",
             "observedMotionSequence = next.AuthoritativeStateSequence",
@@ -114,9 +112,7 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
         self.assertNotIn("ReachyBaselineBehaviorRequest.GazeAcquisition", source)
 
     def test_stop_conditions_are_explicit_and_fail_closed(self) -> None:
-        source = (BEHAVIOR / "ReachyVisualServoGazeLoop.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (BEHAVIOR / "ReachyVisualServoGazeLoop.cs").read_text(encoding="utf-8")
         for required in (
             "ReachyVisualServoStatus.Centered",
             "ReachyVisualServoStatus.TargetLost",
@@ -135,12 +131,12 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             self.assertIn(required, source)
 
     def test_production_feedback_is_read_only_and_authoritative(self) -> None:
-        source = (
-            RENDERING / "ReachyProductionVisualServoFeedbackSource.cs"
-        ).read_text(encoding="utf-8")
-        runtime = (
-            RENDERING / "ReachyProductionAuthoritativeRuntime.cs"
-        ).read_text(encoding="utf-8")
+        source = (RENDERING / "ReachyProductionVisualServoFeedbackSource.cs").read_text(
+            encoding="utf-8"
+        )
+        runtime = (RENDERING / "ReachyProductionAuthoritativeRuntime.cs").read_text(
+            encoding="utf-8"
+        )
         for required in (
             "TryCaptureLatestAuthoritativeState",
             "ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot",
@@ -150,9 +146,9 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             self.assertIn(required, source)
         self.assertIn("TryCreateAuthoritativeStateFrame", runtime)
         self.assertIn("TryCaptureLatestAuthoritativeState", runtime)
-        combined = source + "\n" + (
-            BEHAVIOR / "ReachyVisualServoGazeLoop.cs"
-        ).read_text(encoding="utf-8")
+        combined = (
+            source + "\n" + (BEHAVIOR / "ReachyVisualServoGazeLoop.cs").read_text(encoding="utf-8")
+        )
         for forbidden in (
             "NativeReachySim",
             "ReachySimSession",
@@ -163,7 +159,6 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             "TorqueCommand",
         ):
             self.assertNotIn(forbidden, combined)
-
 
     def test_physical_android_acceptance_closes_real_feedback_path(self) -> None:
         acceptance = "\n".join(
@@ -212,15 +207,13 @@ class Rma154VisualServoGazeContracts(unittest.TestCase):
             self.assertIn(required, script)
 
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn(
-            "run_rma154_visual_servo_acceptance_android.sh", workflow
-        )
+        self.assertIn("run_rma154_visual_servo_acceptance_android.sh", workflow)
         self.assertIn("rma154-visual-servo-report-${{ github.sha }}", workflow)
 
     def test_replay_contract_is_covered(self) -> None:
-        test_source = (
-            MANAGED / "Rma154VisualServoGazeLoopContractTests.Feedback.cs"
-        ).read_text(encoding="utf-8")
+        test_source = (MANAGED / "Rma154VisualServoGazeLoopContractTests.Feedback.cs").read_text(
+            encoding="utf-8"
+        )
         for required in (
             "FeedbackRegressionFailsClosed",
             "ObservationReplayProducesRepeatableTrajectories",
