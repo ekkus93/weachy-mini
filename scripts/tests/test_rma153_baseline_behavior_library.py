@@ -76,6 +76,7 @@ class Rma153BaselineBehaviorLibraryContracts(unittest.TestCase):
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
         self.assertEqual("rma153_baseline_behavior_library_v1", policy["contract_id"])
         self.assertEqual("engineering_estimate", policy["quality"])
+        self.assertTrue(policy["gaze_search"]["requires_current_coverage_timestamp"])
         self.assertEqual(
             {
                 "neutral_idle",
@@ -220,6 +221,7 @@ class Rma153BaselineBehaviorLibraryContracts(unittest.TestCase):
         self.assertIn("IsNeutralWakeSource", planner)
         self.assertIn("wake-requires-fresh-neutral-awake-authoritative-state", planner)
         self.assertIn("executionResult.Completed", contracts)
+        self.assertIn("executionResult.SubmittedFrameCount", contracts)
 
 
 if __name__ == "__main__":
