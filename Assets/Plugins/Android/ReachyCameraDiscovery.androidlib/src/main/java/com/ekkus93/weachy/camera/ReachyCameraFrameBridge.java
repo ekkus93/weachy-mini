@@ -35,9 +35,6 @@ import androidx.camera.core.SurfaceRequest;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.lifecycle.Lifecycle;
-import androidx.lifecycle.LifecycleOwner;
-import androidx.lifecycle.LifecycleRegistry;
 import androidx.lifecycle.Observer;
 
 import com.google.common.util.concurrent.ListenableFuture;
@@ -81,7 +78,7 @@ public final class ReachyCameraFrameBridge {
     private static ProcessCameraProvider cameraProvider;
     private static Camera boundCamera;
     private static Observer<CameraState> cameraStateObserver;
-    private static CameraLifecycleOwner lifecycleOwner;
+    private static ReachyCameraLifecycleOwner lifecycleOwner;
     private static Preview preview;
     private static ImageAnalysis imageAnalysis;
     private static DiscardingPreviewSurfaceProvider previewSurfaceProvider;
@@ -149,7 +146,7 @@ public final class ReachyCameraFrameBridge {
                 cameraId = requestedCameraId;
                 descriptor = requestedDescriptor;
                 latestFrame = null;
-                lifecycleOwner = new CameraLifecycleOwner();
+                lifecycleOwner = new ReachyCameraLifecycleOwner();
                 lifecycleOwner.start();
                 analyzerExecutor = Executors.newSingleThreadExecutor(
                         new ReachyCameraFrameThreadFactory("reachy-camera-analysis"));
@@ -802,7 +799,7 @@ public final class ReachyCameraFrameBridge {
         return analyzerExecutor;
     }
 
-    private static CameraLifecycleOwner requireLifecycleOwnerLocked() {
+    private static ReachyCameraLifecycleOwner requireLifecycleOwnerLocked() {
         if (lifecycleOwner == null) {
             throw new IllegalStateException(
                     "The CameraX lifecycle owner is unavailable.");
@@ -896,55 +893,6 @@ public final class ReachyCameraFrameBridge {
                 rotation != Surface.ROTATION_270) {
             throw new IllegalArgumentException(
                     "Android returned invalid display rotation " + rotation + ".");
-        }
-    }
-
-    private static final class CameraLifecycleOwner implements LifecycleOwner {
-        private final LifecycleRegistry registry = new LifecycleRegistry(this);
-        private boolean created;
-        private boolean started;
-        private boolean destroyed;
-
-        CameraLifecycleOwner() {
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE);
-            created = true;
-        }
-
-        @NonNull
-        @Override
-        public Lifecycle getLifecycle() {
-            return registry;
-        }
-
-        void start() {
-            if (destroyed || !created || started) {
-                return;
-            }
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_START);
-            started = true;
-        }
-
-        void pause() {
-            if (destroyed || !started) {
-                return;
-            }
-            registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
-            started = false;
-        }
-
-        void destroy() {
-            if (destroyed) {
-                return;
-            }
-            if (started) {
-                registry.handleLifecycleEvent(Lifecycle.Event.ON_STOP);
-                started = false;
-            }
-            if (created) {
-                registry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY);
-                created = false;
-            }
-            destroyed = true;
         }
     }
 
