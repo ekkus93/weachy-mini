@@ -101,21 +101,13 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             "maximumWorldSnapshotAgeNanoseconds": policy["world_model"][
                 "maximum_snapshot_age_nanoseconds"
             ],
-            "minimumSegmentMilliseconds": policy["planning"][
-                "minimum_segment_milliseconds"
-            ],
+            "minimumSegmentMilliseconds": policy["planning"]["minimum_segment_milliseconds"],
             "maximumPlanDurationMilliseconds": policy["planning"][
                 "maximum_plan_duration_milliseconds"
             ],
-            "maximumGazeBodyYawRadians": policy["planning"][
-                "maximum_gaze_body_yaw_radians"
-            ],
-            "maximumGazeHeadYawRadians": policy["planning"][
-                "maximum_gaze_head_yaw_radians"
-            ],
-            "maximumGazeHeadPitchRadians": policy["planning"][
-                "maximum_gaze_head_pitch_radians"
-            ],
+            "maximumGazeBodyYawRadians": policy["planning"]["maximum_gaze_body_yaw_radians"],
+            "maximumGazeHeadYawRadians": policy["planning"]["maximum_gaze_head_yaw_radians"],
+            "maximumGazeHeadPitchRadians": policy["planning"]["maximum_gaze_head_pitch_radians"],
         }
         for name, expected in named_values.items():
             match = re.search(rf"{name}:\s*([0-9_.]+)L?", source)
@@ -182,9 +174,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("CopyTarget(\n                motionSnapshot.PositionsRadians)", planner)
-        self.assertIn(
-            "target[ReachyBehaviorPlannerActuators.BodyYaw] += bodyYaw", gaze
-        )
+        self.assertIn("target[ReachyBehaviorPlannerActuators.BodyYaw] += bodyYaw", gaze)
 
     def test_motion_limits_and_interlocks_are_explicit(self) -> None:
         contracts = "\n".join(
@@ -253,9 +243,7 @@ class Rma152BehaviorPlannerContracts(unittest.TestCase):
         self.assertIn("SafeRestReturnsAllActuatorsToNeutral", fixture)
 
     def test_execution_stops_on_cancellation_or_submission_failure(self) -> None:
-        source = (BEHAVIOR / "ReachyBehaviorTrajectoryExecutor.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (BEHAVIOR / "ReachyBehaviorTrajectoryExecutor.cs").read_text(encoding="utf-8")
         self.assertIn("cancellationToken.IsCancellationRequested", source)
         self.assertIn("OperationCanceledException", source)
         self.assertIn("SubmissionRejected", source)
