@@ -1,8 +1,20 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ACCEPTANCE = (
-    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs"
+# ReachyRma135ResourceGovernorAcceptance.cs is planned to split
+# (docs/LARGE_FILE_REFACTOR_TODO_2.md, file #8) into several partial/helper
+# files in the same directory. Glob and concatenate every matching file so
+# this check still covers the full implementation regardless of which file
+# each member lives in.
+_APPLICATION_DIR = ROOT / "Assets/ReachyMini/Runtime/Application"
+ACCEPTANCE_TEXT = "".join(
+    path.read_text(encoding="utf-8")
+    for path in sorted(
+        {
+            *_APPLICATION_DIR.glob("ReachyRma135ResourceGovernorAcceptance*.cs"),
+            *_APPLICATION_DIR.glob("Rma135Acceptance*.cs"),
+        }
+    )
 )
 RUNNER = ROOT / "scripts/run_rma135_resource_governor_acceptance_android.sh"
 
@@ -18,7 +30,7 @@ def forbid(text: str, needle: str, label: str) -> None:
 
 
 def main() -> None:
-    text = ACCEPTANCE.read_text(encoding="utf-8")
+    text = ACCEPTANCE_TEXT
     runner = RUNNER.read_text(encoding="utf-8")
     require(text, "ReachyProductionAuthoritativeRuntime", "live production runtime")
     require(
