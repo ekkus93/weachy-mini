@@ -56,7 +56,7 @@ skill) and dispatching one analysis pass per file.
 | 5 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs` (renamed to `ReachyOpenAiVisionLanguageProviders.cs`) | 1516 | ☑ Done (commits `591f2e6`, `a7f7aff`, `ee59c50`, `0a51f40`, `86a1a95`, `02d2b32`, `827f9c9`, `68bc402`) |
 | 6 | `Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs` (renamed to `ReachyLocalLlmProvider.Core.cs`) | 1438 | ☑ Done (commits `a960a60`, `ac550aa`, `578c3df`, `755bfc5`, `747f4e9`) |
 | 7 | `Assets/Plugins/Android/.../ReachyCameraFrameBridge.java` | 1383 | ☑ Done (commits `8e61c06`, `86cb5c9`, `f545a30`, `7d741ca`, `32ec510`, `d7e42dd`, `f41536f`, `d6f355f`, `d99f9be`, `e7b914f`, `ba34a2d`) |
-| 8 | `Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs` | 1363 | ☐ Not started |
+| 8 | `Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs` (deleted, split into 5 files) | 1363 | ☑ Done (commits `dbb1463`, `d11f2a1`, `d5ce69e`, `5cca40a`, `e30acd4`) |
 | 9 | `scripts/calibration_fitting.py` | 1342 | ☐ Not started |
 | 10 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs` | 1166 | ☐ Not started |
 
