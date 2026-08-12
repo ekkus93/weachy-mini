@@ -27,6 +27,24 @@ skill) and dispatching one analysis pass per file.
   `partial class`, Android package visibility, Python sibling-file loading),
   follow the guidance in that file's section — they are not interchangeable.
 
+## Known findings (out of scope, not fixed here)
+
+- **`android-plugin/build.gradle.kts` does not compile `ReachyCameraDiscovery.androidlib`.**
+  Discovered while splitting file #7. Its `sourceSets` block only adds
+  `ReachyOnDeviceAsr.androidlib`'s source directory — `ReachyCameraDiscovery.androidlib`,
+  `ReachyProviderSecurity.androidlib`, and `ReachyRma134Acceptance.androidlib` are never
+  wired in, so `./gradlew lint test` silently doesn't compile or lint any of them. This
+  predates the file #7 split (confirmed via `git stash`-style comparison against a clean
+  checkout) and is a pre-existing project-configuration gap, not something introduced by
+  this refactor. Verification for file #7's steps therefore used a real `javac` compile
+  against CameraX/AndroidX/Guava jars pulled from the local Gradle dependency cache
+  instead of trusting `./gradlew lint test` alone (see commits `d6f355f`, `d99f9be`
+  onward). Properly fixing this would mean adding real CameraX/lifecycle/org.json/Guava
+  dependencies to `build.gradle.kts` for the missing module(s), which will likely surface
+  a flood of pre-existing lint findings under this project's `-Werror`/`warningsAsErrors`
+  settings across code that appears to have never been compiled under them — a
+  substantial, separate task, not a one-line fix.
+
 ## Progress tracker
 
 | # | File | Lines (before) | Status |
@@ -37,7 +55,7 @@ skill) and dispatching one analysis pass per file.
 | 4 | `managed/ReachyMini.RemoteVlm.Tests/Program.cs` | 1659 | ☑ Done (commits `7ab1cb6`, `6fcd6aa`, `12102cf`, `39b717a`, `7424a00`, `307f74a`, `b6134e3`, `00f477c`, `417332c`, `dd6893e`, `af8866c`, `d049187`) |
 | 5 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionLanguageAdapters.cs` (renamed to `ReachyOpenAiVisionLanguageProviders.cs`) | 1516 | ☑ Done (commits `591f2e6`, `a7f7aff`, `ee59c50`, `0a51f40`, `86a1a95`, `02d2b32`, `827f9c9`, `68bc402`) |
 | 6 | `Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs` (renamed to `ReachyLocalLlmProvider.Core.cs`) | 1438 | ☑ Done (commits `a960a60`, `ac550aa`, `578c3df`, `755bfc5`, `747f4e9`) |
-| 7 | `Assets/Plugins/Android/.../ReachyCameraFrameBridge.java` | 1383 | ☐ Not started |
+| 7 | `Assets/Plugins/Android/.../ReachyCameraFrameBridge.java` | 1383 | ☑ Done (commits `8e61c06`, `86cb5c9`, `f545a30`, `7d741ca`, `32ec510`, `d7e42dd`, `f41536f`, `d6f355f`, `d99f9be`, `e7b914f`, `ba34a2d`) |
 | 8 | `Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs` | 1363 | ☐ Not started |
 | 9 | `scripts/calibration_fitting.py` | 1342 | ☐ Not started |
 | 10 | `Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmSchedulingPolicy.cs` | 1166 | ☐ Not started |
