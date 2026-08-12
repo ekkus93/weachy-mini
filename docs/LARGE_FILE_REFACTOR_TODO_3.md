@@ -75,7 +75,7 @@ section before starting.
 
 | # | File | Lines | Landmine? | Status |
 |---|---|---|---|---|
-| 1 | `Assets/ReachyMini/Runtime/Core/Speech/AndroidSystemTtsProvider.cs` | 953 | No | ☐ Not started |
+| 1 | `Assets/ReachyMini/Runtime/Core/Speech/AndroidSystemTtsProvider.cs` | 953 | No | ☑ Done (commit `af99fbe`) |
 | 2 | `managed/ReachyMini.Camera.Tests/Rma110VisionProviderContracts.cs` | 921 | No (CI check already directory-glob-based) | ☐ Not started |
 | 3 | `scripts/calibration_data.py` | 919 | Soft only (rma070 CI path trigger — no in-file grep) | ☐ Not started |
 | 4 | `scripts/calibration_profile_approval.py` | 875 | **Yes** (rma074 CI path trigger + `compileall` file list) | ☐ Not started |
