@@ -6,6 +6,11 @@ on:
     paths:
       - '.github/workflows/rma100-camera-calibration.yml'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCoordinateContract.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyGeometryPrimitives.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraIntrinsics.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationProfile.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationStateStore.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs'
       - 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraCalibrationUnityAdapter.cs'
@@ -78,8 +83,28 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
+          # ReachyCameraReprojectionCalibration.cs is being incrementally split
+          # (docs/LARGE_FILE_REFACTOR_TODO.md, file #8) into the sibling files
+          # below. Concatenate every piece that currently exists so this
+          # contract check keeps covering the same source, regardless of which
+          # resulting file each token now lives in.
+          core_dir = Path('Assets/ReachyMini/Runtime/Core/Application')
+          core_source_files = [
+              'ReachyCameraReprojectionCalibration.cs',
+              'ReachyCameraCoordinateContract.cs',
+              'ReachyGeometryPrimitives.cs',
+              'ReachyCameraIntrinsics.cs',
+              'ReachyCameraCalibrationProfile.cs',
+              'ReachyCameraCalibrationStateStore.cs',
+          ]
+          core_text = ''.join(
+              (core_dir / name).read_text(encoding='utf-8')
+              for name in core_source_files
+              if (core_dir / name).exists()
+          )
+
           files = {
-              'core': Path('Assets/ReachyMini/Runtime/Core/Application/ReachyCameraReprojectionCalibration.cs').read_text(encoding='utf-8'),
+              'core': core_text,
               'persistence': Path('Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs').read_text(encoding='utf-8'),
               'settings': Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8'),
               'adapter': Path('Assets/ReachyMini/Runtime/Rendering/ReachyCameraCalibrationUnityAdapter.cs').read_text(encoding='utf-8'),
