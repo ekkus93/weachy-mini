@@ -105,8 +105,9 @@ Sleep and wake use the existing simulator reset semantics rather than cosmetic a
 - `WakeNeutral` maps to `ReachySimResetPose.NeutralAwake`.
 
 Sleep first plans the normal RMA-152 safe-rest trajectory. `EnterSleepRest` is released only after a
-successful trajectory execution result. Planning failure, cancellation, or controller rejection
-never authorizes the sleep reset.
+completed trajectory execution result whose submitted-frame count matches the planned safe-rest
+trajectory. Planning failure, cancellation, controller rejection, or a mismatched completed
+execution never authorizes the sleep reset.
 
 Wake declares `WakeNeutral` as a pre-planning lifecycle action. After that reset the caller must
 obtain a fresh authoritative state. The expressive wake phase is rejected unless all nine positions
