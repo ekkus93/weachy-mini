@@ -15,7 +15,7 @@ on:
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraReprojection*.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs'
       - 'managed/ReachyMini.Camera.Tests/Rma104*.cs'
-      - 'scripts/run_rma092_camera_texture_acceptance_android.sh'
+      - 'scripts/run_rma092_camera_texture_acceptance_android*.sh'
       - 'docs/architecture/REPROJECTION_TEST_SUITE.md'
       - 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md'
       - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
@@ -94,7 +94,6 @@ jobs:
               'renderer': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpRenderer.cs',
               'pipeline': root / 'Assets/ReachyMini/Runtime/Rendering/ReachyCameraHomographyWarpPipeline.cs',
               'close_tests': root / 'Assets/ReachyMini/Tests/Editor/ReachyCameraCloseBarrierTests.cs',
-              'acceptance': root / 'scripts/run_rma092_camera_texture_acceptance_android.sh',
               'architecture': root / 'docs/architecture/REPROJECTION_TEST_SUITE.md',
               'validation': root / 'docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md',
           }
@@ -116,6 +115,19 @@ jobs:
               for path in sorted(
                   (root / 'Assets/ReachyMini/Runtime/Application').glob(
                       'ReachyAndroidCameraAcquisition*.cs'
+                  )
+              )
+          )
+          # run_rma092_camera_texture_acceptance_android.sh was split into an
+          # entrypoint plus two sourced function libraries sharing the same
+          # filename prefix. Concatenate every piece so this contract check
+          # keeps covering the same source, regardless of which file each
+          # token now lives in.
+          text['acceptance'] = ''.join(
+              path.read_text(encoding='utf-8')
+              for path in sorted(
+                  (root / 'scripts').glob(
+                      'run_rma092_camera_texture_acceptance_android*.sh'
                   )
               )
           )
