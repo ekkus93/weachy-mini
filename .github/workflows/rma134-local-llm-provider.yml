@@ -122,7 +122,11 @@ jobs:
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmBehaviorContract.cs \
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmRuntimeContracts.cs \
             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLlamaLocalLlmRuntime.cs \
-            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.StateHelpers.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.RuntimeCalls.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Streaming.cs \
+            Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs \
             Assets/ReachyMini/Runtime/Interop/NativeReachyLlama.cs \
             Assets/ReachyMini/Runtime/Interop/ReachyLlamaNativeTypes.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma134LocalLlmAcceptance.cs \
