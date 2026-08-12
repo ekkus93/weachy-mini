@@ -171,7 +171,6 @@ namespace ReachyMini.Behavior
                 {
                     double[] recoil = CopyTarget(baseTarget);
                     ApplyHeadOffset(recoil, 0.0, 0.09, 0.0);
-                    recoil[ReachyBehaviorPlannerActuators.BodyYaw] *= 0.75;
                     AddAntennaOffset(recoil, 0.12, -0.12);
                     poses.Add(recoil);
                     poses.Add(CopyTarget(baseTarget));

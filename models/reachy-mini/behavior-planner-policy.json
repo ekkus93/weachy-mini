@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "contract_id": "rma152_deterministic_behavior_planner_v1",
+  "contract_id": "rma152_deterministic_behavior_planner_v2",
   "quality": "engineering_estimate",
   "purpose": "Conservative deterministic envelope for converting validated behavior intent into normal position-controller targets.",
   "actuator_order": [
@@ -21,10 +21,13 @@
   },
   "planning": {
     "minimum_segment_milliseconds": 120,
+    "command_interval_milliseconds": 50,
+    "maximum_trajectory_frame_count": 128,
     "maximum_plan_duration_milliseconds": 5000,
     "maximum_gaze_body_yaw_radians": 0.35,
     "maximum_gaze_head_yaw_radians": 0.18,
-    "maximum_gaze_head_pitch_radians": 0.16
+    "maximum_gaze_head_pitch_radians": 0.16,
+    "trajectory_profile": "cubic_smoothstep_zero_endpoint_velocity"
   },
   "actuator_limits": [
     {
@@ -38,7 +41,7 @@
     {
       "name": "stewart_1",
       "minimum_position_radians": -0.8227580409572196,
-      "maximum_position_radians": 1.3812634015955222,
+      "maximum_position_radians": 1.3812634015955223,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
       "position_source": "rma065_pinned_joint_range_with_0.015_rad_soft_inset"
@@ -46,7 +49,7 @@
     {
       "name": "stewart_2",
       "minimum_position_radians": -1.381263401595614,
-      "maximum_position_radians": 1.2067304763958803,
+      "maximum_position_radians": 1.2067304763958804,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
       "position_source": "rma065_pinned_joint_range_with_0.015_rad_soft_inset"
@@ -54,14 +57,14 @@
     {
       "name": "stewart_3",
       "minimum_position_radians": -0.8227580409572173,
-      "maximum_position_radians": 1.3812634015955244,
+      "maximum_position_radians": 1.3812634015955243,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
       "position_source": "rma065_pinned_joint_range_with_0.015_rad_soft_inset"
     },
     {
       "name": "stewart_4",
-      "minimum_position_radians": -1.3812634015953894,
+      "minimum_position_radians": -1.3812634015953893,
       "maximum_position_radians": 0.8227580409573525,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
@@ -69,7 +72,7 @@
     },
     {
       "name": "stewart_5",
-      "minimum_position_radians": -1.2067304763962082,
+      "minimum_position_radians": -1.2067304763962081,
       "maximum_position_radians": 1.381263401595286,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
@@ -77,7 +80,7 @@
     },
     {
       "name": "stewart_6",
-      "minimum_position_radians": -1.3812634015954123,
+      "minimum_position_radians": -1.3812634015954124,
       "maximum_position_radians": 0.8227580409573296,
       "maximum_velocity_radians_per_second": 0.9,
       "maximum_acceleration_radians_per_second_squared": 1.8,
@@ -111,9 +114,30 @@
   "head_mapping": {
     "quality": "engineering_estimate",
     "note": "Small bounded Stewart offsets provide the deterministic RMA-152 baseline. They are not a calibrated inverse-kinematics model and remain subordinate to RMA-065 collision/hard-stop enforcement and later visual-servo feedback.",
-    "yaw_basis": [0.5, -0.5, 0.5, -0.5, 0.5, -0.5],
-    "pitch_basis": [0.7, 0.7, 0.0, -0.7, -0.7, 0.0],
-    "roll_basis": [0.0, 0.7, 0.7, 0.0, -0.7, -0.7]
+    "yaw_basis": [
+      0.5,
+      -0.5,
+      0.5,
+      -0.5,
+      0.5,
+      -0.5
+    ],
+    "pitch_basis": [
+      0.7,
+      0.7,
+      0.0,
+      -0.7,
+      -0.7,
+      0.0
+    ],
+    "roll_basis": [
+      0.0,
+      0.7,
+      0.7,
+      0.0,
+      -0.7,
+      -0.7
+    ]
   },
   "forbidden_shortcuts": [
     "direct_mujoco_state_write",

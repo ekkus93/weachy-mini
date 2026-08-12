@@ -17,7 +17,8 @@ namespace ReachyMini.Behavior
         private static bool RequestsMotion(ReachyBehaviorIntent intent)
         {
             return intent.GazeTarget != null ||
-                intent.Expression.HasValue ||
+                (intent.Expression.HasValue &&
+                    intent.Expression.Value != ReachyBehaviorExpression.Neutral) ||
                 (intent.Gesture.HasValue &&
                     intent.Gesture.Value != ReachyBehaviorGesture.None);
         }

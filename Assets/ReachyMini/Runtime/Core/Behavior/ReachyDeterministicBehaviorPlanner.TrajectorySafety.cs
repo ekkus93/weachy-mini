@@ -36,7 +36,7 @@ namespace ReachyMini.Behavior
                 throw new ArgumentOutOfRangeException(nameof(urgencyScale));
             }
 
-            var frames = new List<ReachyBehaviorTrajectoryFrame>(poses.Count);
+            var frames = new List<ReachyBehaviorTrajectoryFrame>();
             IReadOnlyList<double> previous = initialPositions;
             int offset = startDelayMilliseconds;
             for (int index = 0; index < poses.Count; ++index)
@@ -48,21 +48,43 @@ namespace ReachyMini.Behavior
                         ReachyBehaviorPlannerStatus.TrajectoryConstraintRejected,
                         "behavior-target-exceeds-soft-actuator-envelope");
                 }
+                if (!HasMotion(previous, target))
+                {
+                    previous = target;
+                    continue;
+                }
 
                 int segmentMilliseconds = MinimumSafeSegmentMilliseconds(
                     previous,
                     target,
                     urgencyScale);
-                offset = checked(offset + segmentMilliseconds);
-                if (offset > maximumDurationMilliseconds ||
-                    offset > policy.MaximumPlanDurationMilliseconds)
+                int stepCount = checked(
+                    (segmentMilliseconds + policy.CommandIntervalMilliseconds - 1) /
+                    policy.CommandIntervalMilliseconds);
+                int scheduledSegmentMilliseconds = checked(
+                    stepCount * policy.CommandIntervalMilliseconds);
+                int segmentEndOffset = checked(offset + scheduledSegmentMilliseconds);
+                if (segmentEndOffset > maximumDurationMilliseconds ||
+                    segmentEndOffset > policy.MaximumPlanDurationMilliseconds)
                 {
                     return Failure(
                         ReachyBehaviorPlannerStatus.TrajectoryConstraintRejected,
                         "behavior-duration-cannot-meet-velocity-acceleration-limits");
                 }
-                frames.Add(
-                    new ReachyBehaviorTrajectoryFrame(offset, target));
+                if (frames.Count + stepCount > policy.MaximumTrajectoryFrameCount)
+                {
+                    return Failure(
+                        ReachyBehaviorPlannerStatus.TrajectoryConstraintRejected,
+                        "behavior-trajectory-frame-budget-exceeded");
+                }
+
+                AppendSmoothStepFrames(
+                    frames,
+                    previous,
+                    target,
+                    offset,
+                    stepCount);
+                offset = segmentEndOffset;
                 previous = target;
             }
 
@@ -73,6 +95,37 @@ namespace ReachyMini.Behavior
                 resolvedGazeEntityId,
                 frames);
             return null;
+        }
+
+        private void AppendSmoothStepFrames(
+            List<ReachyBehaviorTrajectoryFrame> frames,
+            IReadOnlyList<double> from,
+            IReadOnlyList<double> to,
+            int startOffsetMilliseconds,
+            int stepCount)
+        {
+            if (stepCount <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(stepCount));
+            }
+
+            for (int step = 1; step <= stepCount; ++step)
+            {
+                double progress = step / (double)stepCount;
+                double blend = progress * progress * (3.0 - (2.0 * progress));
+                var sample = new double[ReachyBehaviorPlannerActuators.Count];
+                for (int actuator = 0;
+                    actuator < ReachyBehaviorPlannerActuators.Count;
+                    ++actuator)
+                {
+                    sample[actuator] = from[actuator] +
+                        ((to[actuator] - from[actuator]) * blend);
+                }
+                int offset = checked(
+                    startOffsetMilliseconds +
+                    (step * policy.CommandIntervalMilliseconds));
+                frames.Add(new ReachyBehaviorTrajectoryFrame(offset, sample));
+            }
         }
 
         private int MinimumSafeSegmentMilliseconds(
@@ -86,20 +139,42 @@ namespace ReachyMini.Behavior
                 ++index)
             {
                 double distance = Math.Abs(to[index] - from[index]);
+                if (distance <= 0.0)
+                {
+                    continue;
+                }
                 ReachyBehaviorActuatorLimit limit = policy.ActuatorLimits[index];
                 double velocity =
                     limit.MaximumVelocityRadiansPerSecond * urgencyScale;
                 double acceleration =
                     limit.MaximumAccelerationRadiansPerSecondSquared * urgencyScale;
-                double velocitySeconds = distance / velocity;
-                double accelerationSeconds = distance <= 0.0
-                    ? 0.0
-                    : 2.0 * Math.Sqrt(distance / acceleration);
+
+                // Cubic smoothstep h(s)=3s^2-2s^3 has peak dh/ds=1.5 and
+                // peak |d2h/ds2|=6. These bounds make the scheduled setpoint
+                // path respect the configured velocity/acceleration envelope.
+                double velocitySeconds = 1.5 * distance / velocity;
+                double accelerationSeconds = Math.Sqrt(6.0 * distance / acceleration);
                 minimumSeconds = Math.Max(
                     minimumSeconds,
                     Math.Max(velocitySeconds, accelerationSeconds));
             }
             return checked((int)Math.Ceiling(minimumSeconds * 1000.0));
+        }
+
+        private static bool HasMotion(
+            IReadOnlyList<double> from,
+            IReadOnlyList<double> to)
+        {
+            for (int index = 0;
+                index < ReachyBehaviorPlannerActuators.Count;
+                ++index)
+            {
+                if (from[index] != to[index])
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private bool ValidateMotionSnapshot(
