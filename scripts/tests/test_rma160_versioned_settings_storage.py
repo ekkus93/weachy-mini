@@ -5,8 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SETTINGS = ROOT / "Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs"
 REFERENCES = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStorageReferences.cs"
 STATE_PERSISTENCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Persistence.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Persistence.cs"
 )
 PROVIDERS = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs"
 PROVIDER_CONTRACT = ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs"
