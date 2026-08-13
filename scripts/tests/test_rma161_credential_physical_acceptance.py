@@ -30,22 +30,28 @@ class Rma161CredentialPhysicalAcceptanceTests(unittest.TestCase):
         self.assertNotIn("Debug.Log(UpdatedCredential", source)
         self.assertNotIn("message = exception.Message", source)
 
-    def test_device_script_proves_lock_clear_and_text_evidence_privacy(self) -> None:
+    def test_device_script_proves_locked_access_clear_and_text_evidence_privacy(self) -> None:
         source = SCRIPT.read_text(encoding="utf-8")
         for contract in (
             "wait_for_keyguard_showing",
-            "wait_for_keyguard_dismissed",
+            "require_unoccluded_keyguard",
+            "run_phase_while_keyguard_showing",
             "input keyevent 223",
-            "run_phase verify-after-lock",
-            "run_phase invalidate",
+            "run_phase_while_keyguard_showing verify-after-lock",
+            "run_phase_while_keyguard_showing invalidate",
             'shell pm clear "${PACKAGE_NAME}"',
-            "run_phase verify-cleared",
+            "run_phase_while_keyguard_showing verify-cleared",
             "assert_no_full_secret_in_text_evidence",
             "uiautomator dump",
             "screencap -p",
             "run-as",
+            "mKeyguardShowing=true",
+            "mOccluded=true",
         ):
             self.assertIn(contract, source)
+        self.assertNotIn("wait_for_keyguard_dismissed", source)
+        self.assertNotIn("unlock-prepare.txt", source)
+        self.assertNotIn("input text", source)
         self.assertNotIn("set +e\nassert_no_full_secret", source)
 
     def test_device_script_reuses_only_matching_installed_upstream_apk(self) -> None:
