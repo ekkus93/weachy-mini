@@ -60,9 +60,7 @@ class Rma161CredentialLifecycleTests(unittest.TestCase):
         ):
             self.assertIn(contract, source)
 
-        managed = (APPLICATION / "ReachyAndroidProviderSecretStore.cs").read_text(
-            encoding="utf-8"
-        )
+        managed = (APPLICATION / "ReachyAndroidProviderSecretStore.cs").read_text(encoding="utf-8")
         for contract in (
             "IsKeyguardLockedForAcceptance",
             "IsDeviceSecureForAcceptance",
@@ -102,9 +100,7 @@ class Rma161CredentialLifecycleTests(unittest.TestCase):
         self.assertIn("StringAssert.DoesNotContain", source)
         self.assertIn("Array.Clear", source)
 
-        contract = (PROVIDERS / "ReachyProviderConfiguration.cs").read_text(
-            encoding="utf-8"
-        )
+        contract = (PROVIDERS / "ReachyProviderConfiguration.cs").read_text(encoding="utf-8")
         self.assertIn("interface IReachyProviderSecretStore", contract)
         self.assertIn("byte[] GetSecret(string reference);", contract)
 
