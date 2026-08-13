@@ -30,7 +30,9 @@ namespace ReachyMini.Tests
                     contents.GetComponentsInChildren<
                         ReachyPresentationBody>(true))
                 {
-                    if (body.BodyIndex != (int)binding.CameraBodyId)
+                    if (body.BodyIndex !=
+                        ReachyCameraMujocoOpticalBinding
+                            .CanonicalCameraPresentationIndex)
                     {
                         continue;
                     }
