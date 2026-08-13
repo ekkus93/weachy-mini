@@ -2,7 +2,9 @@
 
 ## Status
 
-Implementation specification for RMA-160. This document extends the existing RMA-082 settings UI, RMA-100 camera-calibration persistence, RMA-131 model-manifest contract, and RMA-140 provider-profile/secret separation. It does not replace those specialized stores.
+**Complete (2026-08-13).** Accepted validation evidence is recorded in `docs/validation/RMA_160_VERSIONED_SETTINGS_STORAGE_LOCAL_VALIDATION_2026-08-12.md`.
+
+This document extends the existing RMA-082 settings UI, RMA-100 camera-calibration persistence, RMA-131 model-manifest contract, and RMA-140 provider-profile/secret separation. It does not replace those specialized stores.
 
 ## Storage ownership
 
