@@ -2,7 +2,7 @@
 
 **Task:** RMA-161 — Implement credential lifecycle  
 **Date:** 2026-08-13  
-**Status:** Implementation and physical gate committed; secure-keyguard rerun pending
+**Status:** Implementation committed; inline physical rerun and evidence verification pending
 
 ## Scope implemented
 
@@ -32,7 +32,7 @@ RMA-161 extends the existing RMA-140 Android Keystore-backed provider secret bou
 
 `scripts/tests/test_rma161_credential_lifecycle.py` locks the Android Keystore/AES-GCM boundary, no-plaintext persistence, fail-closed key-loss behavior, debuggable-only invalidation hook, managed cleanup ownership, zeroing, and redaction fixtures.
 
-`scripts/tests/test_rma161_credential_physical_acceptance.py` locks the four-phase Android acceptance contract, real keyguard transition checks, real app-data clearing, text-evidence secret scanning, exact-SHA APK reuse, and the secure-keyguard execution contract in the dedicated physical workflow. It rejects attempts to dismiss or type a device credential into the test path.
+`scripts/tests/test_rma161_credential_physical_acceptance.py` locks the four-phase Android acceptance contract, real keyguard transition checks, real app-data clearing, text-evidence secret scanning, exact-SHA APK reuse, fail-closed foreground preparation, execution before the physical-device wrapper releases the phone, and exact-parent evidence handoff. It rejects attempts to dismiss or type a device credential into the locked test path and rejects a second self-hosted RMA-161 child run.
 
 ## Physical Android gate
 
@@ -45,7 +45,7 @@ RMA-161 extends the existing RMA-140 Android Keystore-backed provider secret bou
 
 The shell captures phase JSON, logcat, screenshots, UI hierarchy dumps, keyguard evidence, APK/report hashes, and device metadata. It rejects any full synthetic credential marker appearing in collected text evidence. Reports intentionally contain only booleans and generic failure type names, never secret values.
 
-The dedicated `.github/workflows/rma161-credential-lifecycle.yml` runs only after `Local Unity Android Validation` succeeds. It checks out that exact source SHA and downloads the exact device APK artifact from the successful upstream run instead of rebuilding or substituting a different APK.
+The physical script now executes from `scripts/run_unity_authoritative_rendering_acceptance_android.sh` after authoritative rendering succeeds but before that wrapper's exit trap restores/releases the physical device. Its evidence is written under `rma161-credential-report/` inside the authoritative physical report artifact. The dependent `.github/workflows/rma161-credential-lifecycle.yml` no longer reacquires the Android runner; after an exact successful `Local Unity Android Validation` run it uses `ubuntu-latest` to download that run's authoritative artifact and require the embedded RMA-161 reports and provenance evidence.
 
 ## Physical-gate corrections
 
@@ -53,14 +53,20 @@ The first physical child run reached a redundant `adb install -r -g` in the RMA-
 
 A later physical run on exact SHA `93b8098528112665982162c8c2368163c0a494f2` proved that `prepare` passed completely: credential create/read/update/read succeeded and the Keystore key was present. The subsequent lock step then failed because the self-hosted runner phone has an actual PIN credential. The captured failure screenshot showed the Android `Enter PIN to unlock` keypad, while `dumpsys activity activities` retained `mKeyguardShowing=true` and `mOccluded=false`. `wm dismiss-keyguard` correctly did not bypass that credential.
 
-RMA-161 does not require CI to know or weaken the runner's PIN. Commit `809a9c5be19cb5452ad28557de38c0e4a74f2b26` therefore changes the physical contract: after the shell proves screen-off/screen-on has entered keyguard, all remaining acceptance phases execute behind the still-active keyguard. Each locked phase requires `mKeyguardShowing=true` and `mOccluded=false` both before and after the application work. This directly proves that the production key configured with `setUserAuthenticationRequired(false)` remains usable under a real secure device lock. The script contains no PIN input path and does not attempt to dismiss the keyguard after the lock transition. Commit `cafff335b18317a122350485bf9c21c192dc194a` locks that behavior into the permanent static regression.
+RMA-161 does not require CI to know or weaken the runner's PIN. Commit `809a9c5be19cb5452ad28557de38c0e4a74f2b26` changed the physical contract so the locked phases execute behind the still-active keyguard. Each locked phase requires `mKeyguardShowing=true` and `mOccluded=false` before and after the application work. This directly tests the production key configured with `setUserAuthenticationRequired(false)` under a real secure device lock. The script contains no PIN input path and does not attempt to dismiss keyguard after the lock transition.
+
+The next exact physical child run, GitHub Actions run `31745381576` on SHA `6122524e3e8b8832b4593219705d665289b079d4`, failed before `prepare` evidence with `Unity application exited before RMA-161 phase prepare evidence.` The child had waited roughly 30 minutes for the self-hosted `kawa` runner after the successful parent validation. Its artifact `9199734454` proved the installed APK still matched the exact parent artifact, but by job start the phone had independently relocked behind its PIN. The foreground helper also had a fail-open defect: after three unsuccessful attempts to clear a blocking keyguard, `prepare_device()` fell off the end and returned success.
+
+Commit `b6bbb6782ae3daf7820471fa32c734e450166d1b` fixes that helper defect by returning failure with explicit power/keyguard diagnostics whenever an unoccluded PIN, pattern, or password keyguard remains. Commit `56204e299d733952e9ad2aef5be3495a1d619147` removes the queue-time race from RMA-161 itself by invoking the credential acceptance from the already-running authoritative physical wrapper before that wrapper releases the device. Commit `f651cb91ae3f53d5f068dcf443c4ee8b2c9a1cc6` changes the dependent RMA-161 workflow into a hosted exact-parent evidence check instead of a second physical-device job.
+
+An abandoned headless-receiver experiment was not adopted. The remaining receiver source was neutralized to an inert no-op after repository automation rejected its deletion in the same change sequence; it has no intent filter and performs no credential or application operation. It is not part of the RMA-161 acceptance path.
 
 ## Local validation available in this sandbox
 
 The sandbox does not provide Unity, `dotnet`, `csc`, `mcs`, Ruff, ShellCheck, actionlint, or an Android SDK platform jar, so those exact gates are not claimed locally.
 
-The original RMA-161 implementation validation completed successfully with the available Java/Python/shell checks documented for the implementation checkpoint. The exact-installed-APK correction was additionally validated with Python syntax/static checks, `bash -n`, and a fake-ADB provenance harness before publication. The secure-keyguard correction is intentionally awaiting the real runner because its core behavior is launching the Unity acceptance component while the PIN keyguard remains active.
+The original RMA-161 implementation validation completed successfully with the available Java/Python/shell checks documented for the implementation checkpoint. The exact-installed-APK correction was additionally validated with Python syntax/static checks, `bash -n`, and a fake-ADB provenance harness before publication. The current queue/relock correction is validated structurally by the permanent Python regression and shell syntax checks available in this environment; the actual lock/Keystore behavior remains intentionally assigned to the physical runner.
 
 ## Remaining validation before closeout
 
-RMA-161 remains open until the dedicated physical workflow reruns on the secure-keyguard contract and produces a passing exact-SHA artifact proving locked credential access, fail-closed key loss, provider deletion, app-data clear, evidence redaction, and installed-APK provenance behavior. No device PIN is required or authorized for this acceptance path.
+RMA-161 remains open until `Local Unity Android Validation` executes the embedded RMA-161 physical gate successfully and the dependent hosted RMA-161 workflow confirms the exact parent artifact contains the complete phase/provenance evidence. No device PIN is required or authorized for this acceptance path.
