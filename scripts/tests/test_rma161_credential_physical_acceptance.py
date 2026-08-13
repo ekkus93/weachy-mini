@@ -9,9 +9,7 @@ WORKFLOW = ROOT / ".github/workflows/rma161-credential-lifecycle.yml"
 
 class Rma161CredentialPhysicalAcceptanceTests(unittest.TestCase):
     def test_android_acceptance_has_explicit_lifecycle_phases(self) -> None:
-        source = (APPLICATION / "ReachyRma161CredentialAcceptance.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (APPLICATION / "ReachyRma161CredentialAcceptance.cs").read_text(encoding="utf-8")
         for contract in (
             '"prepare"',
             '"verify-after-lock"',
