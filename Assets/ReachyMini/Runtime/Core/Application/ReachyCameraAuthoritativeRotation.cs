@@ -27,7 +27,11 @@ namespace ReachyMini.AppState
         public const string PinnedOpticalSiteName = "camera_optical";
         public const string PinnedCameraName = "eye_camera";
         public const string PinnedCanonicalCameraBodyName = "__body_15";
-        public const uint CanonicalCameraBodyId = 15U;
+        // Presentation indices are zero-based over non-world bodies, while
+        // native MuJoCo body IDs include the world body at ID 0. The fixed
+        // eye_camera child is presentation index 15 but MuJoCo body ID 16.
+        public const int CanonicalCameraPresentationIndex = 15;
+        public const uint CanonicalCameraBodyId = 16U;
         public const int CanonicalBodyPoseCount = 18;
 
         public ReachyCameraMujocoOpticalBinding(
