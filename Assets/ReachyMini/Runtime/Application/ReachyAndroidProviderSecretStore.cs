@@ -28,7 +28,7 @@ namespace ReachyMini.AppState
             }
 
             using AndroidJavaObject activity = GetCurrentActivity();
-            using var bridge = new AndroidJavaClass(BridgeClassName);
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
             bridge.CallStatic("put", activity, reference, secretUtf8);
         }
 
@@ -36,7 +36,7 @@ namespace ReachyMini.AppState
         {
             ReachyProviderSecretReference.Validate(reference);
             using AndroidJavaObject activity = GetCurrentActivity();
-            using var bridge = new AndroidJavaClass(BridgeClassName);
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
             byte[]? secret = bridge.CallStatic<byte[]>("get", activity, reference);
             return secret ?? throw new KeyNotFoundException(
                 "The requested provider secret reference is not configured.");
@@ -46,7 +46,7 @@ namespace ReachyMini.AppState
         {
             ReachyProviderSecretReference.Validate(reference);
             using AndroidJavaObject activity = GetCurrentActivity();
-            using var bridge = new AndroidJavaClass(BridgeClassName);
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
             return bridge.CallStatic<bool>("contains", activity, reference);
         }
 
@@ -54,13 +54,43 @@ namespace ReachyMini.AppState
         {
             ReachyProviderSecretReference.Validate(reference);
             using AndroidJavaObject activity = GetCurrentActivity();
-            using var bridge = new AndroidJavaClass(BridgeClassName);
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
             return bridge.CallStatic<bool>("delete", activity, reference);
+        }
+
+        internal static bool IsKeyguardLockedForAcceptance()
+        {
+            using AndroidJavaObject activity = GetCurrentActivity();
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
+            return bridge.CallStatic<bool>("isKeyguardLocked", activity);
+        }
+
+        internal static bool IsDeviceSecureForAcceptance()
+        {
+            using AndroidJavaObject activity = GetCurrentActivity();
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
+            return bridge.CallStatic<bool>("isDeviceSecure", activity);
+        }
+
+        internal static bool HasEncryptionKeyForAcceptance()
+        {
+            using AndroidJavaObject activity = GetCurrentActivity();
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
+            return bridge.CallStatic<bool>("hasEncryptionKey", activity);
+        }
+
+        internal static bool InvalidateEncryptionKeyForAcceptance()
+        {
+            using AndroidJavaObject activity = GetCurrentActivity();
+            using AndroidJavaClass bridge = new AndroidJavaClass(BridgeClassName);
+            return bridge.CallStatic<bool>(
+                "invalidateEncryptionKeyForTesting",
+                activity);
         }
 
         private static AndroidJavaObject GetCurrentActivity()
         {
-            using var unityPlayer = new AndroidJavaClass(
+            using AndroidJavaClass unityPlayer = new AndroidJavaClass(
                 "com.unity3d.player.UnityPlayer");
             return unityPlayer.GetStatic<AndroidJavaObject>("currentActivity") ??
                 throw new InvalidOperationException(
