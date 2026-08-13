@@ -12,7 +12,6 @@ import android.util.Base64;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.KeyStore;
-import java.security.SecureRandom;
 import java.security.UnrecoverableKeyException;
 
 import javax.crypto.AEADBadTagException;
@@ -44,11 +43,15 @@ public final class ReachyProviderSecretBridge {
         synchronized (LOCK) {
             SharedPreferences stored = preferences(context);
             SecretKey key = getOrCreateKey(stored);
-            byte[] iv = new byte[IV_BYTES];
-            new SecureRandom().nextBytes(iv);
+            byte[] iv = null;
             byte[] ciphertext = null;
             try {
-                Cipher cipher = createEncryptionCipher(stored, key, reference, iv);
+                Cipher cipher = createEncryptionCipher(stored, key, reference);
+                iv = cipher.getIV();
+                if (iv == null || iv.length != IV_BYTES) {
+                    throw new IllegalStateException(
+                            "Provider secret encryption did not produce a valid random IV.");
+                }
                 ciphertext = cipher.doFinal(secretUtf8);
                 SharedPreferences.Editor editor = stored.edit()
                         .putString(ivKey(reference), Base64.encodeToString(iv, Base64.NO_WRAP))
@@ -200,25 +203,19 @@ public final class ReachyProviderSecretBridge {
     private static Cipher createEncryptionCipher(
             SharedPreferences stored,
             SecretKey key,
-            String reference,
-            byte[] iv) throws Exception {
+            String reference) throws Exception {
         Cipher cipher = Cipher.getInstance(CIPHER);
         try {
-            cipher.init(
-                    Cipher.ENCRYPT_MODE,
-                    key,
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, key);
         } catch (KeyPermanentlyInvalidatedException exception) {
             return retryEncryptionWithReplacementKey(
                     stored,
                     reference,
-                    iv,
                     exception);
         } catch (InvalidKeyException exception) {
             return retryEncryptionWithReplacementKey(
                     stored,
                     reference,
-                    iv,
                     exception);
         }
         cipher.updateAAD(reference.getBytes(StandardCharsets.UTF_8));
@@ -228,7 +225,6 @@ public final class ReachyProviderSecretBridge {
     private static Cipher retryEncryptionWithReplacementKey(
             SharedPreferences stored,
             String reference,
-            byte[] iv,
             InvalidKeyException invalidKeyException) throws Exception {
         if (hasStoredSecretRecords(stored)) {
             throw keyUnavailable(invalidKeyException);
@@ -237,10 +233,7 @@ public final class ReachyProviderSecretBridge {
         SecretKey replacement = getOrCreateKey(stored);
         Cipher cipher = Cipher.getInstance(CIPHER);
         try {
-            cipher.init(
-                    Cipher.ENCRYPT_MODE,
-                    replacement,
-                    new GCMParameterSpec(GCM_TAG_BITS, iv));
+            cipher.init(Cipher.ENCRYPT_MODE, replacement);
         } catch (InvalidKeyException exception) {
             throw keyUnavailable(exception);
         }
