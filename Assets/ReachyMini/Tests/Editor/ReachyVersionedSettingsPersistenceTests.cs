@@ -196,7 +196,7 @@ namespace ReachyMini.Tests
                 service.Initialize();
                 Assert.That(service.RecoveryRequired, Is.True);
 
-                Assert.Throws<Exception>(
+                Assert.Catch<Exception>(
                     () => service.ImportRecoveredSettingsJson("{still-broken"));
                 Assert.That(service.RecoveryRequired, Is.True);
                 Assert.That(File.Exists(path), Is.False);
