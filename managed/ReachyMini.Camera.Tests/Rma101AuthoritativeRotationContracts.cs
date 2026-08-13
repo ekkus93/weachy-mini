@@ -23,7 +23,12 @@ namespace ReachyMini.Camera.Tests
         {
             ReachyCameraMujocoOpticalBinding binding =
                 ReachyCameraMujocoOpticalBinding.PinnedReachyMini;
-            Equal(15U, binding.CameraBodyId, "camera body ID");
+            Equal(
+                15,
+                ReachyCameraMujocoOpticalBinding
+                    .CanonicalCameraPresentationIndex,
+                "camera presentation index");
+            Equal(16U, binding.CameraBodyId, "MuJoCo camera body ID");
             Equal(18, binding.ExpectedBodyPoseCount, "body pose count");
             Equal("__body_15", binding.CanonicalCameraBodyName, "body name");
             Equal("camera_optical", binding.OpticalSiteName, "site name");
