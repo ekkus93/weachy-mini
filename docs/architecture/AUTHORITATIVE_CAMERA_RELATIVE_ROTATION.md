@@ -22,10 +22,13 @@ The model defines:
 - an anonymous fixed-offset body containing `eye_camera`.
 
 The generated authoritative presentation assigns that anonymous body the stable
-canonical identity `__body_15`, matching MuJoCo body ID 15. The existing native
-authoritative state already serializes solved `mjData.xquat` values for every
-non-world body. RMA-101 therefore consumes body 15 from the published solved
-state; it does not add an alternate target-orientation channel.
+canonical identity `__body_15`. The `15` is the zero-based presentation index
+among non-world bodies. Native MuJoCo body IDs include the world body at ID 0,
+so the same fixed `eye_camera` child is MuJoCo body ID 16; body ID 15 is its
+`xl_330` head-platform parent. The existing native authoritative state serializes
+solved `mjData.xquat` values with those native IDs. RMA-101 therefore consumes
+body 16 from the published solved state; it does not add an alternate
+target-orientation channel.
 
 The optical site differs from the camera body by the fixed proper rotation:
 
@@ -96,7 +99,7 @@ A continuity change permits a sequence reset. Capture fails closed when:
 - the calibration model key differs from the pinned binding;
 - model hash is zero;
 - the authoritative body count differs from the pinned model;
-- body ID 15 is missing or duplicated;
+- body ID 16 is missing or duplicated;
 - the body quaternion is invalid;
 - no state is currently published;
 - an already-consumed sequence is presented again.
