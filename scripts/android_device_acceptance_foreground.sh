@@ -118,9 +118,19 @@ prepare_device()
         collapse_status_bar
         sleep 1
         if device_is_awake && ! keyguard_blocks_focused_app; then
-            return
+            return 0
         fi
     done
+
+    printf '%s\n' \
+        'Could not prepare an awake device that is not blocked by secure keyguard.' \
+        >&2
+    printf 'Power state: %s\n' "$(power_state || true)" >&2
+    printf 'Keyguard state: %s\n' "$(keyguard_state || true)" >&2
+    printf '%s\n' \
+        'An unoccluded PIN/pattern/password keyguard cannot be bypassed by this helper.' \
+        >&2
+    return 1
 }
 
 case "${ACTION}" in
