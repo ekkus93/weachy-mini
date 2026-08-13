@@ -98,6 +98,54 @@ cleanup()
 }
 trap cleanup EXIT
 
+verify_installed_apk_matches_artifact()
+{
+    local expected_sha installed_sha base_apk_path
+    local -a base_apk_paths=()
+
+    mapfile -t base_apk_paths < <(
+        "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
+            | tr -d '\r' \
+            | sed -n 's#^package:\(.*/base\.apk\)$#\1#p'
+    )
+    if (( ${#base_apk_paths[@]} != 1 )); then
+        printf 'Expected exactly one installed base.apk for %s; found %s.\n' \
+            "${PACKAGE_NAME}" "${#base_apk_paths[@]}" >&2
+        "${ADB[@]}" shell pm path "${PACKAGE_NAME}" >&2 || true
+        return 1
+    fi
+    base_apk_path="${base_apk_paths[0]}"
+
+    expected_sha="$(sha256sum "${APK_PATH}" | awk '{print $1}')"
+    if ! installed_sha="$(
+        "${ADB[@]}" exec-out cat "${base_apk_path}" \
+            | sha256sum \
+            | awk '{print $1}'
+    )"; then
+        printf 'Could not hash installed base.apk for %s.\n' "${PACKAGE_NAME}" >&2
+        return 1
+    fi
+
+    if [[ ! "${expected_sha}" =~ ^[0-9a-f]{64}$ \
+        || ! "${installed_sha}" =~ ^[0-9a-f]{64}$ ]]; then
+        printf 'RMA-161 APK provenance produced an invalid SHA-256 value.\n' >&2
+        return 1
+    fi
+    if [[ "${installed_sha}" != "${expected_sha}" ]]; then
+        printf 'Installed APK does not match the exact upstream validated artifact.\n' >&2
+        printf 'Expected SHA-256: %s\nInstalled SHA-256: %s\n' \
+            "${expected_sha}" "${installed_sha}" >&2
+        return 1
+    fi
+
+    {
+        printf 'artifact_sha256=%s\n' "${expected_sha}"
+        printf 'installed_base_apk_sha256=%s\n' "${installed_sha}"
+        printf 'installed_base_apk_path=%s\n' "${base_apk_path}"
+        printf 'reinstall_skipped=true\n'
+    } > "${REPORT_DIR}/installed-apk-provenance.txt"
+}
+
 keyguard_state()
 {
     "${ADB[@]}" shell dumpsys activity activities 2>/dev/null \
@@ -275,7 +323,7 @@ assert_no_full_secret_in_text_evidence()
     done
 }
 
-"${ADB[@]}" install -r -g "${APK_PATH}" > "${REPORT_DIR}/install.txt"
+verify_installed_apk_matches_artifact
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/initial-pm-clear.txt"
 if ! grep -Fxq 'Success' "${REPORT_DIR}/initial-pm-clear.txt"; then
     printf 'Initial RMA-161 app-data clear did not succeed.\n' >&2
