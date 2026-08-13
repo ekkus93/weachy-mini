@@ -48,6 +48,20 @@ class Rma161CredentialPhysicalAcceptanceTests(unittest.TestCase):
             self.assertIn(contract, source)
         self.assertNotIn("set +e\nassert_no_full_secret", source)
 
+    def test_device_script_reuses_only_matching_installed_upstream_apk(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        for contract in (
+            "verify_installed_apk_matches_artifact",
+            'shell pm path "${PACKAGE_NAME}"',
+            'exec-out cat "${base_apk_path}"',
+            'sha256sum "${APK_PATH}"',
+            "Installed APK does not match the exact upstream validated artifact.",
+            "installed-apk-provenance.txt",
+            "reinstall_skipped=true",
+        ):
+            self.assertIn(contract, source)
+        self.assertNotIn('install -r -g "${APK_PATH}"', source)
+
     def test_physical_workflow_reuses_successful_exact_sha_apk(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
         for contract in (
