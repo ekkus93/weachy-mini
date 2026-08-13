@@ -3,25 +3,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SETTINGS = ROOT / "Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs"
-REFERENCES = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStorageReferences.cs"
-)
+REFERENCES = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStorageReferences.cs"
 STATE_PERSISTENCE = (
     ROOT
     / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Persistence.cs"
 )
 PROVIDERS = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs"
-PROVIDER_CONTRACT = (
-    ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs"
-)
-CALIBRATION = (
-    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs"
-)
+PROVIDER_CONTRACT = ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs"
+CALIBRATION = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs"
 MANIFEST = ROOT / "models/manifests/qwen3-0.6b-q4-k-m.local-llm.json"
-UNITY_TESTS = (
-    ROOT / "Assets/ReachyMini/Tests/Editor/ReachyVersionedSettingsPersistenceTests.cs"
-)
+UNITY_TESTS = ROOT / "Assets/ReachyMini/Tests/Editor/ReachyVersionedSettingsPersistenceTests.cs"
 
 
 class Rma160VersionedSettingsStorageContracts(unittest.TestCase):
