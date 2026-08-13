@@ -11,6 +11,8 @@ LAUNCH_READY_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_LAUNCH_READY_TIMEOUT_SECONDS
 FOCUS_TIMEOUT_SECONDS="${UNITY_AUTHORITATIVE_FOCUS_TIMEOUT_SECONDS:-60}"
 FOREGROUND_HELPER="${ROOT_DIR}/scripts/android_device_acceptance_foreground.sh"
 IMPLEMENTATION="${ROOT_DIR}/scripts/run_unity_authoritative_rendering_acceptance_android_impl.sh"
+RMA161_SCRIPT="${ROOT_DIR}/scripts/run_rma161_credential_acceptance_android.sh"
+RMA161_REPORT_DIR="${REPORT_DIR}/rma161-credential-report"
 
 if [[ ! -s "${FOREGROUND_HELPER}" ]]; then
     printf 'Android foreground helper is missing: %s\n' "${FOREGROUND_HELPER}" >&2
@@ -18,6 +20,10 @@ if [[ ! -s "${FOREGROUND_HELPER}" ]]; then
 fi
 if [[ ! -s "${IMPLEMENTATION}" ]]; then
     printf 'Authoritative acceptance implementation is missing: %s\n' "${IMPLEMENTATION}" >&2
+    exit 1
+fi
+if [[ ! -s "${RMA161_SCRIPT}" ]]; then
+    printf 'RMA-161 credential acceptance script is missing: %s\n' "${RMA161_SCRIPT}" >&2
     exit 1
 fi
 if [[ ! "${INSTALL_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || (( INSTALL_TIMEOUT_SECONDS <= 0 )); then
@@ -137,3 +143,9 @@ if (( focus_status != 0 )); then
 fi
 
 wait "${implementation_pid}"
+implementation_pid=""
+
+REACHY_ANDROID_SERIAL="${DEVICE_SERIAL}" \
+ADB_BIN="${ADB_BIN}" \
+RMA161_CREDENTIAL_REPORT_DIR="${RMA161_REPORT_DIR}" \
+    bash "${RMA161_SCRIPT}"
