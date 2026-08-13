@@ -58,51 +58,51 @@ namespace ReachyMini.AppState
                     durable.PreferredCameraFacing))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(durable.PreferredCameraFacing),
+                    nameof(durable),
                     durable.PreferredCameraFacing,
-                    "The persisted camera-facing value is outside the supported contract.");
+                    "The persisted PreferredCameraFacing value is outside the supported contract.");
             }
             if (!Enum.IsDefined(
                     typeof(ReachySimulationFidelity),
                     durable.SimulationFidelity))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(durable.SimulationFidelity),
+                    nameof(durable),
                     durable.SimulationFidelity,
-                    "The persisted simulation-fidelity value is outside the supported contract.");
+                    "The persisted SimulationFidelity value is outside the supported contract.");
             }
             if (!Contains(SpeechLanguages, durable.SpeechLanguage))
             {
                 throw new ArgumentException(
-                    "The persisted speech language is not a supported settings value.",
-                    nameof(durable.SpeechLanguage));
+                    "The persisted SpeechLanguage value is not a supported settings value.",
+                    nameof(durable));
             }
             if (!Contains(SpeechVoices, durable.SpeechVoice))
             {
                 throw new ArgumentException(
-                    "The persisted speech voice is not a supported settings value.",
-                    nameof(durable.SpeechVoice));
+                    "The persisted SpeechVoice value is not a supported settings value.",
+                    nameof(durable));
             }
             if (!Contains(MemoryBudgetsMb, durable.LocalModelMemoryBudgetMb))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(durable.LocalModelMemoryBudgetMb),
+                    nameof(durable),
                     durable.LocalModelMemoryBudgetMb,
-                    "The persisted local-model memory budget is unsupported.");
+                    "The persisted LocalModelMemoryBudgetMb value is unsupported.");
             }
             if (!Contains(ContextLengths, durable.LocalModelContextTokens))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(durable.LocalModelContextTokens),
+                    nameof(durable),
                     durable.LocalModelContextTokens,
-                    "The persisted local-model context length is unsupported.");
+                    "The persisted LocalModelContextTokens value is unsupported.");
             }
             if (!Contains(RetentionPeriods, durable.RetentionDays))
             {
                 throw new ArgumentOutOfRangeException(
-                    nameof(durable.RetentionDays),
+                    nameof(durable),
                     durable.RetentionDays,
-                    "The persisted retention period is unsupported.");
+                    "The persisted RetentionDays value is unsupported.");
             }
         }
 
