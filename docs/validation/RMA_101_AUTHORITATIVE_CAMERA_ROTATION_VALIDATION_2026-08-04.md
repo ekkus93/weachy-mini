@@ -31,12 +31,20 @@ reprojection-image quality. Those remain RMA-102 through RMA-104.
   `efd7e49d4288e5ef53945771a1f116584aa2c8b89721b725d5d77da9f0fcbf46`;
 - named optical site `camera_optical`;
 - named camera `eye_camera`;
-- canonical anonymous camera body `__body_15` / MuJoCo body ID `15`; and
+- canonical anonymous camera body `__body_15` at presentation index `15` /
+  MuJoCo body ID `16`; and
 - the expected 18 non-world authoritative body poses.
 
 The fixed camera-body-to-optical rotation and neutral optical frame are proper
 rotations derived from the pinned MJCF hierarchy. They are not inferred from a
 Unity presentation transform.
+
+**2026-08-12 correction:** RMA-154 physical visual-servo acceptance exposed an
+off-by-one in the original body-ID statement and binding. `__body_15` is the
+zero-based presentation identity of the fixed camera child, while native MuJoCo
+IDs include world body 0. The camera child is therefore native body ID 16; body
+ID 15 is `xl_330`. The runtime binding and permanent provenance gate now enforce
+that distinction.
 
 ### 2.2 Solved-state rotation
 
@@ -92,7 +100,7 @@ closed for:
 - calibration/model compatibility mismatch;
 - zero model hash or unexpected authoritative body count;
 - unavailable authoritative state;
-- missing or duplicate body ID 15;
+- missing or duplicate body ID 16;
 - invalid/non-normalizable authoritative quaternion;
 - a sequence that does not advance within one continuity; and
 - any improper derived rotation.
