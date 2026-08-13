@@ -2331,10 +2331,12 @@ Example:
 
 ## RMA-160 — Implement versioned settings storage
 
-- [ ] Store non-secret provider settings, selected voices/languages, camera calibration, fidelity mode, model manifests, and device profile.
-- [ ] Add migrations with tests.
-- [ ] Detect corruption and offer explicit recovery/export instead of silent reset.
-- [ ] Keep secret values separate.
+**Status:** Complete (2026-08-13)
+
+- [x] Store non-secret provider settings, selected voices/languages, camera calibration, fidelity mode, model manifests, and device profile.
+- [x] Add migrations with tests.
+- [x] Detect corruption and offer explicit recovery/export instead of silent reset.
+- [x] Keep secret values separate.
 
 ## RMA-161 — Implement credential lifecycle
 
