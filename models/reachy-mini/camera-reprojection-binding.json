@@ -11,7 +11,8 @@
     "camera_name": "eye_camera",
     "optical_site_name": "camera_optical",
     "canonical_body_name": "__body_15",
-    "body_id": 15,
+    "canonical_body_index": 15,
+    "body_id": 16,
     "expected_body_pose_count": 18,
     "camera_body_from_optical_matrix": [
       [
@@ -51,7 +52,7 @@
   "level_1_policy": {
     "translation_used": false,
     "requested_target_orientation_allowed": false,
-    "source": "MuJoCo solved data.xquat for body 15",
+    "source": "MuJoCo solved data.xquat for body 16",
     "composition": "currentReachy_from_currentPhone = currentReachy_from_neutralReachy * neutralReachy_from_neutralPhone * neutralPhone_from_currentPhone"
   }
 }
