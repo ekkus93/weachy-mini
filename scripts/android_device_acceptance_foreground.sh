@@ -185,7 +185,8 @@ case "${ACTION}" in
         ;;
     restore)
         collapse_status_bar
-        "${ADB[@]}" shell svc power stayon false >/dev/null 2>&1 || true
+        "${ADB[@]}" shell svc power stayon true >/dev/null 2>&1 || true
+        "${ADB[@]}" shell input keyevent 224 >/dev/null 2>&1 || true
         ;;
     *)
         printf 'Unsupported action: %s\n' "${ACTION}" >&2
