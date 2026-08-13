@@ -188,22 +188,17 @@ wait_for_keyguard_showing()
     done
 }
 
-wait_for_keyguard_dismissed()
+require_unoccluded_keyguard()
 {
-    local deadline=$(( $(date +%s) + 30 ))
-    while true; do
-        local state
-        state="$(keyguard_state || true)"
-        if [[ "${state}" != *"mKeyguardShowing=true"* ]]; then
-            printf '%s\n' "${state}"
-            return 0
-        fi
-        if (( $(date +%s) >= deadline )); then
-            printf 'Device keyguard remained active. Last state: %s\n' "${state}" >&2
-            return 1
-        fi
-        sleep 1
-    done
+    local state
+    state="$(keyguard_state || true)"
+    if [[ "${state}" != *"mKeyguardShowing=true"* \
+        || "${state}" == *"mOccluded=true"* ]]; then
+        printf 'RMA-161 requires the secure keyguard to remain visibly active. State: %s\n' \
+            "${state}" >&2
+        return 1
+    fi
+    printf '%s\n' "${state}"
 }
 
 validate_phase_report()
@@ -311,6 +306,47 @@ run_phase()
     capture_visible_evidence "${phase}"
 }
 
+run_phase_while_keyguard_showing()
+{
+    local phase="$1"
+    require_unoccluded_keyguard > "${REPORT_DIR}/keyguard-before-${phase}.txt"
+    "${ADB[@]}" shell mkdir -p "${REMOTE_FILES_DIR}"
+    "${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp"
+    "${ADB[@]}" logcat -c
+    "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
+    "${ADB[@]}" shell am start \
+        -n "${LAUNCH_COMPONENT}" \
+        -a android.intent.action.MAIN \
+        -c android.intent.category.LAUNCHER \
+        --es reachy_rma161_acceptance_phase "${phase}" \
+        > "${REPORT_DIR}/launch-${phase}.txt"
+
+    local deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+    local report_json=""
+    while true; do
+        report_json="$(
+            "${ADB[@]}" shell \
+                "if test -f '${REMOTE_RESULT}'; then cat '${REMOTE_RESULT}'; fi" \
+                2>/dev/null \
+                | tr -d '\r' \
+        )"
+        if [[ -n "${report_json}" ]]; then
+            break
+        fi
+        if (( $(date +%s) >= deadline )); then
+            printf 'Timed out waiting for locked RMA-161 phase %s evidence.\n' \
+                "${phase}" >&2
+            return 1
+        fi
+        sleep "${POLL_SECONDS}"
+    done
+
+    require_unoccluded_keyguard > "${REPORT_DIR}/keyguard-after-${phase}.txt"
+    printf '%s\n' "${report_json}" > "${REPORT_DIR}/${phase}.json"
+    validate_phase_report "${phase}" "${REPORT_DIR}/${phase}.json"
+    capture_visible_evidence "${phase}"
+}
+
 assert_no_full_secret_in_text_evidence()
 {
     local marker
@@ -358,13 +394,9 @@ wait_for_keyguard_showing > "${REPORT_DIR}/keyguard-locked.txt"
 "${ADB[@]}" shell input keyevent 224
 sleep 1
 wait_for_keyguard_showing > "${REPORT_DIR}/keyguard-woken-locked.txt"
-ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
-    prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 30 \
-    > "${REPORT_DIR}/unlock-prepare.txt"
-wait_for_keyguard_dismissed > "${REPORT_DIR}/keyguard-unlocked.txt"
 
-run_phase verify-after-lock
-run_phase invalidate
+run_phase_while_keyguard_showing verify-after-lock
+run_phase_while_keyguard_showing invalidate
 
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"
@@ -372,7 +404,7 @@ if ! grep -Fxq 'Success' "${REPORT_DIR}/pm-clear.txt"; then
     printf 'RMA-161 app-data clear did not succeed.\n' >&2
     exit 1
 fi
-run_phase verify-cleared
+run_phase_while_keyguard_showing verify-cleared
 
 assert_no_full_secret_in_text_evidence
 "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt"
