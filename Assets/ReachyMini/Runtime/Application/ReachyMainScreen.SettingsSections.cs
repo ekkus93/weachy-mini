@@ -129,28 +129,52 @@ namespace ReachyMini.AppState
             ReachySettingsSnapshot current)
         {
             GUI.Label(
-                new Rect(area.x, area.y, area.width, 130f),
-                current.PrivacyCloudSummary,
+                new Rect(area.x, area.y, area.width, 112f),
+                current.PrivacyCloudSummary + "\n" +
+                "Raw camera, microphone, and cloud-request media are not retained by default.",
                 warningStyle!);
-            float y = area.y + 142f;
+            float y = area.y + 124f;
+            string historyLabel = current.HistoryEnabled
+                ? current.RetentionDays == 0
+                    ? "HISTORY  SESSION ONLY"
+                    : "HISTORY PERSISTENCE  ENABLED"
+                : "HISTORY PERSISTENCE  DISABLED";
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 58f),
-                    current.HistoryEnabled
-                        ? "HISTORY  ENABLED"
-                        : "HISTORY  DISABLED",
+                    new Rect(area.x, y, area.width, 52f),
+                    historyLabel,
                     smallButtonStyle!))
             {
                 ToggleHistory();
             }
-            y += 68f;
+            y += 62f;
             if (GUI.Button(
-                    new Rect(area.x, y, area.width, 58f),
+                    new Rect(area.x, y, area.width, 52f),
                     current.RetentionDays == 0
                         ? "RETENTION  SESSION ONLY"
                         : $"RETENTION  {current.RetentionDays} DAYS",
                     smallButtonStyle!))
             {
                 CycleRetentionDays();
+            }
+            y += 62f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 52f),
+                    "MEDIA RECORDING  OFF — OPT-IN REQUIRED",
+                    smallButtonStyle!))
+            {
+                RequireSettings().ReportUnavailableAction(
+                    "Private-media recording",
+                    ReachyPrivateMediaRetentionPolicy.PersistentMediaRetentionUnavailableReason);
+            }
+            y += 62f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 52f),
+                    "MEDIA EXPORT  UNAVAILABLE — CONSENT REQUIRED",
+                    smallButtonStyle!))
+            {
+                RequireSettings().ReportUnavailableAction(
+                    "Private-media export",
+                    ReachyPrivateMediaRetentionPolicy.PersistentMediaRetentionUnavailableReason);
             }
         }
 
