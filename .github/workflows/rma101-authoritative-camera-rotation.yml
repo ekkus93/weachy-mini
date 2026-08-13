@@ -122,6 +122,13 @@ jobs:
               raise SystemExit('Pinned camera hierarchy is not body-backed.')
           if parent.get(camera_body) is not optical_parent:
               raise SystemExit('eye_camera must remain on the fixed child of the camera_optical parent body.')
+          non_world_bodies = list(root.iter('body'))
+          presentation_index = non_world_bodies.index(camera_body)
+          mujoco_body_id = presentation_index + 1
+          if presentation_index != 15 or mujoco_body_id != 16:
+              raise SystemExit(
+                  'Pinned camera identity changed: expected presentation index 15 / MuJoCo body ID 16, '
+                  f'found {presentation_index} / {mujoco_body_id}.')
           if camera.get('quat') not in (None, '1 0 0 0'):
               raise SystemExit('eye_camera gained an unexpected local rotation.')
 
@@ -160,7 +167,9 @@ jobs:
               'core': (core, [
                   'PinnedSourceCommit', 'PinnedSourceModelSha256',
                   'PinnedOpticalSiteName', 'PinnedCameraName',
-                  'PinnedCanonicalCameraBodyName', 'CanonicalCameraBodyId = 15U',
+                  'PinnedCanonicalCameraBodyName',
+                  'CanonicalCameraPresentationIndex = 15',
+                  'CanonicalCameraBodyId = 16U',
                   'CanonicalBodyPoseCount = 18', 'CameraBodyFromOptical',
                   'NeutralMujocoWorldFromOptical',
                   'currentWorldFromOptical.Transposed()',
@@ -192,7 +201,7 @@ jobs:
                   'SourceFailsClosedForMissingOrDuplicatedCameraBody',
               ]),
               'documentation': (doc, [
-                  'mjData.xquat', 'body ID 15', 'camera_optical', 'eye_camera',
+                  'mjData.xquat', 'body ID 16', 'camera_optical', 'eye_camera',
                   'Body position is not read by the calculator',
                   'R_currentReachy_from_currentPhone',
                   'positive yaw', 'positive pitch', 'positive roll',
@@ -218,8 +227,10 @@ jobs:
               raise SystemExit('Binding schema or model key changed.')
           if camera['camera_name'] != 'eye_camera' or camera['optical_site_name'] != 'camera_optical':
               raise SystemExit('Pinned camera/site names changed.')
-          if camera['canonical_body_name'] != '__body_15' or camera['body_id'] != 15:
-              raise SystemExit('Pinned canonical camera body changed.')
+          if (camera['canonical_body_name'] != '__body_15' or
+                  camera.get('canonical_body_index') != 15 or
+                  camera['body_id'] != 16):
+              raise SystemExit('Pinned camera presentation/native body identity changed.')
           if camera['expected_body_pose_count'] != 18:
               raise SystemExit('Pinned body layout changed.')
           policy = binding['level_1_policy']
