@@ -70,51 +70,43 @@ class Rma161CredentialPhysicalAcceptanceTests(unittest.TestCase):
             self.assertIn(contract, source)
         self.assertNotIn('install -r -g "${APK_PATH}"', source)
 
-    def test_foreground_prepare_fails_closed_when_secure_keyguard_remains(self) -> None:
+    def test_foreground_prepare_fails_closed_and_restore_parks_runner_awake(self) -> None:
         source = FOREGROUND_HELPER.read_text(encoding="utf-8")
         self.assertIn("Could not prepare an awake device", source)
         self.assertIn("PIN/pattern/password keyguard cannot be bypassed", source)
         prepare_body = source.split("prepare_device()", 1)[1].split("case ", 1)[0]
         self.assertIn("return 1", prepare_body)
+        restore_body = source.split("restore)", 1)[1].split(";;", 1)[0]
+        self.assertIn("svc power stayon true", restore_body)
+        self.assertIn("input keyevent 224", restore_body)
+        self.assertNotIn("svc power stayon false", restore_body)
 
-    def test_authoritative_wrapper_runs_rma161_before_device_release(self) -> None:
+    def test_routine_authoritative_wrapper_does_not_run_rma161(self) -> None:
         source = AUTHORITATIVE_WRAPPER.read_text(encoding="utf-8")
-        for contract in (
-            "RMA161_SCRIPT=",
-            "RMA161_REPORT_DIR=",
-            "RMA161_CREDENTIAL_REPORT_DIR=",
-            'bash "${RMA161_SCRIPT}"',
-            'wait "${implementation_pid}"',
-            'implementation_pid=""',
-        ):
-            self.assertIn(contract, source)
-        trap_install = source.index("trap on_exit EXIT")
-        authoritative_wait = source.rindex('wait "${implementation_pid}"')
-        rma161_call = source.index('bash "${RMA161_SCRIPT}"')
-        self.assertLess(trap_install, authoritative_wait)
-        self.assertLess(authoritative_wait, rma161_call)
+        self.assertIn('wait "${implementation_pid}"', source)
+        self.assertNotIn("RMA161_SCRIPT=", source)
+        self.assertNotIn("RMA161_REPORT_DIR=", source)
+        self.assertNotIn("RMA161_CREDENTIAL_REPORT_DIR=", source)
+        self.assertNotIn("run_rma161_credential_acceptance_android.sh", source)
 
-    def test_child_workflow_verifies_exact_parent_evidence_without_device_reacquire(self) -> None:
+    def test_rma161_workflow_is_manual_and_pinned_to_exact_validated_apk(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
         for contract in (
-            "workflow_run:",
-            "Local Unity Android Validation",
-            "github.event.workflow_run.conclusion == 'success'",
-            "github.event.workflow_run.head_sha",
-            "runs-on: ubuntu-latest",
+            "workflow_dispatch:",
+            "validated_sha:",
+            "validated_run_id:",
+            "inputs.validated_sha",
+            "inputs.validated_run_id",
+            "weachy-mini-android-device",
             "actions/download-artifact@v4",
-            "unity-authoritative-device-report-${{ github.event.workflow_run.head_sha }}",
-            "run-id: ${{ github.event.workflow_run.id }}",
-            'report_dir="parent-evidence/rma161-credential-report"',
-            'test -s "${report_dir}/prepare.json"',
-            'test -s "${report_dir}/verify-after-lock.json"',
-            'test -s "${report_dir}/invalidate.json"',
-            'test -s "${report_dir}/verify-cleared.json"',
-            'test -s "${report_dir}/installed-apk-provenance.txt"',
+            "local-unity-device-apk-${{ inputs.validated_sha }}",
+            "run-id: ${{ inputs.validated_run_id }}",
+            'test "$(git rev-parse HEAD)" = "${{ inputs.validated_sha }}"',
+            "run_rma161_credential_acceptance_android.sh",
+            "rma161-credential-report-${{ inputs.validated_sha }}",
         ):
             self.assertIn(contract, source)
-        self.assertNotIn("weachy-mini-android-device", source)
-        self.assertNotIn("run_rma161_credential_acceptance_android.sh", source)
+        self.assertNotIn("workflow_run:", source)
         self.assertNotIn("continue-on-error", source)
 
 
