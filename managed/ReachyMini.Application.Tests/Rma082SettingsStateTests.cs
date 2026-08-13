@@ -14,7 +14,7 @@ namespace ReachyMini.Application.Tests
         {
             ProviderSelectionsAreIndependentAndNetworkTruthful();
             PrivacySummaryTracksCloudBoundSelections();
-            DurableSettingsRoundTripAndSanitizeInvalidValues();
+            DurableSettingsRoundTripAndRejectInvalidValues();
             SectionsActionsAndAttributionsAreComplete();
             Console.WriteLine("RMA-082 settings state tests passed.");
         }
@@ -99,7 +99,7 @@ namespace ReachyMini.Application.Tests
                 "cloud privacy requirement");
         }
 
-        private static void DurableSettingsRoundTripAndSanitizeInvalidValues()
+        private static void DurableSettingsRoundTripAndRejectInvalidValues()
         {
             var source = new ReachySettingsStateStore();
             source.CycleProvider(ReachyProviderKind.Asr);
@@ -143,33 +143,94 @@ namespace ReachyMini.Application.Tests
                 restored.Current.HistoryEnabled,
                 "history round trip");
 
-            restored.ApplyDurableSettings(new ReachyDurableSettings
+            ReachyDurableSettings invalid = restored.CaptureDurableSettings();
+            invalid.AsrExecution = 999;
+            RejectsWithoutMutation(restored, invalid, "invalid ASR");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.LlmExecution = (int)ReachyProviderExecution.AndroidService;
+            RejectsWithoutMutation(restored, invalid, "unsupported Android LLM");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.PreferredCameraFacing = 999;
+            RejectsWithoutMutation(restored, invalid, "invalid camera facing");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.SpeechLanguage = "not-supported";
+            RejectsWithoutMutation(restored, invalid, "invalid speech language");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.SpeechVoice = "not-supported";
+            RejectsWithoutMutation(restored, invalid, "invalid speech voice");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.LocalModelMemoryBudgetMb = -1;
+            RejectsWithoutMutation(restored, invalid, "invalid memory budget");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.LocalModelContextTokens = -1;
+            RejectsWithoutMutation(restored, invalid, "invalid context length");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.SimulationFidelity = 999;
+            RejectsWithoutMutation(restored, invalid, "invalid simulation fidelity");
+
+            invalid = restored.CaptureDurableSettings();
+            invalid.RetentionDays = -1;
+            RejectsWithoutMutation(restored, invalid, "invalid retention period");
+        }
+
+        private static void RejectsWithoutMutation(
+            ReachySettingsStateStore store,
+            ReachyDurableSettings invalid,
+            string label)
+        {
+            ReachySettingsSnapshot before = store.Current;
+            Throws<ArgumentException>(
+                () => store.ApplyDurableSettings(invalid),
+                label + " rejected");
+            ReachySettingsSnapshot after = store.Current;
+
+            Equal(before.Revision, after.Revision, label + " preserves revision");
+            foreach (ReachyProviderKind kind in Enum.GetValues<ReachyProviderKind>())
             {
-                AsrExecution = 999,
-                LlmExecution = (int)ReachyProviderExecution.AndroidService,
-                PreferredCameraFacing = 999,
-                SpeechLanguage = "not-supported",
-                SpeechVoice = "not-supported",
-                LocalModelMemoryBudgetMb = -1,
-                LocalModelContextTokens = -1,
-                SimulationFidelity = 999,
-                RetentionDays = -1,
-            });
+                Equal(
+                    before.GetProvider(kind).Execution,
+                    after.GetProvider(kind).Execution,
+                    label + $" preserves {kind} provider");
+            }
             Equal(
-                ReachyProviderExecution.Unconfigured,
-                restored.Current.GetProvider(ReachyProviderKind.Asr).Execution,
-                "invalid ASR sanitized");
+                before.PreferredCameraFacing,
+                after.PreferredCameraFacing,
+                label + " preserves camera facing");
             Equal(
-                ReachyProviderExecution.Unconfigured,
-                restored.Current.GetProvider(ReachyProviderKind.Llm).Execution,
-                "unsupported Android LLM sanitized");
+                before.SpeechLanguage,
+                after.SpeechLanguage,
+                label + " preserves speech language");
             Equal(
-                ReachyCameraFacing.Unconfigured,
-                restored.Current.PreferredCameraFacing,
-                "invalid camera sanitized");
-            Equal("System default", restored.Current.SpeechLanguage, "language fallback");
-            Equal(1024, restored.Current.LocalModelMemoryBudgetMb, "memory fallback");
-            Equal(30, restored.Current.RetentionDays, "retention fallback");
+                before.SpeechVoice,
+                after.SpeechVoice,
+                label + " preserves speech voice");
+            Equal(
+                before.LocalModelMemoryBudgetMb,
+                after.LocalModelMemoryBudgetMb,
+                label + " preserves memory budget");
+            Equal(
+                before.LocalModelContextTokens,
+                after.LocalModelContextTokens,
+                label + " preserves context length");
+            Equal(
+                before.SimulationFidelity,
+                after.SimulationFidelity,
+                label + " preserves simulation fidelity");
+            Equal(
+                before.HistoryEnabled,
+                after.HistoryEnabled,
+                label + " preserves history setting");
+            Equal(
+                before.RetentionDays,
+                after.RetentionDays,
+                label + " preserves retention period");
         }
 
         private static void SectionsActionsAndAttributionsAreComplete()
