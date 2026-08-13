@@ -23,7 +23,7 @@ namespace ReachyMini.Tests
                     "  \"llmExecution\": 3,\n" +
                     "  \"vlmExecution\": 0,\n" +
                     "  \"preferredCameraFacing\": 2,\n" +
-                    "  \"speechLanguage\": \"English\",\n" +
+                    "  \"speechLanguage\": \"English (United States)\",\n" +
                     "  \"speechVoice\": \"System default\",\n" +
                     "  \"localModelMemoryBudgetMb\": 1024,\n" +
                     "  \"localModelContextTokens\": 4096,\n" +
@@ -115,12 +115,16 @@ namespace ReachyMini.Tests
                 Assert.That(recovery.RecoveryRequired, Is.True);
                 Assert.That(recovery.Health.State, Is.EqualTo(ReachyServiceState.Degraded));
                 Assert.That(recovery.LastPersistenceFault, Is.Not.Empty);
-                Assert.That(File.Exists(path), Is.False,
+                Assert.That(
+                    File.Exists(path),
+                    Is.False,
                     "Corrupt durable settings must not be silently replaced with defaults.");
                 Assert.That(File.Exists(recovery.QuarantinedSettingsPath), Is.True);
 
                 recovery.Settings.ToggleHistory();
-                Assert.That(File.Exists(path), Is.False,
+                Assert.That(
+                    File.Exists(path),
+                    Is.False,
                     "Ordinary setting changes must not bypass the recovery gate.");
 
                 string exportPath = path + ".recovery-export";
@@ -149,6 +153,34 @@ namespace ReachyMini.Tests
                 Assert.That(File.Exists(path), Is.False);
                 StringAssert.Contains(
                     "Unsupported settings schema 99",
+                    service.LastPersistenceFault);
+            });
+        }
+
+        [Test]
+        public void SemanticallyInvalidSettingsFailClosedInsteadOfBeingSanitized()
+        {
+            WithTemporarySettingsPath(path =>
+            {
+                File.WriteAllText(
+                    path,
+                    "{\n" +
+                    "  \"schemaVersion\": 2,\n" +
+                    "  \"llmExecution\": 2,\n" +
+                    "  \"speechLanguage\": \"System default\",\n" +
+                    "  \"speechVoice\": \"System default\",\n" +
+                    "  \"localModelMemoryBudgetMb\": 1024,\n" +
+                    "  \"localModelContextTokens\": 4096,\n" +
+                    "  \"retentionDays\": 30\n" +
+                    "}\n");
+                using var service =
+                    new ReachySettingsPersistenceApplicationService(path);
+                service.Initialize();
+
+                Assert.That(service.RecoveryRequired, Is.True);
+                Assert.That(File.Exists(path), Is.False);
+                StringAssert.Contains(
+                    "Android-service execution is not supported",
                     service.LastPersistenceFault);
             });
         }
