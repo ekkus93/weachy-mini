@@ -20,12 +20,16 @@ class Rma161CredentialLifecycleTests(unittest.TestCase):
             'private static final String CIPHER = "AES/GCM/NoPadding";',
             ".setRandomizedEncryptionRequired(true)",
             ".setUserAuthenticationRequired(false)",
+            "cipher.init(Cipher.ENCRYPT_MODE, key);",
+            "cipher.init(Cipher.ENCRYPT_MODE, replacement);",
+            "iv = cipher.getIV();",
             "cipher.updateAAD(reference.getBytes(StandardCharsets.UTF_8))",
             "Base64.encodeToString(ciphertext, Base64.NO_WRAP)",
             "clear(iv);",
             "clear(ciphertext);",
         ):
             self.assertIn(contract, source)
+        self.assertNotIn("SecureRandom", source)
         self.assertNotIn("putString(reference,", source)
         self.assertNotIn("new String(secretUtf8", source)
         self.assertNotIn("Log.", source)
