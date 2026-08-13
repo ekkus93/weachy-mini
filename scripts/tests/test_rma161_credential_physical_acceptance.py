@@ -88,9 +88,11 @@ class Rma161CredentialPhysicalAcceptanceTests(unittest.TestCase):
             'implementation_pid=""',
         ):
             self.assertIn(contract, source)
+        trap_install = source.index("trap on_exit EXIT")
+        authoritative_wait = source.rindex('wait "${implementation_pid}"')
         rma161_call = source.index('bash "${RMA161_SCRIPT}"')
-        restore_call = source.index('restore "${DEVICE_SERIAL}"', source.index("on_exit()"))
-        self.assertGreater(rma161_call, restore_call)
+        self.assertLess(trap_install, authoritative_wait)
+        self.assertLess(authoritative_wait, rma161_call)
 
     def test_child_workflow_verifies_exact_parent_evidence_without_device_reacquire(self) -> None:
         source = WORKFLOW.read_text(encoding="utf-8")
