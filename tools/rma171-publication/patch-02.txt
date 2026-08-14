@@ -1,0 +1,300 @@
++                    : cameraDiscovery.State.Current.Message));
++            return new ReachyDiagnosticsSection("Camera", metrics);
++        }
++
++        private static ReachyDiagnosticsSection BuildProviders(
++            ReachySettingsSnapshot currentSettings)
++        {
++            var metrics = new List<ReachyDiagnosticsMetric>(4);
++            foreach (ReachyProviderKind kind in Enum.GetValues(
++                         typeof(ReachyProviderKind)))
++            {
++                ReachyProviderSelection provider = currentSettings.GetProvider(kind);
++                string value =
++                    $"{provider.DisplayName}; {provider.Execution}; {provider.Connectivity}";
++                if (provider.Available)
++                {
++                    metrics.Add(new ReachyDiagnosticsMetric(kind.ToString(), value));
++                }
++                else if (provider.Execution == ReachyProviderExecution.Unconfigured)
++                {
++                    metrics.Add(ReachyDiagnosticsMetric.Unavailable(
++                        kind.ToString(),
++                        provider.Status));
++                }
++                else
++                {
++                    metrics.Add(ReachyDiagnosticsMetric.Degraded(
++                        kind.ToString(),
++                        value,
++                        provider.Status));
++                }
++            }
++            return new ReachyDiagnosticsSection("Providers", metrics);
++        }
++
++        private ReachyDiagnosticsSection BuildVersions(
++            ReachySettingsSnapshot currentSettings)
++        {
++            var metrics = new List<ReachyDiagnosticsMetric>(7)
++            {
++                runtime.ModelHash == 0UL
++                    ? ReachyDiagnosticsMetric.Unavailable(
++                        "Simulation model",
++                        "The authoritative runtime has not published a model hash.")
++                    : new ReachyDiagnosticsMetric(
++                        "Simulation model",
++                        $"0x{runtime.ModelHash:x16}"),
++                new ReachyDiagnosticsMetric(
++                    "Local model",
++                    currentSettings.ActiveLocalModel),
++                new ReachyDiagnosticsMetric(
++                    "Calibration",
++                    currentSettings.CameraCalibrationProfile),
++                new ReachyDiagnosticsMetric(
++                    "Native ABI",
++                    ProjectMetadata.NativeAbiVersion.ToString()),
++                new ReachyDiagnosticsMetric(
++                    "MuJoCo",
++                    ReachyProductionAuthoritativeRuntime.RequiredMujocoVersion),
++                string.IsNullOrWhiteSpace(runtime.ReachyAssetSourceHash)
++                    ? ReachyDiagnosticsMetric.Unavailable(
++                        "Reachy asset",
++                        "The presentation root has not published its source-model hash.")
++                    : new ReachyDiagnosticsMetric(
++                        "Reachy asset",
++                        runtime.ReachyAssetSourceHash),
++                new ReachyDiagnosticsMetric(
++                    "App",
++                    string.IsNullOrWhiteSpace(Application.version)
++                        ? "development"
++                        : Application.version),
++            };
++            return new ReachyDiagnosticsSection("Versions", metrics);
++        }
++
++        private static ReachyDiagnosticsSection BuildDevice(
++            LocalLlmResourceSnapshot? resources)
++        {
++            long totalMemoryBytes = GetTotalMemoryBytes(resources);
++            int processors = GetProcessorCount(resources);
++            LocalLlmDeviceProfile deviceProfile =
++                LocalLlmDeviceProfile.Select(totalMemoryBytes, processors);
++            var metrics = new List<ReachyDiagnosticsMetric>(6)
++            {
++                new ReachyDiagnosticsMetric("Model", SystemInfo.deviceModel),
++                new ReachyDiagnosticsMetric("OS", SystemInfo.operatingSystem),
++                new ReachyDiagnosticsMetric(
++                    "Graphics",
++                    $"{SystemInfo.graphicsDeviceType}; {SystemInfo.graphicsDeviceName}"),
++                new ReachyDiagnosticsMetric(
++                    "Memory",
++                    totalMemoryBytes > 0L
++                        ? $"{totalMemoryBytes / Megabyte:F0} MiB total"
++                        : "unknown",
++                    totalMemoryBytes > 0L
++                        ? ReachyDiagnosticsAvailability.Available
++                        : ReachyDiagnosticsAvailability.Degraded,
++                    totalMemoryBytes > 0L
++                        ? string.Empty
++                        : "The runtime did not expose total physical memory."),
++                new ReachyDiagnosticsMetric(
++                    "CPU",
++                    $"{processors} logical processor(s)"),
++                new ReachyDiagnosticsMetric(
++                    "Resource profile",
++                    deviceProfile.Kind.ToString()),
++            };
++            return new ReachyDiagnosticsSection("Device", metrics);
++        }
++
++        private LocalLlmResourceSnapshot? TryCaptureResources()
++        {
++#if UNITY_ANDROID && !UNITY_EDITOR
++            try
++            {
++                androidResources ??=
++                    new ReachyAndroidLocalLlmResourceSignalSource();
++                LocalLlmResourceSnapshot snapshot = androidResources.Capture(
++                    LocalLlmPhysicsBudgetState.Unavailable);
++                resourceUnavailableReason = string.Empty;
++                return snapshot;
++            }
++            catch (Exception exception)
++            {
++                resourceUnavailableReason =
++                    "Android resource telemetry failed (" +
++                    exception.GetType().Name + ").";
++                return null;
++            }
++#else
++            resourceUnavailableReason =
++                "Android thermal telemetry is unavailable outside an Android player.";
++            return null;
++#endif
++        }
++
++        private static long GetTotalMemoryBytes(LocalLlmResourceSnapshot? resources)
++        {
++            if (resources != null && resources.TotalMemoryBytes > 0L)
++            {
++                return resources.TotalMemoryBytes;
++            }
++            return SystemInfo.systemMemorySize > 0
++                ? checked((long)SystemInfo.systemMemorySize * 1024L * 1024L)
++                : 0L;
++        }
++
++        private static int GetProcessorCount(LocalLlmResourceSnapshot? resources)
++        {
++            if (resources != null && resources.LogicalProcessorCount > 0)
++            {
++                return resources.LogicalProcessorCount;
++            }
++            return Math.Max(1, SystemInfo.processorCount);
++        }
++
++        private void ThrowIfDisposed()
++        {
++            if (disposed)
++            {
++                throw new ObjectDisposedException(
++                    nameof(ReachyDiagnosticsScreenSource));
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyFallbackPolicyPersistence.cs b/Assets/ReachyMini/Runtime/Application/ReachyFallbackPolicyPersistence.cs
+index 45fe0d1..68b7c7d 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyFallbackPolicyPersistence.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyFallbackPolicyPersistence.cs
+@@ -5,6 +5,7 @@ using System.Collections.Generic;
+ using System.Globalization;
+ using System.IO;
+ using ReachyMini.Providers;
++using ReachyMini.Security;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -65,7 +66,9 @@ namespace ReachyMini.AppState
+ 
+             try
+             {
+-                string json = File.ReadAllText(persistencePath);
++                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
++                    persistencePath,
++                    ReachyImportedDocumentKind.FallbackPolicies);
+                 FallbackPoliciesEnvelope envelope =
+                     JsonUtility.FromJson<FallbackPoliciesEnvelope>(json) ??
+                     throw new InvalidDataException(
+@@ -191,6 +194,9 @@ namespace ReachyMini.AppState
+                 Directory.CreateDirectory(directory);
+             }
+             string json = JsonUtility.ToJson(CaptureEnvelope(), prettyPrint: true);
++            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
++                json,
++                ReachyImportedDocumentKind.FallbackPolicies);
+             string temporaryPath = persistencePath + ".tmp";
+             string backupPath = persistencePath + ".bak";
+             File.WriteAllText(temporaryPath, json);
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs
+index 942d5c8..edb27ba 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs
+@@ -1,5 +1,6 @@
+ #nullable enable
+ 
++using ReachyMini.Diagnostics;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -148,12 +149,32 @@ namespace ReachyMini.AppState
+                 new Rect(panel.x + 28f, panel.y + 24f, panel.width - 56f, 40f),
+                 "Diagnostics",
+                 panelTitleStyle!);
+-            string diagnostics = diagnosticsProvider?.Invoke() ??
+-                "Application diagnostics are unavailable.";
+-            GUI.Label(
+-                new Rect(panel.x + 28f, panel.y + 78f, panel.width - 56f, 230f),
+-                diagnostics,
+-                panelBodyStyle!);
++            ReachyDiagnosticsScreenSnapshot diagnostics =
++                diagnosticsProvider?.Invoke() ??
++                ReachyDiagnosticsScreenSnapshot.FromLegacyText(
++                    "Application diagnostics are unavailable because no diagnostics source is bound.");
++            string diagnosticsText = diagnostics.ToDisplayText();
++            Rect viewport = new Rect(
++                panel.x + 28f,
++                panel.y + 78f,
++                panel.width - 56f,
++                panel.height - 174f);
++            float contentHeight = Mathf.Max(
++                viewport.height,
++                panelBodyStyle!.CalcHeight(
++                    new GUIContent(diagnosticsText),
++                    viewport.width - 20f) + 12f);
++            Rect content = new Rect(
++                0f,
++                0f,
++                viewport.width - 20f,
++                contentHeight);
++            diagnosticsScrollPosition = GUI.BeginScrollView(
++                viewport,
++                diagnosticsScrollPosition,
++                new Rect(0f, 0f, viewport.width - 20f, contentHeight));
++            GUI.Label(content, diagnosticsText, panelBodyStyle!);
++            GUI.EndScrollView();
+             if (GUI.Button(
+                     new Rect(panel.x + 28f, panel.yMax - 78f, panel.width - 56f, 50f),
+                     "CLOSE",
+@@ -176,8 +197,8 @@ namespace ReachyMini.AppState
+ 
+         private static Rect CenterPanel(float width, float height)
+         {
+-            const float panelWidth = 650f;
+-            const float panelHeight = 390f;
++            float panelWidth = Mathf.Min(900f, width - EdgePadding * 2f);
++            float panelHeight = Mathf.Min(620f, height - EdgePadding * 2f);
+             return new Rect(
+                 (width - panelWidth) * 0.5f,
+                 Mathf.Max(EdgePadding, (height - panelHeight) * 0.5f),
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs
+index 8159a47..a32959c 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs
+@@ -1,6 +1,7 @@
+ #nullable enable
+ 
+ using System;
++using ReachyMini.Diagnostics;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -42,7 +43,8 @@ namespace ReachyMini.AppState
+         private ReachyCameraCapabilityStateStore? cameraCapabilityStore;
+         private ReachyCameraCapabilitySnapshot? cameraCapabilitySnapshot;
+         private Action? requestCameraAccess;
+-        private Func<string>? diagnosticsProvider;
++        private Func<ReachyDiagnosticsScreenSnapshot>? diagnosticsProvider;
++        private Vector2 diagnosticsScrollPosition;
+         private Func<ReachySettingsResetOutcome>? resetSimulation;
+ 
+         public ReachyMainScreenSnapshot? Snapshot => snapshot;
+@@ -52,6 +54,9 @@ namespace ReachyMini.AppState
+         public ReachyCameraCapabilitySnapshot? CameraCapabilitySnapshot =>
+             cameraCapabilitySnapshot;
+ 
++        public ReachyDiagnosticsScreenSnapshot? DiagnosticsSnapshot =>
++            diagnosticsProvider?.Invoke();
++
+         public Camera? PresentationCamera => presentationCamera;
+ 
+         public void ConfigurePresentationCamera(Camera camera)
+@@ -113,6 +118,47 @@ namespace ReachyMini.AppState
+                     "The main screen requires the fixed presentation camera.");
+             }
+ 
++            stateStore = store ?? throw new ArgumentNullException(nameof(store));
++            settingsStore = durableSettings ??
++                throw new ArgumentNullException(nameof(durableSettings));
++            cameraCapabilityStore = cameraCapabilities ??
