@@ -1,0 +1,300 @@
++                throw new ArgumentNullException(nameof(cameraCapabilities));
++            requestCameraAccess = requestCameraAccessOperation ??
++                throw new ArgumentNullException(nameof(requestCameraAccessOperation));
++            Func<string> legacyDiagnostics = currentDiagnostics ??
++                throw new ArgumentNullException(nameof(currentDiagnostics));
++            diagnosticsProvider = () =>
++                ReachyDiagnosticsScreenSnapshot.FromLegacyText(
++                    legacyDiagnostics());
++            resetSimulation = resetSimulationOperation ??
++                throw new ArgumentNullException(nameof(resetSimulationOperation));
++            snapshot = stateStore.Current;
++            settingsSnapshot = settingsStore.Current;
++            cameraCapabilitySnapshot = cameraCapabilityStore.Current;
++            stateStore.Changed += OnStateChanged;
++            settingsStore.Changed += OnSettingsChanged;
++            cameraCapabilityStore.Changed += OnCameraCapabilitiesChanged;
++        }
++
++        public void Bind(
++            ReachyMainScreenStateStore store,
++            ReachySettingsStateStore durableSettings,
++            Func<ReachyDiagnosticsScreenSnapshot> currentDiagnostics,
++            Func<ReachySettingsResetOutcome> resetSimulationOperation,
++            ReachyCameraCapabilityStateStore cameraCapabilities,
++            Action requestCameraAccessOperation)
++        {
++            if (stateStore != null)
++            {
++                throw new InvalidOperationException(
++                    "The main screen cannot be bound more than once.");
++            }
++            if (presentationCamera == null)
++            {
++                throw new InvalidOperationException(
++                    "The main screen requires the fixed presentation camera.");
++            }
++
+             stateStore = store ?? throw new ArgumentNullException(nameof(store));
+             settingsStore = durableSettings ??
+                 throw new ArgumentNullException(nameof(durableSettings));
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs b/Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs
+index 479cd6e..57a3b9f 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs
+@@ -4,6 +4,8 @@ using System;
+ using ReachyMini.Presentation;
+ using ReachyMini.Rendering;
+ using UnityEngine;
++using ReachyMini.Diagnostics;
++using ReachyMini.RuntimeDiagnostics;
+ 
+ namespace ReachyMini.AppState
+ {
+@@ -16,7 +18,15 @@ namespace ReachyMini.AppState
+         {
+             if (!TryInstall(out string fault))
+             {
+-                Debug.LogError($"Reachy main-screen bootstrap failed: {fault}");
++                ReachyRuntimeDiagnostics.Emit(
++                    "ui",
++                    ReachyDiagnosticEventIds.MainScreenBootstrapFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Configuration,
++                    new ReachyDiagnosticField(
++                        "operation",
++                        "install_after_scene_load",
++                        ReachyDiagnosticDataClass.Identifier));
+             }
+         }
+ 
+@@ -107,9 +117,22 @@ namespace ReachyMini.AppState
+             catch (Exception exception)
+             {
+                 UnityEngine.Object.DestroyImmediate(shellObject);
+-                fault = string.IsNullOrWhiteSpace(exception.Message)
+-                    ? "The application shell failed without diagnostics."
+-                    : exception.Message;
++                ReachyRuntimeDiagnostics.Emit(
++                    "ui",
++                    ReachyDiagnosticEventIds.MainScreenBootstrapFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Configuration,
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier),
++                    new ReachyDiagnosticField(
++                        "operation",
++                        "compose_shell",
++                        ReachyDiagnosticDataClass.Identifier));
++                fault =
++                    "The application shell failed (" +
++                    exception.GetType().Name + ").";
+                 return false;
+             }
+         }
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs b/Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs
+index e79e579..fe97a98 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyProviderProfilePersistence.cs
+@@ -5,6 +5,7 @@ using System.Collections.Generic;
+ using System.Globalization;
+ using System.IO;
+ using ReachyMini.Providers;
++using ReachyMini.Security;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -14,6 +15,7 @@ namespace ReachyMini.AppState
+         public const string ProfileFileName = "reachy-provider-profiles-v1.json";
+ 
+         private const int SchemaVersion = 1;
++        private const int MaximumProfiles = 64;
+         private readonly string persistencePath;
+         private readonly Dictionary<string, ReachyProviderProfile> profiles =
+             new Dictionary<string, ReachyProviderProfile>(StringComparer.Ordinal);
+@@ -67,7 +69,9 @@ namespace ReachyMini.AppState
+ 
+             try
+             {
+-                string json = File.ReadAllText(persistencePath);
++                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
++                    persistencePath,
++                    ReachyImportedDocumentKind.ProviderProfiles);
+                 ProviderProfilesEnvelope envelope =
+                     JsonUtility.FromJson<ProviderProfilesEnvelope>(json) ??
+                     throw new InvalidDataException(
+@@ -79,6 +83,11 @@ namespace ReachyMini.AppState
+                 }
+                 ProviderProfileEnvelope[] stored =
+                     envelope.profiles ?? Array.Empty<ProviderProfileEnvelope>();
++                if (stored.Length > MaximumProfiles)
++                {
++                    throw new InvalidDataException(
++                        $"Provider profile storage supports at most {MaximumProfiles} profiles.");
++                }
+                 for (int index = 0; index < stored.Length; ++index)
+                 {
+                     ReachyProviderProfile profile = stored[index].ToProfile();
+@@ -211,6 +220,10 @@ namespace ReachyMini.AppState
+                 },
+                 prettyPrint: true);
+ 
++            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
++                json,
++                ReachyImportedDocumentKind.ProviderProfiles);
++
+             string temporaryPath = persistencePath + ".tmp";
+             string backupPath = persistencePath + ".bak";
+             File.WriteAllText(temporaryPath, json);
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs b/Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs
+index a363002..29c283a 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs
+@@ -2,6 +2,7 @@
+ 
+ using System;
+ using System.Collections.Generic;
++using ReachyMini.Diagnostics;
+ using ReachyMini.Rendering;
+ using ReachyMini.Simulation;
+ using UnityEngine;
+@@ -320,6 +321,7 @@ namespace ReachyMini.AppState
+         private readonly IReachyApplicationService[] dependencies;
+         private readonly ReachySettingsPersistenceApplicationService persistence;
+         private readonly ReachyAndroidCameraDiscovery cameraDiscovery;
++        private readonly ReachyDiagnosticsScreenSource diagnosticsSource;
+         private readonly ReachyMainScreenStateStore stateStore =
+             new ReachyMainScreenStateStore();
+ 
+@@ -355,6 +357,11 @@ namespace ReachyMini.AppState
+                 behavior ?? throw new ArgumentNullException(nameof(behavior)),
+                 persistence,
+             };
++            diagnosticsSource = new ReachyDiagnosticsScreenSource(
++                this.runtime,
++                this.persistence.Settings,
++                this.cameraDiscovery,
++                dependencies);
+         }
+ 
+         protected override void OnInitialize()
+@@ -375,7 +382,7 @@ namespace ReachyMini.AppState
+             screen.Bind(
+                 stateStore,
+                 persistence.Settings,
+-                BuildDiagnostics,
++                BuildDiagnosticsSnapshot,
+                 ResetSimulation,
+                 cameraDiscovery.State,
+                 cameraDiscovery.RequestAccessOrRefresh);
+@@ -386,6 +393,7 @@ namespace ReachyMini.AppState
+         {
+             persistence.Settings.Changed -= OnSettingsChanged;
+             cameraDiscovery.State.Changed -= OnCameraCapabilitiesChanged;
++            diagnosticsSource.Dispose();
+             for (int index = 0; index < dependencies.Length; ++index)
+             {
+                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
+@@ -472,27 +480,9 @@ namespace ReachyMini.AppState
+                 $"fault={runtime.Fault}";
+         }
+ 
+-        private string BuildDiagnostics()
++        private ReachyDiagnosticsScreenSnapshot BuildDiagnosticsSnapshot()
+         {
+-            var lines = new List<string>(dependencies.Length + 4)
+-            {
+-                "Application shell: active",
+-                $"Settings file: {persistence.PersistencePath}",
+-                $"Settings status: {persistence.Settings.Current.StatusMessage}",
+-                $"Camera discovery: {cameraDiscovery.State.Current.Summary}",
+-            };
+-            if (!string.IsNullOrEmpty(persistence.LastPersistenceFault))
+-            {
+-                lines.Add(
+-                    $"Settings persistence fault: {persistence.LastPersistenceFault}");
+-            }
+-            for (int index = 0; index < dependencies.Length; ++index)
+-            {
+-                ReachyServiceHealth health = dependencies[index].Health;
+-                lines.Add(
+-                    $"{health.Kind}: {health.State} — {health.Message}");
+-            }
+-            return string.Join("\n", lines);
++            return diagnosticsSource.Capture();
+         }
+     }
+ }
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs b/Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs
+index 9c02843..441b298 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs
+@@ -3,6 +3,7 @@
+ using System;
+ using System.Globalization;
+ using System.IO;
++using ReachyMini.Security;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -170,6 +171,9 @@ namespace ReachyMini.AppState
+ 
+         public void ImportRecoveredSettingsJson(string json)
+         {
++            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
++                json,
++                ReachyImportedDocumentKind.DurableSettings);
+             if (!RecoveryRequired)
+             {
+                 throw new InvalidOperationException(
+@@ -251,7 +255,9 @@ namespace ReachyMini.AppState
+             loading = true;
+             try
+             {
+-                string json = File.ReadAllText(persistencePath);
++                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
++                    persistencePath,
++                    ReachyImportedDocumentKind.DurableSettings);
+                 Deserialize(
+                     json,
+                     out ReachyDurableSettings durable,
+@@ -317,7 +323,9 @@ namespace ReachyMini.AppState
+             try
+             {
+                 Deserialize(
+-                    File.ReadAllText(backupPath),
++                    ReachyImportedContentPolicy.ReadBoundedUtf8File(
++                        backupPath,
++                        ReachyImportedDocumentKind.DurableSettings),
+                     out ReachyDurableSettings durable,
+                     out ReachySettingsStorageReferences references,
+                     out int sourceSchemaVersion);
+@@ -426,6 +434,9 @@ namespace ReachyMini.AppState
+             string json = Serialize(
+                 Settings.CaptureDurableSettings(),
+                 References);
++            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
++                json,
++                ReachyImportedDocumentKind.DurableSettings);
+             if (string.Equals(json, lastSerialized, StringComparison.Ordinal) &&
+                 File.Exists(persistencePath))
+             {
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationProfile.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationProfile.cs
+index c7d822d..85cb2d5 100644
+--- a/Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationProfile.cs
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCalibrationProfile.cs
+@@ -7,6 +7,7 @@ namespace ReachyMini.AppState
+     public sealed class ReachyCameraCalibrationProfile
+     {
+         public const int CurrentProfileSchemaVersion = 1;
++        public const int MaximumTextCharacters = 512;
+ 
+         public ReachyCameraCalibrationProfile(
+             int profileSchemaVersion,
+@@ -44,7 +45,8 @@ namespace ReachyMini.AppState
+                     facing,
+                     "Calibration requires a front, rear, or external camera.");
+             }
+-            if (provenance == ReachyCameraCalibrationProvenance.Unknown)
