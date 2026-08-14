@@ -1,0 +1,300 @@
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs b/Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs
+index dcfaed7..1880808 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyAndroidUiThreadCameraAcquisitionPlatform.cs
+@@ -3,6 +3,8 @@
+ using System;
+ using System.Threading;
+ using UnityEngine;
++using ReachyMini.Diagnostics;
++using ReachyMini.RuntimeDiagnostics;
+ 
+ namespace ReachyMini.AppState
+ {
+@@ -172,9 +174,19 @@ namespace ReachyMini.AppState
+             }
+             catch (Exception exception)
+             {
+-                Debug.LogError(
+-                    "CameraX shutdown failed on the Android UI thread: " +
+-                    exception.Message);
++                ReachyRuntimeDiagnostics.Emit(
++                    "camera",
++                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Camera,
++                    new ReachyDiagnosticField(
++                        "operation",
++                        "shutdown",
++                        ReachyDiagnosticDataClass.Identifier),
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier));
+             }
+ #endif
+         }
+@@ -231,9 +243,19 @@ namespace ReachyMini.AppState
+                         }
+                         catch (Exception exception)
+                         {
+-                            Debug.LogError(
+-                                $"CameraX {operation} failed on the Android UI thread: " +
+-                                exception.Message);
++                            ReachyRuntimeDiagnostics.Emit(
++                                "camera",
++                                ReachyDiagnosticEventIds.CameraUiOperationFailed,
++                                ReachyDiagnosticSeverity.Error,
++                                ReachyDiagnosticErrorCategory.Camera,
++                                new ReachyDiagnosticField(
++                                    "operation",
++                                    operation,
++                                    ReachyDiagnosticDataClass.Identifier),
++                                new ReachyDiagnosticField(
++                                    "exception_type",
++                                    exception.GetType().Name,
++                                    ReachyDiagnosticDataClass.Identifier));
+                         }
+                     }));
+         }
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs b/Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs
+index 060cafb..d86ae31 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs
+@@ -2,6 +2,8 @@
+ 
+ using System;
+ using UnityEngine;
++using ReachyMini.Diagnostics;
++using ReachyMini.RuntimeDiagnostics;
+ 
+ namespace ReachyMini.AppState
+ {
+@@ -65,7 +67,18 @@ namespace ReachyMini.AppState
+             catch (Exception exception)
+             {
+                 ShutdownApplication();
+-                EnterFault(exception.Message);
++                ReachyRuntimeDiagnostics.Emit(
++                    "application",
++                    ReachyDiagnosticEventIds.ApplicationStartupFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Lifecycle,
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier));
++                EnterFault(
++                    "Application lifecycle operation failed (" +
++                    exception.GetType().Name + ").");
+             }
+         }
+ 
+@@ -85,9 +98,15 @@ namespace ReachyMini.AppState
+             }
+             catch (Exception exception)
+             {
+-                Debug.LogError(
+-                    $"Reachy application disposal failed: {exception.Message}",
+-                    this);
++                ReachyRuntimeDiagnostics.Emit(
++                    "application",
++                    ReachyDiagnosticEventIds.ApplicationDisposalFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Lifecycle,
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier));
+             }
+         }
+ 
+@@ -108,9 +127,15 @@ namespace ReachyMini.AppState
+             if (eventArgs.Snapshot.State == ReachyApplicationState.Faulted)
+             {
+                 Fault = eventArgs.Snapshot.Message;
+-                Debug.LogError(
+-                    $"Reachy application fault: {Fault}",
+-                    this);
++                ReachyRuntimeDiagnostics.Emit(
++                    "application",
++                    ReachyDiagnosticEventIds.ApplicationFaulted,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Lifecycle,
++                    new ReachyDiagnosticField(
++                        "state",
++                        eventArgs.Snapshot.State.ToString(),
++                        ReachyDiagnosticDataClass.Identifier));
+             }
+         }
+ 
+@@ -119,7 +144,15 @@ namespace ReachyMini.AppState
+             Fault = string.IsNullOrWhiteSpace(message)
+                 ? "Reachy application startup failed without diagnostics."
+                 : message;
+-            Debug.LogError($"Reachy application startup failed: {Fault}", this);
++            ReachyRuntimeDiagnostics.Emit(
++                "application",
++                ReachyDiagnosticEventIds.ApplicationStartupFailed,
++                ReachyDiagnosticSeverity.Error,
++                ReachyDiagnosticErrorCategory.Lifecycle,
++                new ReachyDiagnosticField(
++                    "state",
++                    "faulted",
++                    ReachyDiagnosticDataClass.Identifier));
+         }
+     }
+ }
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs b/Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs
+index a1727a1..c7560b9 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs
+@@ -3,6 +3,8 @@
+ using System;
+ using System.Collections;
+ using UnityEngine;
++using ReachyMini.Diagnostics;
++using ReachyMini.RuntimeDiagnostics;
+ 
+ namespace ReachyMini.AppState
+ {
+@@ -67,9 +69,18 @@ namespace ReachyMini.AppState
+             }
+             catch (Exception exception)
+             {
+-                fault = string.IsNullOrWhiteSpace(exception.Message)
+-                    ? "CameraX acquisition installation failed without diagnostics."
+-                    : exception.Message;
++                ReachyRuntimeDiagnostics.Emit(
++                    "camera",
++                    ReachyDiagnosticEventIds.CameraBootstrapFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Camera,
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier));
++                fault =
++                    "CameraX acquisition installation failed (" +
++                    exception.GetType().Name + ").";
+                 return false;
+             }
+         }
+@@ -121,17 +132,37 @@ namespace ReachyMini.AppState
+                             }
+                             catch (Exception exception)
+                             {
+-                                Debug.LogError(
+-                                    "Android auto-rotation request failed on the UI thread: " +
+-                                    exception.Message);
++                                ReachyRuntimeDiagnostics.Emit(
++                                    "camera",
++                                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
++                                    ReachyDiagnosticSeverity.Error,
++                                    ReachyDiagnosticErrorCategory.Camera,
++                                    new ReachyDiagnosticField(
++                                        "operation",
++                                        "auto_rotation_request",
++                                        ReachyDiagnosticDataClass.Identifier),
++                                    new ReachyDiagnosticField(
++                                        "exception_type",
++                                        exception.GetType().Name,
++                                        ReachyDiagnosticDataClass.Identifier));
+                             }
+                         }));
+             }
+             catch (Exception exception)
+             {
+-                Debug.LogError(
+-                    "Android auto-rotation setup failed: " +
+-                    exception.Message);
++                ReachyRuntimeDiagnostics.Emit(
++                    "camera",
++                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
++                    ReachyDiagnosticSeverity.Error,
++                    ReachyDiagnosticErrorCategory.Camera,
++                    new ReachyDiagnosticField(
++                        "operation",
++                        "auto_rotation_setup",
++                        ReachyDiagnosticDataClass.Identifier),
++                    new ReachyDiagnosticField(
++                        "exception_type",
++                        exception.GetType().Name,
++                        ReachyDiagnosticDataClass.Identifier));
+             }
+ #endif
+         }
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs b/Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs
+index d796ec0..6c46b56 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyCameraCalibrationPersistence.cs
+@@ -3,6 +3,7 @@
+ using System;
+ using System.Globalization;
+ using System.IO;
++using ReachyMini.Security;
+ using UnityEngine;
+ 
+ namespace ReachyMini.AppState
+@@ -38,6 +39,7 @@ namespace ReachyMini.AppState
+         public const string CalibrationFileName =
+             "reachy-camera-calibration-v1.json";
+         public const int SchemaVersion = 1;
++        public const int MaximumProfiles = ReachyCameraCalibrationStateStore.MaximumProfiles;
+ 
+         private readonly string persistencePath;
+         private bool initialized;
+@@ -93,7 +95,9 @@ namespace ReachyMini.AppState
+             loading = true;
+             try
+             {
+-                string json = File.ReadAllText(persistencePath);
++                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
++                    persistencePath,
++                    ReachyImportedDocumentKind.CameraCalibration);
+                 CalibrationEnvelope envelope =
+                     JsonUtility.FromJson<CalibrationEnvelope>(json) ??
+                     throw new InvalidDataException(
+@@ -107,6 +111,11 @@ namespace ReachyMini.AppState
+ 
+                 CalibrationProfileDto[] profileDtos =
+                     envelope.profiles ?? Array.Empty<CalibrationProfileDto>();
++                if (profileDtos.Length > MaximumProfiles)
++                {
++                    throw new InvalidDataException(
++                        $"Camera calibration storage supports at most {MaximumProfiles} profiles.");
++                }
+                 var profiles = new ReachyCameraCalibrationProfile[profileDtos.Length];
+                 for (int index = 0; index < profileDtos.Length; ++index)
+                 {
+@@ -187,6 +196,9 @@ namespace ReachyMini.AppState
+         private void PersistCurrent()
+         {
+             string json = Serialize(State.Current);
++            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
++                json,
++                ReachyImportedDocumentKind.CameraCalibration);
+             if (string.Equals(json, lastSerialized, StringComparison.Ordinal) &&
+                 File.Exists(persistencePath))
+             {
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticsScreenSource.cs b/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticsScreenSource.cs
+new file mode 100644
+index 0000000..239e2b0
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticsScreenSource.cs
+@@ -0,0 +1,481 @@
++#nullable enable
++
++using System;
++using System.Collections.Generic;
++using ReachyMini.Core;
++using ReachyMini.Diagnostics;
++using ReachyMini.LocalModels;
++using ReachyMini.Rendering;
++using ReachyMini.Simulation;
++using UnityEngine;
++using UnityEngine.Profiling;
++using Object = UnityEngine.Object;
++
++namespace ReachyMini.AppState
++{
