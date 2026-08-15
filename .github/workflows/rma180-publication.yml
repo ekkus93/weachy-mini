@@ -1,4 +1,4 @@
-# Publication payload revision 3: verified binary parts plus managed-build compatibility fix.
+# Publication payload revision 4: verified payload plus managed-build compatibility fixes.
 name: RMA-180 performance harness publication
 
 on:
@@ -66,6 +66,29 @@ jobs:
             ../publication/tools/rma180-publication/managed-build-fix.patch
           git -C target apply \
             ../publication/tools/rma180-publication/managed-build-fix.patch
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("target/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs")
+          text = path.read_text(encoding="utf-8")
+          old = "for (int sectionIndex = 0; sectionIndex < sections.Count; ++sectionIndex)"
+          new = "for (int sectionIndex = 0; sectionIndex < sections.Length; ++sectionIndex)"
+          if text.count(old) != 1:
+              raise SystemExit("expected exactly one diagnostics sections.Count loop")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+          grep -Fq \
+            'sectionIndex < sections.Length; ++sectionIndex' \
+            target/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
+          if grep -Fq \
+            'sectionIndex < sections.Count; ++sectionIndex' \
+            target/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
+          then
+            echo "stale diagnostics sections.Count loop remains" >&2
+            exit 1
+          fi
           git -C target diff --check
 
       - name: Run current repository static gate
