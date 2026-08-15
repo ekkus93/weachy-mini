@@ -557,13 +557,18 @@ namespace ReachyMini.Perception
         }
     }
 
-    public sealed class ReachyOnDeviceLightweightTracker : IVisualTracker
+    public sealed class ReachyOnDeviceLightweightTracker :
+        IVisualTracker,
+        IReachyPriorityDegradationTarget
     {
         public const int DefaultMaximumTrackingDimension = 640;
 
         private readonly IReachyTrackingDetectionBackend backend;
         private readonly ReachyStableTrackStore trackStore;
         private readonly int maximumTrackingDimension;
+        private int priorityMaximumTrackingDimension;
+        private long priorityMinimumIntervalNanoseconds;
+        private long lastPriorityAcceptedTimestampNanoseconds;
         private int inFlight;
         private int disposed;
 
@@ -594,6 +599,7 @@ namespace ReachyMini.Perception
             this.backend = backend;
             this.maximumTrackingDimension =
                 maximumTrackingDimension;
+            priorityMaximumTrackingDimension = maximumTrackingDimension;
             trackStore = new ReachyStableTrackStore(trackingPolicy);
             Descriptor = new ProviderDescriptor(
                 VisionProviderKind.LightweightTracker,
@@ -615,6 +621,23 @@ namespace ReachyMini.Perception
         public ProviderDescriptor Descriptor { get; }
 
         public TrackerCapabilities Capabilities { get; }
+
+        public void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+            Volatile.Write(
+                ref priorityMaximumTrackingDimension,
+                Math.Min(
+                    maximumTrackingDimension,
+                    decision.TrackingMaximumDimension));
+            Interlocked.Exchange(
+                ref priorityMinimumIntervalNanoseconds,
+                decision.TrackingMinimumIntervalNanoseconds);
+        }
 
         public async ValueTask<TrackingResult> AnalyzeAsync(
             TrackingRequest request,
@@ -651,6 +674,32 @@ namespace ReachyMini.Perception
                         requiresProviderReset: false,
                         "Tracking requires an observation-eligible transformed Reachy-eye frame.");
                 }
+
+                long minimumIntervalNanoseconds = Interlocked.Read(
+                    ref priorityMinimumIntervalNanoseconds);
+                long timestampNanoseconds =
+                    request.Frame.Identity.SourceTimestampNanoseconds;
+                long previousTimestampNanoseconds = Interlocked.Read(
+                    ref lastPriorityAcceptedTimestampNanoseconds);
+                if (minimumIntervalNanoseconds > 0L &&
+                    previousTimestampNanoseconds > 0L &&
+                    timestampNanoseconds > previousTimestampNanoseconds &&
+                    timestampNanoseconds - previousTimestampNanoseconds <
+                        minimumIntervalNanoseconds)
+                {
+                    return TrackingResult.Failure(
+                        VisionOperationStatus.Unavailable,
+                        Descriptor,
+                        request,
+                        requiresProviderReset: false,
+                        "Tracking analysis was deferred by the RMA-181 priority degradation policy; stale tracking content was not reused.");
+                }
+                Interlocked.Exchange(
+                    ref lastPriorityAcceptedTimestampNanoseconds,
+                    timestampNanoseconds);
+                int trackingDimension = Volatile.Read(
+                    ref priorityMaximumTrackingDimension);
+
                 if (!request.Frame.Resources.TryGetResource<IReachyTrackingPixelSource>(
                         VisionResourceKind.Color,
                         out IReachyTrackingPixelSource? pixelSource) ||
@@ -667,7 +716,7 @@ namespace ReachyMini.Perception
                 ReachyTrackingFramePixels pixels =
                     await pixelSource.StageAsync(
                         request.Frame,
-                        maximumTrackingDimension,
+                        trackingDimension,
                         cancellationToken).ConfigureAwait(false);
                 if (!pixels.Identity.Matches(request.Frame.Identity))
                 {

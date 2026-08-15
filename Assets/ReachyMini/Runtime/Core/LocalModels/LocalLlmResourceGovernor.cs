@@ -2,6 +2,8 @@
 
 using System;
 using System.Globalization;
+using System.Threading;
+using ReachyMini.Performance;
 
 namespace ReachyMini.LocalModels
 {
@@ -59,6 +61,7 @@ namespace ReachyMini.LocalModels
         RecoveryHold = 1 << 12,
         RecentOutOfMemory = 1 << 13,
         ProfileIncompatible = 1 << 14,
+        PriorityDegradationPolicy = 1 << 15,
     }
 
     public sealed class LocalLlmResourceSnapshot
@@ -226,13 +229,14 @@ namespace ReachyMini.LocalModels
         public bool InferenceAllowed => Mode != LocalLlmGovernorMode.Suspended;
     }
 
-    public sealed class LocalLlmResourceGovernor
+    public sealed class LocalLlmResourceGovernor : IReachyPriorityDegradationTarget
     {
         public const int RecoverySamplesRequired = 3;
 
         private LocalLlmGovernorMode currentMode = LocalLlmGovernorMode.Nominal;
         private int recoverySamples;
         private bool outOfMemoryLatched;
+        private int priorityMinimumMode;
 
         public LocalLlmGovernorMode CurrentMode => currentMode;
         public bool OutOfMemoryLatched => outOfMemoryLatched;
@@ -255,6 +259,13 @@ namespace ReachyMini.LocalModels
                 snapshot.LogicalProcessorCount);
             LocalLlmGovernorReason reasons = LocalLlmGovernorReason.None;
             LocalLlmGovernorMode requestedMode = ClassifyPressure(snapshot, ref reasons);
+            LocalLlmGovernorMode policyMinimumMode =
+                (LocalLlmGovernorMode)Volatile.Read(ref priorityMinimumMode);
+            if (policyMinimumMode != LocalLlmGovernorMode.Nominal)
+            {
+                reasons |= LocalLlmGovernorReason.PriorityDegradationPolicy;
+                requestedMode = Stronger(requestedMode, policyMinimumMode);
+            }
 
             if (baselineProfile.MaximumGeneratedTokens >= deviceProfile.MaximumContextTokens)
             {
@@ -309,6 +320,18 @@ namespace ReachyMini.LocalModels
             currentMode = LocalLlmGovernorMode.Suspended;
             recoverySamples = 0;
             outOfMemoryLatched = true;
+        }
+
+        public void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+            Volatile.Write(
+                ref priorityMinimumMode,
+                (int)decision.MinimumLocalLlmMode);
         }
 
         public void Reset()

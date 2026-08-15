@@ -2501,6 +2501,8 @@ Create tests proving that:
 
 ## RMA-181 — Implement priority-based degradation policy
 
+**Status:** Complete (2026-08-15)
+
 Order of preservation:
 
 1. simulation correctness;
@@ -2510,11 +2512,20 @@ Order of preservation:
 5. LLM/VLM throughput;
 6. visual quality/previews.
 
-- [ ] Reduce render FPS/effects before physics.
-- [ ] Reduce camera analysis resolution/rate before physics.
-- [ ] Cancel/suspend VLM first.
-- [ ] Reduce LLM resource use next.
-- [ ] Never silently enlarge physics timestep or skip arbitrary steps while reporting calibrated dynamics.
+- [x] Reduce render FPS/effects before physics.
+- [x] Reduce camera analysis resolution/rate before physics.
+- [x] Cancel/suspend VLM first.
+- [x] Reduce LLM resource use next.
+- [x] Never silently enlarge physics timestep or skip arbitrary steps while reporting calibrated dynamics.
+
+**Completion evidence**
+
+- `ReachyPriorityDegradationPolicy` defines the ordered `Nominal`, `RenderReduced`, `CameraReduced`, `VlmSuspended`, `LlmReduced`, and `Critical` ladder, with immediate escalation and three-observation recovery hysteresis.
+- Unity presentation degradation lowers target render FPS and disables optional shadows, anti-aliasing, and soft particles before any physics behavior can change. Lightweight tracking then reduces its bounded staging dimension and analysis cadence; throttled frames return an explicit unavailable result and never reuse stale tracking content.
+- `ReachyVlmScheduler` cancels active leases and rejects new requests with `ResourceSuspended` before `LocalLlmResourceGovernor` is forced to `Minimal` or `Suspended`. The existing LLM resource governor may always impose a stronger restriction.
+- Every RMA-181 decision retains the exact configured physics timestep, forbids arbitrary physics-step skipping, and preserves audio interaction. No RMA-181 code changes the simulation worker or native step API.
+- The runtime bridge consumes the existing RMA-135 memory, thermal, and physics-budget sources and applies one decision to explicitly composed targets; render p95 may be supplied from the RMA-180 timing path.
+- Managed contract sources cover ordering, recovery, physics/audio invariants, VLM cancellation/admission, LLM policy floors, and camera/tracking resolution/rate reduction. Static contracts and design details are in `scripts/tests/test_rma181_priority_degradation.py`, `docs/RMA_181_PRIORITY_DEGRADATION_POLICY_SPEC_2026-08-15.md`, and `docs/validation/RMA_181_PRIORITY_DEGRADATION_LOCAL_VALIDATION_2026-08-15.md`.
 
 ## RMA-182 — Harden pause/resume and interruption handling
 

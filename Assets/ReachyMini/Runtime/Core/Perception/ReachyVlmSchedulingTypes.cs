@@ -31,6 +31,7 @@ namespace ReachyMini.Perception
         DisclosureRequired = 8,
         RateLimited = 9,
         ConcurrencyLimited = 10,
+        ResourceSuspended = 11,
     }
 
     public enum VlmContextUpdateStatus

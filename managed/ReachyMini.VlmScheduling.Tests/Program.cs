@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using ReachyMini.Perception;
+using ReachyMini.Performance;
+using ReachyMini.LocalModels;
 
 namespace ReachyMini.VlmScheduling.Tests
 {
@@ -33,6 +35,7 @@ namespace ReachyMini.VlmScheduling.Tests
             SchedulingTimestampsCannotRegress();
             CancellationCallbackFailuresRemainVisible();
             CancellationDispatchDoesNotInvertCompletionLocks();
+            PriorityDegradationSuspendsAndCancelsRequests();
             ProviderPolicyStateIsBounded();
             SnapshotsAreImmutableCopies();
             UnknownCompletionIsVisible();
@@ -504,6 +507,54 @@ namespace ReachyMini.VlmScheduling.Tests
             True(completion!.WasCancellationRequested, "completion retained cancellation state");
             True(lease.CancellationToken.IsCancellationRequested, "cached token remains readable");
             scheduler.Dispose();
+        }
+
+        private static void PriorityDegradationSuspendsAndCancelsRequests()
+        {
+            using ReachyVlmScheduler scheduler = Scheduler(OnDevicePolicy());
+            VlmScheduleLease lease = scheduler.TrySchedule(
+                ManualSignal("vlm-device", 1UL),
+                1_010L).Lease!;
+
+            ReachyPriorityDegradationDecision suspended =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    new ReachyPriorityDegradationSignals(
+                        totalMemoryBytes: 12L * 1024L * 1024L * 1024L,
+                        availableMemoryBytes: 8L * 1024L * 1024L * 1024L,
+                        lowMemoryThresholdBytes: 512L * 1024L * 1024L,
+                        systemReportsLowMemory: false,
+                        LocalLlmThermalStatus.Moderate,
+                        LocalLlmPhysicsBudgetState.Healthy));
+            scheduler.ApplyPriorityDegradation(suspended);
+            True(lease.IsCancellationRequested, "priority suspension cancels active VLM");
+
+            VlmScheduleDecision blocked = scheduler.TrySchedule(
+                ManualSignal("vlm-device", 2UL),
+                1_020L);
+            Equal(
+                VlmScheduleStatus.ResourceSuspended,
+                blocked.Status,
+                "priority suspension blocks VLM admission");
+            True(
+                scheduler.Complete(lease.RequestId).WasCancellationRequested,
+                "priority-cancelled completion remains visible");
+
+            ReachyPriorityDegradationDecision nominal =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    new ReachyPriorityDegradationSignals(
+                        totalMemoryBytes: 12L * 1024L * 1024L * 1024L,
+                        availableMemoryBytes: 8L * 1024L * 1024L * 1024L,
+                        lowMemoryThresholdBytes: 512L * 1024L * 1024L,
+                        systemReportsLowMemory: false,
+                        LocalLlmThermalStatus.None,
+                        LocalLlmPhysicsBudgetState.Healthy));
+            scheduler.ApplyPriorityDegradation(nominal);
+            Equal(
+                VlmScheduleStatus.Scheduled,
+                scheduler.TrySchedule(
+                    ManualSignal("vlm-device", 2UL),
+                    1_020L).Status,
+                "priority recovery restores VLM admission");
         }
 
         private static void ProviderPolicyStateIsBounded()

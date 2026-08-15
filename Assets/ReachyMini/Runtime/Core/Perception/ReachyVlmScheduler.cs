@@ -3,10 +3,11 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Perception
 {
-    public sealed class ReachyVlmScheduler : IDisposable
+    public sealed class ReachyVlmScheduler : IDisposable, IReachyPriorityDegradationTarget
     {
         public const int MaximumProviderPolicies = 16;
 
@@ -52,6 +53,9 @@ namespace ReachyMini.Perception
         private long completedRequestCount;
         private long unknownCompletionCount;
         private bool disposed;
+        private bool prioritySuspended;
+        private string prioritySuspensionDiagnostic =
+            "VLM scheduling is available under the priority degradation policy.";
 
         public ReachyVlmScheduler(
             IReadOnlyList<VlmProviderSchedulingPolicy> providerPolicies,
@@ -185,6 +189,58 @@ namespace ReachyMini.Perception
                     : "Obsolete requests were cancelled, but one or more cancellation callbacks failed.");
         }
 
+        public void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+
+            var cancellationLeases = new List<VlmScheduleLease>();
+            lock (sync)
+            {
+                ThrowIfDisposed();
+                prioritySuspended = !decision.VlmAllowed;
+                prioritySuspensionDiagnostic = decision.Diagnostic;
+                if (prioritySuspended)
+                {
+                    foreach (ProviderState state in providers.Values)
+                    {
+                        foreach (VlmScheduleLease lease in state.ActiveRequests.Values)
+                        {
+                            if (lease.MarkCancellationRequested())
+                            {
+                                cancellationLeases.Add(lease);
+                            }
+                        }
+                    }
+                    cancellationRequestCount = checked(
+                        cancellationRequestCount + cancellationLeases.Count);
+                }
+            }
+
+            int callbackFailures = 0;
+            for (int index = 0; index < cancellationLeases.Count; ++index)
+            {
+                if (cancellationLeases[index].DispatchCancellation())
+                {
+                    callbackFailures = checked(callbackFailures + 1);
+                }
+            }
+            if (callbackFailures > 0)
+            {
+                lock (sync)
+                {
+                    if (!disposed)
+                    {
+                        cancellationCallbackFailureCount = checked(
+                            cancellationCallbackFailureCount + callbackFailures);
+                    }
+                }
+            }
+        }
+
         public VlmScheduleDecision TrySchedule(
             VlmScheduleSignal signal,
             long timestampNanoseconds)
@@ -201,6 +257,16 @@ namespace ReachyMini.Perception
             lock (sync)
             {
                 ThrowIfDisposed();
+                if (prioritySuspended)
+                {
+                    return Decision(
+                        VlmScheduleStatus.ResourceSuspended,
+                        null,
+                        null,
+                        0L,
+                        "VLM scheduling is suspended by the RMA-181 priority degradation policy: " +
+                            prioritySuspensionDiagnostic);
+                }
                 if (signal.SceneRevision != sceneRevision ||
                     signal.QuestionRevision != questionRevision)
                 {

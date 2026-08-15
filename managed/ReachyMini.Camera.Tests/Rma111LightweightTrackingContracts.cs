@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.LocalModels;
 using ReachyMini.Perception;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Camera.Tests
 {
@@ -23,6 +25,7 @@ namespace ReachyMini.Camera.Tests
             await BackendFailureRemainsVisibleAsync().ConfigureAwait(false);
             await ConcurrentRequestsFailBusyWithoutQueueingAsync().ConfigureAwait(false);
             await TrackerBorrowsFrameWithoutDisposingItAsync().ConfigureAwait(false);
+            await PriorityDegradationReducesTrackingResolutionAndRateAsync().ConfigureAwait(false);
             Console.WriteLine("RMA-111 lightweight tracking contracts passed.");
         }
 
@@ -415,6 +418,82 @@ namespace ReachyMini.Camera.Tests
             False(resources.IsDisposed, "tracker must not dispose borrowed frame resources");
         }
 
+        private static async Task PriorityDegradationReducesTrackingResolutionAndRateAsync()
+        {
+            FakeBackend backend = FakeBackend.Immediate(
+                Array.Empty<ReachyTrackingDetection>());
+            await using var tracker = new ReachyOnDeviceLightweightTracker(
+                "managed-rma181-degradation",
+                backend);
+            ReachyPriorityDegradationDecision decision =
+                new ReachyPriorityDegradationPolicy(nominalRenderFps: 60).Evaluate(
+                    new ReachyPriorityDegradationSignals(
+                        12L * 1024L * 1024L * 1024L,
+                        8L * 1024L * 1024L * 1024L,
+                        512L * 1024L * 1024L,
+                        systemReportsLowMemory: false,
+                        LocalLlmThermalStatus.None,
+                        LocalLlmPhysicsBudgetState.Healthy,
+                        recentRenderP95Milliseconds: 30.0));
+            Equal(
+                ReachyPriorityDegradationLevel.CameraReduced,
+                decision.Level,
+                "RMA-181 camera degradation level");
+            tracker.ApplyPriorityDegradation(decision);
+
+            await using TestResources resources1 = TestResources.Create(
+                Identity(1UL, 1_000_000_000L),
+                8,
+                8,
+                AllValid(8, 8));
+            await using ReachyVisionFrame frame1 = Frame(resources1);
+            TrackingResult first = await TrackAsync(
+                tracker,
+                frame1,
+                "rma181-first").ConfigureAwait(false);
+            True(first.Succeeded, first.Diagnostic);
+            Equal(480, resources1.LastMaximumDimension, "RMA-181 reduced tracking dimension");
+            Equal(1, resources1.StageInvocationCount, "RMA-181 first staging count");
+            Equal(1, backend.InvocationCount, "RMA-181 first backend invocation");
+
+            await using TestResources resources2 = TestResources.Create(
+                Identity(2UL, 1_010_000_000L),
+                8,
+                8,
+                AllValid(8, 8));
+            await using ReachyVisionFrame frame2 = Frame(resources2);
+            TrackingResult throttled = await TrackAsync(
+                tracker,
+                frame2,
+                "rma181-throttled").ConfigureAwait(false);
+            Equal(
+                VisionOperationStatus.Unavailable,
+                throttled.Status,
+                "RMA-181 throttled tracking status");
+            True(
+                throttled.Diagnostic.Contains(
+                    "stale tracking content was not reused",
+                    StringComparison.Ordinal),
+                "RMA-181 throttled tracking is explicit");
+            Equal(0, resources2.StageInvocationCount, "RMA-181 throttled staging count");
+            Equal(1, backend.InvocationCount, "RMA-181 throttled backend invocation count");
+
+            await using TestResources resources3 = TestResources.Create(
+                Identity(3UL, 1_100_000_000L),
+                8,
+                8,
+                AllValid(8, 8));
+            await using ReachyVisionFrame frame3 = Frame(resources3);
+            TrackingResult resumed = await TrackAsync(
+                tracker,
+                frame3,
+                "rma181-resumed").ConfigureAwait(false);
+            True(resumed.Succeeded, resumed.Diagnostic);
+            Equal(480, resources3.LastMaximumDimension, "RMA-181 resumed tracking dimension");
+            Equal(1, resources3.StageInvocationCount, "RMA-181 resumed staging count");
+            Equal(2, backend.InvocationCount, "RMA-181 resumed backend invocation count");
+        }
+
         private static Task<TrackingResult> TrackAsync(
             ReachyOnDeviceLightweightTracker tracker,
             ReachyVisionFrame frame,
@@ -559,6 +638,10 @@ namespace ReachyMini.Camera.Tests
 
             public bool IsDisposed { get; private set; }
 
+            public int LastMaximumDimension { get; private set; }
+
+            public int StageInvocationCount { get; private set; }
+
             public static TestResources Create(
                 ReachyVisionFrameIdentity identity,
                 int width,
@@ -607,6 +690,8 @@ namespace ReachyMini.Camera.Tests
             {
                 ObjectDisposedException.ThrowIf(IsDisposed, this);
                 cancellationToken.ThrowIfCancellationRequested();
+                LastMaximumDimension = maximumDimension;
+                StageInvocationCount = checked(StageInvocationCount + 1);
                 return new ValueTask<ReachyTrackingFramePixels>(pixels);
             }
 

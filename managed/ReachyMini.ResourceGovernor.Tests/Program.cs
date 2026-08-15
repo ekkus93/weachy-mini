@@ -3,6 +3,7 @@
 using System;
 using ReachyMini.AppState;
 using ReachyMini.LocalModels;
+using ReachyMini.Performance;
 using ReachyMini.Simulation;
 
 namespace ReachyMini.ResourceGovernor.Tests
@@ -96,6 +97,10 @@ namespace ReachyMini.ResourceGovernor.Tests
                     LocalLlmThermalStatus.None, LocalLlmPhysicsBudgetState.Healthy)));
             Run("physics tracker budget", PhysicsTrackerBudget);
             Run("incompatible profile suspended", IncompatibleProfileSuspended);
+            Run("RMA-181 degradation order", PriorityDegradationOrder);
+            Run("RMA-181 recovery hysteresis", PriorityDegradationRecovery);
+            Run("RMA-181 physics invariants", PriorityDegradationPhysicsInvariant);
+            Run("RMA-181 local LLM floor", PriorityDegradationControlsLocalLlm);
 
             Console.WriteLine(failures == 0
                 ? "RMA-135 managed resource-governor contracts passed."
@@ -170,6 +175,180 @@ namespace ReachyMini.ResourceGovernor.Tests
             LocalLlmGovernorDecision d = new LocalLlmResourceGovernor().Evaluate(
                 baseline, Snapshot(4, 3, 0.25, 4, LocalLlmThermalStatus.None, LocalLlmPhysicsBudgetState.Healthy));
             Suspended(d, LocalLlmGovernorReason.ProfileIncompatible);
+        }
+
+        private static void PriorityDegradationOrder()
+        {
+            ReachyPriorityDegradationDecision nominal =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals());
+            Equal(ReachyPriorityDegradationLevel.Nominal, nominal.Level);
+            Equal(60, nominal.TargetRenderFps);
+            if (!nominal.ExpensiveVisualEffectsAllowed || !nominal.VlmAllowed)
+            {
+                throw new InvalidOperationException("Nominal policy unexpectedly degraded optional workloads.");
+            }
+
+            ReachyPriorityDegradationDecision render =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(renderP95Milliseconds: 20.0));
+            Equal(ReachyPriorityDegradationLevel.RenderReduced, render.Level);
+            Equal(30, render.TargetRenderFps);
+            if (render.ExpensiveVisualEffectsAllowed)
+            {
+                throw new InvalidOperationException("Render pressure did not disable expensive effects first.");
+            }
+            Equal(640, render.TrackingMaximumDimension);
+            if (!render.VlmAllowed || render.MinimumLocalLlmMode != LocalLlmGovernorMode.Nominal)
+            {
+                throw new InvalidOperationException("Render-only pressure degraded semantic inference too early.");
+            }
+
+            ReachyPriorityDegradationDecision camera =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(renderP95Milliseconds: 30.0));
+            Equal(ReachyPriorityDegradationLevel.CameraReduced, camera.Level);
+            Equal(480, camera.TrackingMaximumDimension);
+            if (camera.TrackingMinimumIntervalNanoseconds <= 0L || !camera.VlmAllowed)
+            {
+                throw new InvalidOperationException("Camera degradation order is incorrect.");
+            }
+
+            ReachyPriorityDegradationDecision vlm =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(thermal: LocalLlmThermalStatus.Moderate));
+            Equal(ReachyPriorityDegradationLevel.VlmSuspended, vlm.Level);
+            if (vlm.VlmAllowed || vlm.MinimumLocalLlmMode != LocalLlmGovernorMode.Nominal)
+            {
+                throw new InvalidOperationException("VLM must suspend before local LLM reduction begins.");
+            }
+
+            ReachyPriorityDegradationDecision llm =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(physics: LocalLlmPhysicsBudgetState.AtRisk));
+            Equal(ReachyPriorityDegradationLevel.LlmReduced, llm.Level);
+            if (llm.VlmAllowed || llm.MinimumLocalLlmMode != LocalLlmGovernorMode.Minimal)
+            {
+                throw new InvalidOperationException("LLM reduction did not follow VLM suspension.");
+            }
+
+            ReachyPriorityDegradationDecision critical =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(thermal: LocalLlmThermalStatus.Severe));
+            Equal(ReachyPriorityDegradationLevel.Critical, critical.Level);
+            Equal(LocalLlmGovernorMode.Suspended, critical.MinimumLocalLlmMode);
+            Equal(15, critical.TargetRenderFps);
+        }
+
+        private static void PriorityDegradationRecovery()
+        {
+            var policy = new ReachyPriorityDegradationPolicy();
+            Equal(
+                ReachyPriorityDegradationLevel.Critical,
+                policy.Evaluate(
+                    PrioritySignals(thermal: LocalLlmThermalStatus.Severe)).Level);
+            ReachyPriorityDegradationDecision first = policy.Evaluate(PrioritySignals());
+            Equal(ReachyPriorityDegradationLevel.Critical, first.Level);
+            if ((first.Reasons & ReachyPriorityDegradationReason.RecoveryHold) == 0)
+            {
+                throw new InvalidOperationException("Priority recovery hold was not reported.");
+            }
+            Equal(
+                ReachyPriorityDegradationLevel.Critical,
+                policy.Evaluate(PrioritySignals()).Level);
+            Equal(
+                ReachyPriorityDegradationLevel.Nominal,
+                policy.Evaluate(PrioritySignals()).Level);
+        }
+
+        private static void PriorityDegradationPhysicsInvariant()
+        {
+            var decisions = new[]
+            {
+                new ReachyPriorityDegradationPolicy().Evaluate(PrioritySignals()),
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(renderP95Milliseconds: 20.0)),
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(renderP95Milliseconds: 30.0)),
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(thermal: LocalLlmThermalStatus.Moderate)),
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(physics: LocalLlmPhysicsBudgetState.AtRisk)),
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(physics: LocalLlmPhysicsBudgetState.Exceeded)),
+            };
+            foreach (ReachyPriorityDegradationDecision decision in decisions)
+            {
+                Equal(
+                    ReachyMini.Core.ProjectMetadata.InitialPhysicsTimestepSeconds,
+                    decision.PhysicsTimestepSeconds);
+                if (decision.PhysicsStepSkippingAllowed)
+                {
+                    throw new InvalidOperationException("RMA-181 allowed physics step skipping.");
+                }
+                if (!decision.AudioInteractionPreserved)
+                {
+                    throw new InvalidOperationException("RMA-181 degraded audio before lower-priority workloads.");
+                }
+            }
+        }
+
+        private static void PriorityDegradationControlsLocalLlm()
+        {
+            var governor = new LocalLlmResourceGovernor();
+            ReachyPriorityDegradationDecision constrained =
+                new ReachyPriorityDegradationPolicy().Evaluate(
+                    PrioritySignals(physics: LocalLlmPhysicsBudgetState.AtRisk));
+            governor.ApplyPriorityDegradation(constrained);
+            LocalLlmGovernorDecision decision = governor.Evaluate(
+                Baseline(),
+                Snapshot(
+                    12,
+                    8,
+                    0.5,
+                    8,
+                    LocalLlmThermalStatus.None,
+                    LocalLlmPhysicsBudgetState.Healthy));
+            Equal(LocalLlmGovernorMode.Minimal, decision.Mode);
+            Reason(decision, LocalLlmGovernorReason.PriorityDegradationPolicy);
+
+            ReachyPriorityDegradationDecision nominal =
+                new ReachyPriorityDegradationPolicy().Evaluate(PrioritySignals());
+            governor.ApplyPriorityDegradation(nominal);
+            Equal(
+                LocalLlmGovernorMode.Minimal,
+                governor.Evaluate(Baseline(), Snapshot(
+                    12, 8, 0.5, 8,
+                    LocalLlmThermalStatus.None,
+                    LocalLlmPhysicsBudgetState.Healthy)).Mode);
+            Equal(
+                LocalLlmGovernorMode.Minimal,
+                governor.Evaluate(Baseline(), Snapshot(
+                    12, 8, 0.5, 8,
+                    LocalLlmThermalStatus.None,
+                    LocalLlmPhysicsBudgetState.Healthy)).Mode);
+            Equal(
+                LocalLlmGovernorMode.Nominal,
+                governor.Evaluate(Baseline(), Snapshot(
+                    12, 8, 0.5, 8,
+                    LocalLlmThermalStatus.None,
+                    LocalLlmPhysicsBudgetState.Healthy)).Mode);
+        }
+
+        private static ReachyPriorityDegradationSignals PrioritySignals(
+            LocalLlmThermalStatus thermal = LocalLlmThermalStatus.None,
+            LocalLlmPhysicsBudgetState physics = LocalLlmPhysicsBudgetState.Healthy,
+            double availableGiB = 8.0,
+            double? renderP95Milliseconds = null)
+        {
+            return new ReachyPriorityDegradationSignals(
+                12L * GiB,
+                checked((long)(availableGiB * GiB)),
+                GiB / 2L,
+                systemReportsLowMemory: false,
+                thermal,
+                physics,
+                renderP95Milliseconds);
         }
 
         private static LocalLlmGovernorDecision Eval(
