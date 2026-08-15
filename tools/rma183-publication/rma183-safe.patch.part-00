@@ -1,0 +1,472 @@
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs b/Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs
+index 862f9e6..45f7e04 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs
+@@ -62,6 +62,14 @@ namespace ReachyMini.AppState
+                         "Android returned invalid ActivityManager memory information.");
+                 }
+ 
++                ReachyAndroidMemoryPressureState.ObserveHealthySnapshot(
++                    availableMemory,
++                    threshold,
++                    lowMemory);
++                lowMemory = lowMemory ||
++                    ReachyAndroidMemoryPressureState.CurrentLevel ==
++                        ReachyMemoryPressureLevel.Critical;
++
+                 LocalLlmThermalStatus thermalStatus = ReadThermalStatus();
+                 return new LocalLlmResourceSnapshot(
+                     totalMemory,
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyAndroidMemoryPressureMonitor.cs b/Assets/ReachyMini/Runtime/Application/ReachyAndroidMemoryPressureMonitor.cs
+new file mode 100644
+index 0000000..6dc2451
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Application/ReachyAndroidMemoryPressureMonitor.cs
+@@ -0,0 +1,189 @@
++#nullable enable
++
++using System;
++using System.Threading;
++using ReachyMini.AppState;
++using UnityEngine;
++
++namespace ReachyMini.LocalModels
++{
++    public static class ReachyAndroidMemoryPressureState
++    {
++        private static int level;
++        private static long revision;
++
++        public static ReachyMemoryPressureLevel CurrentLevel =>
++            (ReachyMemoryPressureLevel)Volatile.Read(ref level);
++
++        public static long Revision => Volatile.Read(ref revision);
++
++        public static void Report(ReachyMemoryPressureLevel pressureLevel)
++        {
++            if (!Enum.IsDefined(typeof(ReachyMemoryPressureLevel), pressureLevel))
++            {
++                throw new ArgumentOutOfRangeException(nameof(pressureLevel));
++            }
++
++            while (true)
++            {
++                int current = Volatile.Read(ref level);
++                if (current >= (int)pressureLevel)
++                {
++                    return;
++                }
++                if (Interlocked.CompareExchange(
++                        ref level,
++                        (int)pressureLevel,
++                        current) == current)
++                {
++                    Interlocked.Increment(ref revision);
++                    return;
++                }
++            }
++        }
++
++        public static void ObserveHealthySnapshot(
++            long availableMemoryBytes,
++            long lowMemoryThresholdBytes,
++            bool systemReportsLowMemory)
++        {
++            if (availableMemoryBytes < 0L || lowMemoryThresholdBytes < 0L)
++            {
++                throw new ArgumentOutOfRangeException(nameof(availableMemoryBytes));
++            }
++            if (systemReportsLowMemory)
++            {
++                return;
++            }
++
++            long recoveryThreshold = lowMemoryThresholdBytes > long.MaxValue / 2L
++                ? long.MaxValue
++                : lowMemoryThresholdBytes * 2L;
++            if (availableMemoryBytes <= recoveryThreshold)
++            {
++                return;
++            }
++
++            if (Interlocked.Exchange(
++                    ref level,
++                    (int)ReachyMemoryPressureLevel.Normal) !=
++                (int)ReachyMemoryPressureLevel.Normal)
++            {
++                Interlocked.Increment(ref revision);
++            }
++        }
++    }
++
++    public sealed class ReachyAndroidMemoryTrimMonitor : IDisposable
++    {
++        private readonly Action<ReachyMemoryPressureSignal> pressureObserved;
++#if UNITY_ANDROID && !UNITY_EDITOR
++        private readonly AndroidJavaObject activity;
++        private readonly ComponentCallbacksProxy callbacks;
++#endif
++        private bool disposed;
++
++        public ReachyAndroidMemoryTrimMonitor(
++            Action<ReachyMemoryPressureSignal> onPressureObserved)
++        {
++            pressureObserved = onPressureObserved ??
++                throw new ArgumentNullException(nameof(onPressureObserved));
++#if UNITY_ANDROID && !UNITY_EDITOR
++            activity = GetCurrentActivity();
++            callbacks = new ComponentCallbacksProxy(HandleTrimMemory, HandleLowMemory);
++            activity.Call("registerComponentCallbacks", callbacks);
++#endif
++        }
++
++        public void Dispose()
++        {
++            if (disposed)
++            {
++                return;
++            }
++            disposed = true;
++#if UNITY_ANDROID && !UNITY_EDITOR
++            try
++            {
++                activity.Call("unregisterComponentCallbacks", callbacks);
++            }
++            finally
++            {
++                callbacks.Dispose();
++                activity.Dispose();
++            }
++#endif
++            GC.SuppressFinalize(this);
++        }
++
++        private void HandleTrimMemory(int trimLevel)
++        {
++            if (disposed)
++            {
++                return;
++            }
++            ReachyMemoryPressureLevel level =
++                ReachyMemoryPressureSignal.ClassifyAndroidTrimLevel(trimLevel);
++            if (level == ReachyMemoryPressureLevel.Normal)
++            {
++                return;
++            }
++            pressureObserved(new ReachyMemoryPressureSignal(
++                level,
++                ReachyMemoryPressureSource.AndroidTrimMemory,
++                trimLevel));
++        }
++
++        private void HandleLowMemory()
++        {
++            if (disposed)
++            {
++                return;
++            }
++            pressureObserved(new ReachyMemoryPressureSignal(
++                ReachyMemoryPressureLevel.Critical,
++                ReachyMemoryPressureSource.AndroidLowMemory));
++        }
++
++#if UNITY_ANDROID && !UNITY_EDITOR
++        private static AndroidJavaObject GetCurrentActivity()
++        {
++            using var unityPlayer =
++                new AndroidJavaClass("com.unity3d.player.UnityPlayer");
++            return unityPlayer.GetStatic<AndroidJavaObject>("currentActivity") ??
++                throw new InvalidOperationException(
++                    "Unity did not expose an Android currentActivity.");
++        }
++
++        private sealed class ComponentCallbacksProxy : AndroidJavaProxy
++        {
++            private readonly Action<int> trimMemory;
++            private readonly Action lowMemory;
++
++            public ComponentCallbacksProxy(
++                Action<int> onTrimMemory,
++                Action onLowMemory)
++                : base("android.content.ComponentCallbacks2")
++            {
++                trimMemory = onTrimMemory;
++                lowMemory = onLowMemory;
++            }
++
++            public void onTrimMemory(int level)
++            {
++                trimMemory(level);
++            }
++
++            public void onLowMemory()
++            {
++                lowMemory();
++            }
++
++            public void onConfigurationChanged(AndroidJavaObject configuration)
++            {
++                _ = configuration;
++            }
++        }
++#endif
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleStorageGate.cs b/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleStorageGate.cs
+new file mode 100644
+index 0000000..6b84e67
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleStorageGate.cs
+@@ -0,0 +1,35 @@
++#nullable enable
++
++using System;
++
++namespace ReachyMini.AppState
++{
++    internal sealed class ReachyDiagnosticBundleStorageGate
++    {
++        private readonly string outputDirectory;
++        private readonly IReachyStorageSpaceProbe storageProbe;
++
++        public ReachyDiagnosticBundleStorageGate(
++            string diagnosticOutputDirectory,
++            IReachyStorageSpaceProbe? probe = null)
++        {
++            if (string.IsNullOrWhiteSpace(diagnosticOutputDirectory))
++            {
++                throw new ArgumentException(
++                    "Diagnostic storage gates require an output directory.",
++                    nameof(diagnosticOutputDirectory));
++            }
++            outputDirectory = diagnosticOutputDirectory;
++            storageProbe = probe ?? new ReachyDriveStorageSpaceProbe();
++        }
++
++        public ReachyStorageSpaceCheck Check()
++        {
++            return ReachyStorageSpaceCheck.Evaluate(
++                storageProbe,
++                outputDirectory,
++                ReachyStoragePressurePolicy.DiagnosticExportWriteBudgetBytes,
++                ReachyStoragePressurePolicy.DiagnosticExportSafetyReserveBytes);
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs
+index 386f490..9f9299f 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs
+@@ -92,6 +92,18 @@ namespace ReachyMini.AppState
+             {
+                 CycleLocalModelContextLength();
+             }
++            y += 66f;
++            if (GUI.Button(
++                    new Rect(area.x, y, area.width, 56f),
++                    "CLEAN APP STORAGE",
++                    smallButtonStyle!))
++            {
++                _ = CleanupStorage();
++            }
++            GUI.Label(
++                new Rect(area.x, y + 64f, area.width, 82f),
++                StorageCleanupStatus,
++                warningStyle!);
+         }
+ 
+         private void DrawSimulationSettings(
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs
+new file mode 100644
+index 0000000..2263c44
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs
+@@ -0,0 +1,48 @@
++#nullable enable
++
++using System;
++
++namespace ReachyMini.AppState
++{
++    public sealed partial class ReachyMainScreen
++    {
++        private Func<ReachyStorageCleanupOutcome>? storageCleanupOperation;
++        private string storageCleanupStatus =
++            "Storage cleanup has not been run. Verified installed models are never removed automatically.";
++
++        public string StorageCleanupStatus => storageCleanupStatus;
++
++        public void ConfigureStorageCleanup(
++            Func<ReachyStorageCleanupOutcome> cleanupOperation)
++        {
++            if (storageCleanupOperation != null)
++            {
++                throw new InvalidOperationException(
++                    "The storage cleanup operation cannot be bound more than once.");
++            }
++            storageCleanupOperation = cleanupOperation ??
++                throw new ArgumentNullException(nameof(cleanupOperation));
++        }
++
++        public ReachyStorageCleanupOutcome CleanupStorage()
++        {
++            Func<ReachyStorageCleanupOutcome>? cleanup = storageCleanupOperation;
++            if (cleanup == null)
++            {
++                var unavailable = new ReachyStorageCleanupOutcome(
++                    false,
++                    0L,
++                    0,
++                    "Storage cleanup is unavailable because no cleanup coordinator is bound.");
++                storageCleanupStatus = unavailable.Detail;
++                return unavailable;
++            }
++
++            ReachyStorageCleanupOutcome outcome = cleanup();
++            storageCleanupStatus = outcome.Succeeded
++                ? outcome.Detail + " Freed " + outcome.BytesFreed + " bytes."
++                : outcome.Detail;
++            return outcome;
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyStoragePressureCleanupCoordinator.cs b/Assets/ReachyMini/Runtime/Application/ReachyStoragePressureCleanupCoordinator.cs
+new file mode 100644
+index 0000000..8f38d65
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Application/ReachyStoragePressureCleanupCoordinator.cs
+@@ -0,0 +1,188 @@
++#nullable enable
++
++using System;
++using System.Collections.Generic;
++using System.IO;
++using ReachyMini.LocalModels;
++
++namespace ReachyMini.AppState
++{
++    public sealed class ReachyStorageCleanupOutcome
++    {
++        public ReachyStorageCleanupOutcome(
++            bool succeeded,
++            long bytesFreed,
++            int removedEntries,
++            string detail)
++        {
++            if (bytesFreed < 0L)
++            {
++                throw new ArgumentOutOfRangeException(nameof(bytesFreed));
++            }
++            if (removedEntries < 0)
++            {
++                throw new ArgumentOutOfRangeException(nameof(removedEntries));
++            }
++            if (string.IsNullOrWhiteSpace(detail))
++            {
++                throw new ArgumentException(
++                    "Storage cleanup outcomes require detail.",
++                    nameof(detail));
++            }
++
++            Succeeded = succeeded;
++            BytesFreed = bytesFreed;
++            RemovedEntries = removedEntries;
++            Detail = detail.Trim();
++        }
++
++        public bool Succeeded { get; }
++
++        public long BytesFreed { get; }
++
++        public int RemovedEntries { get; }
++
++        public string Detail { get; }
++    }
++
++    internal sealed class ReachyStoragePressureCleanupCoordinator
++    {
++        private const string DiagnosticPrefix = "reachy-diagnostics-";
++        private const string DiagnosticExtension = ".zip";
++
++        private readonly string diagnosticDirectory;
++        private readonly string localModelStoreRoot;
++
++        public ReachyStoragePressureCleanupCoordinator(
++            string diagnosticOutputDirectory,
++            string managedLocalModelStoreRoot)
++        {
++            if (string.IsNullOrWhiteSpace(diagnosticOutputDirectory))
++            {
++                throw new ArgumentException(
++                    "Storage cleanup requires the diagnostic output directory.",
++                    nameof(diagnosticOutputDirectory));
++            }
++            if (string.IsNullOrWhiteSpace(managedLocalModelStoreRoot))
++            {
++                throw new ArgumentException(
++                    "Storage cleanup requires the managed local-model root.",
++                    nameof(managedLocalModelStoreRoot));
++            }
++
++            diagnosticDirectory = Path.GetFullPath(diagnosticOutputDirectory);
++            localModelStoreRoot = Path.GetFullPath(managedLocalModelStoreRoot);
++        }
++
++        public ReachyStorageCleanupOutcome Cleanup()
++        {
++            try
++            {
++                long bytesFreed = 0L;
++                int removedEntries = 0;
++
++                CleanupOldDiagnosticBundles(ref bytesFreed, ref removedEntries);
++                ReachyStorageCleanupOutcome modelCleanup = CleanupLocalModelTransients();
++                if (!modelCleanup.Succeeded)
++                {
++                    return new ReachyStorageCleanupOutcome(
++                        false,
++                        bytesFreed,
++                        removedEntries,
++                        modelCleanup.Detail);
++                }
++                bytesFreed = checked(bytesFreed + modelCleanup.BytesFreed);
++                removedEntries = checked(
++                    removedEntries + modelCleanup.RemovedEntries);
++
++                return new ReachyStorageCleanupOutcome(
++                    true,
++                    bytesFreed,
++                    removedEntries,
++                    "Safe app-storage cleanup completed. Verified installed models and the newest diagnostic bundles were preserved.");
++            }
++            catch (IOException exception)
++            {
++                return Failure(exception);
++            }
++            catch (UnauthorizedAccessException exception)
++            {
++                return Failure(exception);
++            }
++        }
++
++        private void CleanupOldDiagnosticBundles(
++            ref long bytesFreed,
++            ref int removedEntries)
++        {
++            if (!Directory.Exists(diagnosticDirectory))
++            {
++                return;
++            }
++
++            string[] files = Directory.GetFiles(
++                diagnosticDirectory,
++                DiagnosticPrefix + "*" + DiagnosticExtension,
++                SearchOption.TopDirectoryOnly);
++            var candidates = new List<FileInfo>(files.Length);
++            for (int index = 0; index < files.Length; ++index)
++            {
++                var info = new FileInfo(files[index]);
++                if ((info.Attributes & FileAttributes.ReparsePoint) != 0)
++                {
++                    continue;
++                }
