@@ -29,8 +29,13 @@ namespace ReachyMini.Validation
 
     internal sealed class Rma135FaultInjectingPhysicsBudgetSource : ILocalLlmPhysicsBudgetSource
     {
+        private static readonly TimeSpan PostLoadSettleSampleInterval =
+            TimeSpan.FromMilliseconds(800.0);
+
         private readonly object gate = new object();
         private readonly ILocalLlmPhysicsBudgetSource inner;
+        private bool postLoadSettleSpacingEnabled = true;
+        private bool hasRealCapture;
         private bool replayVerifiedPassThrough;
         private bool injectNextLiveCapture;
 
@@ -62,6 +67,7 @@ namespace ReachyMini.Validation
                         "admissible real pass-through sample.");
                 }
 
+                postLoadSettleSpacingEnabled = false;
                 replayVerifiedPassThrough = true;
                 injectNextLiveCapture = true;
             }
@@ -69,6 +75,7 @@ namespace ReachyMini.Validation
 
         public LocalLlmPhysicsBudgetState Capture()
         {
+            bool spacePostLoadSample;
             lock (gate)
             {
                 if (replayVerifiedPassThrough)
@@ -76,11 +83,18 @@ namespace ReachyMini.Validation
                     replayVerifiedPassThrough = false;
                     return LastObservedRealState;
                 }
+                spacePostLoadSample = postLoadSettleSpacingEnabled && hasRealCapture;
+            }
+
+            if (spacePostLoadSample)
+            {
+                Task.Delay(PostLoadSettleSampleInterval).GetAwaiter().GetResult();
             }
 
             LocalLlmPhysicsBudgetState real = inner.Capture();
             lock (gate)
             {
+                hasRealCapture = true;
                 LastObservedRealState = real;
                 if (!injectNextLiveCapture)
                 {

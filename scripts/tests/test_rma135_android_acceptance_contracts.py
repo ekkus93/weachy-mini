@@ -85,6 +85,18 @@ def main() -> None:
     require(text, "injectNextLiveCapture", "monitor-only controlled injection")
     require(
         text,
+        "TimeSpan.FromMilliseconds(800.0)",
+        "post-load settling sample interval",
+    )
+    require(text, "postLoadSettleSpacingEnabled = true", "post-load settling enabled")
+    require(text, "postLoadSettleSpacingEnabled = false", "monitor cadence restoration")
+    require(
+        text,
+        "Task.Delay(PostLoadSettleSampleInterval).GetAwaiter().GetResult()",
+        "acceptance-only post-load settling wait",
+    )
+    require(
+        text,
         "LastObservedRealState != LocalLlmPhysicsBudgetState.Healthy &&",
         "admissible replay guard",
     )
