@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "contract_id": "rma184_representative_device_matrix_v1",
+  "measurement_policy": {
+    "minimum_long_run_seconds": 1800,
+    "maximum_physics_p95_ms": 2.0,
+    "maximum_state_lag_growth_seconds": 0.002,
+    "minimum_local_llm_decode_tokens_per_second": 1.0,
+    "thermal_degradation_contract": "rma181_priority_degradation_v1",
+    "memory_growth_is_post_warmup_final_minus_initial": true
+  },
+  "support_policy": {
+    "minimum_android_api": 26,
+    "minimum_ram_bytes": 3221225472,
+    "minimum_logical_processors": 4,
+    "supported_graphics_apis": [
+      "Vulkan",
+      "OpenGLES3"
+    ],
+    "rear_camera_required": true,
+    "front_camera_required_for_full_experience": true,
+    "minimum_explicit_on_device_asr_api": 31,
+    "offline_asr_required_for_full_offline_interaction": true,
+    "offline_tts_required_for_full_offline_interaction": true
+  },
+  "default_profiles": [
+    {
+      "performance_class": "low",
+      "target_fps": 30,
+      "maximum_render_p95_ms": 38.33333333333333,
+      "local_llm_profile": "Conservative",
+      "maximum_memory_growth_bytes": 134217728,
+      "publication_status": "initial_default_low_device_measurement_backed"
+    },
+    {
+      "performance_class": "mid",
+      "target_fps": 30,
+      "maximum_render_p95_ms": 38.33333333333333,
+      "local_llm_profile": "Balanced",
+      "maximum_memory_growth_bytes": 201326592,
+      "publication_status": "initial_default_physical_long_run_pending"
+    },
+    {
+      "performance_class": "high",
+      "target_fps": 60,
+      "maximum_render_p95_ms": 19.166666666666664,
+      "local_llm_profile": "Performance",
+      "maximum_memory_growth_bytes": 268435456,
+      "publication_status": "initial_default_physical_long_run_pending"
+    }
+  ],
+  "representative_devices": [
+    {
+      "id": "lge-lg-h872",
+      "performance_class": "low",
+      "manufacturer": "LGE",
+      "model": "LG-H872",
+      "soc": "Qualcomm Snapdragon 821",
+      "android_version": "8.0.0",
+      "android_api": 26,
+      "ram_configuration_gib": [4],
+      "ram_observation_status": "device_family_spec_and_existing_physical_evidence",
+      "graphics_api": "Vulkan",
+      "gpu": "Adreno 530",
+      "camera_capability": "rear_and_front_camera_paths_physically_validated",
+      "on_device_asr": "unsupported_explicit_api_below_31",
+      "offline_tts": "not_yet_positive_audible_acceptance",
+      "support_status": "supported_with_limitations",
+      "measurement_status": "partial_existing_physical_evidence",
+      "evidence": [
+        "docs/validation/RMA_091_CAMERA_ACQUISITION_VALIDATION_2026-08-04.md",
+        "docs/validation/RMA_092_GPU_TEXTURE_BRIDGE_VALIDATION_2026-08-04.md",
+        "docs/validation/RMA_133_CANDIDATE_SET_V6_VALIDATION_2026-08-08.md",
+        "docs/validation/RMA_133_V6_REPRODUCIBILITY_VALIDATION_2026-08-08.md"
+      ]
+    },
+    {
+      "id": "samsung-sm-a546e",
+      "performance_class": "mid",
+      "manufacturer": "Samsung",
+      "model": "SM-A546E",
+      "soc": "Samsung Exynos 1380",
+      "android_version": "16",
+      "android_api": null,
+      "ram_configuration_gib": [6, 8],
+      "ram_observation_status": "runtime_probe_required_for_installed_variant",
+      "graphics_api": "Vulkan",
+      "gpu": "Mali-G68 MP5",
+      "camera_capability": "rear_and_front_hardware_present_runtime_probe_required",
+      "on_device_asr": "runtime_probe_required",
+      "offline_tts": "runtime_probe_required",
+      "support_status": "pending_measurement",
+      "measurement_status": "pending_rma184_device_probe",
+      "evidence": []
+    },
+    {
+      "id": "oneplus-11-5g",
+      "performance_class": "high",
+      "manufacturer": "OnePlus",
+      "model": "OnePlus 11 5G",
+      "soc": "Qualcomm Snapdragon 8 Gen 2",
+      "android_version": "15",
+      "android_api": null,
+      "ram_configuration_gib": [8, 16],
+      "ram_observation_status": "runtime_probe_required_for_installed_variant",
+      "graphics_api": "Vulkan",
+      "gpu": "Adreno 740",
+      "camera_capability": "rear_and_front_hardware_present_runtime_probe_required",
+      "on_device_asr": "runtime_probe_required",
+      "offline_tts": "runtime_probe_required",
+      "support_status": "pending_measurement",
+      "measurement_status": "pending_rma184_device_probe",
+      "evidence": []
+    },
+    {
+      "id": "google-pixel-7-pro",
+      "performance_class": "high",
+      "manufacturer": "Google",
+      "model": "Pixel 7 Pro",
+      "soc": "Google Tensor G2",
+      "android_version": "14",
+      "android_api": null,
+      "ram_configuration_gib": [12],
+      "ram_observation_status": "device_family_spec_runtime_probe_required",
+      "graphics_api": "Vulkan",
+      "gpu": "Mali-G710 MP7",
+      "camera_capability": "rear_and_front_hardware_present_runtime_probe_required",
+      "on_device_asr": "runtime_probe_required",
+      "offline_tts": "runtime_probe_required",
+      "support_status": "pending_measurement",
+      "measurement_status": "pending_rma184_device_probe",
+      "evidence": []
+    }
+  ]
+}
