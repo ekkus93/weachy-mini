@@ -1,0 +1,481 @@
++                candidates.Add(info);
++            }
++            candidates.Sort((left, right) =>
++                right.LastWriteTimeUtc.CompareTo(left.LastWriteTimeUtc));
++
++            for (int index = ReachyStoragePressurePolicy.RetainedDiagnosticBundleCount;
++                 index < candidates.Count;
++                 ++index)
++            {
++                FileInfo candidate = candidates[index];
++                long length = candidate.Length;
++                candidate.Delete();
++                bytesFreed = checked(bytesFreed + length);
++                removedEntries = checked(removedEntries + 1);
++            }
++        }
++
++        private ReachyStorageCleanupOutcome CleanupLocalModelTransients()
++        {
++            string markerPath = Path.Combine(
++                localModelStoreRoot,
++                LocalModelPackagePolicy.OwnershipMarkerFileName);
++            if (!File.Exists(markerPath))
++            {
++                return new ReachyStorageCleanupOutcome(
++                    true,
++                    0L,
++                    0,
++                    "No owned local-model store is present; model cleanup was skipped.");
++            }
++
++            using var manager = new LocalModelPackageManager(
++                localModelStoreRoot,
++                new DriveInfoLocalModelStorageProbe());
++            LocalModelTransientCleanupReport report =
++                manager.CleanupTransientStorage();
++            return new ReachyStorageCleanupOutcome(
++                report.Succeeded,
++                report.BytesFreed,
++                report.RemovedEntries,
++                report.Detail);
++        }
++
++        private static ReachyStorageCleanupOutcome Failure(Exception exception)
++        {
++            return new ReachyStorageCleanupOutcome(
++                false,
++                0L,
++                0,
++                "Safe app-storage cleanup failed (" +
++                exception.GetType().Name + ").");
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyResourcePressure.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyResourcePressure.cs
+new file mode 100644
+index 0000000..34009a7
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyResourcePressure.cs
+@@ -0,0 +1,255 @@
++#nullable enable
++
++using System;
++using System.Collections.Generic;
++using System.Collections.ObjectModel;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace ReachyMini.AppState
++{
++    public enum ReachyMemoryPressureLevel
++    {
++        Normal = 0,
++        Moderate = 1,
++        Critical = 2,
++    }
++
++    public enum ReachyMemoryPressureSource
++    {
++        Manual = 0,
++        UnityLowMemory = 1,
++        AndroidLowMemory = 2,
++        AndroidTrimMemory = 3,
++    }
++
++    public sealed class ReachyMemoryPressureSignal
++    {
++        public ReachyMemoryPressureSignal(
++            ReachyMemoryPressureLevel level,
++            ReachyMemoryPressureSource source,
++            int androidTrimLevel = -1)
++        {
++            if (!Enum.IsDefined(typeof(ReachyMemoryPressureLevel), level))
++            {
++                throw new ArgumentOutOfRangeException(nameof(level));
++            }
++            if (!Enum.IsDefined(typeof(ReachyMemoryPressureSource), source))
++            {
++                throw new ArgumentOutOfRangeException(nameof(source));
++            }
++            if (source == ReachyMemoryPressureSource.AndroidTrimMemory &&
++                androidTrimLevel < 0)
++            {
++                throw new ArgumentOutOfRangeException(nameof(androidTrimLevel));
++            }
++
++            Level = level;
++            Source = source;
++            AndroidTrimLevel = androidTrimLevel;
++        }
++
++        public ReachyMemoryPressureLevel Level { get; }
++
++        public ReachyMemoryPressureSource Source { get; }
++
++        public int AndroidTrimLevel { get; }
++
++        public static ReachyMemoryPressureLevel ClassifyAndroidTrimLevel(int trimLevel)
++        {
++            if (trimLevel < 0)
++            {
++                throw new ArgumentOutOfRangeException(nameof(trimLevel));
++            }
++
++            return trimLevel switch
++            {
++                5 => ReachyMemoryPressureLevel.Moderate,
++                10 => ReachyMemoryPressureLevel.Moderate,
++                15 => ReachyMemoryPressureLevel.Critical,
++                20 => ReachyMemoryPressureLevel.Normal,
++                40 => ReachyMemoryPressureLevel.Moderate,
++                60 => ReachyMemoryPressureLevel.Critical,
++                80 => ReachyMemoryPressureLevel.Critical,
++                _ => ReachyMemoryPressureLevel.Normal,
++            };
++        }
++    }
++
++    public sealed class ReachyMemoryPressureTargetResult
++    {
++        public ReachyMemoryPressureTargetResult(
++            string targetId,
++            bool succeeded,
++            bool releasedResources,
++            string detail)
++        {
++            if (string.IsNullOrWhiteSpace(targetId))
++            {
++                throw new ArgumentException(
++                    "Memory-pressure targets require an identifier.",
++                    nameof(targetId));
++            }
++            if (string.IsNullOrWhiteSpace(detail))
++            {
++                throw new ArgumentException(
++                    "Memory-pressure target results require detail.",
++                    nameof(detail));
++            }
++
++            TargetId = targetId.Trim();
++            Succeeded = succeeded;
++            ReleasedResources = releasedResources;
++            Detail = detail.Trim();
++        }
++
++        public string TargetId { get; }
++
++        public bool Succeeded { get; }
++
++        public bool ReleasedResources { get; }
++
++        public string Detail { get; }
++    }
++
++    public interface IReachyMemoryPressureTarget
++    {
++        string MemoryPressureTargetId { get; }
++
++        ValueTask<ReachyMemoryPressureTargetResult> ApplyMemoryPressureAsync(
++            ReachyMemoryPressureSignal signal);
++    }
++
++    public sealed class ReachyMemoryPressureReport
++    {
++        internal ReachyMemoryPressureReport(
++            ReachyMemoryPressureSignal signal,
++            IReadOnlyList<ReachyMemoryPressureTargetResult> results)
++        {
++            Signal = signal ?? throw new ArgumentNullException(nameof(signal));
++            Results = results ?? throw new ArgumentNullException(nameof(results));
++
++            int failureCount = 0;
++            int releaseCount = 0;
++            for (int index = 0; index < results.Count; ++index)
++            {
++                ReachyMemoryPressureTargetResult result = results[index];
++                if (!result.Succeeded)
++                {
++                    failureCount = checked(failureCount + 1);
++                }
++                if (result.ReleasedResources)
++                {
++                    releaseCount = checked(releaseCount + 1);
++                }
++            }
++            FailureCount = failureCount;
++            ReleasedTargetCount = releaseCount;
++        }
++
++        public ReachyMemoryPressureSignal Signal { get; }
++
++        public IReadOnlyList<ReachyMemoryPressureTargetResult> Results { get; }
++
++        public int FailureCount { get; }
++
++        public int ReleasedTargetCount { get; }
++
++        public bool Succeeded => FailureCount == 0;
++    }
++
++    public sealed class ReachyMemoryPressureCoordinator : IDisposable
++    {
++        private readonly ReadOnlyCollection<IReachyMemoryPressureTarget> targets;
++        private readonly SemaphoreSlim operationGate = new SemaphoreSlim(1, 1);
++        private int disposed;
++
++        public ReachyMemoryPressureCoordinator(
++            IEnumerable<IReachyMemoryPressureTarget> pressureTargets)
++        {
++            if (pressureTargets == null)
++            {
++                throw new ArgumentNullException(nameof(pressureTargets));
++            }
++
++            var copy = new List<IReachyMemoryPressureTarget>();
++            foreach (IReachyMemoryPressureTarget target in pressureTargets)
++            {
++                copy.Add(target ?? throw new ArgumentException(
++                    "Memory-pressure target collections cannot contain null.",
++                    nameof(pressureTargets)));
++            }
++            targets = copy.AsReadOnly();
++        }
++
++        public int TargetCount => targets.Count;
++
++        public async Task<ReachyMemoryPressureReport> ApplyAsync(
++            ReachyMemoryPressureSignal signal)
++        {
++            if (signal == null)
++            {
++                throw new ArgumentNullException(nameof(signal));
++            }
++            ThrowIfDisposed();
++
++            await operationGate.WaitAsync().ConfigureAwait(false);
++            try
++            {
++                ThrowIfDisposed();
++                var results = new List<ReachyMemoryPressureTargetResult>(targets.Count);
++                for (int index = 0; index < targets.Count; ++index)
++                {
++                    IReachyMemoryPressureTarget target = targets[index];
++                    try
++                    {
++                        ReachyMemoryPressureTargetResult result =
++                            await target.ApplyMemoryPressureAsync(signal)
++                                .ConfigureAwait(false);
++                        results.Add(result ?? new ReachyMemoryPressureTargetResult(
++                            target.MemoryPressureTargetId,
++                            succeeded: false,
++                            releasedResources: false,
++                            "The memory-pressure target returned no result."));
++                    }
++                    catch (Exception exception)
++                    {
++                        results.Add(new ReachyMemoryPressureTargetResult(
++                            target.MemoryPressureTargetId,
++                            succeeded: false,
++                            releasedResources: false,
++                            "Memory-pressure handling failed (" +
++                            exception.GetType().Name + ")."));
++                    }
++                }
++
++                return new ReachyMemoryPressureReport(
++                    signal,
++                    results.AsReadOnly());
++            }
++            finally
++            {
++                operationGate.Release();
++            }
++        }
++
++        public void Dispose()
++        {
++            if (Interlocked.Exchange(ref disposed, 1) != 0)
++            {
++                return;
++            }
++            operationGate.Dispose();
++            GC.SuppressFinalize(this);
++        }
++
++        private void ThrowIfDisposed()
++        {
++            if (Volatile.Read(ref disposed) != 0)
++            {
++                throw new ObjectDisposedException(
++                    nameof(ReachyMemoryPressureCoordinator));
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyStoragePressure.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyStoragePressure.cs
+new file mode 100644
+index 0000000..1f6a753
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyStoragePressure.cs
+@@ -0,0 +1,136 @@
++#nullable enable
++
++using System;
++using System.IO;
++
++namespace ReachyMini.AppState
++{
++    public static class ReachyStoragePressurePolicy
++    {
++        public const long DiagnosticExportWriteBudgetBytes =
++            16L * 1024L * 1024L;
++
++        public const long DiagnosticExportSafetyReserveBytes =
++            64L * 1024L * 1024L;
++
++        public const int RetainedDiagnosticBundleCount = 3;
++    }
++
++    public interface IReachyStorageSpaceProbe
++    {
++        long GetAvailableBytes(string path);
++    }
++
++    public sealed class ReachyDriveStorageSpaceProbe : IReachyStorageSpaceProbe
++    {
++        public long GetAvailableBytes(string path)
++        {
++            if (string.IsNullOrWhiteSpace(path))
++            {
++                throw new ArgumentException(
++                    "Storage probes require a path.",
++                    nameof(path));
++            }
++
++            string fullPath = Path.GetFullPath(path);
++            string filesystemRoot = Path.GetPathRoot(fullPath) ??
++                throw new InvalidOperationException(
++                    "The storage path does not have a filesystem root.");
++            return new DriveInfo(filesystemRoot).AvailableFreeSpace;
++        }
++    }
++
++    public sealed class ReachyStorageSpaceCheck
++    {
++        private ReachyStorageSpaceCheck(
++            bool succeeded,
++            long availableBytes,
++            long requiredBytes,
++            string detail)
++        {
++            Succeeded = succeeded;
++            AvailableBytes = availableBytes;
++            RequiredBytes = requiredBytes;
++            Detail = detail;
++        }
++
++        public bool Succeeded { get; }
++
++        public long AvailableBytes { get; }
++
++        public long RequiredBytes { get; }
++
++        public string Detail { get; }
++
++        public static ReachyStorageSpaceCheck Evaluate(
++            IReachyStorageSpaceProbe probe,
++            string path,
++            long bytesToWrite,
++            long safetyReserveBytes)
++        {
++            if (probe == null)
++            {
++                throw new ArgumentNullException(nameof(probe));
++            }
++            if (bytesToWrite < 0L)
++            {
++                throw new ArgumentOutOfRangeException(nameof(bytesToWrite));
++            }
++            if (safetyReserveBytes < 0L)
++            {
++                throw new ArgumentOutOfRangeException(nameof(safetyReserveBytes));
++            }
++
++            long required = checked(bytesToWrite + safetyReserveBytes);
++            try
++            {
++                long available = probe.GetAvailableBytes(path);
++                if (available < 0L)
++                {
++                    return new ReachyStorageSpaceCheck(
++                        false,
++                        available,
++                        required,
++                        "Storage availability returned an invalid negative value.");
++                }
++                if (available < required)
++                {
++                    return new ReachyStorageSpaceCheck(
++                        false,
++                        available,
++                        required,
++                        "Free storage is below the required write budget plus safety reserve.");
++                }
++                return new ReachyStorageSpaceCheck(
++                    true,
++                    available,
++                    required,
++                    "Storage headroom satisfies the required write budget and safety reserve.");
++            }
++            catch (IOException exception)
++            {
++                return Failure(required, exception);
++            }
++            catch (UnauthorizedAccessException exception)
++            {
++                return Failure(required, exception);
++            }
++            catch (InvalidOperationException exception)
++            {
++                return Failure(required, exception);
++            }
++        }
++
++        private static ReachyStorageSpaceCheck Failure(
++            long requiredBytes,
++            Exception exception)
++        {
++            return new ReachyStorageSpaceCheck(
++                false,
++                -1L,
++                requiredBytes,
++                "Storage availability could not be read (" +
++                exception.GetType().Name + ").");
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
+index fadb133..bc6e2e3 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
+@@ -24,6 +24,8 @@ namespace ReachyMini.LocalModels
+         private ulong conversationEpoch = 1UL;
+         private CancellationTokenSource? activeCancellation;
+         private Task<LocalLlmGenerationResult>? activeGenerationTask;
++        private bool memoryPressureReleasePending;
++        private TaskCompletionSource<bool>? memoryPressureReleaseCompletion;
+ 
+         private LocalLlmProvider(
+             ILocalLlmRuntime runtime,
+@@ -131,6 +133,13 @@ namespace ReachyMini.LocalModels
+                         "Local LLM reload is suspended while the application is backgrounded.",
+                         ReachyLlamaNativeContract.StatusCancelled);
+                 }
++                if (memoryPressureReleasePending)
++                {
++                    return new LocalLlmReloadResult(
++                        LocalLlmReloadStatus.Unavailable,
++                        "Local LLM reload is suspended while memory-pressure release is active.",
++                        ReachyLlamaNativeContract.StatusCancelled);
++                }
