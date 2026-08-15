@@ -315,7 +315,8 @@ namespace ReachyMini.AppState
 
     internal sealed class ReachySettingsMainScreenApplicationService :
         ReachyApplicationServiceBase,
-        IReachyUserInterfaceService
+        IReachyUserInterfaceService,
+        IReachyApplicationInterruptionParticipant
     {
         private readonly ReachyMainScreen screen;
         private readonly ReachyProductionAuthoritativeRuntime runtime;
@@ -407,6 +408,16 @@ namespace ReachyMini.AppState
             {
                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
             }
+        }
+
+        public void PauseForApplicationInterruption()
+        {
+            _ = stateStore.PauseForApplicationInterruption();
+        }
+
+        public void ResumeAfterApplicationInterruption()
+        {
+            _ = stateStore.ResumeAfterApplicationInterruption();
         }
 
         private void OnCameraCapabilitiesChanged(

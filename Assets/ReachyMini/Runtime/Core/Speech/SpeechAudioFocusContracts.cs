@@ -35,6 +35,7 @@ namespace ReachyMini.Speech
         AlarmPlayback = 6,
         MicrophoneMuted = 7,
         PlatformFailure = 8,
+        ApplicationBackgrounded = 9,
     }
 
     public sealed class SpeechAudioInterruption

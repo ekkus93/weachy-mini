@@ -7,7 +7,7 @@ using ReachyMini.Performance;
 
 namespace ReachyMini.Perception
 {
-    public sealed class ReachyVlmScheduler : IDisposable, IReachyPriorityDegradationTarget
+    public sealed partial class ReachyVlmScheduler : IDisposable, IReachyPriorityDegradationTarget
     {
         public const int MaximumProviderPolicies = 16;
 
@@ -257,6 +257,15 @@ namespace ReachyMini.Perception
             lock (sync)
             {
                 ThrowIfDisposed();
+                if (lifecycleSuspended)
+                {
+                    return Decision(
+                        VlmScheduleStatus.ResourceSuspended,
+                        null,
+                        null,
+                        0L,
+                        "VLM scheduling is suspended while the application is backgrounded; cancelled work is never restarted automatically.");
+                }
                 if (prioritySuspended)
                 {
                     return Decision(

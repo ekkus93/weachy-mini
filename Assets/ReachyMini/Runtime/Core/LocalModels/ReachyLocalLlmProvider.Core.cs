@@ -124,6 +124,13 @@ namespace ReachyMini.LocalModels
                         "The local LLM provider is disposed.",
                         ReachyLlamaNativeContract.StatusNotFound);
                 }
+                if (interruptionGate.IsPaused)
+                {
+                    return new LocalLlmReloadResult(
+                        LocalLlmReloadStatus.Unavailable,
+                        "Local LLM reload is suspended while the application is backgrounded.",
+                        ReachyLlamaNativeContract.StatusCancelled);
+                }
                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
                 {
                     return new LocalLlmReloadResult(
@@ -255,6 +262,7 @@ namespace ReachyMini.LocalModels
 
         public async ValueTask DisposeAsync()
         {
+            interruptionGate.Dispose();
             Task<LocalLlmGenerationResult>? activeTask;
             CancellationTokenSource? cancellation;
             lock (sync)

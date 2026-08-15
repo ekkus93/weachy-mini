@@ -104,7 +104,7 @@ namespace ReachyMini.AppState
         public ReachyMainScreenSnapshot Snapshot { get; }
     }
 
-    public sealed class ReachyMainScreenStateStore
+    public sealed partial class ReachyMainScreenStateStore
     {
         private ReachyMainScreenSnapshot current = new ReachyMainScreenSnapshot(
             ReachyInteractionState.Idle,

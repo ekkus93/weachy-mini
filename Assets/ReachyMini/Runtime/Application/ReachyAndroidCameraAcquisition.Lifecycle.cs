@@ -24,16 +24,20 @@ namespace ReachyMini.AppState
             ApplyPlatformSnapshot(RequirePlatform().Snapshot());
         }
 
-        private void OnApplicationPause(bool paused)
+        public void PauseForApplicationInterruption()
         {
             if (!initialized || disposed || !state.Current.IsActive)
             {
                 return;
             }
 
-            if (paused)
+            ApplyPlatformSnapshot(RequirePlatform().Pause());
+        }
+
+        public void ResumeAfterApplicationInterruption()
+        {
+            if (!initialized || disposed || !state.Current.IsActive)
             {
-                ApplyPlatformSnapshot(RequirePlatform().Pause());
                 return;
             }
 

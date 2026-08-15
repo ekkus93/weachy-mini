@@ -171,7 +171,8 @@ namespace ReachyMini.AppState
 
     internal sealed class ReachyProductionSimulationApplicationService :
         ReachyApplicationServiceBase,
-        IReachySimulationService
+        IReachySimulationService,
+        IReachyApplicationInterruptionParticipant
     {
         private readonly ReachyProductionAuthoritativeRuntime runtime;
 
@@ -189,6 +190,30 @@ namespace ReachyMini.AppState
         {
             SetReady(
                 $"Authoritative simulation adapter is present; runtime status is {runtime.Status}.");
+        }
+
+        public void PauseForApplicationInterruption()
+        {
+            ReachySimulationControlResult result =
+                runtime.PauseForApplicationInterruption();
+            if (!result.IsSuccess)
+            {
+                throw new InvalidOperationException(
+                    "Authoritative simulation pause failed with " +
+                    result.Error.Code + ".");
+            }
+        }
+
+        public void ResumeAfterApplicationInterruption()
+        {
+            ReachySimulationControlResult result =
+                runtime.ResumeAfterApplicationInterruption();
+            if (!result.IsSuccess)
+            {
+                throw new InvalidOperationException(
+                    "Authoritative simulation resume failed with " +
+                    result.Error.Code + ".");
+            }
         }
     }
 
@@ -332,7 +357,8 @@ namespace ReachyMini.AppState
 
     internal sealed class ReachyMainScreenApplicationService :
         ReachyApplicationServiceBase,
-        IReachyUserInterfaceService
+        IReachyUserInterfaceService,
+        IReachyApplicationInterruptionParticipant
     {
         private readonly ReachyMainScreen screen;
         private readonly IReachyApplicationService[] dependencies;
@@ -399,6 +425,16 @@ namespace ReachyMini.AppState
             {
                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
             }
+        }
+
+        public void PauseForApplicationInterruption()
+        {
+            _ = stateStore.PauseForApplicationInterruption();
+        }
+
+        public void ResumeAfterApplicationInterruption()
+        {
+            _ = stateStore.ResumeAfterApplicationInterruption();
         }
 
         private void OnDependencyHealthChanged(

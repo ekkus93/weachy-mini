@@ -104,7 +104,11 @@ namespace ReachyMini.Providers
                         "HTTP transport is disposed."),
                     1);
             }
-            if (cancellationToken.IsCancellationRequested)
+            using CancellationTokenSource lifecycleCancellation =
+                interruptionGate.CreateLinkedTokenSource(cancellationToken);
+            CancellationToken effectiveCancellationToken =
+                lifecycleCancellation.Token;
+            if (effectiveCancellationToken.IsCancellationRequested)
             {
                 return ReachyHttpTransportResult.Failure(
                     Error(
@@ -113,7 +117,7 @@ namespace ReachyMini.Providers
                         null,
                         null,
                         false,
-                        "HTTP request was cancelled before transport start."),
+                        "HTTP request was cancelled or suspended before transport start."),
                     1);
             }
 
@@ -129,7 +133,7 @@ namespace ReachyMini.Providers
                 AttemptResult attempt = await SendAttemptAsync(
                         request,
                         eventSink,
-                        cancellationToken)
+                        effectiveCancellationToken)
                     .ConfigureAwait(false);
                 if (attempt.Result.Succeeded)
                 {
@@ -152,12 +156,12 @@ namespace ReachyMini.Providers
                 TimeSpan delay = ComputeBackoff(attempts, attempt.RetryAfter);
                 try
                 {
-                    await backoffDelay.DelayAsync(delay, cancellationToken)
+                    await backoffDelay.DelayAsync(delay, effectiveCancellationToken)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
-                    bool callerCancelled = cancellationToken.IsCancellationRequested;
+                    bool callerCancelled = effectiveCancellationToken.IsCancellationRequested;
                     return ReachyHttpTransportResult.Failure(
                         Error(
                             callerCancelled
@@ -184,6 +188,7 @@ namespace ReachyMini.Providers
             {
                 return;
             }
+            interruptionGate.Dispose();
             if (ownsClient)
             {
                 client.Dispose();

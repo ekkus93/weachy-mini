@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ReachyMini.Speech
 {
-    public sealed class SpeechAudioFocusCoordinator : IAsyncDisposable
+    public sealed partial class SpeechAudioFocusCoordinator : IAsyncDisposable
     {
         private readonly object sync = new object();
         private readonly ISpeechAudioFocusPlatform platform;
@@ -53,6 +53,14 @@ namespace ReachyMini.Speech
             lock (sync)
             {
                 ThrowIfDisposedLocked();
+                if (interruptionGate.IsPaused)
+                {
+                    return Failure(new SpeechProviderError(
+                        SpeechErrorCategory.ServiceFailure,
+                        "speech_audio_lifecycle_suspended",
+                        "Speech audio is suspended while the application is backgrounded.",
+                        isRetryable: true));
+                }
                 if (fault != null || state == SpeechAudioState.Faulted)
                 {
                     return Failure(
@@ -79,76 +87,91 @@ namespace ReachyMini.Speech
                 lastInterruption = null;
             }
 
-            SpeechAudioFocusRequestResult requestResult;
-            try
+            using (CancellationTokenSource lifecycleCancellation =
+                CreateLifecycleCancellation(session, cancellationToken))
             {
-                requestResult = await platform.RequestFocusAsync(
-                    session.SessionId,
-                    role,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                ClearCancelledAcquisition(session);
-                throw;
-            }
-            catch (Exception exception)
-            {
-                SpeechProviderError error = FaultPlatform(
-                    session,
-                    "audio_focus_request_exception",
-                    "Requesting Android speech audio focus failed with " +
-                        exception.GetType().Name +
-                        "; the coordinator was faulted instead of retrying or falling back.");
-                return Failure(error);
-            }
-
-            if (!requestResult.IsGranted)
-            {
-                SpeechProviderError error = new SpeechProviderError(
-                    SpeechErrorCategory.ServiceFailure,
-                    BoundCode(requestResult.Code),
-                    BoundDiagnostic(requestResult.Diagnostic),
-                    isRetryable: true);
-                ClearDeniedAcquisition(session);
-                return Failure(error);
-            }
-
-            SpeechAudioInterruption? interruptedBeforeGrant;
-            lock (sync)
-            {
-                if (!ReferenceEquals(activeSession, session))
+                SpeechAudioFocusRequestResult requestResult;
+                try
                 {
-                    interruptedBeforeGrant = new SpeechAudioInterruption(
-                        SpeechAudioInterruptionKind.PlatformFailure,
-                        "audio_focus_session_replaced",
-                        "The speech audio session changed while focus was being acquired; the granted focus was rejected.");
+                    requestResult = await platform.RequestFocusAsync(
+                        session.SessionId,
+                        role,
+                        lifecycleCancellation.Token).ConfigureAwait(false);
                 }
-                else
+                catch (OperationCanceledException) when (
+                    !cancellationToken.IsCancellationRequested &&
+                    interruptionGate.IsPaused)
                 {
-                    session.FocusHeld = true;
-                    interruptedBeforeGrant = session.Interruption;
-                    if (interruptedBeforeGrant == null)
+                    ClearCancelledAcquisition(session);
+                    return Failure(new SpeechProviderError(
+                        SpeechErrorCategory.ServiceFailure,
+                        "speech_audio_lifecycle_suspended",
+                        "Speech audio focus acquisition was cancelled because the application entered the background.",
+                        isRetryable: true));
+                }
+                catch (OperationCanceledException)
+                {
+                    ClearCancelledAcquisition(session);
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    SpeechProviderError error = FaultPlatform(
+                        session,
+                        "audio_focus_request_exception",
+                        "Requesting Android speech audio focus failed with " +
+                            exception.GetType().Name +
+                            "; the coordinator was faulted instead of retrying or falling back.");
+                    return Failure(error);
+                }
+
+                if (!requestResult.IsGranted)
+                {
+                    SpeechProviderError error = new SpeechProviderError(
+                        SpeechErrorCategory.ServiceFailure,
+                        BoundCode(requestResult.Code),
+                        BoundDiagnostic(requestResult.Diagnostic),
+                        isRetryable: true);
+                    ClearDeniedAcquisition(session);
+                    return Failure(error);
+                }
+
+                SpeechAudioInterruption? interruptedBeforeGrant;
+                lock (sync)
+                {
+                    if (!ReferenceEquals(activeSession, session))
                     {
-                        state = role == SpeechAudioRole.Listening
-                            ? SpeechAudioState.Listening
-                            : SpeechAudioState.Speaking;
-                        return new SpeechAudioAcquireResult(
-                            new SpeechAudioFocusLease(this, session),
-                            error: null);
+                        interruptedBeforeGrant = new SpeechAudioInterruption(
+                            SpeechAudioInterruptionKind.PlatformFailure,
+                            "audio_focus_session_replaced",
+                            "The speech audio session changed while focus was being acquired; the granted focus was rejected.");
                     }
-                    state = SpeechAudioState.Interrupted;
+                    else
+                    {
+                        session.FocusHeld = true;
+                        interruptedBeforeGrant = session.Interruption;
+                        if (interruptedBeforeGrant == null)
+                        {
+                            state = role == SpeechAudioRole.Listening
+                                ? SpeechAudioState.Listening
+                                : SpeechAudioState.Speaking;
+                            return new SpeechAudioAcquireResult(
+                                new SpeechAudioFocusLease(this, session),
+                                error: null);
+                        }
+                        state = SpeechAudioState.Interrupted;
+                    }
                 }
-            }
 
-            SpeechProviderError? releaseError =
-                await ReleaseAsync(session).ConfigureAwait(false);
-            SpeechAudioInterruption interruption = interruptedBeforeGrant ??
-                new SpeechAudioInterruption(
-                    SpeechAudioInterruptionKind.PlatformFailure,
-                    "audio_focus_interrupted_without_detail",
-                    "Speech audio focus was interrupted during acquisition without platform detail.");
-            return Failure(releaseError ?? interruption.ToProviderError());
+                SpeechProviderError? releaseError =
+                    await ReleaseAsync(session).ConfigureAwait(false);
+                SpeechAudioInterruption interruption = interruptedBeforeGrant ??
+                    new SpeechAudioInterruption(
+                        SpeechAudioInterruptionKind.PlatformFailure,
+                        "audio_focus_interrupted_without_detail",
+                        "Speech audio focus was interrupted during acquisition without platform detail.");
+                return Failure(releaseError ?? interruption.ToProviderError());
+            }
         }
 
         internal async ValueTask<SpeechProviderError?> ReleaseAsync(
@@ -230,6 +253,7 @@ namespace ReachyMini.Speech
                 session = activeSession;
             }
 
+            interruptionGate.Dispose();
             platform.Interrupted -= OnPlatformInterrupted;
             if (session != null)
             {
@@ -273,6 +297,21 @@ namespace ReachyMini.Speech
             }
 
             _ = session.TryInterrupt(eventArgs.Interruption);
+        }
+
+        private CancellationTokenSource CreateLifecycleCancellation(
+            SpeechAudioSession session,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return interruptionGate.CreateLinkedTokenSource(cancellationToken);
+            }
+            catch
+            {
+                ClearCancelledAcquisition(session);
+                throw;
+            }
         }
 
         private void ClearCancelledAcquisition(SpeechAudioSession session)

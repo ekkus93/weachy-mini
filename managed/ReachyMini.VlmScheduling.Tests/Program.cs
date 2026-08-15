@@ -36,6 +36,7 @@ namespace ReachyMini.VlmScheduling.Tests
             CancellationCallbackFailuresRemainVisible();
             CancellationDispatchDoesNotInvertCompletionLocks();
             PriorityDegradationSuspendsAndCancelsRequests();
+            ApplicationInterruptionSuspendsAndCancelsRequests();
             ProviderPolicyStateIsBounded();
             SnapshotsAreImmutableCopies();
             UnknownCompletionIsVisible();
@@ -555,6 +556,36 @@ namespace ReachyMini.VlmScheduling.Tests
                     ManualSignal("vlm-device", 2UL),
                     1_020L).Status,
                 "priority recovery restores VLM admission");
+        }
+
+        private static void ApplicationInterruptionSuspendsAndCancelsRequests()
+        {
+            using ReachyVlmScheduler scheduler = Scheduler(OnDevicePolicy());
+            VlmScheduleLease lease = scheduler.TrySchedule(
+                ManualSignal("vlm-device", 1UL),
+                1_010L).Lease!;
+
+            scheduler.PauseForApplicationInterruption();
+            True(lease.IsCancellationRequested, "lifecycle pause cancels active VLM");
+            Equal(
+                VlmScheduleStatus.ResourceSuspended,
+                scheduler.TrySchedule(
+                    ManualSignal("vlm-device", 2UL),
+                    1_020L).Status,
+                "lifecycle pause blocks VLM admission");
+            scheduler.PauseForApplicationInterruption();
+            True(
+                scheduler.Complete(lease.RequestId).WasCancellationRequested,
+                "lifecycle cancellation remains visible after repeated pause");
+
+            scheduler.ResumeAfterApplicationInterruption();
+            scheduler.ResumeAfterApplicationInterruption();
+            Equal(
+                VlmScheduleStatus.Scheduled,
+                scheduler.TrySchedule(
+                    ManualSignal("vlm-device", 2UL),
+                    1_020L).Status,
+                "lifecycle resume permits only new VLM work");
         }
 
         private static void ProviderPolicyStateIsBounded()

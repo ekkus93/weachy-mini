@@ -19,6 +19,7 @@ namespace ReachyMini.AppState
         private MonoBehaviour? compositionProvider;
 
         private ReachyApplicationHost? host;
+        private ReachyApplicationInterruptionCoordinator? interruptionCoordinator;
         private bool startupEntered;
 
         public ReachyApplicationHost? Host => host;
@@ -63,6 +64,8 @@ namespace ReachyMini.AppState
                 host = new ReachyApplicationHost(composition);
                 host.HealthChanged += OnHealthChanged;
                 host.Start();
+                interruptionCoordinator =
+                    new ReachyApplicationInterruptionCoordinator(host);
             }
             catch (Exception exception)
             {
@@ -84,6 +87,11 @@ namespace ReachyMini.AppState
 
         public void ShutdownApplication()
         {
+            ReachyApplicationInterruptionCoordinator? coordinator =
+                interruptionCoordinator;
+            interruptionCoordinator = null;
+            coordinator?.Dispose();
+
             ReachyApplicationHost? activeHost = host;
             host = null;
             if (activeHost == null)
@@ -113,6 +121,50 @@ namespace ReachyMini.AppState
         private void Start()
         {
             StartApplication();
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            ReachyApplicationInterruptionCoordinator? coordinator =
+                interruptionCoordinator;
+            if (coordinator == null || host == null)
+            {
+                return;
+            }
+
+            ReachyAndroidCameraAcquisition? acquisition =
+                UnityEngine.Object.FindAnyObjectByType<
+                    ReachyAndroidCameraAcquisition>();
+            try
+            {
+                ReachyApplicationInterruptionResult result;
+                if (paused)
+                {
+                    acquisition?.PauseForApplicationInterruption();
+                    result = coordinator.Pause();
+                }
+                else
+                {
+                    result = coordinator.Resume();
+                    if (result.Succeeded)
+                    {
+                        acquisition?.ResumeAfterApplicationInterruption();
+                    }
+                }
+
+                if (!result.Succeeded)
+                {
+                    EnterFault(
+                        "Application interruption transition failed: " +
+                        result.Diagnostic);
+                }
+            }
+            catch (Exception exception)
+            {
+                EnterFault(
+                    "Application interruption transition failed (" +
+                    exception.GetType().Name + ").");
+            }
         }
 
         private void OnDestroy()

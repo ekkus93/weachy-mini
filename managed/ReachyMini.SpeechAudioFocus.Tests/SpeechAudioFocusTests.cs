@@ -19,6 +19,7 @@ internal static class SpeechAudioFocusTests
             ("asr-terminal-waits-for-focus-release", AsrTerminalWaitsForRelease),
             ("tts-terminal-waits-for-focus-release", TtsTerminalWaitsForRelease),
             ("focus-loss-is-visible-and-cancels", FocusLossIsVisible),
+            ("application-background-cancels-releases-and-blocks", ApplicationBackgroundCancelsReleasesAndBlocks),
             ("route-change-is-visible-and-cancels", RouteChangeIsVisible),
             ("phone-mode-is-visible-and-cancels", PhoneModeIsVisible),
             ("microphone-mute-is-visible-and-cancels", MicrophoneMuteIsVisible),
@@ -136,6 +137,46 @@ internal static class SpeechAudioFocusTests
         List<TtsEvent> events = await active.ConfigureAwait(false);
         Require(events[^1].Kind == TtsEventKind.Completed, "TTS completion should appear only after release.");
         Require(coordinator.Current.State == SpeechAudioState.Idle, "Coordinator must be idle before TTS completion is exposed.");
+    }
+
+    private static async Task ApplicationBackgroundCancelsReleasesAndBlocks()
+    {
+        await using var platform = new FakeAudioPlatform();
+        await using var coordinator = new SpeechAudioFocusCoordinator(platform);
+        await using var raw = new FakeAsrProvider { BlockUntilCancellation = true };
+        await using var provider = new AudioCoordinatedAsrProvider(raw, coordinator, ownsInner: false);
+        Task<List<AsrEvent>> active = CollectAsync(provider.RecognizeAsync(
+            CreateAsrRequest(provider, "application-background", TimeSpan.FromSeconds(5)),
+            CancellationToken.None));
+        await raw.Started.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+
+        coordinator.PauseForApplicationInterruption();
+        List<AsrEvent> events = await active.ConfigureAwait(false);
+        Require(
+            events[^1].Kind == AsrEventKind.Failed &&
+            events[^1].Error?.Code == "application_backgrounded",
+            "Backgrounding must cancel active ASR with an explicit lifecycle failure.");
+        Require(platform.ReleaseCalls == 1, "Backgrounded ASR must release focus exactly once.");
+        Require(coordinator.IsApplicationPaused, "Coordinator must reject new audio while backgrounded.");
+
+        int requestsBeforeBlockedAcquire = platform.RequestCalls;
+        SpeechAudioAcquireResult blocked = await coordinator.AcquireAsync(
+            SpeechAudioRole.Listening,
+            CancellationToken.None).ConfigureAwait(false);
+        Require(
+            !blocked.IsGranted &&
+            blocked.Error?.Code == "speech_audio_lifecycle_suspended",
+            "Backgrounded speech audio must fail closed without touching the platform.");
+        Require(
+            platform.RequestCalls == requestsBeforeBlockedAcquire,
+            "Backgrounded speech audio must not start another focus request.");
+
+        coordinator.ResumeAfterApplicationInterruption();
+        SpeechAudioAcquireResult resumed = await coordinator.AcquireAsync(
+            SpeechAudioRole.Listening,
+            CancellationToken.None).ConfigureAwait(false);
+        Require(resumed.IsGranted && resumed.Lease != null, "Foreground resume must permit a new audio session.");
+        _ = await resumed.Lease!.ReleaseAsync().ConfigureAwait(false);
     }
 
     private static Task FocusLossIsVisible() =>

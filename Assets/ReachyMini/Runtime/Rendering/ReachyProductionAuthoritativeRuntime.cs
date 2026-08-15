@@ -168,6 +168,78 @@ namespace ReachyMini.Rendering
             return result;
         }
 
+        public ReachySimulationControlResult PauseForApplicationInterruption()
+        {
+            ReachySimulationWorker? activeWorker = worker;
+            if (activeWorker == null)
+            {
+                return ReachySimulationControlResult.Failure(
+                    ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidHandle,
+                        ReachySimRecoverability.RecreateHandle,
+                        "The production simulation worker is unavailable for application pause."));
+            }
+            if (Status == ReachyProductionRuntimeStatus.Paused)
+            {
+                return ReachySimulationControlResult.Success(
+                    ReachySimulationRunState.Paused);
+            }
+            if (Status != ReachyProductionRuntimeStatus.Running)
+            {
+                return ReachySimulationControlResult.Failure(
+                    activeWorker.State,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidArgument,
+                        ReachySimRecoverability.Retry,
+                        $"Cannot pause the production runtime while it is {Status}."));
+            }
+
+            ReachySimulationControlResult result =
+                activeWorker.Pause(ControlTimeout);
+            if (result.IsSuccess)
+            {
+                Status = ReachyProductionRuntimeStatus.Paused;
+            }
+            return result;
+        }
+
+        public ReachySimulationControlResult ResumeAfterApplicationInterruption()
+        {
+            ReachySimulationWorker? activeWorker = worker;
+            if (activeWorker == null)
+            {
+                return ReachySimulationControlResult.Failure(
+                    ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidHandle,
+                        ReachySimRecoverability.RecreateHandle,
+                        "The production simulation worker is unavailable for application resume."));
+            }
+            if (Status == ReachyProductionRuntimeStatus.Running)
+            {
+                return ReachySimulationControlResult.Success(
+                    ReachySimulationRunState.Running);
+            }
+            if (Status != ReachyProductionRuntimeStatus.Paused)
+            {
+                return ReachySimulationControlResult.Failure(
+                    activeWorker.State,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidArgument,
+                        ReachySimRecoverability.Retry,
+                        $"Cannot resume the production runtime while it is {Status}."));
+            }
+
+            ReachySimulationControlResult result =
+                activeWorker.Resume(ControlTimeout);
+            if (result.IsSuccess)
+            {
+                Status = ReachyProductionRuntimeStatus.Running;
+            }
+            return result;
+        }
+
         public ReachySimulationControlResult ResetNeutral()
         {
             if (worker == null)
@@ -256,44 +328,6 @@ namespace ReachyMini.Rendering
                     string.IsNullOrWhiteSpace(renderer.Fault)
                         ? "The authoritative renderer faulted without diagnostics."
                         : renderer.Fault);
-            }
-        }
-
-        private void OnApplicationPause(bool paused)
-        {
-            ReachySimulationWorker? activeWorker = worker;
-            if (activeWorker == null || shuttingDown)
-            {
-                return;
-            }
-
-            ReachySimulationControlResult result;
-            if (paused && Status == ReachyProductionRuntimeStatus.Running)
-            {
-                result = activeWorker.Pause(ControlTimeout);
-                if (result.IsSuccess)
-                {
-                    Status = ReachyProductionRuntimeStatus.Paused;
-                }
-            }
-            else if (!paused && Status == ReachyProductionRuntimeStatus.Paused)
-            {
-                result = activeWorker.Resume(ControlTimeout);
-                if (result.IsSuccess)
-                {
-                    Status = ReachyProductionRuntimeStatus.Running;
-                }
-            }
-            else
-            {
-                return;
-            }
-
-            if (!result.IsSuccess)
-            {
-                EnterFault(
-                    $"Simulation lifecycle transition failed: " +
-                    $"{result.Error.Code}: {result.Error.Message}");
             }
         }
 

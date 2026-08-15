@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace ReachyMini.Conversation
 {
-    public sealed class ReachyConversationStateMachine : IDisposable
+    public sealed partial class ReachyConversationStateMachine : IDisposable
     {
         private readonly object sync = new object();
         private readonly ReachyBargeInPolicy bargeInPolicy;

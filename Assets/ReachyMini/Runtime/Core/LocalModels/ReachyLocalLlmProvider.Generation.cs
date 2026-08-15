@@ -35,6 +35,14 @@ namespace ReachyMini.LocalModels
                         conversationEpoch,
                         "The local LLM provider is disposed."));
                 }
+                if (interruptionGate.IsPaused)
+                {
+                    return Task.FromResult(Result(
+                        LocalLlmGenerationStatus.Unavailable,
+                        request.RequestId,
+                        conversationEpoch,
+                        "Local LLM generation is suspended while the application is backgrounded."));
+                }
                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
                 {
                     return Task.FromResult(Result(
@@ -64,7 +72,7 @@ namespace ReachyMini.LocalModels
 
                 ulong epoch = conversationEpoch;
                 CancellationTokenSource linkedCancellation =
-                    CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    interruptionGate.CreateLinkedTokenSource(cancellationToken);
                 activeCancellation = linkedCancellation;
                 state = LocalLlmProviderState.Generating;
                 Task<LocalLlmGenerationResult> task = Task.Run(

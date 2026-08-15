@@ -2529,12 +2529,23 @@ Order of preservation:
 
 ## RMA-182 — Harden pause/resume and interruption handling
 
-- [ ] Pause simulation deterministically.
-- [ ] Stop/release camera and speech resources as required by lifecycle.
-- [ ] Cancel or suspend network and inference jobs safely.
-- [ ] Resume without simulation catch-up.
-- [ ] Restore UI/conversation to a defined state.
-- [ ] Test repeated background/foreground cycles.
+**Status:** Complete (2026-08-15)
+
+- [x] Pause simulation deterministically.
+- [x] Stop/release camera and speech resources as required by lifecycle.
+- [x] Cancel or suspend network and inference jobs safely.
+- [x] Resume without simulation catch-up.
+- [x] Restore UI/conversation to a defined state.
+- [x] Test repeated background/foreground cycles.
+
+**Completion evidence**
+
+- `ReachyApplicationInterruptionCoordinator` provides the single application-service pause/resume state machine, pausing dependents before dependencies and resuming dependencies before dependents with idempotent repeated callbacks and fail-closed transition faults.
+- `ReachySimulationWorker` retains its existing deterministic pause boundary and resets both the fixed-step accumulator and monotonic clock baseline on pause/resume, so elapsed background wall-clock time is never replayed as simulation catch-up.
+- CameraX acquisition now exposes explicit lifecycle pause/resume operations driven by `ReachyApplicationHostBehaviour`; resume revalidates camera permission before restoring the desired stream.
+- Speech focus, shared HTTP transport, local LLM generation, and VLM scheduling now expose lifecycle interruption hooks. Active work is cancelled, new work is rejected while backgrounded, and resume creates fresh work generations rather than restarting cancelled operations.
+- Conversation and main-screen state use lifecycle-owned interruption states. Active turns are cancelled; resume returns only lifecycle-owned state to Idle while preserving pre-existing Error/Unavailable conditions.
+- Managed contracts exercise deterministic ordering, cancellation, error preservation, and five repeated background/foreground cycles. Static design coverage and local validation are recorded in `docs/RMA_182_LIFECYCLE_HARDENING_SPEC_2026-08-15.md`, `docs/validation/RMA_182_LIFECYCLE_HARDENING_LOCAL_VALIDATION_2026-08-15.md`, and `scripts/tests/test_rma182_lifecycle_hardening.py`.
 
 ## RMA-183 — Handle memory and storage pressure
 

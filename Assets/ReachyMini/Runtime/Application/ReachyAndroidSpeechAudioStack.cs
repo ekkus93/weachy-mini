@@ -2,10 +2,13 @@
 
 using System;
 using System.Threading.Tasks;
+using ReachyMini.AppState;
 
 namespace ReachyMini.Speech
 {
-    public sealed class ReachyAndroidSpeechAudioStack : IAsyncDisposable
+    public sealed class ReachyAndroidSpeechAudioStack :
+        IAsyncDisposable,
+        IReachyApplicationInterruptionParticipant
     {
         internal ReachyAndroidSpeechAudioStack(
             IAsrProvider asr,
@@ -20,6 +23,16 @@ namespace ReachyMini.Speech
         public IAsrProvider Asr { get; }
         public ITtsProvider Tts { get; }
         public SpeechAudioFocusCoordinator Audio { get; }
+
+        public void PauseForApplicationInterruption()
+        {
+            Audio.PauseForApplicationInterruption();
+        }
+
+        public void ResumeAfterApplicationInterruption()
+        {
+            Audio.ResumeAfterApplicationInterruption();
+        }
 
         public async ValueTask DisposeAsync()
         {
