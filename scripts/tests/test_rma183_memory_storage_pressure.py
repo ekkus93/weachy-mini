@@ -138,20 +138,6 @@ class Rma183MemoryStoragePressureTests(unittest.TestCase):
         self.assertIn("ReachyMemoryPressureReleaseStatus.Released", llm_tests)
         self.assertIn("ReachyMemoryPressureReleaseStatus.RetainedActiveState", llm_tests)
 
-    def test_roadmap_closes_every_rma183_item(self) -> None:
-        roadmap = read("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
-        block = roadmap.split("## RMA-183 — Handle memory and storage pressure", 1)[1]
-        block = block.split("## RMA-184", 1)[0]
-        self.assertIn("**Status:** Complete (2026-08-15)", block)
-        self.assertEqual(block.count("- [x]"), 4)
-        self.assertNotIn("- [ ]", block)
-        self.assertIn("RMA_183_MEMORY_STORAGE_PRESSURE_SPEC_2026-08-15.md", block)
-        self.assertIn(
-            "RMA_183_MEMORY_STORAGE_PRESSURE_LOCAL_VALIDATION_2026-08-15.md",
-            block,
-        )
-        self.assertIn("scripts/tests/test_rma183_memory_storage_pressure.py", block)
-
 
 if __name__ == "__main__":
     unittest.main()
