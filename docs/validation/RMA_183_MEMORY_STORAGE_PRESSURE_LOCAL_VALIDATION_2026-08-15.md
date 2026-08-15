@@ -13,9 +13,8 @@ RMA-183 must make memory and storage pressure explicit without corrupting active
 - local-LLM registration, idle unload, active-generation retention, and disposal cleanup;
 - periodic model-download storage rechecks plus resumable-partial retention;
 - diagnostic export preflight and explicit insufficient-storage handling;
-- narrowly scoped cleanup UI wiring and durable-state preservation wording;
-- managed contract registration; and
-- closure of all four RMA-183 roadmap items.
+- narrowly scoped cleanup UI wiring and durable-state preservation wording; and
+- managed contract registration.
 
 ## Managed contracts
 
