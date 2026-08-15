@@ -31,9 +31,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
 
     def test_matrix_covers_three_classes_and_required_device_fields(self) -> None:
         data = json.loads(MATRIX.read_text(encoding="utf-8"))
-        classes = {
-            entry["performance_class"] for entry in data["representative_devices"]
-        }
+        classes = {entry["performance_class"] for entry in data["representative_devices"]}
         self.assertTrue({"low", "mid", "high"}.issubset(classes))
         for entry in data["representative_devices"]:
             for key in (

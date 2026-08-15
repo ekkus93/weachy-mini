@@ -8,9 +8,7 @@ APP = ROOT / "Assets/ReachyMini/Runtime/Application"
 
 class Rma163ImportedContentSecurityTests(unittest.TestCase):
     def test_imported_json_reads_are_bounded_and_strict_utf8(self) -> None:
-        policy = (CORE / "Security/ReachyImportedContentSecurity.cs").read_text(
-            encoding="utf-8"
-        )
+        policy = (CORE / "Security/ReachyImportedContentSecurity.cs").read_text(encoding="utf-8")
         for token in (
             "MaximumCameraCalibrationBytes",
             "MaximumLocalModelManifestBytes",
@@ -39,16 +37,14 @@ class Rma163ImportedContentSecurityTests(unittest.TestCase):
         settings = (APP / "ReachySettingsPersistence.cs").read_text(encoding="utf-8")
         self.assertIn("RequireBoundedUtf8Text", settings)
         self.assertNotIn("File.ReadAllText(backupPath)", settings)
-        readiness = (
-            CORE / "LocalModels/ReachyLocalModelPackageManager.Readiness.cs"
-        ).read_text(encoding="utf-8")
-        package_contracts = (
-            CORE / "LocalModels/ReachyLocalModelPackageContracts.cs"
-        ).read_text(encoding="utf-8")
-        self.assertIn("DefaultMaximumArtifactBytes", package_contracts)
-        self.assertIn(
-            "manifest.Artifact.FileSizeBytes > options.MaximumArtifactBytes", readiness
+        readiness = (CORE / "LocalModels/ReachyLocalModelPackageManager.Readiness.cs").read_text(
+            encoding="utf-8"
         )
+        package_contracts = (CORE / "LocalModels/ReachyLocalModelPackageContracts.cs").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("DefaultMaximumArtifactBytes", package_contracts)
+        self.assertIn("manifest.Artifact.FileSizeBytes > options.MaximumArtifactBytes", readiness)
         self.assertIn("ReachyImportedDocumentKind.LocalModelMetadata", readiness)
         self.assertNotIn("File.ReadAllText(markerPath", readiness)
         self.assertNotIn("File.ReadAllText(markerTemporaryPath", readiness)

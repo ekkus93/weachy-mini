@@ -70,10 +70,7 @@ def main() -> int:
         fail("RMA-184 state-lag target drifted")
     if measurement.get("minimum_local_llm_decode_tokens_per_second") != 1.0:
         fail("RMA-184 local LLM decode target drifted")
-    if (
-        measurement.get("thermal_degradation_contract")
-        != "rma181_priority_degradation_v1"
-    ):
+    if measurement.get("thermal_degradation_contract") != "rma181_priority_degradation_v1":
         fail("RMA-184 thermal policy must bind to RMA-181")
 
     devices = data.get("representative_devices")
@@ -116,10 +113,7 @@ def main() -> int:
             fail(f"RMA-184 RAM configuration missing for {device_id}")
         if device["graphics_api"] not in policy["supported_graphics_apis"]:
             fail(f"RMA-184 representative graphics API unsupported for {device_id}")
-        if (
-            device["measurement_status"].startswith("partial")
-            and not device["evidence"]
-        ):
+        if device["measurement_status"].startswith("partial") and not device["evidence"]:
             fail(f"RMA-184 measured/partial device needs evidence: {device_id}")
 
     core = CORE.read_text(encoding="utf-8")
