@@ -56,7 +56,7 @@ namespace ReachyMini.Tests
                 Is.False);
 
             ReachyAuthoritativeInvariantReport report =
-                renderer.LastInvariantReport;
+                renderer!.LastInvariantReport;
             Assert.That(report.WasEvaluated, Is.True);
             Assert.That(report.IsValid, Is.False);
             Assert.That(report.Sequence, Is.EqualTo(2UL));
@@ -114,7 +114,7 @@ namespace ReachyMini.Tests
                     () => renderer!.ValidateAuthoritativeStructure()),
                 Is.False);
             Assert.That(
-                renderer.Status,
+                renderer!.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
             StringAssert.Contains(expectedName, renderer.Fault);
         }

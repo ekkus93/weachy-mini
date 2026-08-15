@@ -258,7 +258,7 @@ namespace ReachyMini.Tests
 
             Assert.That(valid, Is.False);
             Assert.That(
-                renderer.Status,
+                renderer!.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
             StringAssert.Contains(nameof(Rigidbody), renderer.Fault);
         }
@@ -272,7 +272,7 @@ namespace ReachyMini.Tests
 
             Assert.That(valid, Is.False);
             Assert.That(
-                renderer.Status,
+                renderer!.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
             StringAssert.Contains(nameof(Animator), renderer.Fault);
         }
