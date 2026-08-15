@@ -1,3 +1,4 @@
+# Publication trigger revision 1: exact RMA-181 payload with hosted managed gates.
 name: RMA-181 priority degradation publication
 
 on:
