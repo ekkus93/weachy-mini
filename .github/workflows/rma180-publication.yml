@@ -1,3 +1,4 @@
+# Publication payload revision 2: verified binary parts are committed with this workflow.
 name: RMA-180 performance harness publication
 
 on:
