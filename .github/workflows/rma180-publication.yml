@@ -1,0 +1,101 @@
+name: RMA-180 performance harness publication
+
+on:
+  push:
+    branches:
+      - rma-180-publication
+    paths:
+      - .github/workflows/rma180-publication.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma-180-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out publication payload
+        uses: actions/checkout@v4
+        with:
+          ref: rma-180-publication
+          path: publication
+
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          path: target
+
+      - name: Reconstruct and verify exact RMA-180 patch
+        shell: bash
+        env:
+          EXPECTED_MASTER: 9b1d1274475db9e5e225afc1d20f2a1bd9cd225b
+          EXPECTED_PATCH_SHA256: 1135488cb3a75c83b00142107459530f4700cc7e2587469fcf611c26266f8342
+          EXPECTED_GZIP_SHA256: adffd3cd49df578d49ace34ec567391723f3d91f72d537402f2cdf87ce3071c3
+        run: |
+          set -euo pipefail
+          test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
+          cat publication/tools/rma180-publication/rma180.patch.gz.part-* \
+            > "${RUNNER_TEMP}/rma180.patch.gz"
+          printf '%s  %s\n' \
+            "${EXPECTED_GZIP_SHA256}" \
+            "${RUNNER_TEMP}/rma180.patch.gz" \
+            | sha256sum --check --strict
+          gzip -t "${RUNNER_TEMP}/rma180.patch.gz"
+          gzip --decompress --stdout "${RUNNER_TEMP}/rma180.patch.gz" \
+            > "${RUNNER_TEMP}/rma180.patch"
+          printf '%s  %s\n' \
+            "${EXPECTED_PATCH_SHA256}" \
+            "${RUNNER_TEMP}/rma180.patch" \
+            | sha256sum --check --strict
+          git -C target apply --check "${RUNNER_TEMP}/rma180.patch"
+          git -C target apply "${RUNNER_TEMP}/rma180.patch"
+          git -C target diff --check
+
+      - name: Run current repository static gate
+        shell: bash
+        working-directory: target
+        env:
+          TERM: xterm
+        run: |
+          set -euo pipefail
+          bash scripts/ci.sh --static-only
+          git diff --check
+
+      - name: Run managed core contracts
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release \
+            --no-restore
+
+      - name: Commit exact validated RMA-180 integration
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "RMA-180: add performance harness"
+
+      - name: Fast-forward master if unchanged
+        shell: bash
+        working-directory: target
+        env:
+          EXPECTED_MASTER: 9b1d1274475db9e5e225afc1d20f2a1bd9cd225b
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          test "$(git rev-parse origin/master)" = "${EXPECTED_MASTER}"
+          git push origin HEAD:master
