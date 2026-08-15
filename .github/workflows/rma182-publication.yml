@@ -35,6 +35,7 @@ jobs:
         env:
           EXPECTED_MASTER: a7d165d781f3492b7c9418323ba6c0bc71a1b3da
           EXPECTED_PATCH_SHA256: 166025efde270b6f6ba40edac36c50fb9cb7b8019e5873ebf67ba15e50554c5a
+          EXPECTED_CA2000_FIX_SHA256: 4f32202a14470a73a665f494ee1ef1b75a25f22f3e1e7a0f1c6e65cb92b55a5b
           EXPECTED_TRANSFORM_SHA256: 988cc211b772013716424720ebaa3014df8374de6064da9361980ffc62044761
         run: |
           set -euo pipefail
@@ -70,6 +71,15 @@ jobs:
 
           git -C target apply --check "${patch_payload}"
           git -C target apply "${patch_payload}"
+
+          ca2000_fix="${PWD}/publication/tools/rma182-publication/rma182-ca2000-fix.patch"
+          printf '%s  %s\n' \
+            "${EXPECTED_CA2000_FIX_SHA256}" \
+            "${ca2000_fix}" \
+            | sha256sum --check --strict
+          git -C target apply --check "${ca2000_fix}"
+          git -C target apply "${ca2000_fix}"
+
           python3 publication/tools/rma182-publication/apply_remote_transforms.py target
           git -C target diff --check
 
