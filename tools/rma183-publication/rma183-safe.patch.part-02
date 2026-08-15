@@ -1,0 +1,406 @@
+                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
+                 {
+                     return new LocalLlmReloadResult(
+@@ -264,6 +273,7 @@ namespace ReachyMini.LocalModels
+         {
+             interruptionGate.Dispose();
+             Task<LocalLlmGenerationResult>? activeTask;
++            Task? pressureReleaseTask;
+             CancellationTokenSource? cancellation;
+             lock (sync)
+             {
+@@ -275,6 +285,7 @@ namespace ReachyMini.LocalModels
+                 conversationEpoch = NextEpoch(conversationEpoch);
+                 cancellation = activeCancellation;
+                 activeTask = activeGenerationTask;
++                pressureReleaseTask = memoryPressureReleaseCompletion?.Task;
+                 cancellation?.Cancel();
+             }
+ 
+@@ -282,6 +293,10 @@ namespace ReachyMini.LocalModels
+             {
+                 await activeTask.ConfigureAwait(false);
+             }
++            if (pressureReleaseTask != null)
++            {
++                await pressureReleaseTask.ConfigureAwait(false);
++            }
+ 
+             ulong handle;
+             lock (sync)
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
+index 5028860..1545eb8 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
+@@ -43,6 +43,14 @@ namespace ReachyMini.LocalModels
+                         conversationEpoch,
+                         "Local LLM generation is suspended while the application is backgrounded."));
+                 }
++                if (memoryPressureReleasePending)
++                {
++                    return Task.FromResult(Result(
++                        LocalLlmGenerationStatus.Unavailable,
++                        request.RequestId,
++                        conversationEpoch,
++                        "Local LLM generation is unavailable while memory-pressure release is active."));
++                }
+                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
+                 {
+                     return Task.FromResult(Result(
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.MemoryPressure.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.MemoryPressure.cs
+new file mode 100644
+index 0000000..850efdb
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.MemoryPressure.cs
+@@ -0,0 +1,150 @@
++#nullable enable
++
++using System;
++using System.Threading;
++using System.Threading.Tasks;
++using ReachyMini.AppState;
++using ReachyMini.Interop;
++
++namespace ReachyMini.LocalModels
++{
++    public sealed partial class LocalLlmProvider : IReachyMemoryPressureTarget
++    {
++        public string MemoryPressureTargetId => "local-llm-model";
++
++        public async ValueTask<ReachyMemoryPressureTargetResult>
++            ApplyMemoryPressureAsync(ReachyMemoryPressureSignal signal)
++        {
++            if (signal == null)
++            {
++                throw new ArgumentNullException(nameof(signal));
++            }
++            if (signal.Level != ReachyMemoryPressureLevel.Critical)
++            {
++                return new ReachyMemoryPressureTargetResult(
++                    MemoryPressureTargetId,
++                    succeeded: true,
++                    releasedResources: false,
++                    "The loaded local LLM is retained below critical memory pressure.");
++            }
++
++            Task<LocalLlmGenerationResult>? activeTask;
++            CancellationTokenSource? cancellation;
++            lock (sync)
++            {
++                if (state == LocalLlmProviderState.Disposed)
++                {
++                    return new ReachyMemoryPressureTargetResult(
++                        MemoryPressureTargetId,
++                        succeeded: true,
++                        releasedResources: false,
++                        "The local LLM provider is already disposed.");
++                }
++                if (memoryPressureReleasePending)
++                {
++                    return new ReachyMemoryPressureTargetResult(
++                        MemoryPressureTargetId,
++                        succeeded: true,
++                        releasedResources: false,
++                        "A local LLM memory-pressure release is already active.");
++                }
++                if (state == LocalLlmProviderState.Loading)
++                {
++                    return new ReachyMemoryPressureTargetResult(
++                        MemoryPressureTargetId,
++                        succeeded: false,
++                        releasedResources: false,
++                        "Critical memory-pressure release was deferred because a local LLM model lifecycle operation is active.");
++                }
++
++                memoryPressureReleasePending = true;
++                memoryPressureReleaseCompletion = new TaskCompletionSource<bool>(
++                    TaskCreationOptions.RunContinuationsAsynchronously);
++                conversationEpoch = NextEpoch(conversationEpoch);
++                cancellation = activeCancellation;
++                activeTask = activeGenerationTask;
++                cancellation?.Cancel();
++            }
++
++            try
++            {
++                if (activeTask != null)
++                {
++                    await activeTask.ConfigureAwait(false);
++                }
++
++                ulong handle;
++                lock (sync)
++                {
++                    if (state == LocalLlmProviderState.Disposed)
++                    {
++                        return new ReachyMemoryPressureTargetResult(
++                            MemoryPressureTargetId,
++                            succeeded: true,
++                            releasedResources: false,
++                            "The local LLM provider was disposed while pressure release was draining.");
++                    }
++                    handle = modelHandle;
++                    if (handle == 0UL)
++                    {
++                        state = LocalLlmProviderState.Unavailable;
++                        return new ReachyMemoryPressureTargetResult(
++                            MemoryPressureTargetId,
++                            succeeded: true,
++                            releasedResources: false,
++                            "No loaded local LLM model remained to release.");
++                    }
++                    // Claim this handle before crossing the async unload boundary.
++                    // DisposeAsync can then observe that pressure release owns the
++                    // native unload and wait for its completion instead of double-unloading.
++                    modelHandle = 0UL;
++                    state = LocalLlmProviderState.Loading;
++                }
++
++                LocalLlmRuntimeCallResult unload = await Task.Run(
++                    () => runtime.UnloadModel(handle),
++                    CancellationToken.None).ConfigureAwait(false);
++                lock (sync)
++                {
++                    if (state != LocalLlmProviderState.Disposed)
++                    {
++                        if (unload.Succeeded)
++                        {
++                            modelHandle = 0UL;
++                            state = LocalLlmProviderState.Unavailable;
++                        }
++                        else
++                        {
++                            modelHandle = handle;
++                            state = LocalLlmProviderState.Faulted;
++                        }
++                    }
++                }
++
++                return unload.Succeeded
++                    ? new ReachyMemoryPressureTargetResult(
++                        MemoryPressureTargetId,
++                        succeeded: true,
++                        releasedResources: true,
++                        "The optional local LLM model was unloaded after active generation drained.")
++                    : new ReachyMemoryPressureTargetResult(
++                        MemoryPressureTargetId,
++                        succeeded: false,
++                        releasedResources: false,
++                        "The local LLM runtime could not unload the model under memory pressure (" +
++                        unload.Status + ").");
++            }
++            finally
++            {
++                TaskCompletionSource<bool>? completion;
++                lock (sync)
++                {
++                    memoryPressureReleasePending = false;
++                    completion = memoryPressureReleaseCompletion;
++                    memoryPressureReleaseCompletion = null;
++                }
++                completion?.TrySetResult(true);
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs
+index 6a03a72..7528089 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageContracts.cs
+@@ -16,6 +16,9 @@ namespace ReachyMini.LocalModels
+         public const int CopyBufferBytes = 128 * 1024;
+ 
+         public const int MaximumDownloadUriLength = 2048;
++
++        public const string OwnershipMarkerFileName =
++            ".reachy-local-model-store-v1";
+     }
+ 
+     public enum LocalModelPackageFailure
+@@ -34,6 +37,7 @@ namespace ReachyMini.LocalModels
+         IoFailure = 11,
+         NotInstalled = 12,
+         InstalledArtifactCorrupt = 13,
++        OperationBusy = 14,
+     }
+ 
+     public enum LocalModelPackageOutcome
+@@ -381,4 +385,40 @@ namespace ReachyMini.LocalModels
+ 
+         public int CorruptKnownArtifacts { get; }
+     }
++    public sealed class LocalModelTransientCleanupReport
++    {
++        internal LocalModelTransientCleanupReport(
++            bool succeeded,
++            LocalModelPackageFailure failure,
++            string detail,
++            int removedEntries,
++            long bytesFreed)
++        {
++            if (removedEntries < 0)
++            {
++                throw new ArgumentOutOfRangeException(nameof(removedEntries));
++            }
++            if (bytesFreed < 0L)
++            {
++                throw new ArgumentOutOfRangeException(nameof(bytesFreed));
++            }
++
++            Succeeded = succeeded;
++            Failure = failure;
++            Detail = detail ?? string.Empty;
++            RemovedEntries = removedEntries;
++            BytesFreed = bytesFreed;
++        }
++
++        public bool Succeeded { get; }
++
++        public LocalModelPackageFailure Failure { get; }
++
++        public string Detail { get; }
++
++        public int RemovedEntries { get; }
++
++        public long BytesFreed { get; }
++    }
++
+ }
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs
+index 1ca9dfb..cf41077 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs
+@@ -105,6 +105,12 @@ namespace ReachyMini.LocalModels
+                     return IoFailure("Import write was denied", exception);
+                 }
+ 
++                if (copy.StorageFailure != null)
++                {
++                    DeleteFileIfPresent(partPath);
++                    return copy.StorageFailure;
++                }
++
+                 if (copy.HasExtraBytes ||
+                     copy.BytesWritten != manifest.Artifact.FileSizeBytes)
+                 {
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs
+index 6ced7c9..b763141 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs
+@@ -241,6 +241,103 @@ namespace ReachyMini.LocalModels
+             }
+         }
+ 
++        public LocalModelTransientCleanupReport CleanupTransientStorage()
++        {
++            ThrowIfDisposed();
++            if (!operationGate.Wait(0))
++            {
++                return new LocalModelTransientCleanupReport(
++                    false,
++                    LocalModelPackageFailure.OperationBusy,
++                    "Transient local-model cleanup was deferred because a package operation is active.",
++                    0,
++                    0L);
++            }
++
++            try
++            {
++                LocalModelPackageResult? readiness = EnsureStoreReady();
++                if (readiness != null)
++                {
++                    return new LocalModelTransientCleanupReport(
++                        false,
++                        readiness.Failure,
++                        readiness.Detail,
++                        0,
++                        0L);
++                }
++
++                long bytesBefore = checked(
++                    MeasureManagedTreeBytes(stagingRoot) +
++                    MeasureManagedTreeBytes(quarantineRoot));
++                int removed =
++                    RemoveAllChildrenNoFollow(stagingRoot, CancellationToken.None) +
++                    RemoveAllChildrenNoFollow(quarantineRoot, CancellationToken.None);
++                return new LocalModelTransientCleanupReport(
++                    true,
++                    LocalModelPackageFailure.None,
++                    "Transient local-model staging and quarantine data were removed; installed verified models were preserved.",
++                    removed,
++                    bytesBefore);
++            }
++            catch (IOException exception)
++            {
++                return new LocalModelTransientCleanupReport(
++                    false,
++                    LocalModelPackageFailure.IoFailure,
++                    SafeIoDetail("Transient local-model cleanup failed", exception),
++                    0,
++                    0L);
++            }
++            catch (UnauthorizedAccessException exception)
++            {
++                return new LocalModelTransientCleanupReport(
++                    false,
++                    LocalModelPackageFailure.IoFailure,
++                    SafeIoDetail("Transient local-model cleanup was denied", exception),
++                    0,
++                    0L);
++            }
++            finally
++            {
++                operationGate.Release();
++            }
++        }
++
++        private long MeasureManagedTreeBytes(string directory)
++        {
++            if (!Directory.Exists(directory))
++            {
++                return 0L;
++            }
++
++            long total = 0L;
++            var pending = new Stack<string>();
++            pending.Push(directory);
++            while (pending.Count > 0)
++            {
++                string current = pending.Pop();
++                string[] entries = Directory.GetFileSystemEntries(current);
++                for (int index = 0; index < entries.Length; ++index)
++                {
++                    string entry = RequireContainedPath(entries[index]);
++                    if (IsReparsePoint(entry))
++                    {
++                        continue;
++                    }
++                    if (Directory.Exists(entry))
++                    {
++                        pending.Push(entry);
++                    }
++                    else if (File.Exists(entry))
++                    {
++                        total = checked(total + new FileInfo(entry).Length);
++                    }
++                }
++            }
++            return total;
++        }
++
+         private int RemoveStagingOrphans(
+             string managedRoot,
+             HashSet<string> expectedDirectories,
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs
+index 2e86e5e..de9c713 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs
+@@ -12,7 +12,7 @@ namespace ReachyMini.LocalModels
+ {
+     public sealed partial class LocalModelPackageManager
+     {
+-        private static async Task<CopyExactResult> CopyExactAsync(
++        private async Task<CopyExactResult> CopyExactAsync(
+             Stream source,
+             string destinationPath,
+             long maximumBytes,
