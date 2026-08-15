@@ -1,4 +1,4 @@
-# Publication trigger revision 3: representation-agnostic transport with exact patch verification.
+# Publication trigger revision 4: canonical UTF-8 base64 parts with layered checksums.
 name: RMA-181 priority degradation publication
 
 on:
@@ -35,33 +35,49 @@ jobs:
         shell: bash
         env:
           EXPECTED_MASTER: 6e92b3bb0893c8c8f021d10379dd8659fadb5a26
+          EXPECTED_BASE64_SHA256: 808560a0cbfbb9d5b593c9cd4762b27f693525c254ee51156d0293160e997580
+          EXPECTED_GZIP_SHA256: 9a5f0c2807b345dd08a7a8f9a2f13a565bbf9e4827c57494844630ca26c64633
           EXPECTED_PATCH_SHA256: c1705dbcc049a207860f8f28d1908f38345b49e9a944d0bfa3449ae61876a329
         run: |
           set -euo pipefail
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
 
-          payload="publication/tools/rma181-publication/rma181.patch.gz"
+          parts_dir="publication/tools/rma181-publication"
+          base64_payload="${RUNNER_TEMP}/rma181.patch.gz.b64"
           gzip_payload="${RUNNER_TEMP}/rma181.patch.gz"
           patch_payload="${RUNNER_TEMP}/rma181.patch"
 
-          # GitHub/content tooling can surface this payload either as the raw gzip
-          # bytes or as their base64 text representation. Normalize either form,
-          # then trust only the decompressed patch's pinned SHA-256.
-          if gzip -t "${payload}" 2>/dev/null; then
-            cp "${payload}" "${gzip_payload}"
-          else
-            base64 --decode "${payload}" > "${gzip_payload}"
-            gzip -t "${gzip_payload}"
-          fi
+          # Every publication fragment is ordinary UTF-8/ASCII text written via
+          # GitHub's contents API. Verify each fragment before concatenation so
+          # a missing, reordered, normalized, or modified part fails closed.
+          cat <<'SUMS' | sha256sum --check --strict
+          bae3000459dc0052cad32a1d6481df48d2d4f2cba7cd995e717450d22b947453  publication/tools/rma181-publication/rma181.patch.gz.b64.part-00
+          805a283abc0a1abe1d15cae217ece5551e951b945f3d9499d52e66052fe0119e  publication/tools/rma181-publication/rma181.patch.gz.b64.part-01
+          1479f537f8b7a2360ebf4d3f29e5cf8cf88cb9943bab7a7792060b1acc97eb1f  publication/tools/rma181-publication/rma181.patch.gz.b64.part-02
+          51f3099f0795991623153752c883e38dbca3add3ff3d15ec305c23759cb64359  publication/tools/rma181-publication/rma181.patch.gz.b64.part-03
+          1db5d1b5c8eb92fff9b169ef3e390635c45d067f8129df19a5785eda5d9dddb1  publication/tools/rma181-publication/rma181.patch.gz.b64.part-04
+          621394bb2dfdd35ed19ae69aa2aed468b76980de3e1a6d1bf6daa7a6ac7e01d2  publication/tools/rma181-publication/rma181.patch.gz.b64.part-05
+          SUMS
 
-          gzip --decompress --stdout \
+          cat "${parts_dir}"/rma181.patch.gz.b64.part-* > "${base64_payload}"
+          printf '%s  %s\n' \
+            "${EXPECTED_BASE64_SHA256}" \
+            "${base64_payload}" \
+            | sha256sum --check --strict
+
+          base64 --decode "${base64_payload}" > "${gzip_payload}"
+          printf '%s  %s\n' \
+            "${EXPECTED_GZIP_SHA256}" \
             "${gzip_payload}" \
-            > "${patch_payload}"
+            | sha256sum --check --strict
+          gzip -t "${gzip_payload}"
 
+          gzip --decompress --stdout "${gzip_payload}" > "${patch_payload}"
           printf '%s  %s\n' \
             "${EXPECTED_PATCH_SHA256}" \
             "${patch_payload}" \
             | sha256sum --check --strict
+
           git -C target apply --check "${patch_payload}"
           git -C target apply "${patch_payload}"
           git -C target diff --check
