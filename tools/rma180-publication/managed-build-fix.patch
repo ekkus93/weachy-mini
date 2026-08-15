@@ -48,6 +48,15 @@ diff --git a/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleEx
                  ? new[]
                  {
                      snapshot.Simulation,
+@@ -230,7 +234,7 @@ namespace ReachyMini.Diagnostics
+                 };
+ 
+             var builder = new StringBuilder(4096).Append("{\"sections\":[");
+-            for (int sectionIndex = 0; sectionIndex < sections.Count; ++sectionIndex)
++            for (int sectionIndex = 0; sectionIndex < sections.Length; ++sectionIndex)
+             {
+                 if (sectionIndex > 0)
+                 {
 @@ -454,9 +458,9 @@ namespace ReachyMini.Diagnostics
                  ReachyDiagnosticBundleSecurityPolicy.RequireExportable(
                      ReachyDiagnosticArtifactKind.RedactedText);
