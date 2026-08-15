@@ -1,0 +1,440 @@
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs
+@@ -0,0 +1,52 @@
++#nullable enable
++
++namespace ReachyMini.AppState
++{
++    public sealed partial class ReachyMainScreenStateStore
++    {
++        private bool lifecycleOwnsInteractionState;
++
++        public ReachyMainScreenSnapshot PauseForApplicationInterruption()
++        {
++            if (current.InteractionState == ReachyInteractionState.Error ||
++                current.InteractionState == ReachyInteractionState.Unavailable)
++            {
++                lifecycleOwnsInteractionState = false;
++                return current;
++            }
++
++            lifecycleOwnsInteractionState = true;
++            Publish(
++                ReachyInteractionState.Interrupted,
++                "Application paused; active interaction work was cancelled.",
++                current.ActiveCamera,
++                current.CameraSelectionAvailable,
++                current.ActiveProvider,
++                current.ProviderLocation,
++                current.MicrophoneAvailable,
++                settingsVisible: false,
++                diagnosticsVisible: false);
++            return current;
++        }
++
++        public ReachyMainScreenSnapshot ResumeAfterApplicationInterruption()
++        {
++            if (lifecycleOwnsInteractionState &&
++                current.InteractionState == ReachyInteractionState.Interrupted)
++            {
++                Publish(
++                    ReachyInteractionState.Idle,
++                    "Application resumed; start a new interaction to continue.",
++                    current.ActiveCamera,
++                    current.CameraSelectionAvailable,
++                    current.ActiveProvider,
++                    current.ProviderLocation,
++                    current.MicrophoneAvailable,
++                    settingsVisible: false,
++                    diagnosticsVisible: false);
++            }
++            lifecycleOwnsInteractionState = false;
++            return current;
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs
+index 34827e3..138bd20 100644
+--- a/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs
+@@ -104,7 +104,7 @@ namespace ReachyMini.AppState
+         public ReachyMainScreenSnapshot Snapshot { get; }
+     }
+ 
+-    public sealed class ReachyMainScreenStateStore
++    public sealed partial class ReachyMainScreenStateStore
+     {
+         private ReachyMainScreenSnapshot current = new ReachyMainScreenSnapshot(
+             ReachyInteractionState.Idle,
+diff --git a/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.Lifecycle.cs
+new file mode 100644
+index 0000000..3c7782f
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.Lifecycle.cs
+@@ -0,0 +1,72 @@
++#nullable enable
++
++using System.Threading;
++
++namespace ReachyMini.Conversation
++{
++    public sealed partial class ReachyConversationStateMachine
++    {
++        private const string LifecyclePausedStatusCode =
++            "unavailable-lifecycle-paused";
++
++        private bool lifecycleSuspended;
++        private bool lifecycleOwnsUnavailableState;
++
++        public ReachyConversationSnapshot SuspendForApplicationInterruption()
++        {
++            CancellationTokenSource? cancellation = null;
++            ReachyConversationSnapshot snapshot;
++            lock (sync)
++            {
++                ThrowIfDisposed();
++                if (lifecycleSuspended)
++                {
++                    return Snapshot();
++                }
++
++                lifecycleSuspended = true;
++                lifecycleOwnsUnavailableState =
++                    state != ReachyConversationState.Unavailable &&
++                    state != ReachyConversationState.Error;
++                if (lifecycleOwnsUnavailableState)
++                {
++                    cancellation = DetachOperation();
++                    SetPassiveState(
++                        ReachyConversationState.Unavailable,
++                        LifecyclePausedStatusCode);
++                }
++                snapshot = Snapshot();
++            }
++
++            CancelAndDispose(cancellation);
++            return snapshot;
++        }
++
++        public ReachyConversationSnapshot ResumeAfterApplicationInterruption()
++        {
++            lock (sync)
++            {
++                ThrowIfDisposed();
++                if (!lifecycleSuspended)
++                {
++                    return Snapshot();
++                }
++
++                lifecycleSuspended = false;
++                if (lifecycleOwnsUnavailableState &&
++                    state == ReachyConversationState.Unavailable &&
++                    string.Equals(
++                        statusCode,
++                        LifecyclePausedStatusCode,
++                        System.StringComparison.Ordinal))
++                {
++                    SetPassiveState(
++                        ReachyConversationState.Idle,
++                        "idle");
++                }
++                lifecycleOwnsUnavailableState = false;
++                return Snapshot();
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs b/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs
+index bc7f07c..8243108 100644
+--- a/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs
++++ b/Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs
+@@ -5,7 +5,7 @@ using System.Threading;
+ 
+ namespace ReachyMini.Conversation
+ {
+-    public sealed class ReachyConversationStateMachine : IDisposable
++    public sealed partial class ReachyConversationStateMachine : IDisposable
+     {
+         private readonly object sync = new object();
+         private readonly ReachyBargeInPolicy bargeInPolicy;
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
+index bbff636..fadb133 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs
+@@ -124,6 +124,13 @@ namespace ReachyMini.LocalModels
+                         "The local LLM provider is disposed.",
+                         ReachyLlamaNativeContract.StatusNotFound);
+                 }
++                if (interruptionGate.IsPaused)
++                {
++                    return new LocalLlmReloadResult(
++                        LocalLlmReloadStatus.Unavailable,
++                        "Local LLM reload is suspended while the application is backgrounded.",
++                        ReachyLlamaNativeContract.StatusCancelled);
++                }
+                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
+                 {
+                     return new LocalLlmReloadResult(
+@@ -255,6 +262,7 @@ namespace ReachyMini.LocalModels
+ 
+         public async ValueTask DisposeAsync()
+         {
++            interruptionGate.Dispose();
+             Task<LocalLlmGenerationResult>? activeTask;
+             CancellationTokenSource? cancellation;
+             lock (sync)
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
+index 98f41a6..5028860 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs
+@@ -35,6 +35,14 @@ namespace ReachyMini.LocalModels
+                         conversationEpoch,
+                         "The local LLM provider is disposed."));
+                 }
++                if (interruptionGate.IsPaused)
++                {
++                    return Task.FromResult(Result(
++                        LocalLlmGenerationStatus.Unavailable,
++                        request.RequestId,
++                        conversationEpoch,
++                        "Local LLM generation is suspended while the application is backgrounded."));
++                }
+                 if (state == LocalLlmProviderState.Generating || activeGenerationTask != null)
+                 {
+                     return Task.FromResult(Result(
+@@ -64,7 +72,7 @@ namespace ReachyMini.LocalModels
+ 
+                 ulong epoch = conversationEpoch;
+                 CancellationTokenSource linkedCancellation =
+-                    CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
++                    interruptionGate.CreateLinkedTokenSource(cancellationToken);
+                 activeCancellation = linkedCancellation;
+                 state = LocalLlmProviderState.Generating;
+                 Task<LocalLlmGenerationResult> task = Task.Run(
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Lifecycle.cs
+new file mode 100644
+index 0000000..391ba6e
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Lifecycle.cs
+@@ -0,0 +1,25 @@
++#nullable enable
++
++using ReachyMini.AppState;
++
++namespace ReachyMini.LocalModels
++{
++    public sealed partial class LocalLlmProvider :
++        IReachyApplicationInterruptionParticipant
++    {
++        private readonly ReachyApplicationInterruptionGate interruptionGate =
++            new ReachyApplicationInterruptionGate();
++
++        public bool IsApplicationPaused => interruptionGate.IsPaused;
++
++        public void PauseForApplicationInterruption()
++        {
++            interruptionGate.PauseForApplicationInterruption();
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            interruptionGate.ResumeAfterApplicationInterruption();
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.Lifecycle.cs
+new file mode 100644
+index 0000000..138d890
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.Lifecycle.cs
+@@ -0,0 +1,71 @@
++#nullable enable
++
++using System;
++using System.Collections.Generic;
++using ReachyMini.AppState;
++
++namespace ReachyMini.Perception
++{
++    public sealed partial class ReachyVlmScheduler :
++        IReachyApplicationInterruptionParticipant
++    {
++        private bool lifecycleSuspended;
++
++        public void PauseForApplicationInterruption()
++        {
++            var cancellationLeases = new List<VlmScheduleLease>();
++            lock (sync)
++            {
++                ThrowIfDisposed();
++                if (lifecycleSuspended)
++                {
++                    return;
++                }
++                lifecycleSuspended = true;
++                foreach (ProviderState state in providers.Values)
++                {
++                    foreach (VlmScheduleLease lease in state.ActiveRequests.Values)
++                    {
++                        if (lease.MarkCancellationRequested())
++                        {
++                            cancellationLeases.Add(lease);
++                        }
++                    }
++                }
++                cancellationRequestCount = checked(
++                    cancellationRequestCount + cancellationLeases.Count);
++            }
++
++            int callbackFailures = 0;
++            for (int index = 0; index < cancellationLeases.Count; ++index)
++            {
++                if (cancellationLeases[index].DispatchCancellation())
++                {
++                    callbackFailures = checked(callbackFailures + 1);
++                }
++            }
++            if (callbackFailures <= 0)
++            {
++                return;
++            }
++
++            lock (sync)
++            {
++                if (!disposed)
++                {
++                    cancellationCallbackFailureCount = checked(
++                        cancellationCallbackFailureCount + callbackFailures);
++                }
++            }
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            lock (sync)
++            {
++                ThrowIfDisposed();
++                lifecycleSuspended = false;
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs b/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs
+index b8b3964..66c5faa 100644
+--- a/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs
++++ b/Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs
+@@ -7,7 +7,7 @@ using ReachyMini.Performance;
+ 
+ namespace ReachyMini.Perception
+ {
+-    public sealed class ReachyVlmScheduler : IDisposable, IReachyPriorityDegradationTarget
++    public sealed partial class ReachyVlmScheduler : IDisposable, IReachyPriorityDegradationTarget
+     {
+         public const int MaximumProviderPolicies = 16;
+ 
+@@ -257,6 +257,15 @@ namespace ReachyMini.Perception
+             lock (sync)
+             {
+                 ThrowIfDisposed();
++                if (lifecycleSuspended)
++                {
++                    return Decision(
++                        VlmScheduleStatus.ResourceSuspended,
++                        null,
++                        null,
++                        0L,
++                        "VLM scheduling is suspended while the application is backgrounded; cancelled work is never restarted automatically.");
++                }
+                 if (prioritySuspended)
+                 {
+                     return Decision(
+diff --git a/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Core.cs b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Core.cs
+index 6ab0768..f5ed294 100644
+--- a/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Core.cs
++++ b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Core.cs
+@@ -104,7 +104,11 @@ namespace ReachyMini.Providers
+                         "HTTP transport is disposed."),
+                     1);
+             }
+-            if (cancellationToken.IsCancellationRequested)
++            using CancellationTokenSource lifecycleCancellation =
++                interruptionGate.CreateLinkedTokenSource(cancellationToken);
++            CancellationToken effectiveCancellationToken =
++                lifecycleCancellation.Token;
++            if (effectiveCancellationToken.IsCancellationRequested)
+             {
+                 return ReachyHttpTransportResult.Failure(
+                     Error(
+@@ -113,7 +117,7 @@ namespace ReachyMini.Providers
+                         null,
+                         null,
+                         false,
+-                        "HTTP request was cancelled before transport start."),
++                        "HTTP request was cancelled or suspended before transport start."),
+                     1);
+             }
+ 
+@@ -129,7 +133,7 @@ namespace ReachyMini.Providers
+                 AttemptResult attempt = await SendAttemptAsync(
+                         request,
+                         eventSink,
+-                        cancellationToken)
++                        effectiveCancellationToken)
+                     .ConfigureAwait(false);
+                 if (attempt.Result.Succeeded)
+                 {
+@@ -152,12 +156,12 @@ namespace ReachyMini.Providers
+                 TimeSpan delay = ComputeBackoff(attempts, attempt.RetryAfter);
+                 try
+                 {
+-                    await backoffDelay.DelayAsync(delay, cancellationToken)
++                    await backoffDelay.DelayAsync(delay, effectiveCancellationToken)
+                         .ConfigureAwait(false);
+                 }
+                 catch (OperationCanceledException)
+                 {
+-                    bool callerCancelled = cancellationToken.IsCancellationRequested;
++                    bool callerCancelled = effectiveCancellationToken.IsCancellationRequested;
+                     return ReachyHttpTransportResult.Failure(
+                         Error(
+                             callerCancelled
+@@ -184,6 +188,7 @@ namespace ReachyMini.Providers
+             {
+                 return;
+             }
++            interruptionGate.Dispose();
+             if (ownsClient)
+             {
+                 client.Dispose();
+diff --git a/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Lifecycle.cs
+new file mode 100644
+index 0000000..a103b05
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Lifecycle.cs
+@@ -0,0 +1,25 @@
++#nullable enable
++
++using ReachyMini.AppState;
++
++namespace ReachyMini.Providers
++{
++    public sealed partial class ReachySharedHttpTransport :
++        IReachyApplicationInterruptionParticipant
++    {
++        private readonly ReachyApplicationInterruptionGate interruptionGate =
++            new ReachyApplicationInterruptionGate();
++
++        public bool IsApplicationPaused => interruptionGate.IsPaused;
++
++        public void PauseForApplicationInterruption()
++        {
++            interruptionGate.PauseForApplicationInterruption();
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            interruptionGate.ResumeAfterApplicationInterruption();
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusContracts.cs b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusContracts.cs
+index e7d88f8..ee6ce0c 100644
