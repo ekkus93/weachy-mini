@@ -1,4 +1,4 @@
-# Publication payload revision 6: verified payload plus whitespace-safe managed-build/test compatibility fixes.
+# Publication payload revision 7: verified payload plus whitespace-safe managed-build/test compatibility fixes.
 name: RMA-180 performance harness publication
 
 on:
@@ -115,6 +115,16 @@ jobs:
             });''',
           )
 
+          replace_once(
+              "managed/ReachyMini.Core.Tests/Rma170StructuredDiagnosticsContractTests.cs",
+              "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
+              "if (!value.Contains(expected, StringComparison.Ordinal))",
+          )
+          replace_once(
+              "managed/ReachyMini.Core.Tests/Rma171DiagnosticsScreenContractTests.cs",
+              "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
+              "if (!value.Contains(expected, StringComparison.Ordinal))",
+          )
           replace_once(
               "managed/ReachyMini.Core.Tests/Rma172DiagnosticBundleExportContractTests.cs",
               "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
