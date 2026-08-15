@@ -43,13 +43,13 @@ namespace ReachyMini.AppState
     internal sealed class ReachyDiagnosticBundleExportCoordinator
     {
         private readonly ReachyDiagnosticsScreenSource diagnosticsSource;
-        private readonly ReachyDiagnosticBundleExporter exporter;
+        private readonly ReachyStorageAwareDiagnosticBundleExporter exporter;
         private readonly string outputDirectory;
 
         public ReachyDiagnosticBundleExportCoordinator(
             ReachyDiagnosticsScreenSource source,
             string diagnosticOutputDirectory,
-            ReachyDiagnosticBundleExporter? bundleExporter = null)
+            ReachyStorageAwareDiagnosticBundleExporter? bundleExporter = null)
         {
             diagnosticsSource = source ??
                 throw new ArgumentNullException(nameof(source));
@@ -61,7 +61,7 @@ namespace ReachyMini.AppState
             }
 
             outputDirectory = Path.GetFullPath(diagnosticOutputDirectory);
-            exporter = bundleExporter ?? new ReachyDiagnosticBundleExporter();
+            exporter = bundleExporter ?? new ReachyStorageAwareDiagnosticBundleExporter();
         }
 
         public ReachyDiagnosticBundleExportOutcome ExportRedactedBundle()
@@ -84,7 +84,6 @@ namespace ReachyMini.AppState
                     snapshot,
                     ReachyRuntimeDiagnostics.CaptureRecentRecords(),
                     ReachyRuntimeDiagnostics.DroppedCapturedRecordCount);
-                Directory.CreateDirectory(outputDirectory);
                 string outputPath = Path.Combine(
                     outputDirectory,
                     BuildFileName(DateTime.UtcNow));
@@ -111,6 +110,26 @@ namespace ReachyMini.AppState
                     true,
                     $"Redacted diagnostic bundle exported ({result.ByteCount} bytes). Sensitive content was excluded.",
                     result.FullPath);
+            }
+            catch (ReachyDiagnosticBundleInsufficientStorageException)
+            {
+                ReachyRuntimeDiagnostics.Emit(
+                    "diagnostics",
+                    ReachyDiagnosticEventIds.DiagnosticBundleExportFailed,
+                    ReachyDiagnosticSeverity.Warning,
+                    ReachyDiagnosticErrorCategory.Storage,
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "export_redacted_bundle",
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "failure",
+                        "insufficient_storage",
+                        ReachyDiagnosticDataClass.Identifier));
+                return new ReachyDiagnosticBundleExportOutcome(
+                    false,
+                    "Not enough free storage is available for a diagnostic bundle. " +
+                    "Use Recoverable Storage Cleanup and retry; sensitive content was not exported.");
             }
             catch (Exception exception)
             {

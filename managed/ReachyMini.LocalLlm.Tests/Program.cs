@@ -33,6 +33,9 @@ internal static partial class Program
         await TestOutOfMemoryCleanupFailureFaultsAsync().ConfigureAwait(false);
         await TestOutOfMemoryReloadRecoveryAndSecondGenerationAsync().ConfigureAwait(false);
         await TestReloadRecoveryAndDisposeAsync().ConfigureAwait(false);
-        Console.WriteLine("RMA-134 local LLM managed contracts passed (21 groups).");
+        await TestMemoryPressureReleasesOnlyIdleModelAsync().ConfigureAwait(false);
+        await TestMemoryPressureRetainsActiveGenerationAsync().ConfigureAwait(false);
+        await TestMemoryPressureRetainsActiveReloadAsync().ConfigureAwait(false);
+        Console.WriteLine("RMA-134/RMA-183 local LLM managed contracts passed (24 groups).");
     }
 }

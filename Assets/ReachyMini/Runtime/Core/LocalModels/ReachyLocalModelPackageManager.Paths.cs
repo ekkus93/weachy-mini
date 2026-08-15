@@ -12,7 +12,7 @@ namespace ReachyMini.LocalModels
 {
     public sealed partial class LocalModelPackageManager
     {
-        private static async Task<CopyExactResult> CopyExactAsync(
+        private async Task<CopyExactResult> CopyExactAsync(
             Stream source,
             string destinationPath,
             long maximumBytes,
@@ -21,6 +21,7 @@ namespace ReachyMini.LocalModels
         {
             var buffer = new byte[LocalModelPackagePolicy.CopyBufferBytes];
             long written = 0L;
+            long nextStorageCheck = LocalModelPackagePolicy.StorageRecheckIntervalBytes;
             FileMode mode = append ? FileMode.OpenOrCreate : FileMode.Create;
             using (var destination = new FileStream(
                 destinationPath,
@@ -37,6 +38,18 @@ namespace ReachyMini.LocalModels
 
                 while (written < maximumBytes)
                 {
+                    if (written >= nextStorageCheck)
+                    {
+                        LocalModelPackageResult? storageFailure =
+                            CheckStorage(maximumBytes - written);
+                        if (storageFailure != null)
+                        {
+                            throw new StoragePressureIOException(storageFailure);
+                        }
+                        nextStorageCheck = checked(
+                            written + LocalModelPackagePolicy.StorageRecheckIntervalBytes);
+                    }
+
                     int requestSize = (int)Math.Min(
                         buffer.Length,
                         maximumBytes - written);
@@ -48,10 +61,25 @@ namespace ReachyMini.LocalModels
                     {
                         break;
                     }
-                    await destination.WriteAsync(
-                            buffer.AsMemory(0, read),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                    try
+                    {
+                        await destination.WriteAsync(
+                                buffer.AsMemory(0, read),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (IOException exception)
+                    {
+                        LocalModelPackageResult? storageFailure =
+                            CheckStorage(maximumBytes - written);
+                        if (storageFailure != null)
+                        {
+                            throw new StoragePressureIOException(
+                                storageFailure,
+                                exception);
+                        }
+                        throw;
+                    }
                     written += read;
                 }
 
@@ -64,8 +92,22 @@ namespace ReachyMini.LocalModels
                         .ConfigureAwait(false) != 0;
                 }
 
-                await destination.FlushAsync(cancellationToken)
-                    .ConfigureAwait(false);
+                try
+                {
+                    await destination.FlushAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (IOException exception)
+                {
+                    LocalModelPackageResult? storageFailure = CheckStorage(0L);
+                    if (storageFailure != null)
+                    {
+                        throw new StoragePressureIOException(
+                            storageFailure,
+                            exception);
+                    }
+                    throw;
+                }
                 return new CopyExactResult(written, hasExtra);
             }
         }
@@ -293,6 +335,10 @@ namespace ReachyMini.LocalModels
             string operation,
             Exception exception)
         {
+            if (exception is StoragePressureIOException pressure)
+            {
+                return pressure.Failure;
+            }
             return LocalModelPackageResult.Failed(
                 LocalModelPackageFailure.IoFailure,
                 SafeIoDetail(operation, exception));
@@ -303,6 +349,21 @@ namespace ReachyMini.LocalModels
             Exception exception)
         {
             return operation + " (" + exception.GetType().Name + ").";
+        }
+
+        private sealed class StoragePressureIOException : IOException
+        {
+            public StoragePressureIOException(
+                LocalModelPackageResult failure,
+                Exception? innerException = null)
+                : base(
+                    "Free storage fell below the local-model acquisition reserve.",
+                    innerException)
+            {
+                Failure = failure ?? throw new ArgumentNullException(nameof(failure));
+            }
+
+            public LocalModelPackageResult Failure { get; }
         }
 
         private readonly struct CopyExactResult

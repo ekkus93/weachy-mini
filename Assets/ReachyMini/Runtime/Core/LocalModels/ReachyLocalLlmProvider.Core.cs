@@ -4,6 +4,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.AppState;
 using ReachyMini.Interop;
 
 namespace ReachyMini.LocalModels
@@ -40,6 +41,7 @@ namespace ReachyMini.LocalModels
             this.modelHandle = modelHandle;
             this.ownsRuntime = ownsRuntime;
             state = LocalLlmProviderState.Ready;
+            memoryPressureRegistration = ReachyMemoryPressureRegistry.Register(this);
         }
 
         public LocalLlmProviderState State
@@ -262,6 +264,7 @@ namespace ReachyMini.LocalModels
 
         public async ValueTask DisposeAsync()
         {
+            memoryPressureRegistration.Dispose();
             interruptionGate.Dispose();
             Task<LocalLlmGenerationResult>? activeTask;
             CancellationTokenSource? cancellation;

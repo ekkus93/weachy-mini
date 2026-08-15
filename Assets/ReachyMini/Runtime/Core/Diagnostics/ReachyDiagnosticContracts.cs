@@ -216,6 +216,7 @@ namespace ReachyMini.Diagnostics
         public const string CameraUiOperationFailed = "camera.ui_operation.failed";
         public const string ApplicationDisposalFailed = "application.disposal.failed";
         public const string ApplicationFaulted = "application.faulted";
+        public const string ApplicationLowMemoryHandled = "application.memory.low_handled";
         public const string ApplicationStartupFailed = "application.startup.failed";
         public const string MainScreenBootstrapFailed = "ui.bootstrap.failed";
         public const string ProductionRuntimeUnavailable = "runtime.unavailable";
@@ -226,5 +227,7 @@ namespace ReachyMini.Diagnostics
         public const string DiagnosticBundleExportStarted = "diagnostics.bundle.export_started";
         public const string DiagnosticBundleExportSucceeded = "diagnostics.bundle.export_succeeded";
         public const string DiagnosticBundleExportFailed = "diagnostics.bundle.export_failed";
+        public const string StorageCleanupSucceeded = "storage.cleanup.succeeded";
+        public const string StorageCleanupFailed = "storage.cleanup.failed";
     }
 }

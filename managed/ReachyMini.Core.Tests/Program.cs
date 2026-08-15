@@ -14,6 +14,7 @@ namespace ReachyMini.Core.Tests
             Rma172DiagnosticBundleExportContractTests.RunAll();
             Rma180PerformanceHarnessContractTests.RunAll();
             Rma182ApplicationInterruptionContractTests.RunAll();
+            Rma183MemoryStoragePressureContractTests.RunAll();
 
             if (string.Equals(
                     Environment.GetEnvironmentVariable("REACHY_MANAGED_NATIVE_TESTS"),

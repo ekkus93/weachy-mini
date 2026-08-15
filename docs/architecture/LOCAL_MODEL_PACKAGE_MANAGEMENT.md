@@ -68,7 +68,11 @@ The default artifact ceiling is 8 GiB and the default free-space reserve is 64 M
 explicit `LocalModelPackageOptions`; neither changes the manifest's expected file size.
 
 A resumed download checks only its remaining bytes plus reserve. Failure returns
-`InsufficientStorage`; acquisition is not attempted and no alternate model is selected.
+`InsufficientStorage`; acquisition is not attempted and no alternate model is selected. RMA-183
+also rechecks the same invariant every 4 MiB while model bytes are being written. If storage falls
+below the remaining-byte requirement, the exact manifest-bound download partial and metadata remain
+for a later resume; a non-resumable import partial is removed. A write-side I/O failure is re-probed
+for storage pressure before it is classified as a generic I/O failure.
 
 ## Download contract
 

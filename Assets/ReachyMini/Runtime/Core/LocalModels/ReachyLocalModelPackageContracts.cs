@@ -15,6 +15,8 @@ namespace ReachyMini.LocalModels
 
         public const int CopyBufferBytes = 128 * 1024;
 
+        public const long StorageRecheckIntervalBytes = 4L * 1024L * 1024L;
+
         public const int MaximumDownloadUriLength = 2048;
     }
 

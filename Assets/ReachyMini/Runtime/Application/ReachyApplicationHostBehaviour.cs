@@ -20,6 +20,7 @@ namespace ReachyMini.AppState
 
         private ReachyApplicationHost? host;
         private ReachyApplicationInterruptionCoordinator? interruptionCoordinator;
+        private bool lowMemorySubscribed;
         private bool startupEntered;
 
         public ReachyApplicationHost? Host => host;
@@ -66,6 +67,8 @@ namespace ReachyMini.AppState
                 host.Start();
                 interruptionCoordinator =
                     new ReachyApplicationInterruptionCoordinator(host);
+                Application.lowMemory += OnLowMemory;
+                lowMemorySubscribed = true;
             }
             catch (Exception exception)
             {
@@ -87,6 +90,12 @@ namespace ReachyMini.AppState
 
         public void ShutdownApplication()
         {
+            if (lowMemorySubscribed)
+            {
+                Application.lowMemory -= OnLowMemory;
+                lowMemorySubscribed = false;
+            }
+
             ReachyApplicationInterruptionCoordinator? coordinator =
                 interruptionCoordinator;
             interruptionCoordinator = null;
@@ -121,6 +130,64 @@ namespace ReachyMini.AppState
         private void Start()
         {
             StartApplication();
+        }
+
+        private void OnLowMemory()
+        {
+            if (host == null)
+            {
+                return;
+            }
+
+            int directFailureCount = 0;
+            ReachyAndroidCameraTextureBridge? textureBridge =
+                UnityEngine.Object.FindAnyObjectByType<
+                    ReachyAndroidCameraTextureBridge>();
+            try
+            {
+                textureBridge?.ReleaseForMemoryPressure();
+            }
+            catch (Exception)
+            {
+                directFailureCount = checked(directFailureCount + 1);
+            }
+
+            ReachyMemoryPressureSweepResult sweep =
+                ReachyMemoryPressureRegistry.ReleaseRegisteredResources();
+            try
+            {
+                _ = Resources.UnloadUnusedAssets();
+            }
+            catch (Exception)
+            {
+                directFailureCount = checked(directFailureCount + 1);
+            }
+
+            int totalFailureCount = checked(
+                sweep.FailureCount + directFailureCount);
+            ReachyRuntimeDiagnostics.Emit(
+                "application",
+                ReachyDiagnosticEventIds.ApplicationLowMemoryHandled,
+                totalFailureCount == 0
+                    ? ReachyDiagnosticSeverity.Warning
+                    : ReachyDiagnosticSeverity.Error,
+                ReachyDiagnosticErrorCategory.Resource,
+                new ReachyDiagnosticField(
+                    "participants",
+                    sweep.ParticipantCount.ToString(),
+                    ReachyDiagnosticDataClass.Identifier),
+                new ReachyDiagnosticField(
+                    "released",
+                    sweep.ReleasedCount.ToString(),
+                    ReachyDiagnosticDataClass.Identifier),
+                new ReachyDiagnosticField(
+                    "retained_active",
+                    sweep.RetainedActiveCount.ToString(),
+                    ReachyDiagnosticDataClass.Identifier),
+                new ReachyDiagnosticField(
+                    "failures",
+                    totalFailureCount.ToString(),
+                    ReachyDiagnosticDataClass.Identifier));
         }
 
         private void OnApplicationPause(bool paused)

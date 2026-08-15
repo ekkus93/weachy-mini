@@ -92,6 +92,18 @@ namespace ReachyMini.AppState
             {
                 CycleLocalModelContextLength();
             }
+            y += 66f;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 56f),
+                    "CLEAN UP RECOVERABLE STORAGE",
+                    smallButtonStyle!))
+            {
+                CleanupRecoverableStorage();
+            }
+            GUI.Label(
+                new Rect(area.x, y + 60f, area.width, 58f),
+                storageCleanupStatus,
+                warningStyle!);
         }
 
         private void DrawSimulationSettings(
