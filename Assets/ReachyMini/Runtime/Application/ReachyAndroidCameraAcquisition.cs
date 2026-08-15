@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Performance;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -174,6 +175,9 @@ namespace ReachyMini.AppState
             {
                 return null;
             }
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.CameraAcquisition);
             return RequirePlatform().AcquireLatestTextureFrame(
                 checked((long)snapshot.SessionId),
                 checked((long)afterSequence));

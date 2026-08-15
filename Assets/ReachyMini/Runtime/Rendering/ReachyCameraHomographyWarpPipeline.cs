@@ -2,6 +2,7 @@
 
 using System;
 using ReachyMini.AppState;
+using ReachyMini.Performance;
 using UnityEngine;
 
 namespace ReachyMini.Rendering
@@ -112,6 +113,10 @@ namespace ReachyMini.Rendering
                 throw new ArgumentNullException(nameof(rotation));
             }
             ThrowIfDisposed();
+
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.CameraWarp);
 
             ReachyCameraTextureBridgeSnapshot snapshot =
                 textureBridge.Current;

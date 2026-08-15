@@ -6,6 +6,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Perception
 {
@@ -633,6 +634,10 @@ namespace ReachyMini.Perception
                     requiresProviderReset: false,
                     "The on-device lightweight tracker is busy; requests are not queued or retried.");
             }
+
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.LightweightTracking);
 
             try
             {

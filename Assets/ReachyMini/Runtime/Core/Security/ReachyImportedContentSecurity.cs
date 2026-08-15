@@ -220,7 +220,7 @@ namespace ReachyMini.Security
                 return !IsPrivateOrLocalAddress(address);
             }
 
-            return host.IndexOf('.') >= 0;
+            return host.Contains('.');
         }
 
         public static void RequirePublicHttpsUri(Uri uri, string parameterName)

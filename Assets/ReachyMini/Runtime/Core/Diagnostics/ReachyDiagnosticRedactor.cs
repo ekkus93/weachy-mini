@@ -35,8 +35,8 @@ namespace ReachyMini.Diagnostics
                 normalized.Equals("proxy-authorization", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Equals("cookie", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Equals("set-cookie", StringComparison.OrdinalIgnoreCase) ||
-                normalized.IndexOf("api-key", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                normalized.IndexOf("token", StringComparison.OrdinalIgnoreCase) >= 0)
+                normalized.Contains("api-key", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("token", StringComparison.OrdinalIgnoreCase))
             {
                 return RedactedValue;
             }

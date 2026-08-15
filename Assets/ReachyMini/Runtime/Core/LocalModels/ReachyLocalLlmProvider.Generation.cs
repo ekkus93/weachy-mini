@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Interop;
+using ReachyMini.Performance;
 
 namespace ReachyMini.LocalModels
 {
@@ -98,6 +99,9 @@ namespace ReachyMini.LocalModels
             ulong epoch,
             CancellationTokenSource linkedCancellation)
         {
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.LocalLlm);
             try
             {
                 return await RunGenerationCoreAsync(

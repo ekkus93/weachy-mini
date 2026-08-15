@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading;
 using ReachyMini.Interop;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Simulation
 {
@@ -167,6 +168,9 @@ namespace ReachyMini.Simulation
                                 "The monotonic clock produced an invalid step duration."));
                         break;
                     }
+                    ReachyPerformanceTelemetry.RecordDurationSeconds(
+                        ReachyPerformanceWorkload.NativePhysics,
+                        stepDurationSeconds);
                     if (stepDurationSeconds > TimestepSeconds)
                     {
                         ++deadlineMissCount;

@@ -21,6 +21,10 @@ namespace ReachyMini.Diagnostics
         private static readonly UTF8Encoding Utf8 =
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Performance",
+            "CA1822:Mark members as static",
+            Justification = "Exporter instances are retained as an application composition seam for deterministic bundle export testing.")]
         public ReachyDiagnosticBundleExportResult Export(
             string outputPath,
             ReachyDiagnosticBundlePayload payload,
@@ -215,7 +219,7 @@ namespace ReachyMini.Diagnostics
             ReachyDiagnosticsScreenSnapshot snapshot,
             bool includePerformance)
         {
-            IReadOnlyList<ReachyDiagnosticsSection> sections = includePerformance
+            ReachyDiagnosticsSection[] sections = includePerformance
                 ? new[]
                 {
                     snapshot.Simulation,
@@ -230,7 +234,7 @@ namespace ReachyMini.Diagnostics
                 };
 
             var builder = new StringBuilder(4096).Append("{\"sections\":[");
-            for (int sectionIndex = 0; sectionIndex < sections.Count; ++sectionIndex)
+            for (int sectionIndex = 0; sectionIndex < sections.Length; ++sectionIndex)
             {
                 if (sectionIndex > 0)
                 {
@@ -454,9 +458,9 @@ namespace ReachyMini.Diagnostics
                 ReachyDiagnosticBundleSecurityPolicy.RequireExportable(
                     ReachyDiagnosticArtifactKind.RedactedText);
                 if (string.IsNullOrWhiteSpace(name) ||
-                    name.IndexOf('/') >= 0 ||
-                    name.IndexOf('\\') >= 0 ||
-                    name.IndexOf("..", StringComparison.Ordinal) >= 0)
+                    name.Contains('/') ||
+                    name.Contains('\\') ||
+                    name.Contains("..", StringComparison.Ordinal))
                 {
                     throw new InvalidDataException(
                         "Diagnostic bundle entry names must be simple contained filenames.");

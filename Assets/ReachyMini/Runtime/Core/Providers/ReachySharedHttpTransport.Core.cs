@@ -9,6 +9,7 @@ using System.Security.Authentication;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Providers
 {
@@ -115,6 +116,10 @@ namespace ReachyMini.Providers
                         "HTTP request was cancelled before transport start."),
                     1);
             }
+
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.Network);
 
             int attempts = 0;
             ReachyHttpTransportResult? lastFailure = null;

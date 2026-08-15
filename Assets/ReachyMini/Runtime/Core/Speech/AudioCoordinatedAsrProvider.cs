@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using ReachyMini.Performance;
 
 namespace ReachyMini.Speech
 {
@@ -45,6 +46,10 @@ namespace ReachyMini.Speech
             SpeechProviderContract.ValidateProviderForOperation(
                 Descriptor,
                 request.Context);
+
+            using ReachyPerformanceMeasurement measurement =
+                ReachyPerformanceTelemetry.Measure(
+                    ReachyPerformanceWorkload.Audio);
 
             SpeechAudioAcquireAttempt acquisitionAttempt =
                 await SpeechAudioSafeOperations.AcquireSafelyAsync(

@@ -236,7 +236,7 @@ namespace ReachyMini.Core.Tests
 
         private static void Contains(string value, string expected)
         {
-            if (value.IndexOf(expected, StringComparison.Ordinal) < 0)
+            if (!value.Contains(expected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "Expected diagnostic bundle text to contain: " + expected);
@@ -245,7 +245,7 @@ namespace ReachyMini.Core.Tests
 
         private static void NotContains(string value, string unexpected)
         {
-            if (value.IndexOf(unexpected, StringComparison.Ordinal) >= 0)
+            if (value.Contains(unexpected, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "Diagnostic bundle unexpectedly contained: " + unexpected);

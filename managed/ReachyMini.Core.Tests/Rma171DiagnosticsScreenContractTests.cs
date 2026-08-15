@@ -17,10 +17,14 @@ namespace ReachyMini.Core.Tests
         private static void UnavailableMetricRequiresReason()
         {
             AssertThrows<ArgumentException>(() =>
-                new ReachyDiagnosticsMetric(
-                    "Camera FPS",
-                    "unavailable",
-                    ReachyDiagnosticsAvailability.Unavailable));
+  {
+      ReachyDiagnosticsMetric metric =
+          new ReachyDiagnosticsMetric(
+              "Camera FPS",
+              "unavailable",
+              ReachyDiagnosticsAvailability.Unavailable);
+      GC.KeepAlive(metric);
+  });
         }
 
         private static void SectionPromotesWorstAvailability()

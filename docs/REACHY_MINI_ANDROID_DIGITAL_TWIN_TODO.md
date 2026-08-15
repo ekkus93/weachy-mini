@@ -2483,11 +2483,21 @@ Create tests proving that:
 
 ## RMA-180 — Build performance harness
 
-- [ ] Measure native physics step timing separately from Unity rendering.
-- [ ] Measure camera acquisition, warp, tracking, local LLM, audio, and network workloads.
-- [ ] Record median, p95, p99, and maximum timing.
-- [ ] Record memory, battery discharge, and thermal state over long runs.
-- [ ] Test at 30 and 60 FPS where supported.
+**Status:** Complete (2026-08-15)
+
+- [x] Measure native physics step timing separately from Unity rendering.
+- [x] Measure camera acquisition, warp, tracking, local LLM, audio, and network workloads.
+- [x] Record median, p95, p99, and maximum timing.
+- [x] Record memory, battery discharge, and thermal state over long runs.
+- [x] Test at 30 and 60 FPS where supported.
+
+**Completion evidence**
+
+- `ReachyPerformanceTelemetry` provides one active bounded session with real production hooks for native physics, Unity frame cadence, camera acquisition/warp, lightweight tracking, local LLM generation, audio, and shared network transport.
+- Each workload reports count, median, p95, p99, and exact maximum. A 4,096-entry deterministic reservoir keeps long runs bounded and explicitly marks percentile summaries approximate after compaction.
+- `ReachyPerformanceRuntimeProbe` records Unity allocated memory, Android available memory, battery level/discharge, and thermal state every 10 seconds into a bounded 2,048-entry resource ring.
+- `ReachyRma180PerformanceAcceptance` and `scripts/run_rma180_performance_acceptance_android.sh` exercise explicit 30 FPS and 60 FPS profiles with a default five-minute duration per profile and support up to one hour per profile.
+- Managed and static regression contracts cover percentile math, long-run bounds, resource summaries, 30/60 profile enforcement, production hook coverage, and fail-closed input handling. Design and local evidence are recorded in `docs/RMA_180_PERFORMANCE_HARNESS_SPEC_2026-08-15.md` and `docs/validation/RMA_180_PERFORMANCE_HARNESS_LOCAL_VALIDATION_2026-08-15.md`.
 
 ## RMA-181 — Implement priority-based degradation policy
 
