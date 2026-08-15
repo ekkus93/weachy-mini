@@ -1,4 +1,4 @@
-# Publication payload revision 5: verified payload plus managed-build/test compatibility fixes.
+# Publication payload revision 6: verified payload plus whitespace-safe managed-build/test compatibility fixes.
 name: RMA-180 performance harness publication
 
 on:
@@ -69,6 +69,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(relative_path: str, old: str, new: str) -> None:
               path = Path("target") / relative_path
@@ -80,28 +81,38 @@ jobs:
                   )
               path.write_text(text.replace(old, new), encoding="utf-8")
 
+          def replace_regex_once(
+              relative_path: str,
+              pattern: str,
+              replacement: str,
+          ) -> None:
+              path = Path("target") / relative_path
+              text = path.read_text(encoding="utf-8")
+              updated, count = re.subn(pattern, replacement, text)
+              if count != 1:
+                  raise SystemExit(
+                      f"{relative_path}: expected exactly one regex compatibility preimage, found {count}"
+                  )
+              path.write_text(updated, encoding="utf-8")
+
           replace_once(
               "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs",
               "for (int sectionIndex = 0; sectionIndex < sections.Count; ++sectionIndex)",
               "for (int sectionIndex = 0; sectionIndex < sections.Length; ++sectionIndex)",
           )
 
-          replace_once(
+          replace_regex_once(
               "managed/ReachyMini.Core.Tests/Rma171DiagnosticsScreenContractTests.cs",
-              '''            AssertThrows<ArgumentException>(() =>
-                  new ReachyDiagnosticsMetric(
-                      "Camera FPS",
-                      "unavailable",
-                      ReachyDiagnosticsAvailability.Unavailable));''',
-              '''            AssertThrows<ArgumentException>(() =>
-              {
-                  ReachyDiagnosticsMetric metric =
-                      new ReachyDiagnosticsMetric(
-                          "Camera FPS",
-                          "unavailable",
-                          ReachyDiagnosticsAvailability.Unavailable);
-                  GC.KeepAlive(metric);
-              });''',
+              r'''AssertThrows<ArgumentException>\(\(\) =>\s*new ReachyDiagnosticsMetric\(\s*"Camera FPS",\s*"unavailable",\s*ReachyDiagnosticsAvailability\.Unavailable\)\);''',
+              '''AssertThrows<ArgumentException>(() =>
+            {
+                ReachyDiagnosticsMetric metric =
+                    new ReachyDiagnosticsMetric(
+                        "Camera FPS",
+                        "unavailable",
+                        ReachyDiagnosticsAvailability.Unavailable);
+                GC.KeepAlive(metric);
+            });''',
           )
 
           replace_once(
@@ -115,28 +126,21 @@ jobs:
               "if (value.Contains(unexpected, StringComparison.Ordinal))",
           )
 
-          replace_once(
+          replace_regex_once(
               "managed/ReachyMini.Core.Tests/Rma180PerformanceHarnessContractTests.cs",
-              '''            Throws<ArgumentOutOfRangeException>(() =>
-                  new ReachyPerformanceResourceSample(
-                      0.0,
-                      0L,
-                      0L,
-                      1.1,
-                      null,
-                      "unavailable"));''',
-              '''            Throws<ArgumentOutOfRangeException>(() =>
-              {
-                  ReachyPerformanceResourceSample sample =
-                      new ReachyPerformanceResourceSample(
-                          0.0,
-                          0L,
-                          0L,
-                          1.1,
-                          null,
-                          "unavailable");
-                  GC.KeepAlive(sample);
-              });''',
+              r'''Throws<ArgumentOutOfRangeException>\(\(\) =>\s*new ReachyPerformanceResourceSample\(\s*0\.0,\s*0L,\s*0L,\s*1\.1,\s*null,\s*"unavailable"\)\);''',
+              '''Throws<ArgumentOutOfRangeException>(() =>
+            {
+                ReachyPerformanceResourceSample sample =
+                    new ReachyPerformanceResourceSample(
+                        0.0,
+                        0L,
+                        0L,
+                        1.1,
+                        null,
+                        "unavailable");
+                GC.KeepAlive(sample);
+            });''',
           )
           PY
 
