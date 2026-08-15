@@ -1,0 +1,205 @@
++                registrations.Add(new ReachyServiceRegistration(
++                    captured.ToString(),
++                    captured,
++                    ReachyServiceCriticality.Required,
++                    Array.Empty<ReachyServiceKind>(),
++                    resolver => new LifecycleService(
++                        captured,
++                        events,
++                        failingKind == captured)));
++            }
++            return new ReachyApplicationHost(
++                ReachyApplicationComposition.CreateComplete(registrations));
++        }
++
++        private sealed class LifecycleService :
++            ReachyApplicationServiceBase,
++            IReachySimulationService,
++            IReachyCameraService,
++            IReachyAudioService,
++            IReachyProviderService,
++            IReachyPerceptionService,
++            IReachyBehaviorService,
++            IReachyPersistenceService,
++            IReachyUserInterfaceService,
++            IReachyApplicationInterruptionParticipant
++        {
++            private readonly List<string> events;
++            private readonly bool failPause;
++
++            internal LifecycleService(
++                ReachyServiceKind kind,
++                List<string> events,
++                bool failPause)
++                : base(
++                    kind.ToString(),
++                    kind,
++                    ReachyServiceCriticality.Required)
++            {
++                this.events = events;
++                this.failPause = failPause;
++            }
++
++            public void PauseForApplicationInterruption()
++            {
++                events.Add("pause:" + Kind);
++                if (failPause)
++                {
++                    throw new InvalidOperationException("injected pause failure");
++                }
++            }
++
++            public void ResumeAfterApplicationInterruption()
++            {
++                events.Add("resume:" + Kind);
++            }
++
++            protected override void OnInitialize()
++            {
++                SetReady("ready");
++            }
++        }
++
++        private static void Sequence(
++            List<string> actual,
++            params string[] expected)
++        {
++            Equal(expected.Length, actual.Count, "event count");
++            for (int index = 0; index < expected.Length; ++index)
++            {
++                Equal(expected[index], actual[index], "event order " + index);
++            }
++        }
++
++        private static void Contains(
++            List<string> values,
++            string expected,
++            string label)
++        {
++            for (int index = 0; index < values.Count; ++index)
++            {
++                if (string.Equals(values[index], expected, StringComparison.Ordinal))
++                {
++                    return;
++                }
++            }
++            throw new InvalidOperationException(label + ": missing " + expected);
++        }
++
++        private static void Contains(string value, string expected, string label)
++        {
++            if (!value.Contains(expected, StringComparison.Ordinal))
++            {
++                throw new InvalidOperationException(label + ": missing " + expected);
++            }
++        }
++
++        private static void True(bool value, string label)
++        {
++            if (!value)
++            {
++                throw new InvalidOperationException(label + ": expected true");
++            }
++        }
++
++        private static void False(bool value, string label)
++        {
++            if (value)
++            {
++                throw new InvalidOperationException(label + ": expected false");
++            }
++        }
++
++        private static void Equal<T>(T expected, T actual, string label)
++        {
++            if (!EqualityComparer<T>.Default.Equals(expected, actual))
++            {
++                throw new InvalidOperationException(
++                    label + ": expected " + expected + ", actual " + actual);
++            }
++        }
++    }
++}
+diff --git a/managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs b/managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs
+index 9623ddc..f8d1e5f 100644
+--- a/managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs
++++ b/managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs
+@@ -19,6 +19,7 @@ internal static class SpeechAudioFocusTests
+             ("asr-terminal-waits-for-focus-release", AsrTerminalWaitsForRelease),
+             ("tts-terminal-waits-for-focus-release", TtsTerminalWaitsForRelease),
+             ("focus-loss-is-visible-and-cancels", FocusLossIsVisible),
++            ("application-background-cancels-releases-and-blocks", ApplicationBackgroundCancelsReleasesAndBlocks),
+             ("route-change-is-visible-and-cancels", RouteChangeIsVisible),
+             ("phone-mode-is-visible-and-cancels", PhoneModeIsVisible),
+             ("microphone-mute-is-visible-and-cancels", MicrophoneMuteIsVisible),
+@@ -138,6 +139,46 @@ internal static class SpeechAudioFocusTests
+         Require(coordinator.Current.State == SpeechAudioState.Idle, "Coordinator must be idle before TTS completion is exposed.");
+     }
+ 
++    private static async Task ApplicationBackgroundCancelsReleasesAndBlocks()
++    {
++        await using var platform = new FakeAudioPlatform();
++        await using var coordinator = new SpeechAudioFocusCoordinator(platform);
++        await using var raw = new FakeAsrProvider { BlockUntilCancellation = true };
++        await using var provider = new AudioCoordinatedAsrProvider(raw, coordinator, ownsInner: false);
++        Task<List<AsrEvent>> active = CollectAsync(provider.RecognizeAsync(
++            CreateAsrRequest(provider, "application-background", TimeSpan.FromSeconds(5)),
++            CancellationToken.None));
++        await raw.Started.Task.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
++
++        coordinator.PauseForApplicationInterruption();
++        List<AsrEvent> events = await active.ConfigureAwait(false);
++        Require(
++            events[^1].Kind == AsrEventKind.Failed &&
++            events[^1].Error?.Code == "application_backgrounded",
++            "Backgrounding must cancel active ASR with an explicit lifecycle failure.");
++        Require(platform.ReleaseCalls == 1, "Backgrounded ASR must release focus exactly once.");
++        Require(coordinator.IsApplicationPaused, "Coordinator must reject new audio while backgrounded.");
++
++        int requestsBeforeBlockedAcquire = platform.RequestCalls;
++        SpeechAudioAcquireResult blocked = await coordinator.AcquireAsync(
++            SpeechAudioRole.Listening,
++            CancellationToken.None).ConfigureAwait(false);
++        Require(
++            !blocked.IsGranted &&
++            blocked.Error?.Code == "speech_audio_lifecycle_suspended",
++            "Backgrounded speech audio must fail closed without touching the platform.");
++        Require(
++            platform.RequestCalls == requestsBeforeBlockedAcquire,
++            "Backgrounded speech audio must not start another focus request.");
++
++        coordinator.ResumeAfterApplicationInterruption();
++        SpeechAudioAcquireResult resumed = await coordinator.AcquireAsync(
++            SpeechAudioRole.Listening,
++            CancellationToken.None).ConfigureAwait(false);
++        Require(resumed.IsGranted && resumed.Lease != null, "Foreground resume must permit a new audio session.");
++        _ = await resumed.Lease!.ReleaseAsync().ConfigureAwait(false);
++    }
++
+     private static Task FocusLossIsVisible() =>
+         AssertAsrInterruptionAsync(
+             SpeechAudioInterruptionKind.TransientFocusLoss,
+diff --git a/managed/ReachyMini.VlmScheduling.Tests/Program.cs b/managed/ReachyMini.VlmScheduling.Tests/Program.cs
+index 6dffab3..419c948 100644
+--- a/managed/ReachyMini.VlmScheduling.Tests/Program.cs
++++ b/managed/ReachyMini.VlmScheduling.Tests/Program.cs
+@@ -36,6 +36,7 @@ namespace ReachyMini.VlmScheduling.Tests
+             CancellationCallbackFailuresRemainVisible();
+             CancellationDispatchDoesNotInvertCompletionLocks();
+             PriorityDegradationSuspendsAndCancelsRequests();
++            ApplicationInterruptionSuspendsAndCancelsRequests();
+             ProviderPolicyStateIsBounded();
+             SnapshotsAreImmutableCopies();
+             UnknownCompletionIsVisible();
+@@ -557,6 +558,36 @@ namespace ReachyMini.VlmScheduling.Tests
+                 "priority recovery restores VLM admission");
+         }
+ 
++        private static void ApplicationInterruptionSuspendsAndCancelsRequests()
++        {
++            using ReachyVlmScheduler scheduler = Scheduler(OnDevicePolicy());
++            VlmScheduleLease lease = scheduler.TrySchedule(
++                ManualSignal("vlm-device", 1UL),
++                1_010L).Lease!;
++
++            scheduler.PauseForApplicationInterruption();
