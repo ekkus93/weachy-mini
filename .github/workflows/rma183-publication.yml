@@ -1,0 +1,122 @@
+name: RMA-183 memory and storage pressure publication
+
+on:
+  push:
+    branches:
+      - rma-183-publication
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma-183-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out publication payload
+        uses: actions/checkout@v4
+        with:
+          ref: rma-183-publication
+          path: publication
+
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          path: target
+
+      - name: Verify and apply exact RMA-183 integration
+        shell: bash
+        env:
+          EXPECTED_MASTER: 366b6a5324f16819ffacbba09b3ac9fa4687e072
+          EXPECTED_PATCH_SHA256: 1a90fd4544dca8e389bdc3aab8025c84da2d96a9cadd906639bee29cd4a750fe
+          EXPECTED_TRANSFORM_SHA256: e993b991c4daa70ec5a1baff131b0fd544ddc6aabc3054e143c38aee517675ad
+        run: |
+          set -euo pipefail
+          test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
+
+          cat <<'SUMS' | sha256sum --check --strict
+          2273e295293ef50bd9f0209c2ccb696ae3d91d10d746e5094df6cd8a13fc2409  publication/tools/rma183-publication/rma183-safe.patch.part-00
+          54ef4e7b4dba30a679c8dddb6aaa8e59a756549e61f197c712ba90e36fe7532a  publication/tools/rma183-publication/rma183-safe.patch.part-01
+          b7e4ed1b165f255c347660734dfc8bccc7ea6854ac96aac8ec44dd9751fcb069  publication/tools/rma183-publication/rma183-safe.patch.part-02
+          317772d7212aea57ca5095003f53643355ec05f01907896941969f4ecf73bd62  publication/tools/rma183-publication/rma183-safe.patch.part-03
+          0230f539dffb3a783163bd8477434b5042ee08587e2094c2e761d22d688f8956  publication/tools/rma183-publication/rma183-safe.patch.part-04
+          19772f3363acace60471909a4c844117ebcbe013c68fb26905d2e948d4f040f1  publication/tools/rma183-publication/rma183-safe.patch.part-05
+          3301dcbafdd2c6f72f83c6e82fc5490a3f50aaef355aedf51962ffc81a6c72ff  publication/tools/rma183-publication/apply_remote_transforms.py.part-00
+          15b7e2b699be4647eef3e36b4e767f1315192deaac021d298386a371632a584f  publication/tools/rma183-publication/apply_remote_transforms.py.part-01
+          SUMS
+
+          patch_payload="${RUNNER_TEMP}/rma183-safe.patch"
+          transform_payload="${RUNNER_TEMP}/apply_remote_transforms.py"
+          cat publication/tools/rma183-publication/rma183-safe.patch.part-* > "${patch_payload}"
+          cat publication/tools/rma183-publication/apply_remote_transforms.py.part-* > "${transform_payload}"
+
+          printf '%s  %s\n' "${EXPECTED_PATCH_SHA256}" "${patch_payload}" | sha256sum --check --strict
+          printf '%s  %s\n' "${EXPECTED_TRANSFORM_SHA256}" "${transform_payload}" | sha256sum --check --strict
+
+          git -C target apply --check "${patch_payload}"
+          git -C target apply "${patch_payload}"
+          python3 "${transform_payload}" target
+          git -C target diff --check
+
+      - name: Run focused RMA-183 static contract
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma183_memory_storage_pressure.py
+          git diff --check
+
+      - name: Run repository static gate
+        shell: bash
+        working-directory: target
+        env:
+          TERM: xterm
+        run: |
+          set -euo pipefail
+          bash scripts/ci.sh --static-only
+          git diff --check
+
+      - name: Run managed RMA-183 contracts
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          projects=(
+            managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+            managed/ReachyMini.LocalModelPackages.Tests/ReachyMini.LocalModelPackages.Tests.csproj
+            managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+            managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj
+            managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj
+          )
+          for project in "${projects[@]}"; do
+            dotnet restore "${project}"
+            dotnet run --project "${project}" --configuration Release --no-restore
+          done
+
+      - name: Commit exact validated RMA-183 integration
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "RMA-183: handle memory and storage pressure"
+
+      - name: Fast-forward master if unchanged
+        shell: bash
+        working-directory: target
+        env:
+          EXPECTED_MASTER: 366b6a5324f16819ffacbba09b3ac9fa4687e072
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          test "$(git rev-parse origin/master)" = "${EXPECTED_MASTER}"
+          git push origin HEAD:master
