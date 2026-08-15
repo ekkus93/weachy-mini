@@ -1,0 +1,82 @@
+diff --git a/Assets/ReachyMini/Runtime/Core/Performance/ReachyPriorityDegradationPolicy.cs b/Assets/ReachyMini/Runtime/Core/Performance/ReachyPriorityDegradationPolicy.cs
+index 05172f8..bf76097 100644
+--- a/Assets/ReachyMini/Runtime/Core/Performance/ReachyPriorityDegradationPolicy.cs
++++ b/Assets/ReachyMini/Runtime/Core/Performance/ReachyPriorityDegradationPolicy.cs
+@@ -2,6 +2,7 @@
+ 
+ using System;
+ using System.Collections.Generic;
++using System.Collections.ObjectModel;
+ using ReachyMini.LocalModels;
+ 
+ namespace ReachyMini.Performance
+@@ -135,6 +136,10 @@ namespace ReachyMini.Performance
+ 
+     public sealed class ReachyPriorityDegradationDecision
+     {
++        private readonly double physicsTimestepSeconds;
++        private readonly bool physicsStepSkippingAllowed;
++        private readonly bool audioInteractionPreserved;
++
+         internal ReachyPriorityDegradationDecision(
+             ReachyPriorityDegradationLevel level,
+             ReachyPriorityDegradationReason reasons,
+@@ -154,6 +159,10 @@ namespace ReachyMini.Performance
+                 trackingMinimumIntervalNanoseconds;
+             VlmAllowed = vlmAllowed;
+             MinimumLocalLlmMode = minimumLocalLlmMode;
++            physicsTimestepSeconds =
++                ReachyMini.Core.ProjectMetadata.InitialPhysicsTimestepSeconds;
++            physicsStepSkippingAllowed = false;
++            audioInteractionPreserved = true;
+         }
+ 
+         public ReachyPriorityDegradationLevel Level { get; }
+@@ -172,12 +181,11 @@ namespace ReachyMini.Performance
+ 
+         public LocalLlmGovernorMode MinimumLocalLlmMode { get; }
+ 
+-        public double PhysicsTimestepSeconds =>
+-            ReachyMini.Core.ProjectMetadata.InitialPhysicsTimestepSeconds;
++        public double PhysicsTimestepSeconds => physicsTimestepSeconds;
+ 
+-        public bool PhysicsStepSkippingAllowed => false;
++        public bool PhysicsStepSkippingAllowed => physicsStepSkippingAllowed;
+ 
+-        public bool AudioInteractionPreserved => true;
++        public bool AudioInteractionPreserved => audioInteractionPreserved;
+ 
+         public string Diagnostic =>
+             "RMA-181 degradation level=" + Level +
+@@ -202,7 +210,7 @@ namespace ReachyMini.Performance
+         public const int MaximumTargets = 16;
+ 
+         private readonly ReachyPriorityDegradationPolicy policy;
+-        private readonly IReadOnlyList<IReachyPriorityDegradationTarget> targets;
++        private readonly ReadOnlyCollection<IReachyPriorityDegradationTarget> targets;
+ 
+         public ReachyPriorityDegradationCoordinator(
+             ReachyPriorityDegradationPolicy policy,
+diff --git a/scripts/tests/test_rma181_priority_degradation.py b/scripts/tests/test_rma181_priority_degradation.py
+index 4ec312b..e084d3c 100644
+--- a/scripts/tests/test_rma181_priority_degradation.py
++++ b/scripts/tests/test_rma181_priority_degradation.py
+@@ -33,8 +33,16 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
+             "ReachyMini.Core.ProjectMetadata.InitialPhysicsTimestepSeconds",
+             policy,
+         )
+-        self.assertIn("PhysicsStepSkippingAllowed => false", policy)
+-        self.assertIn("AudioInteractionPreserved => true", policy)
++        self.assertIn("physicsStepSkippingAllowed = false", policy)
++        self.assertIn("audioInteractionPreserved = true", policy)
++        self.assertIn(
++            "PhysicsStepSkippingAllowed => physicsStepSkippingAllowed",
++            policy,
++        )
++        self.assertIn(
++            "AudioInteractionPreserved => audioInteractionPreserved",
++            policy,
++        )
+ 
+         rma181_files = [
+             CORE / "Performance/ReachyPriorityDegradationPolicy.cs",
