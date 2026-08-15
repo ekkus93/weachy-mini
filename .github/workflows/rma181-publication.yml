@@ -1,4 +1,4 @@
-# Publication trigger revision 4: canonical UTF-8 base64 parts with layered checksums.
+# Publication trigger revision 5: canonical text payload plus managed analyzer correction.
 name: RMA-181 priority degradation publication
 
 on:
@@ -38,6 +38,7 @@ jobs:
           EXPECTED_BASE64_SHA256: 808560a0cbfbb9d5b593c9cd4762b27f693525c254ee51156d0293160e997580
           EXPECTED_GZIP_SHA256: 9a5f0c2807b345dd08a7a8f9a2f13a565bbf9e4827c57494844630ca26c64633
           EXPECTED_PATCH_SHA256: c1705dbcc049a207860f8f28d1908f38345b49e9a944d0bfa3449ae61876a329
+          EXPECTED_ANALYZER_FIX_SHA256: 72895038dcae2a032da0eb455f84f6402ee49eb0a14c9e179a25394319205a71
         run: |
           set -euo pipefail
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
@@ -46,6 +47,7 @@ jobs:
           base64_payload="${RUNNER_TEMP}/rma181.patch.gz.b64"
           gzip_payload="${RUNNER_TEMP}/rma181.patch.gz"
           patch_payload="${RUNNER_TEMP}/rma181.patch"
+          analyzer_fix="${parts_dir}/rma181-analyzer-fix.patch"
 
           # Every publication fragment is ordinary UTF-8/ASCII text written via
           # GitHub's contents API. Verify each fragment before concatenation so
@@ -77,9 +79,15 @@ jobs:
             "${EXPECTED_PATCH_SHA256}" \
             "${patch_payload}" \
             | sha256sum --check --strict
+          printf '%s  %s\n' \
+            "${EXPECTED_ANALYZER_FIX_SHA256}" \
+            "${analyzer_fix}" \
+            | sha256sum --check --strict
 
           git -C target apply --check "${patch_payload}"
           git -C target apply "${patch_payload}"
+          git -C target apply --check "../${analyzer_fix}"
+          git -C target apply "../${analyzer_fix}"
           git -C target diff --check
 
       - name: Run repository static gate
