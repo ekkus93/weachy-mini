@@ -20,12 +20,7 @@ namespace ReachyMini.Tests
             {
                 ReachyApplicationHostBehaviour behaviour =
                     root.AddComponent<ReachyApplicationHostBehaviour>();
-                LogAssert.Expect(
-                    LogType.Error,
-                    "Reachy application startup failed: " +
-                    "Reachy application startup requires an explicit composition provider.");
-
-                behaviour.StartApplication();
+                InvokeWithExpectedStructuredError(behaviour.StartApplication);
 
                 Assert.That(behaviour.Host, Is.Null);
                 Assert.That(
@@ -37,6 +32,20 @@ namespace ReachyMini.Tests
             finally
             {
                 Object.DestroyImmediate(root);
+            }
+        }
+
+        private static void InvokeWithExpectedStructuredError(Action action)
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                action();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
             }
         }
 

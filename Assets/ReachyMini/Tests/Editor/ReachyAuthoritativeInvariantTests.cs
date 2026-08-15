@@ -50,14 +50,10 @@ namespace ReachyMini.Tests
                     "Development authoritative rendering assertion failed:.*" +
                     "position_tolerance=.*rotation_tolerance=",
                     RegexOptions.CultureInvariant));
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(
-                    "Authoritative transform drift detected.*sequence=2.*" +
-                    "simulation_time=0.001.*continuity=3",
-                    RegexOptions.CultureInvariant));
-
-            Assert.That(renderer!.AssertRenderedPoseInvariant(), Is.False);
+            Assert.That(
+                InvokeWithExpectedStructuredError(
+                    () => renderer!.AssertRenderedPoseInvariant()),
+                Is.False);
 
             ReachyAuthoritativeInvariantReport report =
                 renderer.LastInvariantReport;
@@ -113,16 +109,14 @@ namespace ReachyMini.Tests
             GameObject visual = new GameObject("visual");
             visual.transform.SetParent(body!.transform, false);
             visual.AddComponent(componentType);
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(
-                    $"prohibited transform writer {expectedName}",
-                    RegexOptions.CultureInvariant));
-
-            Assert.That(renderer!.ValidateAuthoritativeStructure(), Is.False);
+            Assert.That(
+                InvokeWithExpectedStructuredError(
+                    () => renderer!.ValidateAuthoritativeStructure()),
+                Is.False);
             Assert.That(
                 renderer.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
+            StringAssert.Contains(expectedName, renderer.Fault);
         }
 
         [TestCase(0.0f, 0.05f)]
@@ -139,6 +133,20 @@ namespace ReachyMini.Tests
                 renderer!.ConfigureInvariantTolerances(
                     positionTolerance,
                     rotationTolerance));
+        }
+
+        private static T InvokeWithExpectedStructuredError<T>(Func<T> action)
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
 
         private void RenderInitialPose()

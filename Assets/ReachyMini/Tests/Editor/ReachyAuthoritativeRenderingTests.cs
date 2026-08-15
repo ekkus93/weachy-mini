@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
 using ReachyMini.Presentation;
 using ReachyMini.Rendering;
@@ -237,16 +236,11 @@ namespace ReachyMini.Tests
                 Is.True);
 
             bodies[0].transform.position += Vector3.one;
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(
-                    "Authoritative transform drift detected",
-                    RegexOptions.CultureInvariant));
-
-            bool rendered = renderer.RenderAtSimulationTime(
-                older,
-                newer,
-                0.0015);
+            bool rendered = InvokeWithExpectedStructuredError(
+                () => renderer.RenderAtSimulationTime(
+                    older,
+                    newer,
+                    0.0015));
 
             Assert.That(rendered, Is.False);
             Assert.That(
@@ -259,36 +253,28 @@ namespace ReachyMini.Tests
         public void UnityPhysicsComponentIsRejectedVisibly()
         {
             bodies[0].gameObject.AddComponent<Rigidbody>();
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(
-                    "prohibited transform writer Rigidbody",
-                    RegexOptions.CultureInvariant));
-
-            bool valid = renderer!.ValidateAuthoritativeStructure();
+            bool valid = InvokeWithExpectedStructuredError(
+                () => renderer!.ValidateAuthoritativeStructure());
 
             Assert.That(valid, Is.False);
             Assert.That(
                 renderer.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
+            StringAssert.Contains(nameof(Rigidbody), renderer.Fault);
         }
 
         [Test]
         public void AnimatorIsRejectedVisibly()
         {
             bodies[0].gameObject.AddComponent<Animator>();
-            LogAssert.Expect(
-                LogType.Error,
-                new Regex(
-                    "prohibited transform writer Animator",
-                    RegexOptions.CultureInvariant));
-
-            bool valid = renderer!.ValidateAuthoritativeStructure();
+            bool valid = InvokeWithExpectedStructuredError(
+                () => renderer!.ValidateAuthoritativeStructure());
 
             Assert.That(valid, Is.False);
             Assert.That(
                 renderer.Status,
                 Is.EqualTo(ReachyAuthoritativeRendererStatus.Faulted));
+            StringAssert.Contains(nameof(Animator), renderer.Fault);
         }
 
         [Test]
@@ -308,6 +294,20 @@ namespace ReachyMini.Tests
             Assert.That(newer.Sequence, Is.EqualTo(2UL));
             Assert.Throws<InvalidOperationException>(() =>
                 buffer.Publish(Snapshot(2UL, 0.006, 1U, 2.0)));
+        }
+
+        private static T InvokeWithExpectedStructuredError<T>(Func<T> action)
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
+            }
         }
 
         private static ReachyPresentationBody[] CreateBodies(

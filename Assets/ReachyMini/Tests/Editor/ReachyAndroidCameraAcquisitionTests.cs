@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Reflection;
 using NUnit.Framework;
 using ReachyMini.AppState;
 using UnityEngine;
@@ -257,12 +256,13 @@ namespace ReachyMini.Tests
             ReachyAndroidCameraAcquisition acquisition,
             bool paused)
         {
-            MethodInfo? callback = typeof(ReachyAndroidCameraAcquisition)
-                .GetMethod(
-                    "OnApplicationPause",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(callback, Is.Not.Null);
-            callback!.Invoke(acquisition, new object[] { paused });
+            if (paused)
+            {
+                acquisition.PauseForApplicationInterruption();
+                return;
+            }
+
+            acquisition.ResumeAfterApplicationInterruption();
         }
 
         private static string RunningSnapshot(

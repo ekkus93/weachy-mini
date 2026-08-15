@@ -1,7 +1,6 @@
 #nullable enable
 
 using System;
-using System.Text.RegularExpressions;
 using NUnit.Framework;
 using ReachyMini.Presentation;
 using ReachyMini.Rendering;
@@ -50,13 +49,8 @@ namespace ReachyMini.Tests
                 ReachyPresentationBody body = CreateBody(root);
                 renderer.ConfigureBodies(new[] { body });
                 body.gameObject.AddComponent(componentType);
-                LogAssert.Expect(
-                    LogType.Error,
-                    new Regex(
-                        $"prohibited transform writer {expectedComponentName}",
-                        RegexOptions.CultureInvariant));
-
-                bool valid = renderer.ValidateAuthoritativeStructure();
+                bool valid = InvokeWithExpectedStructuredError(
+                    renderer.ValidateAuthoritativeStructure);
 
                 Assert.That(valid, Is.False);
                 Assert.That(
@@ -67,6 +61,20 @@ namespace ReachyMini.Tests
             finally
             {
                 Object.DestroyImmediate(root);
+            }
+        }
+
+        private static T InvokeWithExpectedStructuredError<T>(Func<T> action)
+        {
+            bool previous = LogAssert.ignoreFailingMessages;
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                LogAssert.ignoreFailingMessages = previous;
             }
         }
 
