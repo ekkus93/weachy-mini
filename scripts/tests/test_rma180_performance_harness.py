@@ -37,9 +37,7 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
 
         self.assertIn("PercentileReservoirCapacity = 4096", telemetry)
         self.assertIn("MaximumResourceSamples = 2048", telemetry)
-        self.assertIn(
-            "targetFramesPerSecond != 30 && targetFramesPerSecond != 60", telemetry
-        )
+        self.assertIn("targetFramesPerSecond != 30 && targetFramesPerSecond != 60", telemetry)
         self.assertIn('"median_ms"', formatter)
         self.assertIn('"p95_ms"', formatter)
         self.assertIn('"p99_ms"', formatter)
@@ -62,12 +60,8 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
             "Core/LocalModels/ReachyLocalLlmProvider.Generation.cs": (
                 "ReachyPerformanceWorkload.LocalLlm"
             ),
-            "Core/Speech/AudioCoordinatedAsrProvider.cs": (
-                "ReachyPerformanceWorkload.Audio"
-            ),
-            "Core/Speech/AudioCoordinatedTtsProvider.cs": (
-                "ReachyPerformanceWorkload.Audio"
-            ),
+            "Core/Speech/AudioCoordinatedAsrProvider.cs": ("ReachyPerformanceWorkload.Audio"),
+            "Core/Speech/AudioCoordinatedTtsProvider.cs": ("ReachyPerformanceWorkload.Audio"),
             "Core/Providers/ReachySharedHttpTransport.Core.cs": (
                 "ReachyPerformanceWorkload.Network"
             ),
@@ -98,9 +92,7 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
         self.assertIn("ReachyPerformanceReportJsonFormatter.Format(fps60)", acceptance)
         self.assertIn("ReachyPerformanceWorkload.NativePhysics", acceptance)
         self.assertIn("ReachyPerformanceWorkload.UnityRendering", acceptance)
-        runner = (
-            ROOT / "scripts/run_rma180_performance_acceptance_android.sh"
-        ).read_text()
+        runner = (ROOT / "scripts/run_rma180_performance_acceptance_android.sh").read_text()
         self.assertIn("reachy_rma180_performance_acceptance", runner)
         self.assertIn("reachy_rma180_profile_seconds", runner)
         self.assertIn("dumpsys battery", runner)

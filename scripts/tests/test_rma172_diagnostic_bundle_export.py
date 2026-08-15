@@ -85,9 +85,9 @@ class Rma172DiagnosticBundleExportTests(unittest.TestCase):
         coordinator = (APP / "ReachyDiagnosticBundleExportCoordinator.cs").read_text(
             encoding="utf-8"
         )
-        composition = (
-            APP / "ReachySettingsApplicationCompositionProvider.cs"
-        ).read_text(encoding="utf-8")
+        composition = (APP / "ReachySettingsApplicationCompositionProvider.cs").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("ConfigureDiagnosticBundleExport", screen)
         self.assertIn("ExportDiagnosticBundle()", screen)

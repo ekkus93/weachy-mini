@@ -90,12 +90,8 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
         self.assertIn("coordinator.EvaluateAndApply(signals)", runtime)
 
     def test_managed_contracts_cover_llm_vlm_and_tracking(self) -> None:
-        resource_tests = (
-            ROOT / "managed/ReachyMini.ResourceGovernor.Tests/Program.cs"
-        ).read_text()
-        vlm_tests = (
-            ROOT / "managed/ReachyMini.VlmScheduling.Tests/Program.cs"
-        ).read_text()
+        resource_tests = (ROOT / "managed/ReachyMini.ResourceGovernor.Tests/Program.cs").read_text()
+        vlm_tests = (ROOT / "managed/ReachyMini.VlmScheduling.Tests/Program.cs").read_text()
         camera_tests = (
             ROOT / "managed/ReachyMini.Camera.Tests/Rma111LightweightTrackingContracts.cs"
         ).read_text()

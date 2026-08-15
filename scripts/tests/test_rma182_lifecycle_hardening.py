@@ -11,9 +11,7 @@ def read(path: str) -> str:
 
 class Rma182LifecycleHardeningTests(unittest.TestCase):
     def test_simulation_pause_resume_keeps_no_catch_up_invariant(self) -> None:
-        loop = read(
-            "Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.WorkerLoop.cs"
-        )
+        loop = read("Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker.WorkerLoop.cs")
         runtime = read(
             "Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs"
         )
@@ -28,15 +26,12 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
     def test_one_application_lifecycle_ingress_coordinates_services_and_camera(
         self,
     ) -> None:
-        host = read(
-            "Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs"
-        )
+        host = read("Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs")
         contracts = read(
             "Assets/ReachyMini/Runtime/Core/Application/ReachyApplicationInterruption.cs"
         )
         camera = read(
-            "Assets/ReachyMini/Runtime/Application/"
-            "ReachyAndroidCameraAcquisition.Lifecycle.cs"
+            "Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs"
         )
         self.assertEqual(host.count("private void OnApplicationPause(bool paused)"), 1)
         self.assertIn("new ReachyApplicationInterruptionCoordinator(host)", host)
@@ -44,22 +39,16 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
         self.assertIn("result = coordinator.Pause();", host)
         self.assertIn("result = coordinator.Resume();", host)
         self.assertIn("acquisition?.ResumeAfterApplicationInterruption();", host)
-        self.assertIn(
-            "for (int index = ResumeOrder.Length - 1; index >= 0; --index)", contracts
-        )
-        self.assertIn(
-            "for (int index = 0; index < ResumeOrder.Length; ++index)", contracts
-        )
+        self.assertIn("for (int index = ResumeOrder.Length - 1; index >= 0; --index)", contracts)
+        self.assertIn("for (int index = 0; index < ResumeOrder.Length; ++index)", contracts)
         self.assertNotIn("private void OnApplicationPause(bool paused)", camera)
 
     def test_camera_and_speech_release_or_cancel_active_resources(self) -> None:
         camera = read(
-            "Assets/ReachyMini/Runtime/Application/"
-            "ReachyAndroidCameraAcquisition.Lifecycle.cs"
+            "Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs"
         )
         speech = read(
-            "Assets/ReachyMini/Runtime/Core/Speech/"
-            "SpeechAudioFocusCoordinator.Lifecycle.cs"
+            "Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.Lifecycle.cs"
         )
         coordinated_asr = read(
             "Assets/ReachyMini/Runtime/Core/Speech/AudioCoordinatedAsrProvider.cs"
@@ -79,28 +68,19 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
             "Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Core.cs"
         )
         http_lifecycle = read(
-            "Assets/ReachyMini/Runtime/Core/Providers/"
-            "ReachySharedHttpTransport.Lifecycle.cs"
+            "Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Lifecycle.cs"
         )
         llm = read(
-            "Assets/ReachyMini/Runtime/Core/LocalModels/"
-            "ReachyLocalLlmProvider.Generation.cs"
+            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs"
         )
         llm_lifecycle = read(
-            "Assets/ReachyMini/Runtime/Core/LocalModels/"
-            "ReachyLocalLlmProvider.Lifecycle.cs"
+            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Lifecycle.cs"
         )
-        vlm = read(
-            "Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.Lifecycle.cs"
-        )
+        vlm = read("Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.Lifecycle.cs")
         scheduler = read("Assets/ReachyMini/Runtime/Core/Perception/ReachyVlmScheduler.cs")
-        self.assertIn(
-            "interruptionGate.CreateLinkedTokenSource(cancellationToken)", http_core
-        )
+        self.assertIn("interruptionGate.CreateLinkedTokenSource(cancellationToken)", http_core)
         self.assertIn("IReachyApplicationInterruptionParticipant", http_lifecycle)
-        self.assertIn(
-            "interruptionGate.CreateLinkedTokenSource(cancellationToken)", llm
-        )
+        self.assertIn("interruptionGate.CreateLinkedTokenSource(cancellationToken)", llm)
         self.assertIn("IReachyApplicationInterruptionParticipant", llm_lifecycle)
         self.assertIn("lease.MarkCancellationRequested()", vlm)
         self.assertIn("if (lifecycleSuspended)", scheduler)

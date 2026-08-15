@@ -9,9 +9,7 @@ RENDERING = ROOT / "Assets/ReachyMini/Runtime/Rendering"
 
 class Rma171DiagnosticsScreenTests(unittest.TestCase):
     def test_typed_snapshot_requires_explicit_unavailable_reasons(self) -> None:
-        contracts = (CORE / "ReachyDiagnosticsScreenContracts.cs").read_text(
-            encoding="utf-8"
-        )
+        contracts = (CORE / "ReachyDiagnosticsScreenContracts.cs").read_text(encoding="utf-8")
         for token in (
             "ReachyDiagnosticsAvailability",
             "Available = 0",
@@ -24,9 +22,7 @@ class Rma171DiagnosticsScreenTests(unittest.TestCase):
             self.assertIn(token, contracts)
 
     def test_all_required_sections_and_metrics_are_rendered(self) -> None:
-        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(encoding="utf-8")
         for section in (
             '"Simulation"',
             '"Rendering"',
@@ -61,9 +57,7 @@ class Rma171DiagnosticsScreenTests(unittest.TestCase):
             self.assertIn(metric, source)
 
     def test_provider_locality_comes_from_durable_selection(self) -> None:
-        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(encoding="utf-8")
         self.assertIn("currentSettings.GetProvider(kind)", source)
         self.assertIn("provider.Execution", source)
         self.assertIn("provider.Connectivity", source)
@@ -73,9 +67,9 @@ class Rma171DiagnosticsScreenTests(unittest.TestCase):
     def test_screen_uses_typed_diagnostics_with_legacy_adapter_only(self) -> None:
         screen = (APP / "ReachyMainScreen.cs").read_text(encoding="utf-8")
         hud = (APP / "ReachyMainScreen.Hud.cs").read_text(encoding="utf-8")
-        composition = (
-            APP / "ReachySettingsApplicationCompositionProvider.cs"
-        ).read_text(encoding="utf-8")
+        composition = (APP / "ReachySettingsApplicationCompositionProvider.cs").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("Func<ReachyDiagnosticsScreenSnapshot>? diagnosticsProvider", screen)
         self.assertIn("Func<ReachyDiagnosticsScreenSnapshot> currentDiagnostics", screen)
         self.assertIn("ReachyDiagnosticsScreenSnapshot.FromLegacyText", screen)
@@ -84,9 +78,7 @@ class Rma171DiagnosticsScreenTests(unittest.TestCase):
         self.assertIn("diagnosticsSource.Capture()", composition)
 
     def test_missing_camera_pipeline_metrics_fail_visible(self) -> None:
-        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(
-            encoding="utf-8"
-        )
+        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(encoding="utf-8")
         self.assertIn(
             "The production camera path does not yet publish a reprojection timing snapshot.",
             source,
@@ -99,12 +91,10 @@ class Rma171DiagnosticsScreenTests(unittest.TestCase):
         self.assertNotIn('"100.0%"', source)
 
     def test_version_identity_is_not_duplicated_magic_data(self) -> None:
-        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(
+        source = (APP / "ReachyDiagnosticsScreenSource.cs").read_text(encoding="utf-8")
+        runtime = (RENDERING / "ReachyProductionAuthoritativeRuntime.cs").read_text(
             encoding="utf-8"
         )
-        runtime = (
-            RENDERING / "ReachyProductionAuthoritativeRuntime.cs"
-        ).read_text(encoding="utf-8")
         self.assertIn("ProjectMetadata.NativeAbiVersion", source)
         self.assertIn("ReachyProductionAuthoritativeRuntime.RequiredMujocoVersion", source)
         self.assertIn("runtime.ReachyAssetSourceHash", source)
