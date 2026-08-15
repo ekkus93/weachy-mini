@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(sys.argv[1]).resolve()
+EXPECTED = {
+    "Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs": "993ab720b5d6565fde5263699f640bb5241f710b",
+    "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs": "9108d1f412406ec4278cb8db07911392d4c23699",
+    "Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleExportCoordinator.cs": "98f9824cb66c912636b245ff977dc7b6145dd8ef",
+    "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Download.cs": "960fd32abe96e275b485ba1c7d4f5565ef26c991",
+    "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md": "277bd732dbaf0c45181a584b7e4122d3b1efd275",
+    "managed/ReachyMini.Core.Tests/Program.cs": "1e63b41f4f9b34cb84a6953fc3cfbe8a5d354b3a",
+}
+
+def git_blob(path: Path) -> str:
+    return subprocess.check_output(["git", "-C", str(ROOT), "hash-object", str(path)], text=True).strip()
+
+def guard(rel: str) -> Path:
+    path = ROOT / rel
+    actual = git_blob(path)
+    expected = EXPECTED[rel]
+    if actual != expected:
+        raise SystemExit(f"refusing RMA-183 transform for {rel}: expected blob {expected}, got {actual}")
+    return path
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected exactly one anchor, found {count}")
+    return text.replace(old, new, 1)
+
+def write(path: Path, text: str) -> None:
+    path.write_text(text, encoding="utf-8", newline="")
+
+rel = "Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs"
+p = guard(rel); s = p.read_text(encoding="utf-8")
+s = replace_once(s, 'using System;\nusing UnityEngine;\n', 'using System;\nusing System.Collections.Generic;\nusing System.Threading.Tasks;\nusing ReachyMini.LocalModels;\nusing UnityEngine;\n', "host usings")
+s = replace_once(s, '        private ReachyApplicationHost? host;\n        private ReachyApplicationInterruptionCoordinator? interruptionCoordinator;\n        private bool startupEntered;\n', '        private readonly object memoryPressureSync = new object();\n        private ReachyApplicationHost? host;\n        private ReachyApplicationInterruptionCoordinator? interruptionCoordinator;\n        private ReachyMemoryPressureCoordinator? memoryPressureCoordinator;\n        private ReachyAndroidMemoryTrimMonitor? memoryTrimMonitor;\n        private ReachyMemoryPressureSignal? pendingMemoryPressure;\n        private Task<ReachyMemoryPressureReport>? memoryPressureTask;\n        private bool startupEntered;\n', "host fields")
+s = replace_once(s, '                interruptionCoordinator =\n                    new ReachyApplicationInterruptionCoordinator(host);\n', '                interruptionCoordinator =\n                    new ReachyApplicationInterruptionCoordinator(host);\n                StartMemoryPressureHandling(host);\n', "host startup")
+s = replace_once(s, '        public void ShutdownApplication()\n        {\n            ReachyApplicationInterruptionCoordinator? coordinator =\n', '        public void ShutdownApplication()\n        {\n            StopMemoryPressureHandling();\n\n            ReachyApplicationInterruptionCoordinator? coordinator =\n', "host shutdown")
+s = replace_once(s, '        private void OnApplicationPause(bool paused)\n', '        private void Update()\n        {\n            Task<ReachyMemoryPressureReport>? active = memoryPressureTask;\n            if (active != null && active.IsCompleted)\n            {\n                memoryPressureTask = null;\n                try\n                {\n                    ReachyMemoryPressureReport report = active.GetAwaiter().GetResult();\n                    if (!report.Succeeded)\n                    {\n                        Debug.LogError(\n                            $"Memory-pressure cleanup failed in {report.FailureCount} target(s).",\n                            this);\n                    }\n                }\n                catch (Exception exception)\n                {\n                    Debug.LogError(\n                        "Memory-pressure coordination failed (" +\n                        exception.GetType().Name + ").",\n                        this);\n                }\n            }\n\n            if (memoryPressureTask != null)\n            {\n                return;\n            }\n\n            ReachyMemoryPressureSignal? signal;\n            lock (memoryPressureSync)\n            {\n                signal = pendingMemoryPressure;\n                pendingMemoryPressure = null;\n            }\n            if (signal == null)\n            {\n                return;\n            }\n\n            if (signal.Level != ReachyMemoryPressureLevel.Normal)\n            {\n                _ = Resources.UnloadUnusedAssets();\n            }\n            ReachyMemoryPressureCoordinator? coordinator = memoryPressureCoordinator;\n            if (coordinator != null)\n            {\n                memoryPressureTask = coordinator.ApplyAsync(signal);\n            }\n        }\n\n        private void OnApplicationLowMemory()\n        {\n            QueueMemoryPressure(new ReachyMemoryPressureSignal(\n                ReachyMemoryPressureLevel.Critical,\n                ReachyMemoryPressureSource.UnityLowMemory));\n        }\n\n        private void QueueMemoryPressure(ReachyMemoryPressureSignal signal)\n        {\n            ReachyAndroidMemoryPressureState.Report(signal.Level);\n            lock (memoryPressureSync)\n            {\n                if (pendingMemoryPressure == null ||\n                    signal.Level > pendingMemoryPressure.Level)\n                {\n                    pendingMemoryPressure = signal;\n                }\n            }\n        }\n\n        private void StartMemoryPressureHandling(ReachyApplicationHost activeHost)\n        {\n            var targets = new List<IReachyMemoryPressureTarget>();\n            ReachyServiceKind[] kinds =\n            {\n                ReachyServiceKind.Simulation,\n                ReachyServiceKind.Camera,\n                ReachyServiceKind.Audio,\n                ReachyServiceKind.Persistence,\n                ReachyServiceKind.Provider,\n                ReachyServiceKind.Perception,\n                ReachyServiceKind.Behavior,\n                ReachyServiceKind.UserInterface,\n            };\n            for (int index = 0; index < kinds.Length; ++index)\n            {\n                if (activeHost.GetRequiredService(kinds[index]) is\n                    IReachyMemoryPressureTarget target)\n                {\n                    targets.Add(target);\n                }\n            }\n\n            memoryPressureCoordinator = new ReachyMemoryPressureCoordinator(targets);\n            Application.lowMemory += OnApplicationLowMemory;\n            memoryTrimMonitor = new ReachyAndroidMemoryTrimMonitor(QueueMemoryPressure);\n        }\n\n        private void StopMemoryPressureHandling()\n        {\n            Application.lowMemory -= OnApplicationLowMemory;\n            ReachyAndroidMemoryTrimMonitor? monitor = memoryTrimMonitor;\n            memoryTrimMonitor = null;\n            monitor?.Dispose();\n\n            Task<ReachyMemoryPressureReport>? active = memoryPressureTask;\n            memoryPressureTask = null;\n            if (active != null)\n            {\n                try\n                {\n                    _ = active.GetAwaiter().GetResult();\n                }\n                catch (Exception exception)\n                {\n                    Debug.LogError(\n                        "Memory-pressure shutdown drain failed (" +\n                        exception.GetType().Name + ").",\n                        this);\n                }\n            }\n\n            ReachyMemoryPressureCoordinator? coordinator = memoryPressureCoordinator;\n            memoryPressureCoordinator = null;\n            coordinator?.Dispose();\n            lock (memoryPressureSync)\n            {\n                pendingMemoryPressure = null;\n            }\n        }\n\n' + '        private void OnApplicationPause(bool paused)\n', "host memory-pressure methods")
+write(p, s)
+
+rel = "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
+p = guard(rel); s = p.read_text(encoding="utf-8")
+s = replace_once(s, '        private readonly ReachyDiagnosticBundleExportCoordinator diagnosticBundleExporter;\n        private readonly ReachyMainScreenStateStore stateStore =\n', '        private readonly ReachyDiagnosticBundleExportCoordinator diagnosticBundleExporter;\n        private readonly ReachyStoragePressureCleanupCoordinator storageCleanupCoordinator;\n        private readonly ReachyMainScreenStateStore stateStore =\n', "settings cleanup field")
+s = replace_once(s, '            diagnosticBundleExporter = new ReachyDiagnosticBundleExportCoordinator(\n                diagnosticsSource,\n                Path.Combine(\n                    Application.persistentDataPath,\n                    "diagnostics"));\n', '            diagnosticBundleExporter = new ReachyDiagnosticBundleExportCoordinator(\n                diagnosticsSource,\n                Path.Combine(\n                    Application.persistentDataPath,\n                    "diagnostics"));\n            storageCleanupCoordinator = new ReachyStoragePressureCleanupCoordinator(\n                Path.Combine(Application.persistentDataPath, "diagnostics"),\n                Path.Combine(Application.persistentDataPath, "local-models"));\n', "settings cleanup construction")
+s = replace_once(s, '            screen.ConfigureDiagnosticBundleExport(\n                diagnosticBundleExporter.ExportRedactedBundle);\n            SetReady("Main screen and durable settings are bound to application state.");\n', '            screen.ConfigureDiagnosticBundleExport(\n                diagnosticBundleExporter.ExportRedactedBundle);\n            screen.ConfigureStorageCleanup(storageCleanupCoordinator.Cleanup);\n            SetReady("Main screen and durable settings are bound to application state.");\n', "settings cleanup binding")
+write(p, s)
+
+rel = "Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleExportCoordinator.cs"
