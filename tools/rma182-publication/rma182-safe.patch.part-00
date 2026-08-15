@@ -1,0 +1,538 @@
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs b/Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs
+index 332f2e1..edb46c0 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition.Lifecycle.cs
+@@ -24,16 +24,20 @@ namespace ReachyMini.AppState
+             ApplyPlatformSnapshot(RequirePlatform().Snapshot());
+         }
+ 
+-        private void OnApplicationPause(bool paused)
++        public void PauseForApplicationInterruption()
+         {
+             if (!initialized || disposed || !state.Current.IsActive)
+             {
+                 return;
+             }
+ 
+-            if (paused)
++            ApplyPlatformSnapshot(RequirePlatform().Pause());
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            if (!initialized || disposed || !state.Current.IsActive)
+             {
+-                ApplyPlatformSnapshot(RequirePlatform().Pause());
+                 return;
+             }
+ 
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs b/Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs
+index 6243d1a..865315f 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs
+@@ -2,10 +2,13 @@
+ 
+ using System;
+ using System.Threading.Tasks;
++using ReachyMini.AppState;
+ 
+ namespace ReachyMini.Speech
+ {
+-    public sealed class ReachyAndroidSpeechAudioStack : IAsyncDisposable
++    public sealed class ReachyAndroidSpeechAudioStack :
++        IAsyncDisposable,
++        IReachyApplicationInterruptionParticipant
+     {
+         internal ReachyAndroidSpeechAudioStack(
+             IAsrProvider asr,
+@@ -21,6 +24,16 @@ namespace ReachyMini.Speech
+         public ITtsProvider Tts { get; }
+         public SpeechAudioFocusCoordinator Audio { get; }
+ 
++        public void PauseForApplicationInterruption()
++        {
++            Audio.PauseForApplicationInterruption();
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            Audio.ResumeAfterApplicationInterruption();
++        }
++
+         public async ValueTask DisposeAsync()
+         {
+             Exception? firstFailure = null;
+diff --git a/Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs b/Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs
+index bdf3511..ce30a39 100644
+--- a/Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs
++++ b/Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs
+@@ -171,7 +171,8 @@ namespace ReachyMini.AppState
+ 
+     internal sealed class ReachyProductionSimulationApplicationService :
+         ReachyApplicationServiceBase,
+-        IReachySimulationService
++        IReachySimulationService,
++        IReachyApplicationInterruptionParticipant
+     {
+         private readonly ReachyProductionAuthoritativeRuntime runtime;
+ 
+@@ -190,6 +191,30 @@ namespace ReachyMini.AppState
+             SetReady(
+                 $"Authoritative simulation adapter is present; runtime status is {runtime.Status}.");
+         }
++
++        public void PauseForApplicationInterruption()
++        {
++            ReachySimulationControlResult result =
++                runtime.PauseForApplicationInterruption();
++            if (!result.IsSuccess)
++            {
++                throw new InvalidOperationException(
++                    "Authoritative simulation pause failed with " +
++                    result.Error.Code + ".");
++            }
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            ReachySimulationControlResult result =
++                runtime.ResumeAfterApplicationInterruption();
++            if (!result.IsSuccess)
++            {
++                throw new InvalidOperationException(
++                    "Authoritative simulation resume failed with " +
++                    result.Error.Code + ".");
++            }
++        }
+     }
+ 
+     internal sealed class ReachyFixedCameraApplicationService :
+@@ -332,7 +357,8 @@ namespace ReachyMini.AppState
+ 
+     internal sealed class ReachyMainScreenApplicationService :
+         ReachyApplicationServiceBase,
+-        IReachyUserInterfaceService
++        IReachyUserInterfaceService,
++        IReachyApplicationInterruptionParticipant
+     {
+         private readonly ReachyMainScreen screen;
+         private readonly IReachyApplicationService[] dependencies;
+@@ -401,6 +427,16 @@ namespace ReachyMini.AppState
+             }
+         }
+ 
++        public void PauseForApplicationInterruption()
++        {
++            _ = stateStore.PauseForApplicationInterruption();
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            _ = stateStore.ResumeAfterApplicationInterruption();
++        }
++
+         private void OnDependencyHealthChanged(
+             object? sender,
+             ReachyServiceHealthChangedEventArgs eventArgs)
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyApplicationInterruption.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyApplicationInterruption.cs
+new file mode 100644
+index 0000000..cd7bcd2
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Application/ReachyApplicationInterruption.cs
+@@ -0,0 +1,392 @@
++#nullable enable
++
++using System;
++using System.Threading;
++
++namespace ReachyMini.AppState
++{
++    public enum ReachyApplicationInterruptionState
++    {
++        Active = 0,
++        Pausing = 1,
++        Paused = 2,
++        Resuming = 3,
++        Faulted = 4,
++        Disposed = 5,
++    }
++
++    public interface IReachyApplicationInterruptionParticipant
++    {
++        void PauseForApplicationInterruption();
++
++        void ResumeAfterApplicationInterruption();
++    }
++
++    public sealed class ReachyApplicationInterruptionResult
++    {
++        internal ReachyApplicationInterruptionResult(
++            bool succeeded,
++            ReachyApplicationInterruptionState state,
++            int participantCount,
++            int failureCount,
++            ulong completedCycleCount,
++            string diagnostic)
++        {
++            Succeeded = succeeded;
++            State = state;
++            ParticipantCount = participantCount;
++            FailureCount = failureCount;
++            CompletedCycleCount = completedCycleCount;
++            Diagnostic = diagnostic ?? throw new ArgumentNullException(nameof(diagnostic));
++        }
++
++        public bool Succeeded { get; }
++
++        public ReachyApplicationInterruptionState State { get; }
++
++        public int ParticipantCount { get; }
++
++        public int FailureCount { get; }
++
++        public ulong CompletedCycleCount { get; }
++
++        public string Diagnostic { get; }
++    }
++
++    public sealed class ReachyApplicationInterruptionGate :
++        IReachyApplicationInterruptionParticipant,
++        IDisposable
++    {
++        private readonly object sync = new object();
++        private CancellationTokenSource interruptionCancellation =
++            new CancellationTokenSource();
++        private bool paused;
++        private bool disposed;
++        private ulong revision;
++
++        public bool IsPaused
++        {
++            get
++            {
++                lock (sync)
++                {
++                    ThrowIfDisposedLocked();
++                    return paused;
++                }
++            }
++        }
++
++        public ulong Revision
++        {
++            get
++            {
++                lock (sync)
++                {
++                    ThrowIfDisposedLocked();
++                    return revision;
++                }
++            }
++        }
++
++        public CancellationTokenSource CreateLinkedTokenSource(
++            CancellationToken callerToken)
++        {
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                return CancellationTokenSource.CreateLinkedTokenSource(
++                    callerToken,
++                    interruptionCancellation.Token);
++            }
++        }
++
++        public void PauseForApplicationInterruption()
++        {
++            CancellationTokenSource cancellation;
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                if (paused)
++                {
++                    return;
++                }
++
++                paused = true;
++                revision = checked(revision + 1UL);
++                cancellation = interruptionCancellation;
++            }
++
++            cancellation.Cancel();
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            CancellationTokenSource priorCancellation;
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                if (!paused)
++                {
++                    return;
++                }
++
++                priorCancellation = interruptionCancellation;
++                interruptionCancellation = new CancellationTokenSource();
++                paused = false;
++                revision = checked(revision + 1UL);
++            }
++
++            priorCancellation.Dispose();
++        }
++
++        public void Dispose()
++        {
++            CancellationTokenSource cancellation;
++            lock (sync)
++            {
++                if (disposed)
++                {
++                    return;
++                }
++
++                disposed = true;
++                paused = true;
++                revision = checked(revision + 1UL);
++                cancellation = interruptionCancellation;
++            }
++
++            try
++            {
++                cancellation.Cancel();
++            }
++            finally
++            {
++                cancellation.Dispose();
++            }
++            GC.SuppressFinalize(this);
++        }
++
++        private void ThrowIfDisposedLocked()
++        {
++            if (disposed)
++            {
++                throw new ObjectDisposedException(
++                    nameof(ReachyApplicationInterruptionGate));
++            }
++        }
++    }
++
++    public sealed class ReachyApplicationInterruptionCoordinator : IDisposable
++    {
++        private static readonly ReachyServiceKind[] ResumeOrder =
++        {
++            ReachyServiceKind.Simulation,
++            ReachyServiceKind.Camera,
++            ReachyServiceKind.Audio,
++            ReachyServiceKind.Persistence,
++            ReachyServiceKind.Provider,
++            ReachyServiceKind.Perception,
++            ReachyServiceKind.Behavior,
++            ReachyServiceKind.UserInterface,
++        };
++
++        private readonly object sync = new object();
++        private readonly ReachyApplicationHost host;
++        private ReachyApplicationInterruptionState state =
++            ReachyApplicationInterruptionState.Active;
++        private ulong completedCycleCount;
++        private bool disposed;
++
++        public ReachyApplicationInterruptionCoordinator(
++            ReachyApplicationHost host)
++        {
++            this.host = host ?? throw new ArgumentNullException(nameof(host));
++        }
++
++        public ReachyApplicationInterruptionState State
++        {
++            get
++            {
++                lock (sync)
++                {
++                    return state;
++                }
++            }
++        }
++
++        public ulong CompletedCycleCount
++        {
++            get
++            {
++                lock (sync)
++                {
++                    return completedCycleCount;
++                }
++            }
++        }
++
++        public ReachyApplicationInterruptionResult Pause()
++        {
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                if (state == ReachyApplicationInterruptionState.Paused)
++                {
++                    return Result(
++                        succeeded: true,
++                        participantCount: 0,
++                        failureCount: 0,
++                        "Application interruption is already paused.");
++                }
++                if (state != ReachyApplicationInterruptionState.Active)
++                {
++                    return Result(
++                        succeeded: false,
++                        participantCount: 0,
++                        failureCount: 1,
++                        $"Cannot pause application interruption from {state}.");
++                }
++                state = ReachyApplicationInterruptionState.Pausing;
++            }
++
++            int participantCount = 0;
++            int failureCount = 0;
++            for (int index = ResumeOrder.Length - 1; index >= 0; --index)
++            {
++                IReachyApplicationService service =
++                    host.GetRequiredService(ResumeOrder[index]);
++                if (service is not IReachyApplicationInterruptionParticipant participant)
++                {
++                    continue;
++                }
++
++                participantCount = checked(participantCount + 1);
++                try
++                {
++                    participant.PauseForApplicationInterruption();
++                }
++                catch (Exception)
++                {
++                    failureCount = checked(failureCount + 1);
++                }
++            }
++
++            lock (sync)
++            {
++                state = failureCount == 0
++                    ? ReachyApplicationInterruptionState.Paused
++                    : ReachyApplicationInterruptionState.Faulted;
++                return Result(
++                    failureCount == 0,
++                    participantCount,
++                    failureCount,
++                    failureCount == 0
++                        ? "Application services are deterministically paused."
++                        : $"Application pause failed in {failureCount} lifecycle participant(s)." );
++            }
++        }
++
++        public ReachyApplicationInterruptionResult Resume()
++        {
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                if (state == ReachyApplicationInterruptionState.Active)
++                {
++                    return Result(
++                        succeeded: true,
++                        participantCount: 0,
++                        failureCount: 0,
++                        "Application interruption is already active.");
++                }
++                if (state != ReachyApplicationInterruptionState.Paused)
++                {
++                    return Result(
++                        succeeded: false,
++                        participantCount: 0,
++                        failureCount: 1,
++                        $"Cannot resume application interruption from {state}.");
++                }
++                state = ReachyApplicationInterruptionState.Resuming;
++            }
++
++            int participantCount = 0;
++            int failureCount = 0;
++            for (int index = 0; index < ResumeOrder.Length; ++index)
++            {
++                IReachyApplicationService service =
++                    host.GetRequiredService(ResumeOrder[index]);
++                if (service is not IReachyApplicationInterruptionParticipant participant)
++                {
++                    continue;
++                }
++
++                participantCount = checked(participantCount + 1);
++                try
++                {
++                    participant.ResumeAfterApplicationInterruption();
++                }
++                catch (Exception)
++                {
++                    failureCount = checked(failureCount + 1);
++                }
++            }
++
++            lock (sync)
++            {
++                if (failureCount == 0)
++                {
++                    state = ReachyApplicationInterruptionState.Active;
++                    completedCycleCount = checked(completedCycleCount + 1UL);
++                }
++                else
++                {
++                    state = ReachyApplicationInterruptionState.Faulted;
++                }
++                return Result(
++                    failureCount == 0,
++                    participantCount,
++                    failureCount,
++                    failureCount == 0
++                        ? "Application services resumed without replaying paused work."
++                        : $"Application resume failed in {failureCount} lifecycle participant(s)." );
++            }
++        }
++
++        public void Dispose()
++        {
++            lock (sync)
++            {
++                if (disposed)
++                {
++                    return;
++                }
++                disposed = true;
++                state = ReachyApplicationInterruptionState.Disposed;
++            }
++            GC.SuppressFinalize(this);
++        }
++
++        private ReachyApplicationInterruptionResult Result(
++            bool succeeded,
++            int participantCount,
++            int failureCount,
++            string diagnostic) =>
++            new ReachyApplicationInterruptionResult(
++                succeeded,
++                state,
++                participantCount,
++                failureCount,
++                completedCycleCount,
++                diagnostic);
++
++        private void ThrowIfDisposedLocked()
++        {
++            if (disposed)
++            {
++                throw new ObjectDisposedException(
++                    nameof(ReachyApplicationInterruptionCoordinator));
++            }
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs
+new file mode 100644
+index 0000000..5567bfa
+--- /dev/null
