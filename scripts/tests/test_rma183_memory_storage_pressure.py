@@ -32,12 +32,9 @@ class Rma183MemoryStoragePressureTests(unittest.TestCase):
         self.assertIn("InvalidateOutput(", camera)
 
     def test_local_llm_pressure_preserves_active_state_and_releases_idle_model(self) -> None:
-        core = read(
-            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs"
-        )
+        core = read("Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs")
         pressure = read(
-            "Assets/ReachyMini/Runtime/Core/LocalModels/"
-            "ReachyLocalLlmProvider.MemoryPressure.cs"
+            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.MemoryPressure.cs"
         )
         registry = read("Assets/ReachyMini/Runtime/Core/Application/ReachyMemoryPressure.cs")
 
@@ -75,7 +72,7 @@ class Rma183MemoryStoragePressureTests(unittest.TestCase):
         )
         self.assertIn("Writing the resumable model download failed", download)
         self.assertNotIn(
-            'DeleteFileIfPresent(partPath);\n                    return IoFailure(\n'
+            "DeleteFileIfPresent(partPath);\n                    return IoFailure(\n"
             '                        "Writing the resumable model download failed"',
             download,
         )
@@ -105,9 +102,7 @@ class Rma183MemoryStoragePressureTests(unittest.TestCase):
         main_screen = read(
             "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs"
         )
-        cleanup = read(
-            "Assets/ReachyMini/Runtime/Application/ReachyStorageCleanupCoordinator.cs"
-        )
+        cleanup = read("Assets/ReachyMini/Runtime/Application/ReachyStorageCleanupCoordinator.cs")
 
         self.assertIn("CLEAN UP RECOVERABLE STORAGE", settings)
         self.assertIn("CleanupRecoverableStorage();", settings)
