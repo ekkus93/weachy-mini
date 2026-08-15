@@ -1,0 +1,51 @@
+diff --git a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
+index 9f64d28..9799394 100644
+--- a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
++++ b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
+@@ -50,7 +50,6 @@ namespace ReachyMini.Speech
+             cancellationToken.ThrowIfCancellationRequested();
+ 
+             SpeechAudioSession session;
+-            CancellationTokenSource lifecycleCancellation;
+             lock (sync)
+             {
+                 ThrowIfDisposedLocked();
+@@ -83,14 +82,13 @@ namespace ReachyMini.Speech
+                 session = new SpeechAudioSession(
+                     "speech-audio-" + Guid.NewGuid().ToString("N"),
+                     role);
+-                lifecycleCancellation =
+-                    interruptionGate.CreateLinkedTokenSource(cancellationToken);
+                 activeSession = session;
+                 state = SpeechAudioState.Acquiring;
+                 lastInterruption = null;
+             }
+ 
+-            using (lifecycleCancellation)
++            using (CancellationTokenSource lifecycleCancellation =
++                CreateLifecycleCancellation(session, cancellationToken))
+             {
+                 SpeechAudioFocusRequestResult requestResult;
+                 try
+@@ -301,6 +299,21 @@ namespace ReachyMini.Speech
+             _ = session.TryInterrupt(eventArgs.Interruption);
+         }
+ 
++        private CancellationTokenSource CreateLifecycleCancellation(
++            SpeechAudioSession session,
++            CancellationToken cancellationToken)
++        {
++            try
++            {
++                return interruptionGate.CreateLinkedTokenSource(cancellationToken);
++            }
++            catch
++            {
++                ClearCancelledAcquisition(session);
++                throw;
++            }
++        }
++
+         private void ClearCancelledAcquisition(SpeechAudioSession session)
+         {
+             lock (sync)
