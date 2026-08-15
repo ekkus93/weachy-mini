@@ -1,4 +1,4 @@
-# Publication payload revision 2: verified binary parts are committed with this workflow.
+# Publication payload revision 3: verified binary parts plus managed-build compatibility fix.
 name: RMA-180 performance harness publication
 
 on:
@@ -39,6 +39,7 @@ jobs:
           EXPECTED_MASTER: 9b1d1274475db9e5e225afc1d20f2a1bd9cd225b
           EXPECTED_PATCH_SHA256: 1135488cb3a75c83b00142107459530f4700cc7e2587469fcf611c26266f8342
           EXPECTED_GZIP_SHA256: adffd3cd49df578d49ace34ec567391723f3d91f72d537402f2cdf87ce3071c3
+          EXPECTED_BUILD_FIX_SHA256: 175bc8a85b8556a9b6c6eb974b4370673096cc871a8a7ed8e832db7c88050ea5
         run: |
           set -euo pipefail
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
@@ -55,8 +56,16 @@ jobs:
             "${EXPECTED_PATCH_SHA256}" \
             "${RUNNER_TEMP}/rma180.patch" \
             | sha256sum --check --strict
+          printf '%s  %s\n' \
+            "${EXPECTED_BUILD_FIX_SHA256}" \
+            "publication/tools/rma180-publication/managed-build-fix.patch" \
+            | sha256sum --check --strict
           git -C target apply --check "${RUNNER_TEMP}/rma180.patch"
           git -C target apply "${RUNNER_TEMP}/rma180.patch"
+          git -C target apply --check \
+            ../publication/tools/rma180-publication/managed-build-fix.patch
+          git -C target apply \
+            ../publication/tools/rma180-publication/managed-build-fix.patch
           git -C target diff --check
 
       - name: Run current repository static gate
@@ -88,7 +97,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "RMA-180: add performance harness"
+          git commit -m "RMA-180: add performance harness and managed build fixes"
 
       - name: Fast-forward master if unchanged
         shell: bash
