@@ -114,7 +114,7 @@ namespace ReachyMini.Rendering
             }
             ThrowIfDisposed();
 
-            using ReachyPerformanceMeasurement measurement =
+            using ReachyPerformanceMeasurement performanceMeasurement =
                 ReachyPerformanceTelemetry.Measure(
                     ReachyPerformanceWorkload.CameraWarp);
 
@@ -153,10 +153,10 @@ namespace ReachyMini.Rendering
                     build.Message);
             }
 
-            ReachyCameraCoverageMeasurement measurement;
+            ReachyCameraCoverageMeasurement coverageMeasurement;
             try
             {
-                measurement =
+                coverageMeasurement =
                     ReachyCameraValidCoverageCalculator.Calculate(
                         build.Plan!);
             }
@@ -173,7 +173,7 @@ namespace ReachyMini.Rendering
             }
 
             ReachyCameraCoveragePublishResult publication =
-                coverageState.Publish(measurement);
+                coverageState.Publish(coverageMeasurement);
             if (!publication.Succeeded)
             {
                 return Failure(

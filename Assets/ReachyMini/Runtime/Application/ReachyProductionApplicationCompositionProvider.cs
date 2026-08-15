@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using ReachyMini.Presentation;
 using ReachyMini.Rendering;
+using ReachyMini.Simulation;
 using UnityEngine;
 
 namespace ReachyMini.AppState
