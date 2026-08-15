@@ -34,7 +34,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_MASTER: a7d165d781f3492b7c9418323ba6c0bc71a1b3da
-          EXPECTED_PATCH_SHA256: a2d1529fb6b37bb67e86258d2b72f4bf6a7668f4bc84513fe9d5741b033f7792
+          EXPECTED_PATCH_SHA256: 166025efde270b6f6ba40edac36c50fb9cb7b8019e5873ebf67ba15e50554c5a
           EXPECTED_TRANSFORM_SHA256: 988cc211b772013716424720ebaa3014df8374de6064da9361980ffc62044761
         run: |
           set -euo pipefail
@@ -43,7 +43,7 @@ jobs:
           cat <<'SUMS' | sha256sum --check --strict
           b8506f74a6f1842f156881f7210de6edd9c33e30063fede87b89fb7209684379  publication/tools/rma182-publication/rma182-safe.patch.part-00
           5bf1ece2d7bb692d23c1f1a2f3bc46fab159127c795696d45f5f656997acfa4f  publication/tools/rma182-publication/rma182-safe.patch.part-01
-          42f5b7440b2c6bf80550d5d4c8b4387a83729d39cc0a98133b560ee4c40a63ad  publication/tools/rma182-publication/rma182-safe.patch.part-02
+          6f4e8a0c69892376b17c99b5ae77050e74feccdd76eeeeee97d5a55dfb19cfc4  publication/tools/rma182-publication/rma182-safe.patch.part-02
           375190ee30ef6d237a003efa457835681648358844166b3c400738ad972d76b3  publication/tools/rma182-publication/rma182-safe.patch.part-03a
           a8900ae034e7fb011fde12746506264598820341711924a0237dce2679f80f2f  publication/tools/rma182-publication/rma182-safe.patch.part-03b
           bb068b0d3339d8118ded49978549e9ae55477985ec19d86a82c234153afceb35  publication/tools/rma182-publication/rma182-safe.patch.part-04
