@@ -24,6 +24,9 @@ namespace ReachyMini.AppState
             ApplyPlatformSnapshot(RequirePlatform().Snapshot());
         }
 
+        // Unity OnApplicationPause ownership is centralized in
+        // ReachyApplicationHostBehaviour. This component participates through
+        // the explicit interruption methods below.
         public void PauseForApplicationInterruption()
         {
             if (!initialized || disposed || !state.Current.IsActive)
