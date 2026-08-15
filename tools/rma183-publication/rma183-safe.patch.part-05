@@ -1,0 +1,123 @@
++def read(path: str) -> str:
++    return (ROOT / path).read_text(encoding="utf-8")
++
++
++class Rma183MemoryStoragePressureTests(unittest.TestCase):
++    def test_android_low_memory_callbacks_feed_existing_governor_signal(self) -> None:
++        monitor = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyAndroidMemoryPressureMonitor.cs"
++        )
++        host = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyApplicationHostBehaviour.cs"
++        )
++        signals = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs"
++        )
++        self.assertIn('base("android.content.ComponentCallbacks2")', monitor)
++        self.assertIn("public void onTrimMemory(int level)", monitor)
++        self.assertIn("public void onLowMemory()", monitor)
++        self.assertIn("Application.lowMemory += OnApplicationLowMemory", host)
++        self.assertIn("Resources.UnloadUnusedAssets()", host)
++        self.assertIn("ReachyAndroidMemoryPressureState.CurrentLevel", signals)
++        self.assertIn("ObserveHealthySnapshot", signals)
++
++    def test_pressure_coordinator_and_local_llm_release_are_fail_closed(self) -> None:
++        pressure = read(
++            "Assets/ReachyMini/Runtime/Core/Application/ReachyResourcePressure.cs"
++        )
++        llm = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.MemoryPressure.cs"
++        )
++        generation = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs"
++        )
++        self.assertIn("IReachyMemoryPressureTarget", pressure)
++        self.assertIn("failureCount", pressure)
++        self.assertIn("memoryPressureReleasePending = true", llm)
++        self.assertIn("cancellation?.Cancel()", llm)
++        self.assertIn("await activeTask.ConfigureAwait(false)", llm)
++        self.assertIn("runtime.UnloadModel(handle)", llm)
++        self.assertIn("LocalLlmProviderState.Unavailable", llm)
++        self.assertIn("memoryPressureReleasePending", generation)
++
++    def test_model_download_rechecks_storage_and_cleanup_preserves_installs(self) -> None:
++        paths = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Paths.cs"
++        )
++        install = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Installation.cs"
++        )
++        download = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Download.cs"
++        )
++        maintenance = read(
++            "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.Maintenance.cs"
++        )
++        self.assertIn("CheckStorage(read)", paths)
++        self.assertIn("copy.StorageFailure", install)
++        self.assertGreaterEqual(download.count("copy.StorageFailure"), 2)
++        self.assertIn("CleanupTransientStorage", maintenance)
++        self.assertIn("RemoveAllChildrenNoFollow(stagingRoot", maintenance)
++        self.assertIn("RemoveAllChildrenNoFollow(quarantineRoot", maintenance)
++        self.assertNotIn("RemoveAllChildrenNoFollow(installedRoot", maintenance)
++
++    def test_diagnostic_export_has_storage_gate(self) -> None:
++        policy = read(
++            "Assets/ReachyMini/Runtime/Core/Application/ReachyStoragePressure.cs"
++        )
++        gate = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleStorageGate.cs"
++        )
++        exporter = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyDiagnosticBundleExportCoordinator.cs"
++        )
++        self.assertIn("DiagnosticExportWriteBudgetBytes", policy)
++        self.assertIn("DiagnosticExportSafetyReserveBytes", policy)
++        self.assertIn("ReachyStorageSpaceCheck.Evaluate", gate)
++        self.assertIn("ReachyStorageSpaceCheck storage = storageGate.Check()", exporter)
++        self.assertIn("if (!storage.Succeeded)", exporter)
++        self.assertIn("storage_preflight", exporter)
++
++    def test_cleanup_ui_only_targets_safe_transient_storage(self) -> None:
++        cleanup = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyStoragePressureCleanupCoordinator.cs"
++        )
++        screen = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs"
++        )
++        sections = read(
++            "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs"
++        )
++        composition = read(
++            "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
++        )
++        self.assertIn("RetainedDiagnosticBundleCount", cleanup)
++        self.assertIn("CleanupTransientStorage", cleanup)
++        self.assertIn("OwnershipMarkerFileName", cleanup)
++        self.assertIn("Verified installed models", cleanup)
++        self.assertIn("ConfigureStorageCleanup", screen)
++        self.assertIn("CLEAN APP STORAGE", sections)
++        self.assertIn("screen.ConfigureStorageCleanup", composition)
++
++    def test_managed_contracts_cover_pressure_release_and_midstream_storage(self) -> None:
++        core = read("managed/ReachyMini.Core.Tests/Rma183ResourcePressureContractTests.cs")
++        llm = read("managed/ReachyMini.LocalLlm.Tests/Program.MemoryPressureTests.cs")
++        packages = read("managed/ReachyMini.LocalModelPackages.Tests/Program.cs")
++        self.assertIn("TestAndroidTrimClassification", core)
++        self.assertIn("TestStorageHeadroomCheck", core)
++        self.assertIn("TestCriticalMemoryPressureUnloadsModelAsync", llm)
++        self.assertIn('("midstream storage pressure", TestMidstreamStoragePressureAsync)', packages)
++        self.assertIn('("transient pressure cleanup", TestTransientPressureCleanupAsync)', packages)
++
++    def test_roadmap_marks_rma183_complete(self) -> None:
++        roadmap = read("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
++        start = roadmap.index("## RMA-183 — Handle memory and storage pressure")
++        end = roadmap.index("## RMA-184 — Representative-device matrix", start)
++        section = roadmap[start:end]
++        self.assertIn("**Status:** Complete", section)
++        self.assertEqual(section.count("- [x]"), 4)
++        self.assertNotIn("- [ ]", section)
++
++
++if __name__ == "__main__":
++    unittest.main()
