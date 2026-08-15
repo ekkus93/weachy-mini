@@ -14,6 +14,7 @@ namespace ReachyMini.AppState
         private readonly AndroidJavaObject activityManager;
         private readonly AndroidJavaObject powerManager;
         private readonly int apiLevel;
+        private readonly int ownerManagedThreadId;
         private bool disposed;
 #endif
 
@@ -31,6 +32,7 @@ namespace ReachyMini.AppState
                     "Android did not return PowerManager for local LLM resource governance.");
             using var version = new AndroidJavaClass("android.os.Build$VERSION");
             apiLevel = version.GetStatic<int>("SDK_INT");
+            ownerManagedThreadId = Environment.CurrentManagedThreadId;
 #else
             throw new PlatformNotSupportedException(
                 "Android local LLM resource signals are available only in Android player builds.");
@@ -47,6 +49,19 @@ namespace ReachyMini.AppState
 
 #if UNITY_ANDROID && !UNITY_EDITOR
             ThrowIfDisposed();
+            bool detachCurrentThread = false;
+            if (Environment.CurrentManagedThreadId != ownerManagedThreadId)
+            {
+                int attachStatus = AndroidJNI.AttachCurrentThread();
+                if (attachStatus < 0)
+                {
+                    throw new InvalidOperationException(
+                        "Android local LLM resource monitoring could not attach " +
+                        "its worker thread to the JVM: " + attachStatus + ".");
+                }
+                detachCurrentThread = true;
+            }
+
             try
             {
                 using var memoryInfo = new AndroidJavaObject(
@@ -77,6 +92,19 @@ namespace ReachyMini.AppState
                 throw new InvalidOperationException(
                     "Android local LLM resource signal capture failed.",
                     exception);
+            }
+            finally
+            {
+                if (detachCurrentThread)
+                {
+                    int detachStatus = AndroidJNI.DetachCurrentThread();
+                    if (detachStatus < 0)
+                    {
+                        throw new InvalidOperationException(
+                            "Android local LLM resource monitoring could not detach " +
+                            "its worker thread from the JVM: " + detachStatus + ".");
+                    }
+                }
             }
 #else
             throw new PlatformNotSupportedException(

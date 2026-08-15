@@ -50,6 +50,14 @@ def main() -> None:
     require(android, 'Call<int>("getCurrentThermalStatus")', "PowerManager thermal signal")
     require(android, "if (apiLevel < 29)", "API-29 thermal boundary")
     require(android, "LocalLlmThermalStatus.Unavailable", "explicit old-API thermal state")
+    require(android, "ownerManagedThreadId", "Android JNI owner-thread identity")
+    require(
+        android,
+        "Environment.CurrentManagedThreadId != ownerManagedThreadId",
+        "custom-thread JNI detection",
+    )
+    require(android, "AndroidJNI.AttachCurrentThread()", "custom-thread JVM attachment")
+    require(android, "AndroidJNI.DetachCurrentThread()", "custom-thread JVM detachment")
     require(android, "throw new InvalidOperationException", "fail-visible Android bridge errors")
 
     require(physics, "DeadlineMissCount", "authoritative deadline-miss input")
