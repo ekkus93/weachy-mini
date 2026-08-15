@@ -1,0 +1,86 @@
+name: RMA-171 publication
+
+on:
+  push:
+    branches:
+      - rma-171-publication
+    paths:
+      - .github/workflows/rma171-publication.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma-171-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out publication payload
+        uses: actions/checkout@v4
+        with:
+          ref: rma-171-publication
+          path: publication
+
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          path: target
+
+      - name: Reconstruct and verify exact validated patch
+        shell: bash
+        env:
+          EXPECTED_MASTER: cac1d1b31feb1e92c90e5c060c757e48d6e317b5
+          EXPECTED_PATCH_SHA256: a08fcffce201c225e7fe608abc9061062935060a42889fe11f8e9a5beecd9030
+        run: |
+          set -euo pipefail
+
+          test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
+
+          cat publication/tools/rma171-publication/payload-*.b64 \
+            > "${RUNNER_TEMP}/rma171.patch.gz.b64"
+          base64 --decode "${RUNNER_TEMP}/rma171.patch.gz.b64" \
+            | gzip --decompress \
+            > "${RUNNER_TEMP}/rma171.patch"
+          printf '%s  %s\n' \
+            "${EXPECTED_PATCH_SHA256}" \
+            "${RUNNER_TEMP}/rma171.patch" \
+            | sha256sum --check --strict
+
+          git -C target apply --check "${RUNNER_TEMP}/rma171.patch"
+          git -C target apply "${RUNNER_TEMP}/rma171.patch"
+          git -C target diff --check
+
+      - name: Run repository static gate
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          bash scripts/ci.sh --static-only
+          git diff --check
+
+      - name: Commit exact validated integration
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "RMA-163/RMA-170/RMA-171: integrate diagnostics hardening"
+
+      - name: Fast-forward master if unchanged
+        shell: bash
+        working-directory: target
+        env:
+          EXPECTED_MASTER: cac1d1b31feb1e92c90e5c060c757e48d6e317b5
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          test "$(git rev-parse origin/master)" = "${EXPECTED_MASTER}"
+          git push origin HEAD:master
