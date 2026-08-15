@@ -1,0 +1,106 @@
+name: RMA-181 priority degradation publication
+
+on:
+  push:
+    branches:
+      - rma-181-publication
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma-181-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out publication payload
+        uses: actions/checkout@v4
+        with:
+          ref: rma-181-publication
+          path: publication
+
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          path: target
+
+      - name: Verify and apply exact RMA-181 patch
+        shell: bash
+        env:
+          EXPECTED_MASTER: 6e92b3bb0893c8c8f021d10379dd8659fadb5a26
+          EXPECTED_PATCH_SHA256: c1705dbcc049a207860f8f28d1908f38345b49e9a944d0bfa3449ae61876a329
+          EXPECTED_GZIP_SHA256: 9a5f0c2807b345dd08a7a8f9a2f13a565bbf9e4827c57494844630ca26c64633
+        run: |
+          set -euo pipefail
+          test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
+          printf '%s  %s\n' \
+            "${EXPECTED_GZIP_SHA256}" \
+            "publication/tools/rma181-publication/rma181.patch.gz" \
+            | sha256sum --check --strict
+          gzip -t publication/tools/rma181-publication/rma181.patch.gz
+          gzip --decompress --stdout \
+            publication/tools/rma181-publication/rma181.patch.gz \
+            > "${RUNNER_TEMP}/rma181.patch"
+          printf '%s  %s\n' \
+            "${EXPECTED_PATCH_SHA256}" \
+            "${RUNNER_TEMP}/rma181.patch" \
+            | sha256sum --check --strict
+          git -C target apply --check "${RUNNER_TEMP}/rma181.patch"
+          git -C target apply "${RUNNER_TEMP}/rma181.patch"
+          git -C target diff --check
+
+      - name: Run repository static gate
+        shell: bash
+        working-directory: target
+        env:
+          TERM: xterm
+        run: |
+          set -euo pipefail
+          bash scripts/ci.sh --static-only
+          git diff --check
+
+      - name: Run managed RMA-181 contracts
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          projects=(
+            managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+            managed/ReachyMini.ResourceGovernor.Tests/ReachyMini.ResourceGovernor.Tests.csproj
+            managed/ReachyMini.VlmScheduling.Tests/ReachyMini.VlmScheduling.Tests.csproj
+            managed/ReachyMini.Camera.Tests/ReachyMini.Camera.Tests.csproj
+          )
+          for project in "${projects[@]}"; do
+            dotnet restore "${project}"
+            dotnet run \
+              --project "${project}" \
+              --configuration Release \
+              --no-restore
+          done
+
+      - name: Commit exact validated RMA-181 integration
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "RMA-181: implement priority-based degradation policy"
+
+      - name: Fast-forward master if unchanged
+        shell: bash
+        working-directory: target
+        env:
+          EXPECTED_MASTER: 6e92b3bb0893c8c8f021d10379dd8659fadb5a26
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          test "$(git rev-parse origin/master)" = "${EXPECTED_MASTER}"
+          git push origin HEAD:master
