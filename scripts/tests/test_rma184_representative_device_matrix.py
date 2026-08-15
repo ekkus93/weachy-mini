@@ -1,8 +1,8 @@
-from pathlib import Path
 import json
 import subprocess
 import sys
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MATRIX = ROOT / "models/reachy-mini/android-device-matrix.json"
@@ -10,9 +10,14 @@ CORE = ROOT / "Assets/ReachyMini/Runtime/Core/Performance/ReachyRepresentativeDe
 PROBE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma184RepresentativeDeviceProbe.cs"
 RUNNER = ROOT / "scripts/run_rma184_device_probe_android.sh"
 SPEC = ROOT / "docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15.md"
-VALIDATION = ROOT / "docs/validation/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_LOCAL_VALIDATION_2026-08-15.md"
+VALIDATION = ROOT / (
+    "docs/validation/"
+    "RMA_184_REPRESENTATIVE_DEVICE_MATRIX_LOCAL_VALIDATION_2026-08-15.md"
+)
 PROGRAM = ROOT / "managed/ReachyMini.Core.Tests/Program.cs"
-MANAGED = ROOT / "managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs"
+MANAGED = ROOT / (
+    "managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs"
+)
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
@@ -26,7 +31,9 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
 
     def test_matrix_covers_three_classes_and_required_device_fields(self) -> None:
         data = json.loads(MATRIX.read_text(encoding="utf-8"))
-        classes = {entry["performance_class"] for entry in data["representative_devices"]}
+        classes = {
+            entry["performance_class"] for entry in data["representative_devices"]
+        }
         self.assertTrue({"low", "mid", "high"}.issubset(classes))
         for entry in data["representative_devices"]:
             for key in (
@@ -104,7 +111,10 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         spec = SPEC.read_text(encoding="utf-8")
         validation = VALIDATION.read_text(encoding="utf-8")
         self.assertIn("pending_measurement", spec)
-        self.assertIn("Physical-device characterization is intentionally not claimed", validation)
+        self.assertIn(
+            "Physical-device characterization is intentionally not claimed",
+            validation,
+        )
         self.assertIn("RMA-181", spec)
         self.assertIn("1,800", spec)
 
@@ -121,7 +131,6 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "- [ ] Supported devices meet the defined simulation and interaction targets.",
         ]:
             self.assertIn(gate, block)
-
 
 
 if __name__ == "__main__":

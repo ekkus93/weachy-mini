@@ -257,7 +257,7 @@ namespace ReachyMini.AppState
         private ReachyDiagnosticsSection BuildCamera(double now)
         {
             cameraAcquisition ??=
-                Object.FindFirstObjectByType<ReachyAndroidCameraAcquisition>();
+                Object.FindAnyObjectByType<ReachyAndroidCameraAcquisition>();
             ReachyCameraAcquisitionSnapshot? acquisition =
                 cameraAcquisition?.State.Current;
             var metrics = new List<ReachyDiagnosticsMetric>(5);

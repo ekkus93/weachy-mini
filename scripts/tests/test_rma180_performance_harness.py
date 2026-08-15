@@ -1,5 +1,5 @@
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "Assets/ReachyMini/Runtime/Core/Performance"
@@ -37,7 +37,9 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
 
         self.assertIn("PercentileReservoirCapacity = 4096", telemetry)
         self.assertIn("MaximumResourceSamples = 2048", telemetry)
-        self.assertIn("targetFramesPerSecond != 30 && targetFramesPerSecond != 60", telemetry)
+        self.assertIn(
+            "targetFramesPerSecond != 30 && targetFramesPerSecond != 60", telemetry
+        )
         self.assertIn('"median_ms"', formatter)
         self.assertIn('"p95_ms"', formatter)
         self.assertIn('"p99_ms"', formatter)
@@ -45,14 +47,30 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
 
     def test_real_production_boundaries_emit_timing_samples(self) -> None:
         hooks = {
-            "Simulation/ReachySimulationWorker.WorkerLoop.cs": "ReachyPerformanceWorkload.NativePhysics",
-            "Application/ReachyAndroidCameraAcquisition.cs": "ReachyPerformanceWorkload.CameraAcquisition",
-            "Rendering/ReachyCameraHomographyWarpPipeline.cs": "ReachyPerformanceWorkload.CameraWarp",
-            "Core/Perception/ReachyLightweightTracking.cs": "ReachyPerformanceWorkload.LightweightTracking",
-            "Core/LocalModels/ReachyLocalLlmProvider.Generation.cs": "ReachyPerformanceWorkload.LocalLlm",
-            "Core/Speech/AudioCoordinatedAsrProvider.cs": "ReachyPerformanceWorkload.Audio",
-            "Core/Speech/AudioCoordinatedTtsProvider.cs": "ReachyPerformanceWorkload.Audio",
-            "Core/Providers/ReachySharedHttpTransport.Core.cs": "ReachyPerformanceWorkload.Network",
+            "Simulation/ReachySimulationWorker.WorkerLoop.cs": (
+                "ReachyPerformanceWorkload.NativePhysics"
+            ),
+            "Application/ReachyAndroidCameraAcquisition.cs": (
+                "ReachyPerformanceWorkload.CameraAcquisition"
+            ),
+            "Rendering/ReachyCameraHomographyWarpPipeline.cs": (
+                "ReachyPerformanceWorkload.CameraWarp"
+            ),
+            "Core/Perception/ReachyLightweightTracking.cs": (
+                "ReachyPerformanceWorkload.LightweightTracking"
+            ),
+            "Core/LocalModels/ReachyLocalLlmProvider.Generation.cs": (
+                "ReachyPerformanceWorkload.LocalLlm"
+            ),
+            "Core/Speech/AudioCoordinatedAsrProvider.cs": (
+                "ReachyPerformanceWorkload.Audio"
+            ),
+            "Core/Speech/AudioCoordinatedTtsProvider.cs": (
+                "ReachyPerformanceWorkload.Audio"
+            ),
+            "Core/Providers/ReachySharedHttpTransport.Core.cs": (
+                "ReachyPerformanceWorkload.Network"
+            ),
         }
         for relative, marker in hooks.items():
             text = (RUNTIME / relative).read_text()
@@ -80,7 +98,9 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
         self.assertIn("ReachyPerformanceReportJsonFormatter.Format(fps60)", acceptance)
         self.assertIn("ReachyPerformanceWorkload.NativePhysics", acceptance)
         self.assertIn("ReachyPerformanceWorkload.UnityRendering", acceptance)
-        runner = (ROOT / "scripts/run_rma180_performance_acceptance_android.sh").read_text()
+        runner = (
+            ROOT / "scripts/run_rma180_performance_acceptance_android.sh"
+        ).read_text()
         self.assertIn("reachy_rma180_performance_acceptance", runner)
         self.assertIn("reachy_rma180_profile_seconds", runner)
         self.assertIn("dumpsys battery", runner)
@@ -89,7 +109,9 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
 
     def test_managed_contract_is_registered(self) -> None:
         program = (ROOT / "managed/ReachyMini.Core.Tests/Program.cs").read_text()
-        tests = (ROOT / "managed/ReachyMini.Core.Tests/Rma180PerformanceHarnessContractTests.cs").read_text()
+        tests = (
+            ROOT / "managed/ReachyMini.Core.Tests/Rma180PerformanceHarnessContractTests.cs"
+        ).read_text()
         self.assertIn("Rma180PerformanceHarnessContractTests.RunAll();", program)
         self.assertIn("ExactPercentilesAndResourceSummaryAreReported", tests)
         self.assertIn("LongRunsRemainBounded", tests)

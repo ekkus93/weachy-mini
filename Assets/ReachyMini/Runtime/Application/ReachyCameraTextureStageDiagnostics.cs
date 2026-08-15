@@ -78,7 +78,7 @@ namespace ReachyMini.AppState
             }
             nextSampleTime = Time.unscaledTime + SampleIntervalSeconds;
 
-            bridge ??= Object.FindFirstObjectByType<
+            bridge ??= Object.FindAnyObjectByType<
                 ReachyAndroidCameraTextureBridge>();
             ReachyCameraTextureFrameDescriptor? frame = bridge?.Current.Frame;
             if (bridge == null || frame == null ||

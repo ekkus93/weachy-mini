@@ -43,7 +43,9 @@ def main() -> int:
             fail(f"RMA-184 {name} memory-growth budget drifted")
         expected_render = (1000.0 / fps) * 1.15
         actual_render = profile.get("maximum_render_p95_ms")
-        if not isinstance(actual_render, (int, float)) or abs(actual_render - expected_render) > 1e-9:
+        if not isinstance(actual_render, int | float) or (
+            abs(actual_render - expected_render) > 1e-9
+        ):
             fail(f"RMA-184 {name} render p95 budget drifted")
 
     policy = data.get("support_policy", {})
@@ -68,7 +70,10 @@ def main() -> int:
         fail("RMA-184 state-lag target drifted")
     if measurement.get("minimum_local_llm_decode_tokens_per_second") != 1.0:
         fail("RMA-184 local LLM decode target drifted")
-    if measurement.get("thermal_degradation_contract") != "rma181_priority_degradation_v1":
+    if (
+        measurement.get("thermal_degradation_contract")
+        != "rma181_priority_degradation_v1"
+    ):
         fail("RMA-184 thermal policy must bind to RMA-181")
 
     devices = data.get("representative_devices")
@@ -111,7 +116,10 @@ def main() -> int:
             fail(f"RMA-184 RAM configuration missing for {device_id}")
         if device["graphics_api"] not in policy["supported_graphics_apis"]:
             fail(f"RMA-184 representative graphics API unsupported for {device_id}")
-        if device["measurement_status"].startswith("partial") and not device["evidence"]:
+        if (
+            device["measurement_status"].startswith("partial")
+            and not device["evidence"]
+        ):
             fail(f"RMA-184 measured/partial device needs evidence: {device_id}")
 
     core = CORE.read_text(encoding="utf-8")
