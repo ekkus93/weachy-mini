@@ -1,4 +1,4 @@
-name: RMA-171 publication
+name: RMA-172 diagnostics publication
 
 on:
   push:
@@ -32,33 +32,48 @@ jobs:
           fetch-depth: 0
           path: target
 
-      - name: Reconstruct and verify exact validated patch
+      - name: Reconstruct and verify exact validated patches
         shell: bash
         env:
           EXPECTED_MASTER: cac1d1b31feb1e92c90e5c060c757e48d6e317b5
-          EXPECTED_PATCH_SHA256: a08fcffce201c225e7fe608abc9061062935060a42889fe11f8e9a5beecd9030
+          EXPECTED_PREREQUISITE_SHA256: a08fcffce201c225e7fe608abc9061062935060a42889fe11f8e9a5beecd9030
+          EXPECTED_RMA172_SHA256: 9e2a239eb2caaba1e5851d8368743e48150cb89ae133455fecc2dccde38f2996
         run: |
           set -euo pipefail
 
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
 
           cat publication/tools/rma171-publication/payload-*.b64 \
-            > "${RUNNER_TEMP}/rma171.patch.gz.b64"
-          base64 --decode "${RUNNER_TEMP}/rma171.patch.gz.b64" \
+            > "${RUNNER_TEMP}/prerequisite.patch.gz.b64"
+          base64 --decode "${RUNNER_TEMP}/prerequisite.patch.gz.b64" \
             | gzip --decompress \
-            > "${RUNNER_TEMP}/rma171.patch"
+            > "${RUNNER_TEMP}/prerequisite.patch"
           printf '%s  %s\n' \
-            "${EXPECTED_PATCH_SHA256}" \
-            "${RUNNER_TEMP}/rma171.patch" \
+            "${EXPECTED_PREREQUISITE_SHA256}" \
+            "${RUNNER_TEMP}/prerequisite.patch" \
             | sha256sum --check --strict
 
-          git -C target apply --check "${RUNNER_TEMP}/rma171.patch"
-          git -C target apply "${RUNNER_TEMP}/rma171.patch"
+          cat publication/tools/rma171-publication/rma172-only-*.b64 \
+            > "${RUNNER_TEMP}/rma172.patch.gz.b64"
+          base64 --decode "${RUNNER_TEMP}/rma172.patch.gz.b64" \
+            | gzip --decompress \
+            > "${RUNNER_TEMP}/rma172.patch"
+          printf '%s  %s\n' \
+            "${EXPECTED_RMA172_SHA256}" \
+            "${RUNNER_TEMP}/rma172.patch" \
+            | sha256sum --check --strict
+
+          git -C target apply --check "${RUNNER_TEMP}/prerequisite.patch"
+          git -C target apply "${RUNNER_TEMP}/prerequisite.patch"
+          git -C target apply --check "${RUNNER_TEMP}/rma172.patch"
+          git -C target apply "${RUNNER_TEMP}/rma172.patch"
           git -C target diff --check
 
       - name: Run repository static gate
         shell: bash
         working-directory: target
+        env:
+          TERM: xterm
         run: |
           set -euo pipefail
           bash scripts/ci.sh --static-only
@@ -72,7 +87,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "RMA-163/RMA-170/RMA-171: integrate diagnostics hardening"
+          git commit -m "RMA-163/RMA-170/RMA-171/RMA-172: integrate diagnostics hardening"
 
       - name: Fast-forward master if unchanged
         shell: bash
