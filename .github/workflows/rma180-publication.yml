@@ -1,4 +1,4 @@
-# Publication payload revision 7: verified payload plus whitespace-safe managed-build/test compatibility fixes.
+# RMA-180 is published on master. This workflow now acts only as a closure guard.
 name: RMA-180 performance harness publication
 
 on:
@@ -9,23 +9,13 @@ on:
       - .github/workflows/rma180-publication.yml
 
 permissions:
-  contents: write
-
-concurrency:
-  group: rma-180-publication
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  publish:
+  verify-published:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     steps:
-      - name: Check out publication payload
-        uses: actions/checkout@v4
-        with:
-          ref: rma-180-publication
-          path: publication
-
       - name: Check out current master
         uses: actions/checkout@v4
         with:
@@ -33,177 +23,20 @@ jobs:
           fetch-depth: 0
           path: target
 
-      - name: Reconstruct and verify exact RMA-180 patch
+      - name: Verify RMA-180 is already published
         shell: bash
         env:
-          EXPECTED_MASTER: 9b1d1274475db9e5e225afc1d20f2a1bd9cd225b
-          EXPECTED_PATCH_SHA256: 1135488cb3a75c83b00142107459530f4700cc7e2587469fcf611c26266f8342
-          EXPECTED_GZIP_SHA256: adffd3cd49df578d49ace34ec567391723f3d91f72d537402f2cdf87ce3071c3
-          EXPECTED_BUILD_FIX_SHA256: 175bc8a85b8556a9b6c6eb974b4370673096cc871a8a7ed8e832db7c88050ea5
+          RMA180_PUBLISHED_COMMIT: 6e92b3bb0893c8c8f021d10379dd8659fadb5a26
         run: |
           set -euo pipefail
-          test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
-          cat publication/tools/rma180-publication/rma180.patch.gz.part-* \
-            > "${RUNNER_TEMP}/rma180.patch.gz"
-          printf '%s  %s\n' \
-            "${EXPECTED_GZIP_SHA256}" \
-            "${RUNNER_TEMP}/rma180.patch.gz" \
-            | sha256sum --check --strict
-          gzip -t "${RUNNER_TEMP}/rma180.patch.gz"
-          gzip --decompress --stdout "${RUNNER_TEMP}/rma180.patch.gz" \
-            > "${RUNNER_TEMP}/rma180.patch"
-          printf '%s  %s\n' \
-            "${EXPECTED_PATCH_SHA256}" \
-            "${RUNNER_TEMP}/rma180.patch" \
-            | sha256sum --check --strict
-          printf '%s  %s\n' \
-            "${EXPECTED_BUILD_FIX_SHA256}" \
-            "publication/tools/rma180-publication/managed-build-fix.patch" \
-            | sha256sum --check --strict
-          git -C target apply --check "${RUNNER_TEMP}/rma180.patch"
-          git -C target apply "${RUNNER_TEMP}/rma180.patch"
-          git -C target apply --check \
-            ../publication/tools/rma180-publication/managed-build-fix.patch
-          git -C target apply \
-            ../publication/tools/rma180-publication/managed-build-fix.patch
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-
-          def replace_once(relative_path: str, old: str, new: str) -> None:
-              path = Path("target") / relative_path
-              text = path.read_text(encoding="utf-8")
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(
-                      f"{relative_path}: expected exactly one compatibility preimage, found {count}"
-                  )
-              path.write_text(text.replace(old, new), encoding="utf-8")
-
-          def replace_regex_once(
-              relative_path: str,
-              pattern: str,
-              replacement: str,
-          ) -> None:
-              path = Path("target") / relative_path
-              text = path.read_text(encoding="utf-8")
-              updated, count = re.subn(pattern, replacement, text)
-              if count != 1:
-                  raise SystemExit(
-                      f"{relative_path}: expected exactly one regex compatibility preimage, found {count}"
-                  )
-              path.write_text(updated, encoding="utf-8")
-
-          replace_once(
-              "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs",
-              "for (int sectionIndex = 0; sectionIndex < sections.Count; ++sectionIndex)",
-              "for (int sectionIndex = 0; sectionIndex < sections.Length; ++sectionIndex)",
-          )
-
-          replace_regex_once(
-              "managed/ReachyMini.Core.Tests/Rma171DiagnosticsScreenContractTests.cs",
-              r'''AssertThrows<ArgumentException>\(\(\) =>\s*new ReachyDiagnosticsMetric\(\s*"Camera FPS",\s*"unavailable",\s*ReachyDiagnosticsAvailability\.Unavailable\)\);''',
-              '''AssertThrows<ArgumentException>(() =>
-            {
-                ReachyDiagnosticsMetric metric =
-                    new ReachyDiagnosticsMetric(
-                        "Camera FPS",
-                        "unavailable",
-                        ReachyDiagnosticsAvailability.Unavailable);
-                GC.KeepAlive(metric);
-            });''',
-          )
-
-          replace_once(
-              "managed/ReachyMini.Core.Tests/Rma170StructuredDiagnosticsContractTests.cs",
-              "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
-              "if (!value.Contains(expected, StringComparison.Ordinal))",
-          )
-          replace_once(
-              "managed/ReachyMini.Core.Tests/Rma171DiagnosticsScreenContractTests.cs",
-              "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
-              "if (!value.Contains(expected, StringComparison.Ordinal))",
-          )
-          replace_once(
-              "managed/ReachyMini.Core.Tests/Rma172DiagnosticBundleExportContractTests.cs",
-              "if (value.IndexOf(expected, StringComparison.Ordinal) < 0)",
-              "if (!value.Contains(expected, StringComparison.Ordinal))",
-          )
-          replace_once(
-              "managed/ReachyMini.Core.Tests/Rma172DiagnosticBundleExportContractTests.cs",
-              "if (value.IndexOf(unexpected, StringComparison.Ordinal) >= 0)",
-              "if (value.Contains(unexpected, StringComparison.Ordinal))",
-          )
-
-          replace_regex_once(
-              "managed/ReachyMini.Core.Tests/Rma180PerformanceHarnessContractTests.cs",
-              r'''Throws<ArgumentOutOfRangeException>\(\(\) =>\s*new ReachyPerformanceResourceSample\(\s*0\.0,\s*0L,\s*0L,\s*1\.1,\s*null,\s*"unavailable"\)\);''',
-              '''Throws<ArgumentOutOfRangeException>(() =>
-            {
-                ReachyPerformanceResourceSample sample =
-                    new ReachyPerformanceResourceSample(
-                        0.0,
-                        0L,
-                        0L,
-                        1.1,
-                        null,
-                        "unavailable");
-                GC.KeepAlive(sample);
-            });''',
-          )
-          PY
-
+          git -C target merge-base --is-ancestor \
+            "${RMA180_PUBLISHED_COMMIT}" \
+            HEAD
+          test -f \
+            target/Assets/ReachyMini/Runtime/Core/Performance/ReachyPerformanceTelemetry.cs
+          test -f \
+            target/managed/ReachyMini.Core.Tests/Rma180PerformanceHarnessContractTests.cs
           grep -Fq \
-            'sectionIndex < sections.Length; ++sectionIndex' \
-            target/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
-          if grep -Fq \
-            'sectionIndex < sections.Count; ++sectionIndex' \
-            target/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
-          then
-            echo "stale diagnostics sections.Count loop remains" >&2
-            exit 1
-          fi
-          git -C target diff --check
-
-      - name: Run current repository static gate
-        shell: bash
-        working-directory: target
-        env:
-          TERM: xterm
-        run: |
-          set -euo pipefail
-          bash scripts/ci.sh --static-only
-          git diff --check
-
-      - name: Run managed core contracts
-        shell: bash
-        working-directory: target
-        run: |
-          set -euo pipefail
-          dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
-          dotnet run \
-            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
-            --configuration Release \
-            --no-restore
-
-      - name: Commit exact validated RMA-180 integration
-        shell: bash
-        working-directory: target
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "RMA-180: add performance harness and managed build fixes"
-
-      - name: Fast-forward master if unchanged
-        shell: bash
-        working-directory: target
-        env:
-          EXPECTED_MASTER: 9b1d1274475db9e5e225afc1d20f2a1bd9cd225b
-        run: |
-          set -euo pipefail
-          git fetch origin master
-          test "$(git rev-parse origin/master)" = "${EXPECTED_MASTER}"
-          git push origin HEAD:master
+            'Rma180PerformanceHarnessContractTests.RunAll();' \
+            target/managed/ReachyMini.Core.Tests/Program.cs
+          echo "RMA-180 is already published on master; no publication action is required."
