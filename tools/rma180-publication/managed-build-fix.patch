@@ -1,0 +1,75 @@
+diff --git a/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Helpers.cs b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Helpers.cs
+--- a/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Helpers.cs
++++ b/Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.Helpers.cs
+@@ -135,7 +135,7 @@ namespace ReachyMini.Providers
+             return string.Equals(
+                     uri.Scheme,
+                     Uri.UriSchemeHttp,
+                     StringComparison.OrdinalIgnoreCase) &&
+-                ReachyProviderConfigurationValidation.IsLocalDevelopmentHost(uri);
++                ReachyMini.Security.ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(uri);
+         }
+ 
+         private static string? ReadProviderRequestId(HttpResponseMessage response)
+diff --git a/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs b/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs
+--- a/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs
++++ b/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs
+@@ -35,8 +35,8 @@ namespace ReachyMini.Diagnostics
+                 normalized.Equals("proxy-authorization", StringComparison.OrdinalIgnoreCase) ||
+                 normalized.Equals("cookie", StringComparison.OrdinalIgnoreCase) ||
+                 normalized.Equals("set-cookie", StringComparison.OrdinalIgnoreCase) ||
+-                normalized.IndexOf("api-key", StringComparison.OrdinalIgnoreCase) >= 0 ||
+-                normalized.IndexOf("token", StringComparison.OrdinalIgnoreCase) >= 0)
++                normalized.Contains("api-key", StringComparison.OrdinalIgnoreCase) ||
++                normalized.Contains("token", StringComparison.OrdinalIgnoreCase))
+             {
+                 return RedactedValue;
+             }
+diff --git a/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs b/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
+--- a/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
++++ b/Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs
+@@ -21,6 +21,10 @@ namespace ReachyMini.Diagnostics
+         private static readonly UTF8Encoding Utf8 =
+             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+ 
++        [System.Diagnostics.CodeAnalysis.SuppressMessage(
++            "Performance",
++            "CA1822:Mark members as static",
++            Justification = "Exporter instances are retained as an application composition seam for deterministic bundle export testing.")]
+         public ReachyDiagnosticBundleExportResult Export(
+             string outputPath,
+             ReachyDiagnosticBundlePayload payload,
+@@ -215,7 +219,7 @@ namespace ReachyMini.Diagnostics
+             ReachyDiagnosticsScreenSnapshot snapshot,
+             bool includePerformance)
+         {
+-            IReadOnlyList<ReachyDiagnosticsSection> sections = includePerformance
++            ReachyDiagnosticsSection[] sections = includePerformance
+                 ? new[]
+                 {
+                     snapshot.Simulation,
+@@ -454,9 +458,9 @@ namespace ReachyMini.Diagnostics
+                 ReachyDiagnosticBundleSecurityPolicy.RequireExportable(
+                     ReachyDiagnosticArtifactKind.RedactedText);
+                 if (string.IsNullOrWhiteSpace(name) ||
+-                    name.IndexOf('/') >= 0 ||
+-                    name.IndexOf('\\') >= 0 ||
+-                    name.IndexOf("..", StringComparison.Ordinal) >= 0)
++                    name.Contains('/') ||
++                    name.Contains('\\') ||
++                    name.Contains("..", StringComparison.Ordinal))
+                 {
+                     throw new InvalidDataException(
+                         "Diagnostic bundle entry names must be simple contained filenames.");
+diff --git a/Assets/ReachyMini/Runtime/Core/Security/ReachyImportedContentSecurity.cs b/Assets/ReachyMini/Runtime/Core/Security/ReachyImportedContentSecurity.cs
+--- a/Assets/ReachyMini/Runtime/Core/Security/ReachyImportedContentSecurity.cs
++++ b/Assets/ReachyMini/Runtime/Core/Security/ReachyImportedContentSecurity.cs
+@@ -220,7 +220,7 @@ namespace ReachyMini.Security
+                 return !IsPrivateOrLocalAddress(address);
+             }
+ 
+-            return host.IndexOf('.') >= 0;
++            return host.Contains('.');
+         }
+ 
+         public static void RequirePublicHttpsUri(Uri uri, string parameterName)
