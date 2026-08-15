@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: rma-171-publication
+  group: rma-172-publication
   cancel-in-progress: false
 
 jobs:
@@ -43,20 +43,24 @@ jobs:
 
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
 
-          cat publication/tools/rma171-publication/payload-*.b64 \
+          cat publication/tools/rma171-publication/fixed-prerequisite-*.b64 \
             > "${RUNNER_TEMP}/prerequisite.patch.gz.b64"
           base64 --decode "${RUNNER_TEMP}/prerequisite.patch.gz.b64" \
-            | gzip --decompress \
+            > "${RUNNER_TEMP}/prerequisite.patch.gz"
+          gzip -t "${RUNNER_TEMP}/prerequisite.patch.gz"
+          gzip --decompress --stdout "${RUNNER_TEMP}/prerequisite.patch.gz" \
             > "${RUNNER_TEMP}/prerequisite.patch"
           printf '%s  %s\n' \
             "${EXPECTED_PREREQUISITE_SHA256}" \
             "${RUNNER_TEMP}/prerequisite.patch" \
             | sha256sum --check --strict
 
-          cat publication/tools/rma171-publication/rma172-only-*.b64 \
+          cat publication/tools/rma171-publication/fixed-rma172-*.b64 \
             > "${RUNNER_TEMP}/rma172.patch.gz.b64"
           base64 --decode "${RUNNER_TEMP}/rma172.patch.gz.b64" \
-            | gzip --decompress \
+            > "${RUNNER_TEMP}/rma172.patch.gz"
+          gzip -t "${RUNNER_TEMP}/rma172.patch.gz"
+          gzip --decompress --stdout "${RUNNER_TEMP}/rma172.patch.gz" \
             > "${RUNNER_TEMP}/rma172.patch"
           printf '%s  %s\n' \
             "${EXPECTED_RMA172_SHA256}" \
