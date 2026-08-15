@@ -1,0 +1,334 @@
+--- a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusContracts.cs
++++ b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusContracts.cs
+@@ -35,6 +35,7 @@ namespace ReachyMini.Speech
+         AlarmPlayback = 6,
+         MicrophoneMuted = 7,
+         PlatformFailure = 8,
++        ApplicationBackgrounded = 9,
+     }
+ 
+     public sealed class SpeechAudioInterruption
+diff --git a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.Lifecycle.cs b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.Lifecycle.cs
+new file mode 100644
+index 0000000..085177f
+--- /dev/null
++++ b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.Lifecycle.cs
+@@ -0,0 +1,57 @@
++#nullable enable
++
++using ReachyMini.AppState;
++
++namespace ReachyMini.Speech
++{
++    public sealed partial class SpeechAudioFocusCoordinator :
++        IReachyApplicationInterruptionParticipant
++    {
++        private readonly ReachyApplicationInterruptionGate interruptionGate =
++            new ReachyApplicationInterruptionGate();
++
++        public bool IsApplicationPaused => interruptionGate.IsPaused;
++
++        public void PauseForApplicationInterruption()
++        {
++            SpeechAudioSession? session;
++            SpeechAudioInterruption interruption = new SpeechAudioInterruption(
++                SpeechAudioInterruptionKind.ApplicationBackgrounded,
++                "application_backgrounded",
++                "Speech audio was interrupted because the application entered the background.");
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++                if (interruptionGate.IsPaused)
++                {
++                    return;
++                }
++                session = activeSession;
++            }
++
++            interruptionGate.PauseForApplicationInterruption();
++            lock (sync)
++            {
++                if (session != null && ReferenceEquals(activeSession, session))
++                {
++                    lastInterruption = interruption;
++                    state = SpeechAudioState.Interrupted;
++                }
++            }
++
++            if (session != null)
++            {
++                _ = session.TryInterrupt(interruption);
++            }
++        }
++
++        public void ResumeAfterApplicationInterruption()
++        {
++            lock (sync)
++            {
++                ThrowIfDisposedLocked();
++            }
++            interruptionGate.ResumeAfterApplicationInterruption();
++        }
++    }
++}
+diff --git a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
+index dfb823e..c5cb21e 100644
+--- a/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
++++ b/Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs
+@@ -6,7 +6,7 @@ using System.Threading.Tasks;
+ 
+ namespace ReachyMini.Speech
+ {
+-    public sealed class SpeechAudioFocusCoordinator : IAsyncDisposable
++    public sealed partial class SpeechAudioFocusCoordinator : IAsyncDisposable
+     {
+         private readonly object sync = new object();
+         private readonly ISpeechAudioFocusPlatform platform;
+@@ -50,9 +50,18 @@ namespace ReachyMini.Speech
+             cancellationToken.ThrowIfCancellationRequested();
+ 
+             SpeechAudioSession session;
++            CancellationTokenSource lifecycleCancellation;
+             lock (sync)
+             {
+                 ThrowIfDisposedLocked();
++                if (interruptionGate.IsPaused)
++                {
++                    return Failure(new SpeechProviderError(
++                        SpeechErrorCategory.ServiceFailure,
++                        "speech_audio_lifecycle_suspended",
++                        "Speech audio is suspended while the application is backgrounded.",
++                        isRetryable: true));
++                }
+                 if (fault != null || state == SpeechAudioState.Faulted)
+                 {
+                     return Failure(
+@@ -71,6 +80,8 @@ namespace ReachyMini.Speech
+                         isRetryable: true));
+                 }
+ 
++                lifecycleCancellation =
++                    interruptionGate.CreateLinkedTokenSource(cancellationToken);
+                 session = new SpeechAudioSession(
+                     "speech-audio-" + Guid.NewGuid().ToString("N"),
+                     role);
+@@ -79,76 +90,90 @@ namespace ReachyMini.Speech
+                 lastInterruption = null;
+             }
+ 
+-            SpeechAudioFocusRequestResult requestResult;
+-            try
++            using (lifecycleCancellation)
+             {
+-                requestResult = await platform.RequestFocusAsync(
+-                    session.SessionId,
+-                    role,
+-                    cancellationToken).ConfigureAwait(false);
+-            }
+-            catch (OperationCanceledException)
+-            {
+-                ClearCancelledAcquisition(session);
+-                throw;
+-            }
+-            catch (Exception exception)
+-            {
+-                SpeechProviderError error = FaultPlatform(
+-                    session,
+-                    "audio_focus_request_exception",
+-                    "Requesting Android speech audio focus failed with " +
+-                        exception.GetType().Name +
+-                        "; the coordinator was faulted instead of retrying or falling back.");
+-                return Failure(error);
+-            }
+-
+-            if (!requestResult.IsGranted)
+-            {
+-                SpeechProviderError error = new SpeechProviderError(
+-                    SpeechErrorCategory.ServiceFailure,
+-                    BoundCode(requestResult.Code),
+-                    BoundDiagnostic(requestResult.Diagnostic),
+-                    isRetryable: true);
+-                ClearDeniedAcquisition(session);
+-                return Failure(error);
+-            }
++                SpeechAudioFocusRequestResult requestResult;
++                try
++                {
++                    requestResult = await platform.RequestFocusAsync(
++                        session.SessionId,
++                        role,
++                        lifecycleCancellation.Token).ConfigureAwait(false);
++                }
++                catch (OperationCanceledException) when (
++                    !cancellationToken.IsCancellationRequested &&
++                    interruptionGate.IsPaused)
++                {
++                    ClearCancelledAcquisition(session);
++                    return Failure(new SpeechProviderError(
++                        SpeechErrorCategory.ServiceFailure,
++                        "speech_audio_lifecycle_suspended",
++                        "Speech audio focus acquisition was cancelled because the application entered the background.",
++                        isRetryable: true));
++                }
++                catch (OperationCanceledException)
++                {
++                    ClearCancelledAcquisition(session);
++                    throw;
++                }
++                catch (Exception exception)
++                {
++                    SpeechProviderError error = FaultPlatform(
++                        session,
++                        "audio_focus_request_exception",
++                        "Requesting Android speech audio focus failed with " +
++                            exception.GetType().Name +
++                            "; the coordinator was faulted instead of retrying or falling back.");
++                    return Failure(error);
++                }
+ 
+-            SpeechAudioInterruption? interruptedBeforeGrant;
+-            lock (sync)
+-            {
+-                if (!ReferenceEquals(activeSession, session))
++                if (!requestResult.IsGranted)
+                 {
+-                    interruptedBeforeGrant = new SpeechAudioInterruption(
+-                        SpeechAudioInterruptionKind.PlatformFailure,
+-                        "audio_focus_session_replaced",
+-                        "The speech audio session changed while focus was being acquired; the granted focus was rejected.");
++                    SpeechProviderError error = new SpeechProviderError(
++                        SpeechErrorCategory.ServiceFailure,
++                        BoundCode(requestResult.Code),
++                        BoundDiagnostic(requestResult.Diagnostic),
++                        isRetryable: true);
++                    ClearDeniedAcquisition(session);
++                    return Failure(error);
+                 }
+-                else
++
++                SpeechAudioInterruption? interruptedBeforeGrant;
++                lock (sync)
+                 {
+-                    session.FocusHeld = true;
+-                    interruptedBeforeGrant = session.Interruption;
+-                    if (interruptedBeforeGrant == null)
++                    if (!ReferenceEquals(activeSession, session))
+                     {
+-                        state = role == SpeechAudioRole.Listening
+-                            ? SpeechAudioState.Listening
+-                            : SpeechAudioState.Speaking;
+-                        return new SpeechAudioAcquireResult(
+-                            new SpeechAudioFocusLease(this, session),
+-                            error: null);
++                        interruptedBeforeGrant = new SpeechAudioInterruption(
++                            SpeechAudioInterruptionKind.PlatformFailure,
++                            "audio_focus_session_replaced",
++                            "The speech audio session changed while focus was being acquired; the granted focus was rejected.");
++                    }
++                    else
++                    {
++                        session.FocusHeld = true;
++                        interruptedBeforeGrant = session.Interruption;
++                        if (interruptedBeforeGrant == null)
++                        {
++                            state = role == SpeechAudioRole.Listening
++                                ? SpeechAudioState.Listening
++                                : SpeechAudioState.Speaking;
++                            return new SpeechAudioAcquireResult(
++                                new SpeechAudioFocusLease(this, session),
++                                error: null);
++                        }
++                        state = SpeechAudioState.Interrupted;
+                     }
+-                    state = SpeechAudioState.Interrupted;
+                 }
+-            }
+ 
+-            SpeechProviderError? releaseError =
+-                await ReleaseAsync(session).ConfigureAwait(false);
+-            SpeechAudioInterruption interruption = interruptedBeforeGrant ??
+-                new SpeechAudioInterruption(
+-                    SpeechAudioInterruptionKind.PlatformFailure,
+-                    "audio_focus_interrupted_without_detail",
+-                    "Speech audio focus was interrupted during acquisition without platform detail.");
+-            return Failure(releaseError ?? interruption.ToProviderError());
++                SpeechProviderError? releaseError =
++                    await ReleaseAsync(session).ConfigureAwait(false);
++                SpeechAudioInterruption interruption = interruptedBeforeGrant ??
++                    new SpeechAudioInterruption(
++                        SpeechAudioInterruptionKind.PlatformFailure,
++                        "audio_focus_interrupted_without_detail",
++                        "Speech audio focus was interrupted during acquisition without platform detail.");
++                return Failure(releaseError ?? interruption.ToProviderError());
++            }
+         }
+ 
+         internal async ValueTask<SpeechProviderError?> ReleaseAsync(
+@@ -230,6 +255,7 @@ namespace ReachyMini.Speech
+                 session = activeSession;
+             }
+ 
++            interruptionGate.Dispose();
+             platform.Interrupted -= OnPlatformInterrupted;
+             if (session != null)
+             {
+diff --git a/docs/RMA_182_LIFECYCLE_HARDENING_SPEC_2026-08-15.md b/docs/RMA_182_LIFECYCLE_HARDENING_SPEC_2026-08-15.md
+new file mode 100644
+index 0000000..922f247
+--- /dev/null
++++ b/docs/RMA_182_LIFECYCLE_HARDENING_SPEC_2026-08-15.md
+@@ -0,0 +1,26 @@
++# RMA-182 lifecycle hardening
++
++## Scope
++
++RMA-182 makes Android background/foreground transitions an explicit application lifecycle operation. It preserves the authoritative simulation state, releases or cancels transient resources, rejects new background work, and resumes into a defined idle interaction state without replaying elapsed wall-clock time.
++
++## Invariants
++
++1. **Simulation time is authoritative and discontinuous across an application pause.** `ReachySimulationWorker` clears its fixed-step accumulator and refreshes its monotonic timestamp at the pause boundary, while paused, and at resume. Background wall-clock time therefore cannot become physics catch-up work.
++2. **One Unity application lifecycle ingress owns production pause/resume.** `ReachyApplicationHostBehaviour.OnApplicationPause` coordinates the application interruption state and CameraX acquisition. The production simulation runtime and CameraX acquisition expose explicit lifecycle methods instead of independently consuming Unity pause callbacks.
++3. **Dependents pause before dependencies; dependencies resume before dependents.** `ReachyApplicationInterruptionCoordinator` uses a fixed service-kind order and reverses it for pause.
++4. **Pause and resume are idempotent.** Repeated identical callbacks do not re-enter participant transitions. A completed cycle is counted only after a successful Paused -> Active transition.
++5. **Cancellation generations are not resumable jobs.** `ReachyApplicationInterruptionGate` cancels the current generation on pause and allocates a fresh generation on resume. HTTP and local-LLM requests link to the generation token; cancelled requests are never replayed automatically.
++6. **VLM leases are cancelled, not parked.** Lifecycle pause cancels active VLM leases and rejects new scheduling until resume. RMA-181 thermal/resource suspension remains independent and can continue blocking admission after lifecycle resume.
++7. **Speech focus is released through the existing lease-finally contract.** Lifecycle pause cancels focus acquisition and interrupts an active speech session with `ApplicationBackgrounded`. Coordinated ASR/TTS observes that interruption, terminates, and releases its focus lease exactly once.
++8. **Camera resources obey lifecycle and permission state.** Active CameraX acquisition is paused before application services; resume rechecks permission and either resumes the desired stream or stops and reports permission revocation.
++9. **Conversation/UI never silently continue a turn.** Active conversation work is cancelled into a lifecycle-owned unavailable state. Resume converts only that lifecycle-owned state to Idle. Existing Error or unrelated Unavailable states are preserved. The main screen hides transient panels on pause and returns lifecycle-owned interaction state to Idle on resume.
++10. **Failures fail closed.** A participant failure faults the interruption coordinator after all remaining pause participants have still received a quiesce attempt. A faulted coordinator does not resume partially quiesced work.
++
++## Repeated-cycle behavior
++
++Managed contracts execute five pause/resume cycles, including duplicate pause and duplicate resume calls within every cycle. They assert deterministic ordering, idempotence, cancellation-generation replacement, preserved error states, and monotonically increasing completed-cycle count.
++
++## Out of scope
++
++RMA-182 does not change the 500 Hz native physics timestep, skip physics steps, preserve or restart partially completed inference, or add provider fallback. It also does not claim physical Android lifecycle evidence in the local sandbox; representative-device validation remains a separate execution concern.
+diff --git a/docs/validation/RMA_182_LIFECYCLE_HARDENING_LOCAL_VALIDATION_2026-08-15.md b/docs/validation/RMA_182_LIFECYCLE_HARDENING_LOCAL_VALIDATION_2026-08-15.md
+new file mode 100644
+index 0000000..8f88cd7
+--- /dev/null
++++ b/docs/validation/RMA_182_LIFECYCLE_HARDENING_LOCAL_VALIDATION_2026-08-15.md
+@@ -0,0 +1,19 @@
++# RMA-182 local validation — 2026-08-15
++
++## Validation target
++
++RMA-182 hardens background/foreground lifecycle behavior without changing authoritative simulation dynamics.
++
++## Local checks
++
++The focused static contract is `scripts/tests/test_rma182_lifecycle_hardening.py`. It verifies the simulation no-catch-up source invariant, centralized production lifecycle ingress, CameraX pause/resume behavior, speech interruption, HTTP/local-LLM cancellation generations, VLM cancellation/admission blocking, defined conversation/UI recovery, repeated-cycle managed coverage, and roadmap closure.
++
++The repository-wide static suite and `scripts/ci.sh --static-only` are also run before publication. `git diff --check` must remain clean.
++
++## Managed/hosted gate
++
++The sandbox does not provide the .NET SDK or Unity Editor. Publication therefore runs warnings-as-errors managed projects on a hosted runner before `master` can move. At minimum the gate covers Core, Application, SpeechAudioFocus, VlmScheduling, LocalLlm, and Camera managed projects.
++
++## Physical-device claim
++
++No physical Android pause/resume result is fabricated by this local validation. The implementation is structured so a later device acceptance can repeatedly background/foreground the application and inspect simulation step progression, camera reacquisition, and interaction state without changing the RMA-182 contract.
+diff --git a/managed/ReachyMini.Core.Tests/Rma182ApplicationInterruptionContractTests.cs b/managed/ReachyMini.Core.Tests/Rma182ApplicationInterruptionContractTests.cs
+new file mode 100644
+index 0000000..ddedb7c
