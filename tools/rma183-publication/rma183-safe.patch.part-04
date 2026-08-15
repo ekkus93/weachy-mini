@@ -1,0 +1,375 @@
++            public ValueTask<ReachyMemoryPressureTargetResult> ApplyMemoryPressureAsync(
++                ReachyMemoryPressureSignal signal)
++            {
++                calls.Add(MemoryPressureTargetId);
++                return ValueTask.FromResult(new ReachyMemoryPressureTargetResult(
++                    MemoryPressureTargetId,
++                    succeeded: true,
++                    releasedResources: releases,
++                    "Synthetic pressure target completed."));
++            }
++        }
++
++        private sealed class ThrowingTarget : IReachyMemoryPressureTarget
++        {
++            private readonly List<string> calls;
++
++            public ThrowingTarget(string targetId, List<string> calls)
++            {
++                MemoryPressureTargetId = targetId;
++                this.calls = calls;
++            }
++
++            public string MemoryPressureTargetId { get; }
++
++            public ValueTask<ReachyMemoryPressureTargetResult> ApplyMemoryPressureAsync(
++                ReachyMemoryPressureSignal signal)
++            {
++                calls.Add(MemoryPressureTargetId);
++                throw new InvalidOperationException("synthetic pressure failure");
++            }
++        }
++    }
++}
+diff --git a/managed/ReachyMini.LocalLlm.Tests/Program.MemoryPressureTests.cs b/managed/ReachyMini.LocalLlm.Tests/Program.MemoryPressureTests.cs
+new file mode 100644
+index 0000000..a3e199f
+--- /dev/null
++++ b/managed/ReachyMini.LocalLlm.Tests/Program.MemoryPressureTests.cs
+@@ -0,0 +1,61 @@
++#nullable enable
++
++using System.Threading;
++using System.Threading.Tasks;
++using ReachyMini.AppState;
++using ReachyMini.LocalModels;
++
++internal static partial class Program
++{
++    private static async Task TestCriticalMemoryPressureUnloadsModelAsync()
++    {
++        using var runtime = new FakeRuntime();
++        LocalLlmProvider provider = await CreateProviderAsync(runtime).ConfigureAwait(false);
++        try
++        {
++            ReachyMemoryPressureTargetResult moderate =
++                await provider.ApplyMemoryPressureAsync(
++                    new ReachyMemoryPressureSignal(
++                        ReachyMemoryPressureLevel.Moderate,
++                        ReachyMemoryPressureSource.AndroidTrimMemory,
++                        androidTrimLevel: 10));
++            Require(moderate.Succeeded, moderate.Detail);
++            Require(!moderate.ReleasedResources, "Moderate pressure unexpectedly unloaded the local LLM.");
++            Require(runtime.UnloadCount == 0, "Moderate pressure reached native unload.");
++
++            ReachyMemoryPressureTargetResult critical =
++                await provider.ApplyMemoryPressureAsync(
++                    new ReachyMemoryPressureSignal(
++                        ReachyMemoryPressureLevel.Critical,
++                        ReachyMemoryPressureSource.AndroidLowMemory));
++            Require(critical.Succeeded, critical.Detail);
++            Require(critical.ReleasedResources, "Critical pressure did not release the loaded local LLM.");
++            Require(runtime.UnloadCount == 1, "Critical pressure did not unload exactly one model handle.");
++            Require(
++                provider.State == LocalLlmProviderState.Unavailable,
++                "Provider did not become explicitly unavailable after pressure unload.");
++
++            LocalLlmGenerationResult unavailable = await provider.GenerateAsync(
++                    Request("memory-pressure-unloaded", "hello"),
++                    new CollectingSink(),
++                    CancellationToken.None)
++                .ConfigureAwait(false);
++            Require(
++                unavailable.Status == LocalLlmGenerationStatus.Unavailable,
++                "Generation silently continued after pressure unload.");
++
++            LocalLlmReloadResult reloaded = await provider.ReloadAsync(CancellationToken.None)
++                .ConfigureAwait(false);
++            Require(
++                reloaded.Status == LocalLlmReloadStatus.Reloaded,
++                "Explicit reload did not recover the pressure-unloaded provider.");
++        }
++        finally
++        {
++            await provider.DisposeAsync().ConfigureAwait(false);
++        }
++
++        Require(runtime.LoadCount == 2, "Pressure recovery did not perform exactly one explicit reload.");
++        Require(runtime.UnloadCount == 2, "Reloaded model was not released during disposal.");
++    }
++}
+diff --git a/managed/ReachyMini.LocalLlm.Tests/Program.cs b/managed/ReachyMini.LocalLlm.Tests/Program.cs
+index 76d7cd1..784ed0c 100644
+--- a/managed/ReachyMini.LocalLlm.Tests/Program.cs
++++ b/managed/ReachyMini.LocalLlm.Tests/Program.cs
+@@ -33,6 +33,7 @@ internal static partial class Program
+         await TestOutOfMemoryCleanupFailureFaultsAsync().ConfigureAwait(false);
+         await TestOutOfMemoryReloadRecoveryAndSecondGenerationAsync().ConfigureAwait(false);
+         await TestReloadRecoveryAndDisposeAsync().ConfigureAwait(false);
+-        Console.WriteLine("RMA-134 local LLM managed contracts passed (21 groups).");
++        await TestCriticalMemoryPressureUnloadsModelAsync().ConfigureAwait(false);
++        Console.WriteLine("RMA-134/RMA-183 local LLM managed contracts passed (22 groups).");
+     }
+ }
+diff --git a/managed/ReachyMini.LocalModelPackages.Tests/Program.cs b/managed/ReachyMini.LocalModelPackages.Tests/Program.cs
+index ca9f8a0..c187af0 100644
+--- a/managed/ReachyMini.LocalModelPackages.Tests/Program.cs
++++ b/managed/ReachyMini.LocalModelPackages.Tests/Program.cs
+@@ -3,6 +3,7 @@
+ using System;
+ using System.Collections.Generic;
+ using System.IO;
++using System.Linq;
+ using System.Security.Cryptography;
+ using System.Text;
+ using System.Threading;
+@@ -25,6 +26,7 @@ namespace ReachyMini.LocalModelPackages.Tests
+                 ("import and resolve", TestImportAndResolveAsync),
+                 ("wrong hash", TestWrongHashAsync),
+                 ("storage preflight", TestStorageAsync),
++                ("midstream storage pressure", TestMidstreamStoragePressureAsync),
+                 ("fresh download", TestFreshDownloadAsync),
+                 ("exact resume", TestResumeAsync),
+                 ("clean restart", TestRestartAsync),
+@@ -34,6 +36,7 @@ namespace ReachyMini.LocalModelPackages.Tests
+                 ("exact delete", TestDeleteAsync),
+                 ("partial import recovery", TestRecoveryAsync),
+                 ("orphan cleanup", TestCleanupAsync),
++                ("transient pressure cleanup", TestTransientPressureCleanupAsync),
+                 ("store ownership", TestOwnershipAsync),
+                 ("provenance origin", TestOriginAsync),
+                 ("source change restarts", TestSourceChangeAsync),
+@@ -45,7 +48,7 @@ namespace ReachyMini.LocalModelPackages.Tests
+                 Console.WriteLine("PASS: " + tests[index].Name);
+             }
+ 
+-            Console.WriteLine("RMA-132 managed package contracts passed: 15");
++            Console.WriteLine("RMA-132/RMA-183 managed package contracts passed: 17");
+             return 0;
+         }
+ 
+@@ -105,6 +108,73 @@ namespace ReachyMini.LocalModelPackages.Tests
+                 0L).ConfigureAwait(false);
+         }
+ 
++        private static async Task TestMidstreamStoragePressureAsync()
++        {
++            string root = TemporaryRoot();
++            try
++            {
++                var bytes = new byte[LocalModelPackagePolicy.CopyBufferBytes + 17];
++                for (int index = 0; index < bytes.Length; ++index)
++                {
++                    bytes[index] = checked((byte)(index % 251));
++                }
++                LocalModelManifest manifest = CreateManifest(artifactBytes: bytes);
++                var probe = new SequenceStorageProbe(
++                    long.MaxValue,
++                    long.MaxValue,
++                    0L,
++                    long.MaxValue,
++                    long.MaxValue);
++                using var context = new TestContext(root, Manager(root, probe));
++                var requestedOffsets = new List<long>();
++                var transport = new ScriptedTransport(
++                    (uri, offset) =>
++                    {
++                        requestedOffsets.Add(offset);
++                        int start = checked((int)offset);
++                        var remaining = new byte[bytes.Length - start];
++                        Buffer.BlockCopy(bytes, start, remaining, 0, remaining.Length);
++                        return Response(remaining, offset, bytes.Length);
++                    });
++
++                LocalModelPackageResult pressured = await context.Manager.DownloadAsync(
++                        manifest,
++                        ArtifactUri("large-model.gguf"),
++                        transport,
++                        CancellationToken.None)
++                    .ConfigureAwait(false);
++                RequireFailure(pressured, LocalModelPackageFailure.InsufficientStorage);
++                string partPath = Path.Combine(
++                    StagingDirectory(root, manifest),
++                    "artifact.download.part");
++                Require(File.Exists(partPath), "Storage pressure deleted the resumable partial.");
++                Require(
++                    new FileInfo(partPath).Length == LocalModelPackagePolicy.CopyBufferBytes,
++                    "Storage pressure wrote bytes after the failing storage re-check.");
++
++                LocalModelPackageResult resumed = await context.Manager.DownloadAsync(
++                        manifest,
++                        ArtifactUri("large-model.gguf"),
++                        transport,
++                        CancellationToken.None)
++                    .ConfigureAwait(false);
++                Require(resumed.Succeeded, resumed.Detail);
++                Require(resumed.Resumed, "Recovered download did not resume the retained partial.");
++                Require(
++                    requestedOffsets.Count == 2 &&
++                    requestedOffsets[0] == 0L &&
++                    requestedOffsets[1] == LocalModelPackagePolicy.CopyBufferBytes,
++                    "Recovered download did not request the exact retained offset.");
++            }
++            finally
++            {
++                if (Directory.Exists(root))
++                {
++                    Directory.Delete(root, recursive: true);
++                }
++            }
++        }
++
+         private static async Task TestFreshDownloadAsync()
+         {
+             await WithStoreAsync(async context =>
+@@ -366,6 +436,40 @@ namespace ReachyMini.LocalModelPackages.Tests
+             }).ConfigureAwait(false);
+         }
+ 
++        private static async Task TestTransientPressureCleanupAsync()
++        {
++            await WithStoreAsync(async context =>
++            {
++                LocalModelManifest manifest = CreateManifest();
++                LocalModelPackageResult imported =
++                    await ImportAsync(context, manifest, ModelBytes).ConfigureAwait(false);
++                Require(imported.Succeeded, imported.Detail);
++
++                string transientStaging = Path.Combine(context.Root, "staging", "pressure-orphan");
++                string quarantine = Path.Combine(context.Root, "quarantine");
++                Directory.CreateDirectory(transientStaging);
++                Directory.CreateDirectory(quarantine);
++                File.WriteAllBytes(Path.Combine(transientStaging, "partial.bin"), new byte[31]);
++                File.WriteAllBytes(Path.Combine(quarantine, "old.bin"), new byte[17]);
++
++                LocalModelTransientCleanupReport cleanup =
++                    context.Manager.CleanupTransientStorage();
++                Require(cleanup.Succeeded, cleanup.Detail);
++                Require(cleanup.BytesFreed == 48L, "Transient cleanup reported wrong freed bytes.");
++                Require(cleanup.RemovedEntries >= 2, "Transient cleanup did not report removed entries.");
++                Require(!Directory.EnumerateFileSystemEntries(Path.Combine(context.Root, "staging")).Any(),
++                    "Transient cleanup retained staging data.");
++                Require(!Directory.EnumerateFileSystemEntries(quarantine).Any(),
++                    "Transient cleanup retained quarantine data.");
++
++                LocalModelPackageResult resolved = await context.Manager.ResolveInstalledAsync(
++                        manifest,
++                        CancellationToken.None)
++                    .ConfigureAwait(false);
++                Require(resolved.Succeeded, "Transient cleanup corrupted an installed verified model.");
++            }).ConfigureAwait(false);
++        }
++
+         private static async Task TestOwnershipAsync()
+         {
+             string root = TemporaryRoot();
+@@ -452,12 +556,20 @@ namespace ReachyMini.LocalModelPackages.Tests
+         }
+ 
+         private static LocalModelDownloadResponse Response(byte[] bytes, long offset)
++        {
++            return Response(bytes, offset, ModelBytes.Length);
++        }
++
++        private static LocalModelDownloadResponse Response(
++            byte[] bytes,
++            long offset,
++            long totalSizeBytes)
+         {
+             var stream = new MemoryStream(bytes, writable: false);
+             try
+             {
+                 LocalModelDownloadResponse response =
+-                    LocalModelDownloadResponse.CreateContent(stream, offset, ModelBytes.Length);
++                    LocalModelDownloadResponse.CreateContent(stream, offset, totalSizeBytes);
+                 stream = null!;
+                 return response;
+             }
+@@ -477,8 +589,11 @@ namespace ReachyMini.LocalModelPackages.Tests
+             return bytes;
+         }
+ 
+-        private static LocalModelManifest CreateManifest(string? shaOverride = null)
++        private static LocalModelManifest CreateManifest(
++            string? shaOverride = null,
++            byte[]? artifactBytes = null)
+         {
++            byte[] bytes = artifactBytes ?? ModelBytes;
+             return new LocalModelManifest(
+                 LocalModelManifestPolicy.CurrentSchemaVersion,
+                 new LocalModelIdentity(
+@@ -497,8 +612,8 @@ namespace ReachyMini.LocalModelPackages.Tests
+                     requiresNetworkAccess: false),
+                 new LocalModelArtifact(
+                     "model.gguf",
+-                    ModelBytes.Length,
+-                    shaOverride ?? Sha256(ModelBytes)),
++                    bytes.Length,
++                    shaOverride ?? Sha256(bytes)),
+                 new LocalModelGgufMetadata(
+                     3,
+                     "synthetic",
+@@ -565,10 +680,17 @@ namespace ReachyMini.LocalModelPackages.Tests
+         }
+ 
+         private static LocalModelPackageManager Manager(string root, long availableBytes)
++        {
++            return Manager(root, new ConstantStorageProbe(availableBytes));
++        }
++
++        private static LocalModelPackageManager Manager(
++            string root,
++            ILocalModelStorageProbe storageProbe)
+         {
+             return new LocalModelPackageManager(
+                 root,
+-                new ConstantStorageProbe(availableBytes),
++                storageProbe,
+                 new LocalModelPackageOptions(
+                     maximumArtifactBytes: 1024L * 1024L,
+                     safetyReserveBytes: 0L));
+@@ -630,6 +752,32 @@ namespace ReachyMini.LocalModelPackages.Tests
+             }
+         }
+ 
++        private sealed class SequenceStorageProbe : ILocalModelStorageProbe
++        {
++            private readonly Queue<long> availableBytes;
++            private long lastValue;
++
++            public SequenceStorageProbe(params long[] values)
++            {
++                if (values == null || values.Length == 0)
++                {
++                    throw new ArgumentException("Storage probe sequence cannot be empty.", nameof(values));
++                }
++                availableBytes = new Queue<long>(values);
++                lastValue = values[values.Length - 1];
++            }
++
++            public long GetAvailableBytes(string managedStoreRoot)
++            {
++                Require(Path.IsPathRooted(managedStoreRoot), "storage probe path not rooted");
++                if (availableBytes.Count > 0)
++                {
++                    lastValue = availableBytes.Dequeue();
++                }
++                return lastValue;
++            }
++        }
++
+         private sealed class ScriptedTransport : ILocalModelDownloadTransport
+         {
+             private readonly Func<Uri, long, LocalModelDownloadResponse> open;
+diff --git a/scripts/tests/test_rma183_memory_storage_pressure.py b/scripts/tests/test_rma183_memory_storage_pressure.py
+new file mode 100644
+index 0000000..d62c945
+--- /dev/null
++++ b/scripts/tests/test_rma183_memory_storage_pressure.py
+@@ -0,0 +1,129 @@
++from pathlib import Path
++import unittest
++
++ROOT = Path(__file__).resolve().parents[2]
++
++
