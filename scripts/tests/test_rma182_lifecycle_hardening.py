@@ -113,16 +113,13 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
             "Assets/ReachyMini/Runtime/Core/Conversation/"
             "ReachyConversationStateMachine.Lifecycle.cs"
         )
-        ui = read(
-            "Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs"
-        )
+        ui = read("Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs")
         production = read(
             "Assets/ReachyMini/Runtime/Application/"
             "ReachyProductionApplicationCompositionProvider.cs"
         )
         settings = read(
-            "Assets/ReachyMini/Runtime/Application/"
-            "ReachySettingsApplicationCompositionProvider.cs"
+            "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
         )
         self.assertIn("unavailable-lifecycle-paused", conversation)
         self.assertIn("CancelAndDispose(cancellation)", conversation)
@@ -130,19 +127,13 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
         self.assertIn("ReachyInteractionState.Interrupted", ui)
         self.assertIn("ReachyInteractionState.Idle", ui)
         self.assertIn("ReachyInteractionState.Error", ui)
-        self.assertGreaterEqual(
-            production.count("IReachyApplicationInterruptionParticipant"), 2
-        )
+        self.assertGreaterEqual(production.count("IReachyApplicationInterruptionParticipant"), 2)
         self.assertIn("IReachyApplicationInterruptionParticipant", settings)
 
     def test_repeated_cycle_managed_contracts_are_registered(self) -> None:
         program = read("managed/ReachyMini.Core.Tests/Program.cs")
-        tests = read(
-            "managed/ReachyMini.Core.Tests/Rma182ApplicationInterruptionContractTests.cs"
-        )
-        speech = read(
-            "managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs"
-        )
+        tests = read("managed/ReachyMini.Core.Tests/Rma182ApplicationInterruptionContractTests.cs")
+        speech = read("managed/ReachyMini.SpeechAudioFocus.Tests/SpeechAudioFocusTests.cs")
         vlm = read("managed/ReachyMini.VlmScheduling.Tests/Program.cs")
         self.assertIn("Rma182ApplicationInterruptionContractTests.RunAll();", program)
         self.assertIn("for (int cycle = 1; cycle <= 5; ++cycle)", tests)
@@ -153,9 +144,7 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
 
     def test_roadmap_closes_every_rma182_item(self) -> None:
         roadmap = read("docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md")
-        block = roadmap.split(
-            "## RMA-182 — Harden pause/resume and interruption handling", 1
-        )[1]
+        block = roadmap.split("## RMA-182 — Harden pause/resume and interruption handling", 1)[1]
         block = block.split("## RMA-183", 1)[0]
         self.assertIn("**Status:** Complete (2026-08-15)", block)
         self.assertEqual(block.count("- [x]"), 6)

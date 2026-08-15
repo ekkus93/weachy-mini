@@ -50,18 +50,14 @@ class Rma163ImportedContentSecurityTests(unittest.TestCase):
         self.assertNotIn("File.ReadAllText(markerTemporaryPath", readiness)
 
     def test_calibration_schema_and_numeric_ranges_are_bounded(self) -> None:
-        persistence = (APP / "ReachyCameraCalibrationPersistence.cs").read_text(
-            encoding="utf-8"
-        )
+        persistence = (APP / "ReachyCameraCalibrationPersistence.cs").read_text(encoding="utf-8")
         profile = (CORE / "Application/ReachyCameraCalibrationProfile.cs").read_text(
             encoding="utf-8"
         )
-        intrinsics = (CORE / "Application/ReachyCameraIntrinsics.cs").read_text(
+        intrinsics = (CORE / "Application/ReachyCameraIntrinsics.cs").read_text(encoding="utf-8")
+        provider_persistence = (APP / "ReachyProviderProfilePersistence.cs").read_text(
             encoding="utf-8"
         )
-        provider_persistence = (
-            APP / "ReachyProviderProfilePersistence.cs"
-        ).read_text(encoding="utf-8")
         state = (CORE / "Application/ReachyCameraCalibrationStateStore.cs").read_text(
             encoding="utf-8"
         )
@@ -74,9 +70,7 @@ class Rma163ImportedContentSecurityTests(unittest.TestCase):
         self.assertIn("profiles.Count > MaximumProfiles", state)
         self.assertIn("next.Count >= MaximumProfiles", state)
         self.assertIn("MaximumTextCharacters = 512", profile)
-        self.assertIn(
-            "Enum.IsDefined(typeof(ReachyCameraCalibrationProvenance)", profile
-        )
+        self.assertIn("Enum.IsDefined(typeof(ReachyCameraCalibrationProvenance)", profile)
         self.assertIn("MaximumImageDimension = 16384", intrinsics)
         self.assertIn("(long)cropLeft + cropWidth", intrinsics)
         self.assertIn("(long)cropTop + cropHeight", intrinsics)

@@ -11,13 +11,10 @@ PROBE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma184Representative
 RUNNER = ROOT / "scripts/run_rma184_device_probe_android.sh"
 SPEC = ROOT / "docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15.md"
 VALIDATION = ROOT / (
-    "docs/validation/"
-    "RMA_184_REPRESENTATIVE_DEVICE_MATRIX_LOCAL_VALIDATION_2026-08-15.md"
+    "docs/validation/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_LOCAL_VALIDATION_2026-08-15.md"
 )
 PROGRAM = ROOT / "managed/ReachyMini.Core.Tests/Program.cs"
-MANAGED = ROOT / (
-    "managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs"
-)
+MANAGED = ROOT / ("managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs")
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
