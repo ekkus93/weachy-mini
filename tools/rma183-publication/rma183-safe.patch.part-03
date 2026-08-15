@@ -1,0 +1,330 @@
+@@ -48,6 +48,14 @@ namespace ReachyMini.LocalModels
+                     {
+                         break;
+                     }
++                    LocalModelPackageResult? storageFailure = CheckStorage(read);
++                    if (storageFailure != null)
++                    {
++                        return new CopyExactResult(
++                            written,
++                            hasExtraBytes: false,
++                            storageFailure);
++                    }
+                     await destination.WriteAsync(
+                             buffer.AsMemory(0, read),
+                             cancellationToken)
+@@ -307,15 +315,21 @@ namespace ReachyMini.LocalModels
+ 
+         private readonly struct CopyExactResult
+         {
+-            public CopyExactResult(long bytesWritten, bool hasExtraBytes)
++            public CopyExactResult(
++                long bytesWritten,
++                bool hasExtraBytes,
++                LocalModelPackageResult? storageFailure = null)
+             {
+                 BytesWritten = bytesWritten;
+                 HasExtraBytes = hasExtraBytes;
++                StorageFailure = storageFailure;
+             }
+ 
+             public long BytesWritten { get; }
+ 
+             public bool HasExtraBytes { get; }
++
++            public LocalModelPackageResult? StorageFailure { get; }
+         }
+     }
+ }
+diff --git a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs
+index c37d913..f758e31 100644
+--- a/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs
++++ b/Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs
+@@ -8,7 +8,8 @@ namespace ReachyMini.LocalModels
+ {
+     public sealed partial class LocalModelPackageManager : IDisposable
+     {
+-        private const string MarkerFileName = ".reachy-local-model-store-v1";
++        private const string MarkerFileName =
++            LocalModelPackagePolicy.OwnershipMarkerFileName;
+         private const string MarkerContents = "reachy-local-model-store-v1\n";
+         private const string MarkerTemporaryFileName = ".reachy-local-model-store-v1.tmp";
+         private const string InstalledDirectoryName = "installed";
+diff --git a/docs/RMA_183_MEMORY_STORAGE_PRESSURE_SPEC_2026-08-15.md b/docs/RMA_183_MEMORY_STORAGE_PRESSURE_SPEC_2026-08-15.md
+new file mode 100644
+index 0000000..890d491
+--- /dev/null
++++ b/docs/RMA_183_MEMORY_STORAGE_PRESSURE_SPEC_2026-08-15.md
+@@ -0,0 +1,81 @@
++# RMA-183 Memory and Storage Pressure Specification
++
++Date: 2026-08-15
++
++## Objective
++
++RMA-183 hardens the Android digital-twin runtime against memory and storage pressure without introducing a second resource-priority policy, corrupting active state, or silently deleting durable user data.
++
++The implementation reuses the existing RMA-135 resource snapshot/governor and RMA-181 priority-degradation path. Callback-driven pressure augments those signals and performs bounded resource release; it does not change simulation fidelity, physics timestep, provider fallback policy, or calibrated-state claims.
++
++## Memory-pressure ingress
++
++Two Android/Unity ingress paths are supported:
++
++- `Application.lowMemory` produces a critical pressure signal.
++- On Android, `ReachyAndroidMemoryTrimMonitor` registers `android.content.ComponentCallbacks2` and maps `onLowMemory()` plus `onTrimMemory(int)` into `ReachyMemoryPressureSignal`.
++
++The callback latch `ReachyAndroidMemoryPressureState` only escalates between healthy `ActivityManager.MemoryInfo` snapshots. A pressure latch is cleared only after Android no longer reports low memory and available memory exceeds twice the Android low-memory threshold. Critical callback state is ORed into the existing RMA-135 `LocalLlmResourceSnapshot`; no competing byte threshold is introduced.
++
++Android callbacks may arrive off the Unity main thread. The host therefore only queues/coalesces the strongest pending signal from callbacks. `Resources.UnloadUnusedAssets()` and task/result processing happen from `ReachyApplicationHostBehaviour.Update()` on the Unity thread.
++
++## Coordinated memory release
++
++`ReachyMemoryPressureCoordinator` serializes target execution and records one explicit result per target. A target exception is converted into a visible failure result and does not prevent later targets from attempting cleanup.
++
++The local LLM provider implements `IReachyMemoryPressureTarget`:
++
++- moderate pressure retains the loaded model;
++- critical pressure increments the conversation epoch, cancels active generation, waits for that generation to drain, then unloads the optional native model;
++- the model handle is claimed before crossing the asynchronous unload boundary so concurrent disposal cannot double-unload it;
++- disposal waits for an in-flight pressure release before disposing the owned runtime;
++- a reload already in `Loading` causes critical pressure release to report a visible deferred failure instead of racing the native model lifecycle;
++- after a successful pressure unload, provider state is `Unavailable` and generation cannot silently reload the model; recovery requires an explicit `ReloadAsync` call.
++
++The production application composition still does not invent an unavailable provider stack. Any explicitly composed memory-pressure target participates; the Local LLM target is exercised directly by managed contracts and is ready for the production provider composition when that runtime is installed.
++
++## Model-package storage pressure
++
++RMA-132's manifest-bound package manager remains authoritative for local-model storage. RMA-183 strengthens it in two ways:
++
++1. Initial import/download storage preflight remains unchanged.
++2. `CopyExactAsync` now re-checks free space before every destination write chunk.
++
++For resumable downloads, a mid-stream `InsufficientStorage` result preserves the exact manifest/source-bound `.part` and metadata so a later explicit download can resume from the written offset. Non-resumable import partials are removed on storage failure. Size/hash/finalization checks remain unchanged.
++
++`CleanupTransientStorage()` is non-blocking with respect to package operations. If an import/download/resolve operation owns the package gate, cleanup returns `OperationBusy`. Otherwise it removes only the package manager's staging and quarantine trees using the existing no-follow path rules. Verified installed artifacts are never part of this cleanup operation.
++
++## Diagnostic-export storage pressure
++
++Before RMA-172 writes a diagnostic bundle, `ReachyDiagnosticBundleStorageGate` requires:
++
++- a 16 MiB write budget; and
++- a 64 MiB safety reserve.
++
++The RMA-172 exporter itself caps bundles at 8 MiB, so the RMA-183 write budget intentionally provides headroom above the exporter maximum. If free-space probing fails or headroom is insufficient, export fails before a file is created and records a storage-preflight diagnostic.
++
++## Cleanup UI
++
++The Local Model settings panel exposes `CLEAN APP STORAGE`. The operation is deliberately narrow:
++
++- remove transient local-model staging/quarantine content only when the exact managed-store ownership marker exists;
++- retain every verified installed local model;
++- remove old `reachy-diagnostics-*.zip` files while preserving the newest three bundles;
++- ignore diagnostic reparse points;
++- return bytes freed, entry count, and a visible success/failure message.
++
++The cleanup control is not a general recursive delete and does not touch conversation history, settings, credentials, calibrated assets, or arbitrary files beneath `persistentDataPath`.
++
++## Fail-closed invariants
++
++- Memory pressure never changes or skips authoritative physics steps.
++- No cloud provider is selected as a memory-pressure fallback.
++- A failed native LLM unload faults the provider rather than claiming memory was released.
++- Storage probe failure is treated as insufficient/unknown capacity, not as permission to write.
++- Installed verified models are preserved by user cleanup.
++- Mid-download low storage never finalizes or hashes a truncated artifact as installed.
++- Diagnostic export does not start when its storage budget cannot be guaranteed.
++
++## Validation boundary
++
++Local validation covers source contracts, deterministic managed test sources, package-manager behavior, storage policy, and repository static checks. This environment has no .NET SDK, Unity Editor, or attached Android device, so RMA-183 does not claim a local managed build or physical `onTrimMemory`/low-storage run. The publication gate must run warnings-as-errors managed projects on GitHub before the integration can fast-forward `master`.
+diff --git a/docs/validation/RMA_183_MEMORY_STORAGE_PRESSURE_LOCAL_VALIDATION_2026-08-15.md b/docs/validation/RMA_183_MEMORY_STORAGE_PRESSURE_LOCAL_VALIDATION_2026-08-15.md
+new file mode 100644
+index 0000000..522f9f2
+--- /dev/null
++++ b/docs/validation/RMA_183_MEMORY_STORAGE_PRESSURE_LOCAL_VALIDATION_2026-08-15.md
+@@ -0,0 +1,58 @@
++# RMA-183 Local Validation — Memory and Storage Pressure
++
++Date: 2026-08-15
++
++## Scope
++
++This record covers sandbox validation of RMA-183 before publication. It is software evidence only; no physical Android low-memory callback, storage exhaustion, thermal run, or device profiling is claimed.
++
++## Covered behavior
++
++- Android `ComponentCallbacks2` and Unity low-memory ingress are present and feed a coalesced pressure path.
++- Callback pressure augments the existing RMA-135 Android memory snapshot rather than replacing its thresholds.
++- Unity unused-asset release is initiated from the Unity host update path.
++- Critical local-LLM pressure cancels/drains active generation, serializes unload ownership against disposal, unloads the optional model, and leaves the provider explicitly unavailable until explicit reload.
++- Package downloads re-check free space before every write chunk and preserve resumable partial state on mid-stream storage exhaustion.
++- Transient package cleanup removes staging/quarantine state only and preserves verified installed models.
++- Diagnostic export performs a fail-closed storage preflight using a 16 MiB write budget plus 64 MiB reserve.
++- The cleanup UI removes only owned package transients and old diagnostic ZIPs while retaining the newest three diagnostic bundles.
++
++## Managed contract sources
++
++The following managed contracts were added or extended for the hosted warnings-as-errors gate:
++
++- `managed/ReachyMini.Core.Tests/Rma183ResourcePressureContractTests.cs`
++  - Android trim-level classification;
++  - coordinator continuation/failure accounting;
++  - storage headroom boundary behavior.
++- `managed/ReachyMini.LocalLlm.Tests/Program.MemoryPressureTests.cs`
++  - moderate pressure retains the model;
++  - critical pressure unloads it;
++  - generation stays unavailable afterward;
++  - explicit reload restores service.
++- `managed/ReachyMini.LocalModelPackages.Tests/Program.cs`
++  - mid-stream storage exhaustion leaves the exact resumable offset;
++  - a later attempt resumes and completes;
++  - transient cleanup preserves an installed verified model.
++
++## Local commands
++
++Final local commands and results after the implementation and roadmap update:
++
++```bash
++python3 scripts/tests/test_rma183_memory_storage_pressure.py
++# Ran 7 tests: OK
++
++python3 -m unittest discover -s scripts/tests -p 'test_*.py'
++# Ran 349 tests: OK
++
++git diff --check
++# clean
++
++TERM=xterm bash scripts/ci.sh --static-only
++# The sandbox terminated this long-running wrapper at its 600-second execution
++# ceiling while it was still emitting passing checks. No failure was observed
++# before termination, but a completed wrapper pass is not claimed.
++```
++
++The sandbox does not provide `dotnet`; therefore no local managed analyzer/build pass is claimed. GitHub publication is gated on the relevant managed projects with `TreatWarningsAsErrors=true` and `AnalysisLevel=latest-recommended`.
+diff --git a/managed/ReachyMini.Core.Tests/Rma183ResourcePressureContractTests.cs b/managed/ReachyMini.Core.Tests/Rma183ResourcePressureContractTests.cs
+new file mode 100644
+index 0000000..b6ff2b6
+--- /dev/null
++++ b/managed/ReachyMini.Core.Tests/Rma183ResourcePressureContractTests.cs
+@@ -0,0 +1,154 @@
++#nullable enable
++
++using System;
++using System.Collections.Generic;
++using System.Threading.Tasks;
++using ReachyMini.AppState;
++
++namespace ReachyMini.Core.Tests
++{
++    internal static class Rma183ResourcePressureContractTests
++    {
++        public static void RunAll()
++        {
++            TestAndroidTrimClassification();
++            TestCoordinatorContinuesAfterTargetFailure();
++            TestStorageHeadroomCheck();
++        }
++
++        private static void TestAndroidTrimClassification()
++        {
++            Equal(
++                ReachyMemoryPressureLevel.Moderate,
++                ReachyMemoryPressureSignal.ClassifyAndroidTrimLevel(10),
++                "Android running-low classification");
++            Equal(
++                ReachyMemoryPressureLevel.Critical,
++                ReachyMemoryPressureSignal.ClassifyAndroidTrimLevel(15),
++                "Android running-critical classification");
++            Equal(
++                ReachyMemoryPressureLevel.Normal,
++                ReachyMemoryPressureSignal.ClassifyAndroidTrimLevel(20),
++                "Android UI-hidden classification");
++            Equal(
++                ReachyMemoryPressureLevel.Critical,
++                ReachyMemoryPressureSignal.ClassifyAndroidTrimLevel(80),
++                "Android complete classification");
++        }
++
++        private static void TestCoordinatorContinuesAfterTargetFailure()
++        {
++            var calls = new List<string>();
++            using var coordinator = new ReachyMemoryPressureCoordinator(
++                new IReachyMemoryPressureTarget[]
++                {
++                    new RecordingTarget("cache", calls, releases: true),
++                    new ThrowingTarget("fault", calls),
++                    new RecordingTarget("model", calls, releases: true),
++                });
++
++            ReachyMemoryPressureReport report = coordinator.ApplyAsync(
++                new ReachyMemoryPressureSignal(
++                    ReachyMemoryPressureLevel.Critical,
++                    ReachyMemoryPressureSource.AndroidLowMemory))
++                .GetAwaiter()
++                .GetResult();
++
++            Equal(3, report.Results.Count, "pressure result count");
++            Equal(1, report.FailureCount, "pressure failure count");
++            Equal(2, report.ReleasedTargetCount, "pressure release count");
++            Equal("cache,fault,model", string.Join(",", calls), "pressure target order");
++        }
++
++        private static void TestStorageHeadroomCheck()
++        {
++            ReachyStorageSpaceCheck insufficient = ReachyStorageSpaceCheck.Evaluate(
++                new FixedStorageProbe(99L),
++                "/tmp",
++                bytesToWrite: 40L,
++                safetyReserveBytes: 60L);
++            Equal(false, insufficient.Succeeded, "storage reserve rejection");
++            Equal(100L, insufficient.RequiredBytes, "storage required bytes");
++
++            ReachyStorageSpaceCheck sufficient = ReachyStorageSpaceCheck.Evaluate(
++                new FixedStorageProbe(100L),
++                "/tmp",
++                bytesToWrite: 40L,
++                safetyReserveBytes: 60L);
++            Equal(true, sufficient.Succeeded, "storage exact headroom acceptance");
++        }
++
++        private static void Equal<T>(T expected, T actual, string detail)
++        {
++            if (!EqualityComparer<T>.Default.Equals(expected, actual))
++            {
++                throw new InvalidOperationException(
++                    detail + ": expected " + expected + ", got " + actual + ".");
++            }
++        }
++
++        private sealed class FixedStorageProbe : IReachyStorageSpaceProbe
++        {
++            private readonly long availableBytes;
++
++            public FixedStorageProbe(long availableBytes)
++            {
++                this.availableBytes = availableBytes;
++            }
++
++            public long GetAvailableBytes(string path)
++            {
++                return availableBytes;
++            }
++        }
++
++        private sealed class RecordingTarget : IReachyMemoryPressureTarget
++        {
++            private readonly List<string> calls;
++            private readonly bool releases;
++
++            public RecordingTarget(
++                string targetId,
++                List<string> calls,
++                bool releases)
++            {
++                MemoryPressureTargetId = targetId;
++                this.calls = calls;
++                this.releases = releases;
++            }
++
++            public string MemoryPressureTargetId { get; }
++
