@@ -80,6 +80,14 @@ def main() -> None:
         "non-owning production simulation checkpoint",
     )
     require(text, "requiredConsecutiveAdmissible = 3", "startup stabilization window")
+    require(text, "LastObservedRealState", "last real physics sample retention")
+    require(text, "replayVerifiedPassThrough", "verified preflight replay")
+    require(text, "injectNextLiveCapture", "monitor-only controlled injection")
+    require(
+        text,
+        "LastObservedRealState != LocalLlmPhysicsBudgetState.Healthy &&",
+        "admissible replay guard",
+    )
     require(text, "startup_physics_exceeded_observations", "startup miss evidence")
     require(runner, 'mkdir -p "${REPORT_DIR}/checkpoints"', "checkpoint evidence directory")
     require(runner, '"${ADB[@]}" pull "${checkpoint_path}"', "all-checkpoint device pull")

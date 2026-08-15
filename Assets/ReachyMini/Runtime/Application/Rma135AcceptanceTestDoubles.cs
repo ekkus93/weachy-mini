@@ -31,7 +31,8 @@ namespace ReachyMini.Validation
     {
         private readonly object gate = new object();
         private readonly ILocalLlmPhysicsBudgetSource inner;
-        private int passThroughCapturesBeforeInjection = -1;
+        private bool replayVerifiedPassThrough;
+        private bool injectNextLiveCapture;
 
         internal Rma135FaultInjectingPhysicsBudgetSource(ILocalLlmPhysicsBudgetSource inner)
         {
@@ -39,6 +40,8 @@ namespace ReachyMini.Validation
         }
 
         internal int InjectedCount { get; private set; }
+        internal LocalLlmPhysicsBudgetState LastObservedRealState { get; private set; } =
+            LocalLlmPhysicsBudgetState.Unavailable;
         internal LocalLlmPhysicsBudgetState UnderlyingStateAtInjection { get; private set; } =
             LocalLlmPhysicsBudgetState.Unavailable;
 
@@ -46,30 +49,45 @@ namespace ReachyMini.Validation
         {
             lock (gate)
             {
-                if (passThroughCapturesBeforeInjection >= 0)
+                if (replayVerifiedPassThrough || injectNextLiveCapture)
                 {
                     throw new InvalidOperationException(
                         "RMA-135 physics fault injection is already armed.");
                 }
-                passThroughCapturesBeforeInjection = 1;
+                if (LastObservedRealState != LocalLlmPhysicsBudgetState.Healthy &&
+                    LastObservedRealState != LocalLlmPhysicsBudgetState.AtRisk)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 physics fault injection requires a freshly verified " +
+                        "admissible real pass-through sample.");
+                }
+
+                replayVerifiedPassThrough = true;
+                injectNextLiveCapture = true;
             }
         }
 
         public LocalLlmPhysicsBudgetState Capture()
         {
+            lock (gate)
+            {
+                if (replayVerifiedPassThrough)
+                {
+                    replayVerifiedPassThrough = false;
+                    return LastObservedRealState;
+                }
+            }
+
             LocalLlmPhysicsBudgetState real = inner.Capture();
             lock (gate)
             {
-                if (passThroughCapturesBeforeInjection < 0)
+                LastObservedRealState = real;
+                if (!injectNextLiveCapture)
                 {
                     return real;
                 }
-                if (passThroughCapturesBeforeInjection > 0)
-                {
-                    --passThroughCapturesBeforeInjection;
-                    return real;
-                }
-                passThroughCapturesBeforeInjection = -1;
+
+                injectNextLiveCapture = false;
                 UnderlyingStateAtInjection = real;
                 ++InjectedCount;
                 return LocalLlmPhysicsBudgetState.Exceeded;
