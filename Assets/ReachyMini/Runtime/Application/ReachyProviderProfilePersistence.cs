@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using ReachyMini.Providers;
+using ReachyMini.Security;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -14,6 +15,7 @@ namespace ReachyMini.AppState
         public const string ProfileFileName = "reachy-provider-profiles-v1.json";
 
         private const int SchemaVersion = 1;
+        private const int MaximumProfiles = 64;
         private readonly string persistencePath;
         private readonly Dictionary<string, ReachyProviderProfile> profiles =
             new Dictionary<string, ReachyProviderProfile>(StringComparer.Ordinal);
@@ -67,7 +69,9 @@ namespace ReachyMini.AppState
 
             try
             {
-                string json = File.ReadAllText(persistencePath);
+                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                    persistencePath,
+                    ReachyImportedDocumentKind.ProviderProfiles);
                 ProviderProfilesEnvelope envelope =
                     JsonUtility.FromJson<ProviderProfilesEnvelope>(json) ??
                     throw new InvalidDataException(
@@ -79,6 +83,11 @@ namespace ReachyMini.AppState
                 }
                 ProviderProfileEnvelope[] stored =
                     envelope.profiles ?? Array.Empty<ProviderProfileEnvelope>();
+                if (stored.Length > MaximumProfiles)
+                {
+                    throw new InvalidDataException(
+                        $"Provider profile storage supports at most {MaximumProfiles} profiles.");
+                }
                 for (int index = 0; index < stored.Length; ++index)
                 {
                     ReachyProviderProfile profile = stored[index].ToProfile();
@@ -210,6 +219,10 @@ namespace ReachyMini.AppState
                     profiles = stored,
                 },
                 prettyPrint: true);
+
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                json,
+                ReachyImportedDocumentKind.ProviderProfiles);
 
             string temporaryPath = persistencePath + ".tmp";
             string backupPath = persistencePath + ".bak";

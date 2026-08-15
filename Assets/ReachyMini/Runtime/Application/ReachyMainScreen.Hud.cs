@@ -1,5 +1,6 @@
 #nullable enable
 
+using ReachyMini.Diagnostics;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -148,14 +149,57 @@ namespace ReachyMini.AppState
                 new Rect(panel.x + 28f, panel.y + 24f, panel.width - 56f, 40f),
                 "Diagnostics",
                 panelTitleStyle!);
-            string diagnostics = diagnosticsProvider?.Invoke() ??
-                "Application diagnostics are unavailable.";
+            ReachyDiagnosticsScreenSnapshot diagnostics =
+                diagnosticsProvider?.Invoke() ??
+                ReachyDiagnosticsScreenSnapshot.FromLegacyText(
+                    "Application diagnostics are unavailable because no diagnostics source is bound.");
+            string diagnosticsText = diagnostics.ToDisplayText();
+            Rect viewport = new Rect(
+                panel.x + 28f,
+                panel.y + 78f,
+                panel.width - 56f,
+                panel.height - 252f);
+            float contentHeight = Mathf.Max(
+                viewport.height,
+                panelBodyStyle!.CalcHeight(
+                    new GUIContent(diagnosticsText),
+                    viewport.width - 20f) + 12f);
+            Rect content = new Rect(
+                0f,
+                0f,
+                viewport.width - 20f,
+                contentHeight);
+            diagnosticsScrollPosition = GUI.BeginScrollView(
+                viewport,
+                diagnosticsScrollPosition,
+                new Rect(0f, 0f, viewport.width - 20f, contentHeight));
+            GUI.Label(content, diagnosticsText, panelBodyStyle!);
+            GUI.EndScrollView();
+
             GUI.Label(
-                new Rect(panel.x + 28f, panel.y + 78f, panel.width - 56f, 230f),
-                diagnostics,
-                panelBodyStyle!);
+                new Rect(
+                    panel.x + 28f,
+                    panel.yMax - 158f,
+                    panel.width - 56f,
+                    44f),
+                diagnosticBundleExportStatus,
+                detailStyle!);
+
+            const float actionGap = 14f;
+            float actionWidth = (panel.width - 56f - actionGap) * 0.5f;
             if (GUI.Button(
-                    new Rect(panel.x + 28f, panel.yMax - 78f, panel.width - 56f, 50f),
+                    new Rect(panel.x + 28f, panel.yMax - 92f, actionWidth, 64f),
+                    "EXPORT REDACTED\nBUNDLE",
+                    buttonStyle!))
+            {
+                ExportDiagnosticBundle();
+            }
+            if (GUI.Button(
+                    new Rect(
+                        panel.x + 28f + actionWidth + actionGap,
+                        panel.yMax - 92f,
+                        actionWidth,
+                        64f),
                     "CLOSE",
                     buttonStyle!))
             {
@@ -176,8 +220,8 @@ namespace ReachyMini.AppState
 
         private static Rect CenterPanel(float width, float height)
         {
-            const float panelWidth = 650f;
-            const float panelHeight = 390f;
+            float panelWidth = Mathf.Min(900f, width - EdgePadding * 2f);
+            float panelHeight = Mathf.Min(620f, height - EdgePadding * 2f);
             return new Rect(
                 (width - panelWidth) * 0.5f,
                 Mathf.Max(EdgePadding, (height - panelHeight) * 0.5f),

@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL_MODELS = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels"
 INTEROP = ROOT / "Assets/ReachyMini/Runtime/Interop"
-PROVIDER = LOCAL_MODELS / "ReachyLocalLlmProvider.cs"
+PROVIDER_PARTS = tuple(sorted(LOCAL_MODELS.glob("ReachyLocalLlmProvider.*.cs")))
 RUNTIME = LOCAL_MODELS / "ReachyLlamaLocalLlmRuntime.cs"
 RUNTIME_CONTRACTS = LOCAL_MODELS / "ReachyLocalLlmRuntimeContracts.cs"
 BEHAVIOR = LOCAL_MODELS / "ReachyLocalLlmBehaviorContract.cs"
@@ -21,6 +21,12 @@ GRAMMAR = ROOT / "benchmarks/rma133/behavior-output-v1.gbnf"
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def provider_source() -> str:
+    if not PROVIDER_PARTS:
+        raise AssertionError("RMA-134 split provider source set is missing.")
+    return "\n".join(read(path) for path in PROVIDER_PARTS)
 
 
 def sha256(path: Path) -> str:
@@ -44,7 +50,7 @@ def literal_constant(source: str, name: str) -> str:
 
 def test_no_unconstrained_generation_binding() -> None:
     native = read(NATIVE)
-    provider = read(PROVIDER)
+    provider = provider_source()
     runtime = read(RUNTIME)
     combined = "\n".join((native, provider, runtime))
     require(
@@ -63,7 +69,13 @@ def test_no_unconstrained_generation_binding() -> None:
 
 def test_no_network_or_provider_fallback() -> None:
     sources = "\n".join(
-        read(path) for path in (PROVIDER, RUNTIME, RUNTIME_CONTRACTS, BEHAVIOR, NATIVE)
+        (
+            provider_source(),
+            read(RUNTIME),
+            read(RUNTIME_CONTRACTS),
+            read(BEHAVIOR),
+            read(NATIVE),
+        )
     )
     for prohibited in (
         "HttpClient",
@@ -83,7 +95,7 @@ def test_no_network_or_provider_fallback() -> None:
 
 
 def test_approved_artifact_boundary() -> None:
-    provider = read(PROVIDER)
+    provider = provider_source()
     public_create = re.search(
         r"public static async Task<LocalLlmProviderCreationResult> CreateAsync\((.*?)\)\n",
         provider,
@@ -104,7 +116,7 @@ def test_approved_artifact_boundary() -> None:
 
 
 def test_embedded_model_chat_template_is_authoritative() -> None:
-    provider = read(PROVIDER)
+    provider = provider_source()
     runtime = read(RUNTIME)
     require(
         re.search(
@@ -139,7 +151,7 @@ def test_frozen_behavior_lineage() -> None:
         literal_constant(behavior, "UserPromptSuffix") == "/no_think",
         "Selected Qwen3 user suffix drifted from /no_think.",
     )
-    provider = read(PROVIDER)
+    provider = provider_source()
     require(
         'content = content + "\\n" +' in provider
         and "LocalLlmBehaviorContract.UserPromptSuffix" in provider,
@@ -152,7 +164,7 @@ def test_frozen_behavior_lineage() -> None:
 
 
 def test_no_repair_or_hidden_retry() -> None:
-    provider = read(PROVIDER)
+    provider = provider_source()
     behavior = read(BEHAVIOR)
     combined = provider + "\n" + behavior
     prohibited_patterns = (
@@ -191,7 +203,7 @@ def test_no_repair_or_hidden_retry() -> None:
 
 
 def test_terminal_validation_and_consumer_failures_are_visible() -> None:
-    provider = read(PROVIDER)
+    provider = provider_source()
     require(
         "LocalLlmBehaviorContract.TryParseIntent" in provider,
         "Native completion bypasses strict behavior-intent validation.",

@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Text;
+using ReachyMini.Security;
 
 namespace ReachyMini.LocalModels
 {
@@ -103,7 +104,9 @@ namespace ReachyMini.LocalModels
                             GetPathComparison()) &&
                         File.Exists(markerTemporaryPath) &&
                         string.Equals(
-                            File.ReadAllText(markerTemporaryPath, Encoding.UTF8),
+                            ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                                markerTemporaryPath,
+                                ReachyImportedDocumentKind.LocalModelMetadata),
                             MarkerContents,
                             StringComparison.Ordinal))
                     {
@@ -119,7 +122,9 @@ namespace ReachyMini.LocalModels
 
                 if (IsReparsePoint(markerPath) ||
                     !string.Equals(
-                        File.ReadAllText(markerPath, Encoding.UTF8),
+                        ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                            markerPath,
+                            ReachyImportedDocumentKind.LocalModelMetadata),
                         MarkerContents,
                         StringComparison.Ordinal))
                 {
@@ -146,6 +151,9 @@ namespace ReachyMini.LocalModels
             string temporaryPath,
             string markerPath)
         {
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                MarkerContents,
+                ReachyImportedDocumentKind.LocalModelMetadata);
             File.WriteAllText(
                 temporaryPath,
                 MarkerContents,

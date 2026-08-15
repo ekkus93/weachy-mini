@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Security;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -159,18 +160,14 @@ namespace ReachyMini.LocalModels
 
         private static LocalModelDownloadResponse? ValidateHttpsUri(Uri uri)
         {
-            if (!uri.IsAbsoluteUri ||
-                uri.AbsoluteUri.Length > LocalModelPackagePolicy.MaximumDownloadUriLength ||
-                !string.Equals(
-                    uri.Scheme,
-                    Uri.UriSchemeHttps,
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(uri.Host) ||
-                !string.IsNullOrEmpty(uri.UserInfo) ||
-                !string.IsNullOrEmpty(uri.Fragment))
+            try
+            {
+                ReachyNetworkEndpointSecurity.RequirePublicHttpsUri(uri, nameof(uri));
+            }
+            catch (ArgumentException)
             {
                 return LocalModelDownloadResponse.CreateRejected(
-                    "HTTP model sources and redirects must remain absolute HTTPS URIs without credentials or fragments.");
+                    "HTTP model sources and redirects must remain public HTTPS URIs without credentials or fragments.");
             }
 
             return null;

@@ -3,6 +3,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using ReachyMini.Security;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -170,6 +171,9 @@ namespace ReachyMini.AppState
 
         public void ImportRecoveredSettingsJson(string json)
         {
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                json,
+                ReachyImportedDocumentKind.DurableSettings);
             if (!RecoveryRequired)
             {
                 throw new InvalidOperationException(
@@ -251,7 +255,9 @@ namespace ReachyMini.AppState
             loading = true;
             try
             {
-                string json = File.ReadAllText(persistencePath);
+                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                    persistencePath,
+                    ReachyImportedDocumentKind.DurableSettings);
                 Deserialize(
                     json,
                     out ReachyDurableSettings durable,
@@ -317,7 +323,9 @@ namespace ReachyMini.AppState
             try
             {
                 Deserialize(
-                    File.ReadAllText(backupPath),
+                    ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                        backupPath,
+                        ReachyImportedDocumentKind.DurableSettings),
                     out ReachyDurableSettings durable,
                     out ReachySettingsStorageReferences references,
                     out int sourceSchemaVersion);
@@ -426,6 +434,9 @@ namespace ReachyMini.AppState
             string json = Serialize(
                 Settings.CaptureDurableSettings(),
                 References);
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                json,
+                ReachyImportedDocumentKind.DurableSettings);
             if (string.Equals(json, lastSerialized, StringComparison.Ordinal) &&
                 File.Exists(persistencePath))
             {

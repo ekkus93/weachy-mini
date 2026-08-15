@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Security;
 
 namespace ReachyMini.Perception
 {
@@ -100,21 +101,7 @@ namespace ReachyMini.Perception
 
         private static Uri RequireHttpsUri(Uri value, string name)
         {
-            if (value == null)
-            {
-                throw new ArgumentNullException(name);
-            }
-            if (!value.IsAbsoluteUri ||
-                value.AbsoluteUri.Length > 2048 ||
-                !string.Equals(
-                    value.Scheme,
-                    Uri.UriSchemeHttps,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new ArgumentException(
-                    "Local VLM provenance must use an absolute HTTPS source URI.",
-                    name);
-            }
+            ReachyNetworkEndpointSecurity.RequirePublicHttpsUri(value, name);
             return value;
         }
     }

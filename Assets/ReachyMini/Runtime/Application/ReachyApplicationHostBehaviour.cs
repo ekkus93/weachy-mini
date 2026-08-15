@@ -2,6 +2,8 @@
 
 using System;
 using UnityEngine;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.AppState
 {
@@ -65,7 +67,18 @@ namespace ReachyMini.AppState
             catch (Exception exception)
             {
                 ShutdownApplication();
-                EnterFault(exception.Message);
+                ReachyRuntimeDiagnostics.Emit(
+                    "application",
+                    ReachyDiagnosticEventIds.ApplicationStartupFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Lifecycle,
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
+                EnterFault(
+                    "Application lifecycle operation failed (" +
+                    exception.GetType().Name + ").");
             }
         }
 
@@ -85,9 +98,15 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    $"Reachy application disposal failed: {exception.Message}",
-                    this);
+                ReachyRuntimeDiagnostics.Emit(
+                    "application",
+                    ReachyDiagnosticEventIds.ApplicationDisposalFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Lifecycle,
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
             }
         }
 
@@ -108,9 +127,15 @@ namespace ReachyMini.AppState
             if (eventArgs.Snapshot.State == ReachyApplicationState.Faulted)
             {
                 Fault = eventArgs.Snapshot.Message;
-                Debug.LogError(
-                    $"Reachy application fault: {Fault}",
-                    this);
+                ReachyRuntimeDiagnostics.Emit(
+                    "application",
+                    ReachyDiagnosticEventIds.ApplicationFaulted,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Lifecycle,
+                    new ReachyDiagnosticField(
+                        "state",
+                        eventArgs.Snapshot.State.ToString(),
+                        ReachyDiagnosticDataClass.Identifier));
             }
         }
 
@@ -119,7 +144,15 @@ namespace ReachyMini.AppState
             Fault = string.IsNullOrWhiteSpace(message)
                 ? "Reachy application startup failed without diagnostics."
                 : message;
-            Debug.LogError($"Reachy application startup failed: {Fault}", this);
+            ReachyRuntimeDiagnostics.Emit(
+                "application",
+                ReachyDiagnosticEventIds.ApplicationStartupFailed,
+                ReachyDiagnosticSeverity.Error,
+                ReachyDiagnosticErrorCategory.Lifecycle,
+                new ReachyDiagnosticField(
+                    "state",
+                    "faulted",
+                    ReachyDiagnosticDataClass.Identifier));
         }
     }
 }

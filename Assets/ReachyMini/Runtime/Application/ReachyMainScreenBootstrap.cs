@@ -4,6 +4,8 @@ using System;
 using ReachyMini.Presentation;
 using ReachyMini.Rendering;
 using UnityEngine;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.AppState
 {
@@ -16,7 +18,15 @@ namespace ReachyMini.AppState
         {
             if (!TryInstall(out string fault))
             {
-                Debug.LogError($"Reachy main-screen bootstrap failed: {fault}");
+                ReachyRuntimeDiagnostics.Emit(
+                    "ui",
+                    ReachyDiagnosticEventIds.MainScreenBootstrapFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Configuration,
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "install_after_scene_load",
+                        ReachyDiagnosticDataClass.Identifier));
             }
         }
 
@@ -107,9 +117,22 @@ namespace ReachyMini.AppState
             catch (Exception exception)
             {
                 UnityEngine.Object.DestroyImmediate(shellObject);
-                fault = string.IsNullOrWhiteSpace(exception.Message)
-                    ? "The application shell failed without diagnostics."
-                    : exception.Message;
+                ReachyRuntimeDiagnostics.Emit(
+                    "ui",
+                    ReachyDiagnosticEventIds.MainScreenBootstrapFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Configuration,
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "compose_shell",
+                        ReachyDiagnosticDataClass.Identifier));
+                fault =
+                    "The application shell failed (" +
+                    exception.GetType().Name + ").";
                 return false;
             }
         }

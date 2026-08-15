@@ -6,6 +6,8 @@ using ReachyMini.Interop;
 using ReachyMini.Presentation;
 using ReachyMini.Simulation;
 using UnityEngine;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.Rendering
 {
@@ -24,6 +26,8 @@ namespace ReachyMini.Rendering
     public sealed class ReachyProductionAuthoritativeRuntime : MonoBehaviour,
         IReachySimulationTimingSource
     {
+        public const string RequiredMujocoVersion = "3.9.0";
+
         private const string ModelResourcePath =
             "ReachyMiniRuntime/reachy_mini_mjb";
         private const string ManifestResourcePath =
@@ -49,6 +53,9 @@ namespace ReachyMini.Rendering
         public ulong ModelHash => poseSource?.ModelHash ?? 0UL;
 
         public int BodyCount => canonicalBodies.Length;
+
+        public string ReachyAssetSourceHash =>
+            presentationRoot?.SourceModelSha256 ?? string.Empty;
 
         public ReachySimulationRunState SimulationState =>
             worker?.State ?? ReachySimulationRunState.Created;
@@ -208,10 +215,15 @@ namespace ReachyMini.Rendering
 #else
             Status = ReachyProductionRuntimeStatus.Unavailable;
             renderer.enabled = false;
-            Debug.Log(
-                "Reachy production simulation is unavailable outside an Android player; " +
-                "the authoritative renderer remains unbound.",
-                this);
+            ReachyRuntimeDiagnostics.Emit(
+                "runtime",
+                ReachyDiagnosticEventIds.ProductionRuntimeUnavailable,
+                ReachyDiagnosticSeverity.Information,
+                ReachyDiagnosticErrorCategory.Configuration,
+                new ReachyDiagnosticField(
+                    "status",
+                    Status.ToString(),
+                    ReachyDiagnosticDataClass.Identifier));
 #endif
         }
 
@@ -355,14 +367,38 @@ namespace ReachyMini.Rendering
                 }
 
                 Status = ReachyProductionRuntimeStatus.Running;
-                Debug.Log(
-                    $"Reachy production authoritative runtime started: " +
-                    $"model_hash={poseSource.ModelHash} bodies={canonicalBodies.Length}.",
-                    this);
+                ReachyRuntimeDiagnostics.Emit(
+                    "runtime",
+                    ReachyDiagnosticEventIds.ProductionRuntimeStarted,
+                    ReachyDiagnosticSeverity.Information,
+                    ReachyDiagnosticErrorCategory.None,
+                    new ReachyDiagnosticField(
+                        "model_hash",
+                        poseSource.ModelHash.ToString("x16"),
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "body_count",
+                        canonicalBodies.Length.ToString(),
+                        ReachyDiagnosticDataClass.Public));
             }
             catch (Exception exception)
             {
-                EnterFault(exception.Message);
+                ReachyRuntimeDiagnostics.Emit(
+                    "runtime",
+                    ReachyDiagnosticEventIds.ProductionRuntimeFaulted,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Lifecycle,
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "startup",
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
+                EnterFault(
+                    "Production runtime startup failed (" +
+                    exception.GetType().Name + ").");
             }
         }
 
@@ -380,9 +416,15 @@ namespace ReachyMini.Rendering
             {
                 renderer.enabled = false;
             }
-            Debug.LogError(
-                $"Reachy production authoritative runtime fault: {Fault}",
-                this);
+            ReachyRuntimeDiagnostics.Emit(
+                "runtime",
+                ReachyDiagnosticEventIds.ProductionRuntimeFaulted,
+                ReachyDiagnosticSeverity.Error,
+                ReachyDiagnosticErrorCategory.Lifecycle,
+                new ReachyDiagnosticField(
+                    "status",
+                    Status.ToString(),
+                    ReachyDiagnosticDataClass.Identifier));
             ShutdownRuntime(logFailures: true, preserveFault: true);
         }
 
@@ -414,9 +456,19 @@ namespace ReachyMini.Rendering
                 {
                     if (logFailures)
                     {
-                        Debug.LogError(
-                            $"Reachy simulation shutdown failed: {exception.Message}",
-                            this);
+                        ReachyRuntimeDiagnostics.Emit(
+                            "runtime",
+                            ReachyDiagnosticEventIds.ProductionRuntimeShutdownFailed,
+                            ReachyDiagnosticSeverity.Error,
+                            ReachyDiagnosticErrorCategory.Lifecycle,
+                            new ReachyDiagnosticField(
+                                "operation",
+                                "simulation_shutdown",
+                                ReachyDiagnosticDataClass.Identifier),
+                            new ReachyDiagnosticField(
+                                "exception_type",
+                                exception.GetType().Name,
+                                ReachyDiagnosticDataClass.Identifier));
                     }
                 }
                 worker = null;
@@ -432,9 +484,19 @@ namespace ReachyMini.Rendering
                 {
                     if (logFailures)
                     {
-                        Debug.LogError(
-                            $"Reachy native session shutdown failed: {exception.Message}",
-                            this);
+                        ReachyRuntimeDiagnostics.Emit(
+                            "runtime",
+                            ReachyDiagnosticEventIds.ProductionRuntimeShutdownFailed,
+                            ReachyDiagnosticSeverity.Error,
+                            ReachyDiagnosticErrorCategory.Native,
+                            new ReachyDiagnosticField(
+                                "operation",
+                                "native_session_shutdown",
+                                ReachyDiagnosticDataClass.Identifier),
+                            new ReachyDiagnosticField(
+                                "exception_type",
+                                exception.GetType().Name,
+                                ReachyDiagnosticDataClass.Identifier));
                     }
                 }
                 session = null;
@@ -457,10 +519,10 @@ namespace ReachyMini.Rendering
                 throw new InvalidOperationException(
                     "The Reachy runtime manifest is missing or has an unsupported schema.");
             }
-            if (!string.Equals(manifest.mujoco_version, "3.9.0", StringComparison.Ordinal))
+            if (!string.Equals(manifest.mujoco_version, RequiredMujocoVersion, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"The runtime manifest declares MuJoCo {manifest.mujoco_version}, expected 3.9.0.");
+                    $"The runtime manifest declares MuJoCo {manifest.mujoco_version}, expected {RequiredMujocoVersion}.");
             }
             if (manifest.model_byte_count != modelBytes.Length)
             {

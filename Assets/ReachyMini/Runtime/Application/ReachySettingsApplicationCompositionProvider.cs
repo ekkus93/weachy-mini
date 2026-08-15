@@ -2,6 +2,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using ReachyMini.Diagnostics;
 using ReachyMini.Rendering;
 using ReachyMini.Simulation;
 using UnityEngine;
@@ -320,6 +322,8 @@ namespace ReachyMini.AppState
         private readonly IReachyApplicationService[] dependencies;
         private readonly ReachySettingsPersistenceApplicationService persistence;
         private readonly ReachyAndroidCameraDiscovery cameraDiscovery;
+        private readonly ReachyDiagnosticsScreenSource diagnosticsSource;
+        private readonly ReachyDiagnosticBundleExportCoordinator diagnosticBundleExporter;
         private readonly ReachyMainScreenStateStore stateStore =
             new ReachyMainScreenStateStore();
 
@@ -355,6 +359,16 @@ namespace ReachyMini.AppState
                 behavior ?? throw new ArgumentNullException(nameof(behavior)),
                 persistence,
             };
+            diagnosticsSource = new ReachyDiagnosticsScreenSource(
+                this.runtime,
+                this.persistence.Settings,
+                this.cameraDiscovery,
+                dependencies);
+            diagnosticBundleExporter = new ReachyDiagnosticBundleExportCoordinator(
+                diagnosticsSource,
+                Path.Combine(
+                    Application.persistentDataPath,
+                    "diagnostics"));
         }
 
         protected override void OnInitialize()
@@ -375,10 +389,12 @@ namespace ReachyMini.AppState
             screen.Bind(
                 stateStore,
                 persistence.Settings,
-                BuildDiagnostics,
+                BuildDiagnosticsSnapshot,
                 ResetSimulation,
                 cameraDiscovery.State,
                 cameraDiscovery.RequestAccessOrRefresh);
+            screen.ConfigureDiagnosticBundleExport(
+                diagnosticBundleExporter.ExportRedactedBundle);
             SetReady("Main screen and durable settings are bound to application state.");
         }
 
@@ -386,6 +402,7 @@ namespace ReachyMini.AppState
         {
             persistence.Settings.Changed -= OnSettingsChanged;
             cameraDiscovery.State.Changed -= OnCameraCapabilitiesChanged;
+            diagnosticsSource.Dispose();
             for (int index = 0; index < dependencies.Length; ++index)
             {
                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
@@ -472,27 +489,9 @@ namespace ReachyMini.AppState
                 $"fault={runtime.Fault}";
         }
 
-        private string BuildDiagnostics()
+        private ReachyDiagnosticsScreenSnapshot BuildDiagnosticsSnapshot()
         {
-            var lines = new List<string>(dependencies.Length + 4)
-            {
-                "Application shell: active",
-                $"Settings file: {persistence.PersistencePath}",
-                $"Settings status: {persistence.Settings.Current.StatusMessage}",
-                $"Camera discovery: {cameraDiscovery.State.Current.Summary}",
-            };
-            if (!string.IsNullOrEmpty(persistence.LastPersistenceFault))
-            {
-                lines.Add(
-                    $"Settings persistence fault: {persistence.LastPersistenceFault}");
-            }
-            for (int index = 0; index < dependencies.Length; ++index)
-            {
-                ReachyServiceHealth health = dependencies[index].Health;
-                lines.Add(
-                    $"{health.Kind}: {health.State} — {health.Message}");
-            }
-            return string.Join("\n", lines);
+            return diagnosticsSource.Capture();
         }
     }
 }

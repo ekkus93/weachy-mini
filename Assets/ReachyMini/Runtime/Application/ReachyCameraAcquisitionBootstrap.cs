@@ -3,6 +3,8 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.AppState
 {
@@ -67,9 +69,18 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                fault = string.IsNullOrWhiteSpace(exception.Message)
-                    ? "CameraX acquisition installation failed without diagnostics."
-                    : exception.Message;
+                ReachyRuntimeDiagnostics.Emit(
+                    "camera",
+                    ReachyDiagnosticEventIds.CameraBootstrapFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Camera,
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
+                fault =
+                    "CameraX acquisition installation failed (" +
+                    exception.GetType().Name + ").";
                 return false;
             }
         }
@@ -121,17 +132,37 @@ namespace ReachyMini.AppState
                             }
                             catch (Exception exception)
                             {
-                                Debug.LogError(
-                                    "Android auto-rotation request failed on the UI thread: " +
-                                    exception.Message);
+                                ReachyRuntimeDiagnostics.Emit(
+                                    "camera",
+                                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
+                                    ReachyDiagnosticSeverity.Error,
+                                    ReachyDiagnosticErrorCategory.Camera,
+                                    new ReachyDiagnosticField(
+                                        "operation",
+                                        "auto_rotation_request",
+                                        ReachyDiagnosticDataClass.Identifier),
+                                    new ReachyDiagnosticField(
+                                        "exception_type",
+                                        exception.GetType().Name,
+                                        ReachyDiagnosticDataClass.Identifier));
                             }
                         }));
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    "Android auto-rotation setup failed: " +
-                    exception.Message);
+                ReachyRuntimeDiagnostics.Emit(
+                    "camera",
+                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Camera,
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "auto_rotation_setup",
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
             }
 #endif
         }

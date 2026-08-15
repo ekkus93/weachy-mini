@@ -6,19 +6,20 @@ namespace ReachyMini.AppState
 {
     public sealed class ReachyCameraIntrinsicMatrix
     {
+        public const int MaximumImageDimension = 16384;
         public ReachyCameraIntrinsicMatrix(
             int imageWidth,
             int imageHeight,
             ReachyMatrix3x3 pixelFromOpticalRay)
         {
-            if (imageWidth <= 0)
+            if (imageWidth <= 0 || imageWidth > MaximumImageDimension)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(imageWidth),
                     imageWidth,
                     "An intrinsic image width must be positive.");
             }
-            if (imageHeight <= 0)
+            if (imageHeight <= 0 || imageHeight > MaximumImageDimension)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(imageHeight),
@@ -139,6 +140,7 @@ namespace ReachyMini.AppState
 
     public sealed class ReachyCameraImageNormalization
     {
+        public const int MaximumImageDimension = ReachyCameraIntrinsicMatrix.MaximumImageDimension;
         public ReachyCameraImageNormalization(
             int sourceWidth,
             int sourceHeight,
@@ -149,7 +151,8 @@ namespace ReachyMini.AppState
             int clockwiseRotationDegrees,
             bool mirrorHorizontally)
         {
-            if (sourceWidth <= 0 || sourceHeight <= 0)
+            if (sourceWidth <= 0 || sourceHeight <= 0 ||
+                sourceWidth > MaximumImageDimension || sourceHeight > MaximumImageDimension)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(sourceWidth),
@@ -157,8 +160,9 @@ namespace ReachyMini.AppState
             }
             if (cropLeft < 0 || cropTop < 0 ||
                 cropWidth <= 0 || cropHeight <= 0 ||
-                cropLeft + cropWidth > sourceWidth ||
-                cropTop + cropHeight > sourceHeight)
+                cropWidth > MaximumImageDimension || cropHeight > MaximumImageDimension ||
+                (long)cropLeft + cropWidth > sourceWidth ||
+                (long)cropTop + cropHeight > sourceHeight)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(cropLeft),

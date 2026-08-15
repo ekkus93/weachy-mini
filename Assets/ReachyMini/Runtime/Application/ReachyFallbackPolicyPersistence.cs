@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using ReachyMini.Providers;
+using ReachyMini.Security;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -65,7 +66,9 @@ namespace ReachyMini.AppState
 
             try
             {
-                string json = File.ReadAllText(persistencePath);
+                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                    persistencePath,
+                    ReachyImportedDocumentKind.FallbackPolicies);
                 FallbackPoliciesEnvelope envelope =
                     JsonUtility.FromJson<FallbackPoliciesEnvelope>(json) ??
                     throw new InvalidDataException(
@@ -191,6 +194,9 @@ namespace ReachyMini.AppState
                 Directory.CreateDirectory(directory);
             }
             string json = JsonUtility.ToJson(CaptureEnvelope(), prettyPrint: true);
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                json,
+                ReachyImportedDocumentKind.FallbackPolicies);
             string temporaryPath = persistencePath + ".tmp";
             string backupPath = persistencePath + ".bak";
             File.WriteAllText(temporaryPath, json);

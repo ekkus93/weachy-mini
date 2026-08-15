@@ -7,6 +7,7 @@ namespace ReachyMini.AppState
     public sealed class ReachyCameraCalibrationProfile
     {
         public const int CurrentProfileSchemaVersion = 1;
+        public const int MaximumTextCharacters = 512;
 
         public ReachyCameraCalibrationProfile(
             int profileSchemaVersion,
@@ -44,7 +45,8 @@ namespace ReachyMini.AppState
                     facing,
                     "Calibration requires a front, rear, or external camera.");
             }
-            if (provenance == ReachyCameraCalibrationProvenance.Unknown)
+            if (!Enum.IsDefined(typeof(ReachyCameraCalibrationProvenance), provenance) ||
+                provenance == ReachyCameraCalibrationProvenance.Unknown)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(provenance),
@@ -147,10 +149,10 @@ namespace ReachyMini.AppState
 
         private static void RequireText(string value, string name)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(value) || value.Length > MaximumTextCharacters)
             {
                 throw new ArgumentException(
-                    "Calibration text fields cannot be empty.",
+                    $"Calibration text fields must contain 1-{MaximumTextCharacters} characters.",
                     name);
             }
         }

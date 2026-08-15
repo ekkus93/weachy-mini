@@ -4,6 +4,8 @@ using System;
 using ReachyMini.Presentation;
 using UnityEngine;
 using UnityEngine.Playables;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.Rendering
 {
@@ -703,9 +705,15 @@ namespace ReachyMini.Rendering
         {
             fault = message;
             Status = ReachyAuthoritativeRendererStatus.Faulted;
-            Debug.LogError(
-                $"Reachy authoritative rendering fault: {message}",
-                this);
+            ReachyRuntimeDiagnostics.Emit(
+                "renderer",
+                ReachyDiagnosticEventIds.RendererFaulted,
+                ReachyDiagnosticSeverity.Error,
+                ReachyDiagnosticErrorCategory.Rendering,
+                new ReachyDiagnosticField(
+                    "status",
+                    Status.ToString(),
+                    ReachyDiagnosticDataClass.Identifier));
             enabled = false;
             return false;
         }

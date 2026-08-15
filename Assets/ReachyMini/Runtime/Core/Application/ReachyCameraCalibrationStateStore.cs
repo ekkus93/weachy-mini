@@ -103,6 +103,7 @@ namespace ReachyMini.AppState
 
     public sealed class ReachyCameraCalibrationStateStore
     {
+        public const int MaximumProfiles = 64;
         private readonly object sync = new object();
         private ReachyCameraCalibrationSnapshot current =
             new ReachyCameraCalibrationSnapshot(
@@ -128,6 +129,12 @@ namespace ReachyMini.AppState
             if (profiles == null)
             {
                 throw new ArgumentNullException(nameof(profiles));
+            }
+            if (profiles.Count > MaximumProfiles)
+            {
+                throw new ArgumentException(
+                    $"At most {MaximumProfiles} calibration profiles are supported.",
+                    nameof(profiles));
             }
             Publish(new ReachyCameraCalibrationSnapshot(
                 profiles,
@@ -162,6 +169,11 @@ namespace ReachyMini.AppState
             }
             if (!replaced)
             {
+                if (next.Count >= MaximumProfiles)
+                {
+                    throw new InvalidOperationException(
+                        $"At most {MaximumProfiles} calibration profiles are supported.");
+                }
                 next.Add(profile);
             }
             Publish(new ReachyCameraCalibrationSnapshot(

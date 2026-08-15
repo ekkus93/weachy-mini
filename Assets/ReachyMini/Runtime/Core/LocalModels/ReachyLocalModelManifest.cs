@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Security;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 
@@ -151,24 +152,9 @@ namespace ReachyMini.LocalModels
                 modelVersion,
                 nameof(modelVersion),
                 128);
-            if (sourceUri == null)
-            {
-                throw new ArgumentNullException(nameof(sourceUri));
-            }
-            if (!sourceUri.IsAbsoluteUri ||
-                sourceUri.AbsoluteUri.Length > 2048 ||
-                !string.Equals(
-                    sourceUri.Scheme,
-                    Uri.UriSchemeHttps,
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(sourceUri.Host) ||
-                !string.IsNullOrEmpty(sourceUri.UserInfo) ||
-                !string.IsNullOrEmpty(sourceUri.Fragment))
-            {
-                throw new ArgumentException(
-                    "Local-model provenance must use an absolute HTTPS URI without credentials or a fragment.",
-                    nameof(sourceUri));
-            }
+            ReachyNetworkEndpointSecurity.RequirePublicHttpsUri(
+                sourceUri,
+                nameof(sourceUri));
             SourceUri = sourceUri;
             SourceRevision = LocalModelManifestValidation.RequireBoundedText(
                 sourceRevision,

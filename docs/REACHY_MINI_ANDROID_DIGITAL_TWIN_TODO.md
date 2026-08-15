@@ -2354,16 +2354,31 @@ Example:
 
 ## RMA-163 — Harden imported files and URLs
 
-- [ ] Bound model/calibration/manifest file sizes.
-- [ ] Validate schema and numeric ranges.
-- [ ] Prevent path traversal and arbitrary file overwrite.
-- [ ] Validate custom endpoint URL scheme/host.
-- [ ] Reject untrusted cleartext endpoints by default.
+**Status:** Complete (2026-08-14)
+
+- [x] Bound model/calibration/manifest file sizes.
+- [x] Validate schema and numeric ranges.
+- [x] Prevent path traversal and arbitrary file overwrite.
+- [x] Validate custom endpoint URL scheme/host.
+- [x] Reject untrusted cleartext endpoints by default.
 
 **Acceptance criteria**
 
-- [ ] Security tests confirm secrets and private media are absent from diagnostics bundles.
-- [ ] Corrupt settings and files fail visibly without undefined state.
+- [x] Security tests confirm secrets and private media are absent from diagnostics bundles.
+- [x] Corrupt settings and files fail visibly without undefined state.
+
+**Completion evidence**
+
+- Imported JSON and ownership-marker reads use strict UTF-8 with per-document byte ceilings,
+  and serialized persistence output is bounded before replacement.
+- Calibration/profile collection sizes, calibration text, image dimensions, and crop
+  arithmetic are bounded before use.
+- Existing local-model path containment remains fail-closed while model/VLM download
+  sources and redirects use a centralized public-HTTPS host policy.
+- Provider cleartext mode remains limited to explicit trusted local-development hosts;
+  credentials/private media remain denied from diagnostic bundles by default.
+- Local validation is recorded in
+  `docs/validation/RMA_163_IMPORTED_CONTENT_SECURITY_LOCAL_VALIDATION_2026-08-14.md`.
 
 ---
 
@@ -2371,26 +2386,83 @@ Example:
 
 ## RMA-170 — Implement structured logging
 
-- [ ] Add component, severity, event ID, monotonic timestamp, session/turn ID, and error category.
-- [ ] Redact secrets and private content by default.
-- [ ] Rate-limit repeated errors without suppressing first occurrence or final counts.
-- [ ] Do not log raw audio/image payloads.
+**Status:** Complete (2026-08-14)
+
+- [x] Add component, severity, event ID, monotonic timestamp, session/turn ID, and error category.
+- [x] Redact secrets and private content by default.
+- [x] Rate-limit repeated errors without suppressing first occurrence or final counts.
+- [x] Do not log raw audio/image payloads.
+
+**Completion evidence**
+
+- The core diagnostics boundary provides stable event descriptors, typed severity/error
+  categories, monotonic timing, bounded session/turn correlation, deterministic JSON,
+  typed data classification, and centralized redaction before sinks.
+- Repeated-event bursts emit the first occurrence immediately and a final count summary;
+  provider/status/exception/operation/code discriminators prevent unrelated failures from
+  being collapsed into one burst.
+- Secret/private/raw-media fields and credential-bearing headers are default-redacted, and
+  the diagnostic-bundle admission manifest denies private/raw content by default.
+- Application, camera, renderer, and authoritative-runtime ordinary error paths use the
+  structured Unity sink without logging raw exception messages; acceptance-marker logs
+  remain separate.
+- Local static validation is recorded in
+  `docs/validation/RMA_170_STRUCTURED_LOGGING_LOCAL_VALIDATION_2026-08-14.md`.
 
 ## RMA-171 — Build diagnostics screen
 
-- [ ] Show physics frequency, step time, missed deadlines, lag, constraint health, and faults.
-- [ ] Show render FPS, memory, thermal state, and device profile.
-- [ ] Show camera FPS, reprojection time, valid coverage, and active camera.
-- [ ] Show active ASR/TTS/LLM/VLM providers and local/network status.
-- [ ] Show model, calibration, native ABI, MuJoCo, Reachy asset, and app versions.
-- [ ] Provide a clear degraded/unavailable reason.
+**Status:** Complete (2026-08-14)
+
+- [x] Show physics frequency, step time, missed deadlines, lag, constraint health, and faults.
+- [x] Show render FPS, memory, thermal state, and device profile.
+- [x] Show camera FPS, reprojection time, valid coverage, and active camera.
+- [x] Show active ASR/TTS/LLM/VLM providers and local/network status.
+- [x] Show model, calibration, native ABI, MuJoCo, Reachy asset, and app versions.
+- [x] Provide a clear degraded/unavailable reason.
+
+**Completion evidence**
+
+- The main-screen diagnostics panel consumes a typed six-section snapshot rather than one
+  opaque string, and each metric is explicitly Available, Degraded, or Unavailable.
+- Authoritative simulation timing, Unity rendering/memory, RMA-135 thermal/device signals,
+  camera acquisition/discovery, durable provider selections, and pinned version identities
+  populate the screen without taking ownership of those subsystems.
+- Camera reprojection timing and valid-coverage rows remain visible but explicitly
+  unavailable until the production application publishes those telemetry sources; no fake
+  zero/healthy values are substituted.
+- The diagnostics panel is scrollable and preserves the existing toggle workflow. Legacy
+  string binding is retained only through an adapter that marks typed sections unavailable.
+- Local static validation is recorded in
+  `docs/validation/RMA_171_DIAGNOSTICS_SCREEN_LOCAL_VALIDATION_2026-08-14.md`.
 
 ## RMA-172 — Implement diagnostic bundle export
 
-- [ ] Export version/configuration, redacted logs, performance summaries, and health state.
-- [ ] Exclude credentials, raw media, transcripts, and conversation text by default.
-- [ ] Include explicit user selection for any optional sensitive content.
-- [ ] Add a manifest describing redactions.
+**Status:** Complete (2026-08-14)
+
+- [x] Export version/configuration, redacted logs, performance summaries, and health state.
+- [x] Exclude credentials, raw media, transcripts, and conversation text by default.
+- [x] Include explicit user selection for any optional sensitive content.
+- [x] Add a manifest describing redactions.
+
+**Completion evidence**
+
+- `ReachyDiagnosticRecordBuffer` retains a bounded recent window of RMA-170 records and
+  reports overwritten-record counts; `ReachyRuntimeDiagnostics` writes through a composite
+  Unity + retained-record sink.
+- `ReachyDiagnosticBundleExporter` produces an atomic, non-overwriting ZIP containing
+  `manifest.json`, `version-configuration.json`, `performance-health.json`, and
+  `logs.jsonl`. Every structured log field is re-redacted during export.
+- Production user selection is explicitly `RedactedOnly`. Non-redacted selections for
+  private text, raw media, or credentials fail closed; no transcript, conversation, raw
+  media, credential, or raw settings source is wired into the exporter.
+- The manifest records redaction/exclusion policy, user selection, retained/dropped log
+  counts, entry byte counts, SHA-256 digests, and the `redacted_text` classification.
+- The diagnostics panel exposes `EXPORT REDACTED BUNDLE`; the application writes only to
+  its controlled `Application.persistentDataPath/diagnostics` directory and reports
+  failures through structured diagnostics without raw exception messages.
+- Design and local evidence are recorded in
+  `docs/RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md` and
+  `docs/validation/RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_LOCAL_VALIDATION_2026-08-14.md`.
 
 ## RMA-173 — Add silent-failure regression tests
 

@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Diagnostics;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -42,7 +43,11 @@ namespace ReachyMini.AppState
         private ReachyCameraCapabilityStateStore? cameraCapabilityStore;
         private ReachyCameraCapabilitySnapshot? cameraCapabilitySnapshot;
         private Action? requestCameraAccess;
-        private Func<string>? diagnosticsProvider;
+        private Func<ReachyDiagnosticsScreenSnapshot>? diagnosticsProvider;
+        private Func<ReachyDiagnosticBundleExportOutcome>? diagnosticBundleExporter;
+        private string diagnosticBundleExportStatus =
+            "No diagnostic bundle has been exported. Sensitive content is excluded by policy.";
+        private Vector2 diagnosticsScrollPosition;
         private Func<ReachySettingsResetOutcome>? resetSimulation;
 
         public ReachyMainScreenSnapshot? Snapshot => snapshot;
@@ -51,6 +56,11 @@ namespace ReachyMini.AppState
 
         public ReachyCameraCapabilitySnapshot? CameraCapabilitySnapshot =>
             cameraCapabilitySnapshot;
+
+        public ReachyDiagnosticsScreenSnapshot? DiagnosticsSnapshot =>
+            diagnosticsProvider?.Invoke();
+
+        public string DiagnosticBundleExportStatus => diagnosticBundleExportStatus;
 
         public Camera? PresentationCamera => presentationCamera;
 
@@ -62,6 +72,38 @@ namespace ReachyMini.AppState
                     "The presentation camera cannot change after the main screen is bound.");
             }
             presentationCamera = camera ?? throw new ArgumentNullException(nameof(camera));
+        }
+
+        public void ConfigureDiagnosticBundleExport(
+            Func<ReachyDiagnosticBundleExportOutcome> exportOperation)
+        {
+            if (diagnosticBundleExporter != null)
+            {
+                throw new InvalidOperationException(
+                    "The diagnostic bundle export operation cannot be bound more than once.");
+            }
+            diagnosticBundleExporter = exportOperation ??
+                throw new ArgumentNullException(nameof(exportOperation));
+        }
+
+        public ReachyDiagnosticBundleExportOutcome ExportDiagnosticBundle()
+        {
+            Func<ReachyDiagnosticBundleExportOutcome>? exporter =
+                diagnosticBundleExporter;
+            if (exporter == null)
+            {
+                var unavailable = new ReachyDiagnosticBundleExportOutcome(
+                    false,
+                    "Diagnostic bundle export is unavailable because no exporter is bound.");
+                diagnosticBundleExportStatus = unavailable.Detail;
+                return unavailable;
+            }
+
+            ReachyDiagnosticBundleExportOutcome outcome = exporter();
+            diagnosticBundleExportStatus = outcome.Succeeded
+                ? outcome.Detail + " Path: " + outcome.FullPath
+                : outcome.Detail;
+            return outcome;
         }
 
         public void Bind(
@@ -98,6 +140,47 @@ namespace ReachyMini.AppState
             ReachyMainScreenStateStore store,
             ReachySettingsStateStore durableSettings,
             Func<string> currentDiagnostics,
+            Func<ReachySettingsResetOutcome> resetSimulationOperation,
+            ReachyCameraCapabilityStateStore cameraCapabilities,
+            Action requestCameraAccessOperation)
+        {
+            if (stateStore != null)
+            {
+                throw new InvalidOperationException(
+                    "The main screen cannot be bound more than once.");
+            }
+            if (presentationCamera == null)
+            {
+                throw new InvalidOperationException(
+                    "The main screen requires the fixed presentation camera.");
+            }
+
+            stateStore = store ?? throw new ArgumentNullException(nameof(store));
+            settingsStore = durableSettings ??
+                throw new ArgumentNullException(nameof(durableSettings));
+            cameraCapabilityStore = cameraCapabilities ??
+                throw new ArgumentNullException(nameof(cameraCapabilities));
+            requestCameraAccess = requestCameraAccessOperation ??
+                throw new ArgumentNullException(nameof(requestCameraAccessOperation));
+            Func<string> legacyDiagnostics = currentDiagnostics ??
+                throw new ArgumentNullException(nameof(currentDiagnostics));
+            diagnosticsProvider = () =>
+                ReachyDiagnosticsScreenSnapshot.FromLegacyText(
+                    legacyDiagnostics());
+            resetSimulation = resetSimulationOperation ??
+                throw new ArgumentNullException(nameof(resetSimulationOperation));
+            snapshot = stateStore.Current;
+            settingsSnapshot = settingsStore.Current;
+            cameraCapabilitySnapshot = cameraCapabilityStore.Current;
+            stateStore.Changed += OnStateChanged;
+            settingsStore.Changed += OnSettingsChanged;
+            cameraCapabilityStore.Changed += OnCameraCapabilitiesChanged;
+        }
+
+        public void Bind(
+            ReachyMainScreenStateStore store,
+            ReachySettingsStateStore durableSettings,
+            Func<ReachyDiagnosticsScreenSnapshot> currentDiagnostics,
             Func<ReachySettingsResetOutcome> resetSimulationOperation,
             ReachyCameraCapabilityStateStore cameraCapabilities,
             Action requestCameraAccessOperation)

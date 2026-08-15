@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Security;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -459,19 +460,17 @@ namespace ReachyMini.LocalModels
             LocalModelManifest manifest,
             Uri artifactUri)
         {
-            if (!artifactUri.IsAbsoluteUri ||
-                artifactUri.AbsoluteUri.Length > LocalModelPackagePolicy.MaximumDownloadUriLength ||
-                !string.Equals(
-                    artifactUri.Scheme,
-                    Uri.UriSchemeHttps,
-                    StringComparison.OrdinalIgnoreCase) ||
-                string.IsNullOrWhiteSpace(artifactUri.Host) ||
-                !string.IsNullOrEmpty(artifactUri.UserInfo) ||
-                !string.IsNullOrEmpty(artifactUri.Fragment))
+            try
+            {
+                ReachyNetworkEndpointSecurity.RequirePublicHttpsUri(
+                    artifactUri,
+                    nameof(artifactUri));
+            }
+            catch (ArgumentException)
             {
                 return LocalModelPackageResult.Failed(
                     LocalModelPackageFailure.DownloadUriRejected,
-                    "Model downloads require an explicit absolute HTTPS URI without credentials or a fragment.");
+                    "Model downloads require an explicit public HTTPS URI without credentials or a fragment.");
             }
 
             Uri provenance = manifest.Identity.SourceUri;

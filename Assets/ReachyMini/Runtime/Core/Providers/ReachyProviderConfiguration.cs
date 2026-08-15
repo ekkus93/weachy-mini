@@ -1,8 +1,8 @@
 #nullable enable
 
 using System;
+using ReachyMini.Security;
 using System.Collections.Generic;
-using System.Net;
 
 namespace ReachyMini.Providers
 {
@@ -294,12 +294,7 @@ namespace ReachyMini.Providers
             {
                 throw new ArgumentNullException(nameof(baseUri));
             }
-            if (!baseUri.IsAbsoluteUri)
-            {
-                throw new ArgumentException(
-                    "Provider base URLs must be absolute.",
-                    nameof(baseUri));
-            }
+            ReachyNetworkEndpointSecurity.RequireValidHost(baseUri, nameof(baseUri));
             if (!string.IsNullOrEmpty(baseUri.UserInfo) ||
                 !string.IsNullOrEmpty(baseUri.Query) ||
                 !string.IsNullOrEmpty(baseUri.Fragment))
@@ -327,7 +322,7 @@ namespace ReachyMini.Providers
                         baseUri.Scheme,
                         Uri.UriSchemeHttp,
                         StringComparison.OrdinalIgnoreCase) ||
-                    !ReachyProviderConfigurationValidation.IsLocalDevelopmentHost(baseUri))
+                    !ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(baseUri))
                 {
                     throw new ArgumentException(
                         "Cleartext provider profiles are restricted to explicit local-development hosts.",
@@ -557,39 +552,6 @@ namespace ReachyMini.Providers
                 normalized.EndsWith("-key", StringComparison.Ordinal);
         }
 
-        public static bool IsLocalDevelopmentHost(Uri uri)
-        {
-            if (uri.IsLoopback ||
-                string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase) ||
-                uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
-                uri.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
 
-            if (!IPAddress.TryParse(uri.Host, out IPAddress? parsedAddress) ||
-                parsedAddress == null)
-            {
-                return false;
-            }
-
-            IPAddress address = parsedAddress;
-            byte[] bytes = address.GetAddressBytes();
-            if (bytes.Length == 4)
-            {
-                return bytes[0] == 10 ||
-                    bytes[0] == 127 ||
-                    bytes[0] == 192 && bytes[1] == 168 ||
-                    bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31 ||
-                    bytes[0] == 169 && bytes[1] == 254;
-            }
-            if (bytes.Length == 16)
-            {
-                return address.Equals(IPAddress.IPv6Loopback) ||
-                    (bytes[0] & 0xfe) == 0xfc ||
-                    bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80;
-            }
-            return false;
-        }
     }
 }

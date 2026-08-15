@@ -3,6 +3,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using ReachyMini.Security;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -38,6 +39,7 @@ namespace ReachyMini.AppState
         public const string CalibrationFileName =
             "reachy-camera-calibration-v1.json";
         public const int SchemaVersion = 1;
+        public const int MaximumProfiles = ReachyCameraCalibrationStateStore.MaximumProfiles;
 
         private readonly string persistencePath;
         private bool initialized;
@@ -93,7 +95,9 @@ namespace ReachyMini.AppState
             loading = true;
             try
             {
-                string json = File.ReadAllText(persistencePath);
+                string json = ReachyImportedContentPolicy.ReadBoundedUtf8File(
+                    persistencePath,
+                    ReachyImportedDocumentKind.CameraCalibration);
                 CalibrationEnvelope envelope =
                     JsonUtility.FromJson<CalibrationEnvelope>(json) ??
                     throw new InvalidDataException(
@@ -107,6 +111,11 @@ namespace ReachyMini.AppState
 
                 CalibrationProfileDto[] profileDtos =
                     envelope.profiles ?? Array.Empty<CalibrationProfileDto>();
+                if (profileDtos.Length > MaximumProfiles)
+                {
+                    throw new InvalidDataException(
+                        $"Camera calibration storage supports at most {MaximumProfiles} profiles.");
+                }
                 var profiles = new ReachyCameraCalibrationProfile[profileDtos.Length];
                 for (int index = 0; index < profileDtos.Length; ++index)
                 {
@@ -187,6 +196,9 @@ namespace ReachyMini.AppState
         private void PersistCurrent()
         {
             string json = Serialize(State.Current);
+            ReachyImportedContentPolicy.RequireBoundedUtf8Text(
+                json,
+                ReachyImportedDocumentKind.CameraCalibration);
             if (string.Equals(json, lastSerialized, StringComparison.Ordinal) &&
                 File.Exists(persistencePath))
             {

@@ -3,6 +3,8 @@
 using System;
 using System.Threading;
 using UnityEngine;
+using ReachyMini.Diagnostics;
+using ReachyMini.RuntimeDiagnostics;
 
 namespace ReachyMini.AppState
 {
@@ -172,9 +174,19 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    "CameraX shutdown failed on the Android UI thread: " +
-                    exception.Message);
+                ReachyRuntimeDiagnostics.Emit(
+                    "camera",
+                    ReachyDiagnosticEventIds.CameraUiOperationFailed,
+                    ReachyDiagnosticSeverity.Error,
+                    ReachyDiagnosticErrorCategory.Camera,
+                    new ReachyDiagnosticField(
+                        "operation",
+                        "shutdown",
+                        ReachyDiagnosticDataClass.Identifier),
+                    new ReachyDiagnosticField(
+                        "exception_type",
+                        exception.GetType().Name,
+                        ReachyDiagnosticDataClass.Identifier));
             }
 #endif
         }
@@ -231,9 +243,19 @@ namespace ReachyMini.AppState
                         }
                         catch (Exception exception)
                         {
-                            Debug.LogError(
-                                $"CameraX {operation} failed on the Android UI thread: " +
-                                exception.Message);
+                            ReachyRuntimeDiagnostics.Emit(
+                                "camera",
+                                ReachyDiagnosticEventIds.CameraUiOperationFailed,
+                                ReachyDiagnosticSeverity.Error,
+                                ReachyDiagnosticErrorCategory.Camera,
+                                new ReachyDiagnosticField(
+                                    "operation",
+                                    operation,
+                                    ReachyDiagnosticDataClass.Identifier),
+                                new ReachyDiagnosticField(
+                                    "exception_type",
+                                    exception.GetType().Name,
+                                    ReachyDiagnosticDataClass.Identifier));
                         }
                     }));
         }
