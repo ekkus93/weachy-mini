@@ -1,4 +1,4 @@
-# Publication trigger revision 2: byte-safe base64 transport for the exact RMA-181 payload.
+# Publication trigger revision 3: representation-agnostic transport with exact patch verification.
 name: RMA-181 priority degradation publication
 
 on:
@@ -35,37 +35,35 @@ jobs:
         shell: bash
         env:
           EXPECTED_MASTER: 6e92b3bb0893c8c8f021d10379dd8659fadb5a26
-          EXPECTED_BASE64_SHA256: ed1cf9cf4dc5597e7f7a5d62ec76d4e1e403d927b0aea02ca47b1f4c8a6ff0f9
-          EXPECTED_GZIP_SHA256: 9a5f0c2807b345dd08a7a8f9a2f13a565bbf9e4827c57494844630ca26c64633
           EXPECTED_PATCH_SHA256: c1705dbcc049a207860f8f28d1908f38345b49e9a944d0bfa3449ae61876a329
         run: |
           set -euo pipefail
           test "$(git -C target rev-parse HEAD)" = "${EXPECTED_MASTER}"
 
-          printf '%s  %s\n' \
-            "${EXPECTED_BASE64_SHA256}" \
-            "publication/tools/rma181-publication/rma181.patch.gz" \
-            | sha256sum --check --strict
+          payload="publication/tools/rma181-publication/rma181.patch.gz"
+          gzip_payload="${RUNNER_TEMP}/rma181.patch.gz"
+          patch_payload="${RUNNER_TEMP}/rma181.patch"
 
-          base64 --decode \
-            publication/tools/rma181-publication/rma181.patch.gz \
-            > "${RUNNER_TEMP}/rma181.patch.gz"
+          # GitHub/content tooling can surface this payload either as the raw gzip
+          # bytes or as their base64 text representation. Normalize either form,
+          # then trust only the decompressed patch's pinned SHA-256.
+          if gzip -t "${payload}" 2>/dev/null; then
+            cp "${payload}" "${gzip_payload}"
+          else
+            base64 --decode "${payload}" > "${gzip_payload}"
+            gzip -t "${gzip_payload}"
+          fi
 
-          printf '%s  %s\n' \
-            "${EXPECTED_GZIP_SHA256}" \
-            "${RUNNER_TEMP}/rma181.patch.gz" \
-            | sha256sum --check --strict
-          gzip -t "${RUNNER_TEMP}/rma181.patch.gz"
           gzip --decompress --stdout \
-            "${RUNNER_TEMP}/rma181.patch.gz" \
-            > "${RUNNER_TEMP}/rma181.patch"
+            "${gzip_payload}" \
+            > "${patch_payload}"
 
           printf '%s  %s\n' \
             "${EXPECTED_PATCH_SHA256}" \
-            "${RUNNER_TEMP}/rma181.patch" \
+            "${patch_payload}" \
             | sha256sum --check --strict
-          git -C target apply --check "${RUNNER_TEMP}/rma181.patch"
-          git -C target apply "${RUNNER_TEMP}/rma181.patch"
+          git -C target apply --check "${patch_payload}"
+          git -C target apply "${patch_payload}"
           git -C target diff --check
 
       - name: Run repository static gate
