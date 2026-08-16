@@ -74,6 +74,9 @@ def main() -> None:
     )
     require(text, "ProfileFitsWithin", "loaded-profile post-load safety check")
     require(text, "recovery_observations", "explicit recovery evidence")
+    require(text, "RecoveryObservationBudget", "governor recovery observation budget")
+    require(text, "RecoveryObservationInterval", "governor recovery observation spacing")
+    require(text, "governor_recovery_exhausted", "governor recovery failure diagnostics")
     require(
         text,
         "post_recovery_provider_status",

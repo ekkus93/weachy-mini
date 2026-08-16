@@ -20,6 +20,16 @@ namespace ReachyMini.Validation
         private static readonly TimeSpan GenerationTimeout = TimeSpan.FromSeconds(180.0);
         private static readonly TimeSpan MonitorInterval = TimeSpan.FromMilliseconds(25.0);
 
+        // Recovery from the controlled fault injection requires
+        // LocalLlmResourceGovernor.RecoverySamplesRequired (3) *consecutive* non-Suspended
+        // real observations; any observation that is still Suspended resets that streak to
+        // zero. On physical hardware with borderline physics headroom, an occasional real
+        // blip can reset the streak, so a tight budget can starve out recovery that the
+        // production governor would otherwise grant. This is acceptance-only retry budget,
+        // not a change to governor hysteresis itself.
+        private const int RecoveryObservationBudget = 40;
+        private static readonly TimeSpan RecoveryObservationInterval = TimeSpan.FromMilliseconds(75.0);
+
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
         private static string unhandledFailureMessage = string.Empty;

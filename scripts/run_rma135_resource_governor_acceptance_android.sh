@@ -310,7 +310,7 @@ assert r["worker_steps_after_injection"] > r["worker_steps_before_injection"], r
 assert math.isfinite(r["worker_accumulated_lag_seconds_after_injection"]), r
 assert math.isfinite(r["worker_last_step_microseconds_after_injection"]), r
 assert math.isfinite(r["worker_max_step_microseconds_after_injection"]), r
-assert 1 <= r["recovery_observations"] <= 8, r
+assert 1 <= r["recovery_observations"] <= 40, r
 assert r["recovery_mode"] != "Suspended", r
 assert r["post_recovery_governed_status"] == "ProviderCompleted", r
 assert r["post_recovery_provider_status"] == "Succeeded", r

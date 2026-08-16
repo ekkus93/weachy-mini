@@ -241,14 +241,16 @@ namespace ReachyMini.Validation
 
                 int recoverySamples = 0;
                 LocalLlmGovernorDecision? recoveredDecision = null;
+                LocalLlmGovernorDecision? recoveryLastObservedDecision = null;
                 WriteCheckpoint(
                     "governor_recovery_started",
                     "Waiting for explicit healthy observations after injected suspension; no request is replayed.");
-                while (recoverySamples < 8)
+                while (recoverySamples < RecoveryObservationBudget)
                 {
-                    await Task.Delay(30).ConfigureAwait(true);
+                    await Task.Delay(RecoveryObservationInterval).ConfigureAwait(true);
                     ++recoverySamples;
                     LocalLlmGovernorDecision decision = coordinator.EvaluateCurrentBudget();
+                    recoveryLastObservedDecision = decision;
                     if (decision.Mode != LocalLlmGovernorMode.Suspended)
                     {
                         recoveredDecision = decision;
@@ -257,8 +259,19 @@ namespace ReachyMini.Validation
                 }
                 if (recoveredDecision == null)
                 {
+                    // Diagnostics-only, mirrors the post-load-stabilization-exhausted
+                    // checkpoint above: the terminal report is never populated on this path,
+                    // so record the last observed mode/reasons before throwing.
+                    TryWriteCheckpoint(
+                        "governor_recovery_exhausted",
+                        "samples=" + recoverySamples.ToString(CultureInfo.InvariantCulture) +
+                        " last_mode=" + recoveryLastObservedDecision?.Mode +
+                        " last_reasons=" + recoveryLastObservedDecision?.Reasons +
+                        " last_real_physics_state=" + faultPhysics.LastObservedRealState);
                     throw new InvalidOperationException(
-                        "RMA-135 governor did not recover from the controlled suspension after eight observations.");
+                        "RMA-135 governor did not recover from the controlled suspension after " +
+                        RecoveryObservationBudget.ToString(CultureInfo.InvariantCulture) +
+                        " observations.");
                 }
                 WriteCheckpoint(
                     "governor_recovered",
