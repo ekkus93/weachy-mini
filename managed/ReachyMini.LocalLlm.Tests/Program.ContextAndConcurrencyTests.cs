@@ -20,6 +20,29 @@ internal static partial class Program
         Require(runtime.LastMessages.Count == 2, "Context preflight silently dropped history/messages.");
     }
 
+    // A context that cannot hold the mandatory prompt plus the preserved output limit fails
+    // every request on its own preflight, so creating such a provider only produces something
+    // that looks available and never works. Creation refuses it instead, and reports the
+    // measured cost so the caller can re-evaluate admission against the real number.
+    private static async Task TestUnfittableMandatoryPromptIsRefusedAtCreationAsync()
+    {
+        using FakeRuntime runtime = new FakeRuntime { MandatoryPromptTokenCount = 4000 };
+        LocalLlmProviderCreationResult result = await LocalLlmProvider.CreateForTestingAsync(
+            CreateManifest(),
+            CreateApprovedArtifact(),
+            LocalLlmExecutionProfile.CreateRma133V6Baseline(),
+            runtime,
+            CancellationToken.None).ConfigureAwait(false);
+        Require(
+            result.Status == LocalLlmProviderCreationStatus.InvalidConfiguration,
+            "An unfittable mandatory prompt must refuse provider creation.");
+        Require(result.Provider == null, "A refused creation must not expose a provider.");
+        Require(
+            result.MandatoryPromptTokens == 4000,
+            "A refused creation must report the measured mandatory prompt cost.");
+        Require(runtime.UnloadCount == 1, "A refused creation must unload the model it loaded.");
+    }
+
     private static async Task TestBusyAndCancellationAsync()
     {
         using FakeRuntime runtime = new FakeRuntime { BlockUntilCancel = true };

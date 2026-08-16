@@ -174,6 +174,43 @@ def main() -> None:
     forbid(recreation, "GenerateAsync", "generation inside provider recreation")
     forbid(recreation, "HttpClient", "network access inside provider recreation")
 
+    # Every request carries the contract system prompt before any user text, so a throttled
+    # context that cannot hold it plus the preserved output limit fails 100% of requests with
+    # ContextLimit while presenting itself as merely degraded. The cost is measured with the
+    # model's own tokenizer rather than estimated, and admission is re-evaluated against the
+    # measured value when creation refuses the context it was given.
+    require(text, "admission_remeasured", "admission re-evaluated against the measured prompt")
+    require(
+        text,
+        "creation.MandatoryPromptTokens",
+        "acceptance consumes the measured mandatory prompt cost",
+    )
+
+    governor = (ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs").read_text(
+        encoding="utf-8"
+    )
+    require(governor, "mandatoryPromptTokens", "governor accounts for the mandatory prompt")
+    require(
+        governor,
+        "int minimum = checked(mandatoryPromptTokens + maximumGeneratedTokens + 1);",
+        "throttled context floor covers the mandatory prompt and the output limit",
+    )
+    require(
+        governor,
+        "minimumViableContext >= deviceProfile.MaximumContextTokens",
+        "an unfittable mandatory prompt suspends instead of throttling",
+    )
+
+    provider_core = (
+        ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs"
+    ).read_text(encoding="utf-8")
+    require(provider_core, "MandatoryPromptTokens", "provider exposes its measured prompt cost")
+    require(
+        provider_core,
+        "runtime.CountTokens(load.ModelHandle, mandatoryTemplate.Prompt)",
+        "mandatory prompt measured with the model tokenizer, not estimated",
+    )
+
     forbid(text, "CreateAndStartSimulationWorker", "duplicate simulation factory")
     forbid(text, "ReachySimSession.Create", "duplicate native session creation")
     forbid(text, "worker.Dispose()", "production worker disposal")

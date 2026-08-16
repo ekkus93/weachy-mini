@@ -28,6 +28,12 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
                 PendingArtifactReservationIgnoresUnavailableMemory);
             Run("negative pending artifact reservation is rejected",
                 NegativePendingArtifactReservationIsRejected);
+            Run("throttled context never drops below the mandatory prompt",
+                ThrottledContextNeverDropsBelowMandatoryPrompt);
+            Run("unfittable mandatory prompt suspends instead of throttling",
+                UnfittableMandatoryPromptSuspends);
+            Run("negative mandatory prompt tokens are rejected",
+                NegativeMandatoryPromptTokensAreRejected);
             Run("preflight blocks oversized loaded profile", () =>
                 PreflightBlocksOversizedLoadedProfile().GetAwaiter().GetResult());
             Run("monitor cancels on stronger pressure", () =>
@@ -211,6 +217,77 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
             }
             throw new InvalidOperationException(
                 "A negative pending artifact reservation was accepted.");
+        }
+
+        // Every request carries the behaviour contract's system prompt plus the mandatory
+        // user-prompt suffix before the user types anything, and the provider rejects a
+        // request whose templated prompt plus the preserved output limit exceeds the
+        // context. Throttling shrinks context, so a mode whose context cannot hold that
+        // floor fails 100% of requests with ContextLimit while presenting itself as merely
+        // degraded. Physical evidence: a Conservative device throttled to Minimal gave a
+        // 512-token context against a ~600-token mandatory prompt and a preserved 128-token
+        // output limit, so every generation failed its own preflight.
+        private static LocalLlmGovernorDecision EvaluateBoundaryDevice(
+            long availableBytes,
+            int mandatoryPromptTokens) =>
+            new LocalLlmResourceGovernor().Evaluate(
+                Baseline(),
+                BoundaryDeviceSnapshot(availableBytes),
+                mandatoryPromptTokens);
+
+        private static void ThrottledContextNeverDropsBelowMandatoryPrompt()
+        {
+            const int mandatory = 600;
+            // Available memory at or below max(2*threshold, 15% total) = 770,457,600 forces
+            // Minimal, the most aggressive context reduction short of suspension.
+            LocalLlmGovernorDecision decision = EvaluateBoundaryDevice(700000000L, mandatory);
+            Equal(LocalLlmGovernorMode.Minimal, decision.Mode);
+            LocalLlmExecutionProfile profile = decision.EffectiveProfile ??
+                throw new InvalidOperationException("Minimal mode must still expose a profile.");
+
+            int required = mandatory + Baseline().MaximumGeneratedTokens;
+            if (profile.ContextTokens <= required)
+            {
+                throw new InvalidOperationException(
+                    $"Minimal context {profile.ContextTokens} cannot hold the mandatory prompt " +
+                    $"({mandatory}) plus the preserved output limit " +
+                    $"({Baseline().MaximumGeneratedTokens}); every request would fail preflight.");
+            }
+
+            // Regression guard on the exact defect: unaware scaling produced 512 here.
+            Equal(729, profile.ContextTokens);
+        }
+
+        private static void UnfittableMandatoryPromptSuspends()
+        {
+            // 900 + 128 exceeds the Conservative 1024-token ceiling, so no mode can serve a
+            // request. The honest answer is Suspended, not a smaller profile that always
+            // fails.
+            LocalLlmGovernorDecision decision = EvaluateBoundaryDevice(3000000000L, 900);
+            Equal(LocalLlmGovernorMode.Suspended, decision.Mode);
+            if ((decision.Reasons & LocalLlmGovernorReason.ProfileIncompatible) == 0)
+            {
+                throw new InvalidOperationException(
+                    "An unfittable mandatory prompt must report ProfileIncompatible.");
+            }
+            if (decision.EffectiveProfile != null)
+            {
+                throw new InvalidOperationException(
+                    "Suspended must not expose an executable profile.");
+            }
+        }
+
+        private static void NegativeMandatoryPromptTokensAreRejected()
+        {
+            try
+            {
+                EvaluateBoundaryDevice(1503238553L, -1);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return;
+            }
+            throw new InvalidOperationException("A negative mandatory prompt token count was accepted.");
         }
 
         private static async Task PreflightBlocksOversizedLoadedProfile()
@@ -397,11 +474,15 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
 
             internal FakeExecutor(
                 LocalLlmExecutionProfile executionProfile,
-                Func<LocalLlmGenerationRequest, ILocalLlmStreamSink, CancellationToken, Task<LocalLlmGenerationResult>> generate)
+                Func<LocalLlmGenerationRequest, ILocalLlmStreamSink, CancellationToken, Task<LocalLlmGenerationResult>> generate,
+                int mandatoryPromptTokens = 0)
             {
                 ExecutionProfile = executionProfile;
                 this.generate = generate;
+                MandatoryPromptTokens = mandatoryPromptTokens;
             }
+
+            public int MandatoryPromptTokens { get; }
 
             public LocalLlmExecutionProfile ExecutionProfile { get; }
             public int InvocationCount { get; private set; }

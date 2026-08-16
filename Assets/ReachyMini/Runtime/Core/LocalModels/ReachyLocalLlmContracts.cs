@@ -403,12 +403,14 @@ namespace ReachyMini.LocalModels
             LocalLlmProviderCreationStatus status,
             string detail,
             int nativeStatus,
-            LocalLlmProvider? provider)
+            LocalLlmProvider? provider,
+            int mandatoryPromptTokens = 0)
         {
             Status = status;
             Detail = LocalLlmGenerationResult.BoundDiagnostic(detail);
             NativeStatus = nativeStatus;
             Provider = provider;
+            MandatoryPromptTokens = mandatoryPromptTokens;
         }
 
         public LocalLlmProviderCreationStatus Status { get; }
@@ -416,6 +418,14 @@ namespace ReachyMini.LocalModels
         public string Detail { get; }
         public int NativeStatus { get; }
         public LocalLlmProvider? Provider { get; }
+
+        /// <summary>
+        /// Tokens every request must carry, measured with the model's own tokenizer during
+        /// this creation attempt, or zero when the attempt failed before measurement. It is
+        /// reported even on failure so a caller refused for an unfittable context can
+        /// re-evaluate admission against the real number instead of estimating it.
+        /// </summary>
+        public int MandatoryPromptTokens { get; }
     }
 
     public sealed class LocalLlmReloadResult

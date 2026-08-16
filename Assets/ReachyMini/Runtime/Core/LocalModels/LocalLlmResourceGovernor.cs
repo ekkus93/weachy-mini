@@ -241,13 +241,28 @@ namespace ReachyMini.LocalModels
         public LocalLlmGovernorMode CurrentMode => currentMode;
         public bool OutOfMemoryLatched => outOfMemoryLatched;
 
+        /// <param name="mandatoryPromptTokens">
+        /// Tokens every request must carry before any user input, measured from the real
+        /// tokenizer of the loaded model (see LocalLlmProvider.MandatoryPromptTokens). The
+        /// behaviour contract's system prompt is not optional, so a context that cannot hold
+        /// it plus the preserved output-token limit cannot serve a single request. Throttling
+        /// shrinks context, so without this the governor can hand back a Reduced or Minimal
+        /// profile that fails every request with ContextLimit while reporting itself as
+        /// gracefully degraded. Zero preserves the previous behaviour for callers that have
+        /// not measured it yet.
+        /// </param>
         public LocalLlmGovernorDecision Evaluate(
             LocalLlmExecutionProfile baselineProfile,
-            LocalLlmResourceSnapshot snapshot)
+            LocalLlmResourceSnapshot snapshot,
+            int mandatoryPromptTokens = 0)
         {
             if (baselineProfile == null)
             {
                 throw new ArgumentNullException(nameof(baselineProfile));
+            }
+            if (mandatoryPromptTokens < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(mandatoryPromptTokens));
             }
             if (snapshot == null)
             {
@@ -267,7 +282,14 @@ namespace ReachyMini.LocalModels
                 requestedMode = Stronger(requestedMode, policyMinimumMode);
             }
 
-            if (baselineProfile.MaximumGeneratedTokens >= deviceProfile.MaximumContextTokens)
+            // A context must hold the mandatory prompt AND the preserved output-token limit,
+            // otherwise every request fails on the provider's own preflight. When even the
+            // device ceiling cannot cover both, the honest answer is Suspended: offering a
+            // smaller mode instead would advertise graceful degradation while guaranteeing
+            // ContextLimit on every request.
+            long minimumViableContext =
+                (long)mandatoryPromptTokens + baselineProfile.MaximumGeneratedTokens;
+            if (minimumViableContext >= deviceProfile.MaximumContextTokens)
             {
                 reasons |= LocalLlmGovernorReason.ProfileIncompatible;
                 requestedMode = LocalLlmGovernorMode.Suspended;
@@ -306,7 +328,8 @@ namespace ReachyMini.LocalModels
                 : BuildEffectiveProfile(
                     baselineProfile,
                     deviceProfile,
-                    appliedMode);
+                    appliedMode,
+                    mandatoryPromptTokens);
             return new LocalLlmGovernorDecision(
                 appliedMode,
                 reasons,
@@ -466,7 +489,8 @@ namespace ReachyMini.LocalModels
         private static LocalLlmExecutionProfile BuildEffectiveProfile(
             LocalLlmExecutionProfile baseline,
             LocalLlmDeviceProfile device,
-            LocalLlmGovernorMode mode)
+            LocalLlmGovernorMode mode,
+            int mandatoryPromptTokens)
         {
             int context = Math.Min(baseline.ContextTokens, device.MaximumContextTokens);
             int batch = Math.Min(baseline.BatchTokens, device.MaximumBatchTokens);
@@ -480,14 +504,14 @@ namespace ReachyMini.LocalModels
 
             if (mode == LocalLlmGovernorMode.Reduced)
             {
-                context = ScaleContext(context, baseline.MaximumGeneratedTokens, 3, 4);
+                context = ScaleContext(context, baseline.MaximumGeneratedTokens, mandatoryPromptTokens, 3, 4);
                 batch = Math.Max(1, batch / 2);
                 threads = Math.Max(1, threads - 1);
                 batchThreads = Math.Max(1, batchThreads - 1);
             }
             else if (mode == LocalLlmGovernorMode.Minimal)
             {
-                context = ScaleContext(context, baseline.MaximumGeneratedTokens, 1, 2);
+                context = ScaleContext(context, baseline.MaximumGeneratedTokens, mandatoryPromptTokens, 1, 2);
                 batch = Math.Max(1, batch / 4);
                 threads = 1;
                 batchThreads = 1;
@@ -516,10 +540,16 @@ namespace ReachyMini.LocalModels
         private static int ScaleContext(
             int context,
             int maximumGeneratedTokens,
+            int mandatoryPromptTokens,
             int numerator,
             int denominator)
         {
-            int minimum = checked(maximumGeneratedTokens + 1);
+            // The floor must leave room for the mandatory prompt as well as the output the
+            // profile still promises. Scaling context below that produces a profile whose
+            // every request fails the provider's token preflight, which is a broken mode
+            // dressed up as a throttled one. Evaluate already suspends when even the device
+            // ceiling cannot cover both, so clamping here is the in-range counterpart.
+            int minimum = checked(mandatoryPromptTokens + maximumGeneratedTokens + 1);
             long scaled = (long)context * numerator / denominator;
             return Math.Min(context, Math.Max(minimum, checked((int)scaled)));
         }

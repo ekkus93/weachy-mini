@@ -157,7 +157,8 @@ namespace ReachyMini.LocalModels
             LocalLlmResourceGovernor governor,
             ILocalLlmResourceSignalSource resourceSignals,
             ILocalLlmPhysicsBudgetSource physicsBudget,
-            long pendingArtifactBytes = 0L)
+            long pendingArtifactBytes = 0L,
+            int mandatoryPromptTokens = 0)
         {
             if (baselineProfile == null)
             {
@@ -187,7 +188,8 @@ namespace ReachyMini.LocalModels
                     governor,
                     resourceSignals,
                     physicsBudget,
-                    pendingArtifactBytes);
+                    pendingArtifactBytes,
+                    mandatoryPromptTokens);
                 return new LocalLlmProviderAdmissionResult(
                     decision.InferenceAllowed && decision.EffectiveProfile != null
                         ? LocalLlmProviderAdmissionStatus.Ready
@@ -413,11 +415,16 @@ namespace ReachyMini.LocalModels
 
         private LocalLlmGovernorDecision CaptureDecision()
         {
+            // Every decision after the model is loaded uses the executor's measured
+            // mandatory prompt cost, so throttling can never propose a context that cannot
+            // hold a request.
             return CaptureDecision(
                 baselineProfile,
                 governor,
                 resourceSignals,
-                physicsBudget);
+                physicsBudget,
+                pendingArtifactBytes: 0L,
+                mandatoryPromptTokens: executor.MandatoryPromptTokens);
         }
 
         private static LocalLlmGovernorDecision CaptureDecision(
@@ -425,7 +432,8 @@ namespace ReachyMini.LocalModels
             LocalLlmResourceGovernor governor,
             ILocalLlmResourceSignalSource resourceSignals,
             ILocalLlmPhysicsBudgetSource physicsBudget,
-            long pendingArtifactBytes = 0L)
+            long pendingArtifactBytes = 0L,
+            int mandatoryPromptTokens = 0)
         {
             LocalLlmPhysicsBudgetState physics = physicsBudget.Capture();
             LocalLlmResourceSnapshot snapshot = resourceSignals.Capture(physics);
@@ -433,7 +441,7 @@ namespace ReachyMini.LocalModels
             {
                 snapshot = ReserveAvailableMemory(snapshot, pendingArtifactBytes);
             }
-            return governor.Evaluate(baselineProfile, snapshot);
+            return governor.Evaluate(baselineProfile, snapshot, mandatoryPromptTokens);
         }
 
         private static LocalLlmResourceSnapshot ReserveAvailableMemory(
@@ -527,6 +535,13 @@ namespace ReachyMini.LocalModels
     internal interface ILocalLlmGenerationExecutor
     {
         LocalLlmExecutionProfile ExecutionProfile { get; }
+
+        /// <summary>
+        /// Tokens every request carries before any user input, measured from the loaded
+        /// model's own tokenizer. The governor needs it so a throttled context is never
+        /// shrunk below what a request physically requires.
+        /// </summary>
+        int MandatoryPromptTokens { get; }
         Task<LocalLlmGenerationResult> GenerateAsync(
             LocalLlmGenerationRequest request,
             ILocalLlmStreamSink sink,
@@ -543,6 +558,8 @@ namespace ReachyMini.LocalModels
         }
 
         public LocalLlmExecutionProfile ExecutionProfile => provider.ExecutionProfile;
+
+        public int MandatoryPromptTokens => provider.MandatoryPromptTokens;
 
         public Task<LocalLlmGenerationResult> GenerateAsync(
             LocalLlmGenerationRequest request,

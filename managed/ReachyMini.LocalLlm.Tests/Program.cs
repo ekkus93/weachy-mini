@@ -18,6 +18,7 @@ internal static partial class Program
         await TestManifestArtifactAndAbiFailuresAsync().ConfigureAwait(false);
         await TestWorkerPromptAndSuccessAsync().ConfigureAwait(false);
         await TestContextPreflightAsync().ConfigureAwait(false);
+        await TestUnfittableMandatoryPromptIsRefusedAtCreationAsync().ConfigureAwait(false);
         await TestBusyAndCancellationAsync().ConfigureAwait(false);
         await TestResetSuppressesStaleOutputAsync().ConfigureAwait(false);
         await TestInvalidIntentIsNotRepairedAsync().ConfigureAwait(false);

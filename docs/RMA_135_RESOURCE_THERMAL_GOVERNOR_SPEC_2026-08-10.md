@@ -96,7 +96,7 @@ No inference may start. Active inference must be cancelled by the production int
 - a recent local-inference OOM;
 - unavailable authoritative physics-budget telemetry;
 - failure of a required resource-signal read in production integration;
-- a baseline whose preserved output-token limit cannot fit within the selected device context ceiling.
+- a baseline whose preserved output-token limit, together with the mandatory prompt every request carries, cannot fit within the selected device context ceiling.
 
 ## 7. Memory thresholds
 
@@ -122,6 +122,14 @@ double-count it.
 ## 8. Hysteresis
 
 Escalation is immediate. Recovery to a less restrictive mode requires three consecutive observations requesting the less restrictive mode. This prevents oscillation around a threshold. No automatic generation retry occurs when recovery completes.
+
+## 8a. Context floor
+
+Reduced and Minimal shrink context, but a context is only usable if it can hold what a request unavoidably contains: the frozen behaviour-contract system prompt, the mandatory user-prompt suffix, the chat template's own scaffolding, and the preserved output-token limit. A mode whose context falls below that floor does not degrade quality; it fails every request on the provider's token preflight while reporting itself as merely throttled.
+
+The floor is therefore `mandatory prompt + preserved output-token limit`, and context reduction clamps to it. When even the selected device context ceiling cannot clear the floor, the governor suspends and reports `ProfileIncompatible` rather than offering a mode that cannot serve a request.
+
+The mandatory prompt cost is measured at model load with the loaded model's own tokenizer (`LocalLlmProvider.MandatoryPromptTokens`), never estimated from character counts, which are not comparable across tokenizers. Admission runs before the model is resident and so cannot know it; provider creation refuses a context that cannot clear the floor and reports the measured cost, letting the caller re-evaluate admission once against the real number instead of guessing.
 
 ## 9. Execution-profile integrity
 

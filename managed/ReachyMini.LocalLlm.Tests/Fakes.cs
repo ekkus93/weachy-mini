@@ -79,6 +79,8 @@ internal sealed class FakeRuntime : ILocalLlmRuntime
     internal int ReleaseCount { get; private set; }
     internal string? LastChatTemplate { get; private set; }
     internal List<LocalLlmRuntimeChatMessage> LastMessages { get; } = new List<LocalLlmRuntimeChatMessage>();
+    internal int MandatoryPromptTokenCount { get; set; } = 8;
+    private bool mandatoryMeasured;
     internal string LastGrammar { get; private set; } = string.Empty;
     internal string LastGrammarRoot { get; private set; } = string.Empty;
     internal ManualResetEventSlim LoadEntered { get; } = new ManualResetEventSlim(false);
@@ -133,6 +135,14 @@ internal sealed class FakeRuntime : ILocalLlmRuntime
     {
         Program.Require(modelHandle != 0UL, "Tokenize called with null model handle.");
         Program.Require(prompt == "templated-prompt", "Provider tokenized something other than exact templated output.");
+        // Creation measures the mandatory prompt once, before any request, so the governor
+        // knows the floor a throttled context must clear. Only later calls are request
+        // preflights and answer with TokenCount.
+        if (!mandatoryMeasured)
+        {
+            mandatoryMeasured = true;
+            return new LocalLlmRuntimeTokenCountResult(0, string.Empty, MandatoryPromptTokenCount);
+        }
         return new LocalLlmRuntimeTokenCountResult(0, string.Empty, TokenCount);
     }
 

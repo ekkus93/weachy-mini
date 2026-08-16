@@ -108,6 +108,54 @@ namespace ReachyMini.Validation
                     effectiveProfile,
                     CancellationToken.None).ConfigureAwait(true);
                 loadStopwatch.Stop();
+                if (creation.Status == LocalLlmProviderCreationStatus.InvalidConfiguration &&
+                    creation.MandatoryPromptTokens > 0)
+                {
+                    // Admission runs before the model is resident, so it cannot know how many
+                    // tokens the contract's mandatory prompt costs under this model's
+                    // tokenizer. Creation measured it and refused a context that could not
+                    // hold it. Re-evaluate admission once against the real number rather than
+                    // estimating it, then load at the profile that can actually serve a
+                    // request. This is provider creation, not a replayed generation.
+                    WriteCheckpoint(
+                        "admission_remeasured",
+                        "Creation refused the admitted context; re-evaluating admission with the " +
+                        "measured mandatory prompt. mandatory_prompt_tokens=" +
+                        creation.MandatoryPromptTokens.ToString(CultureInfo.InvariantCulture) +
+                        " refused_ctx=" + effectiveProfile.ContextTokens.ToString(
+                            CultureInfo.InvariantCulture));
+                    admission = LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                        baselineProfile,
+                        governor,
+                        androidSignals,
+                        realPhysics,
+                        LocalLlmBehaviorContract.ArtifactBytes,
+                        creation.MandatoryPromptTokens);
+                    if (!admission.Succeeded || admission.Decision == null ||
+                        admission.EffectiveProfile == null)
+                    {
+                        throw new InvalidOperationException(
+                            "RMA-135 admission refused local inference once the mandatory prompt " +
+                            "was measured (" +
+                            creation.MandatoryPromptTokens.ToString(CultureInfo.InvariantCulture) +
+                            " tokens): status=" + admission.Status + " detail=" + admission.Detail);
+                    }
+                    effectiveProfile = admission.EffectiveProfile;
+                    loadStopwatch = Stopwatch.StartNew();
+                    creation = await LocalLlmProvider.CreateAsync(
+                        manifest,
+                        approvedArtifact,
+                        effectiveProfile,
+                        CancellationToken.None).ConfigureAwait(true);
+                    loadStopwatch.Stop();
+                    WriteCheckpoint(
+                        "admission_remeasured_reloaded",
+                        "status=" + creation.Status +
+                        " ctx=" + effectiveProfile.ContextTokens.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " threads=" + effectiveProfile.Threads.ToString(
+                            CultureInfo.InvariantCulture));
+                }
                 if (!creation.Succeeded || creation.Provider == null)
                 {
                     throw new InvalidOperationException(
