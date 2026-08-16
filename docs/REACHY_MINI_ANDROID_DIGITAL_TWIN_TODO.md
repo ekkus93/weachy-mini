@@ -1367,6 +1367,11 @@ public:
 **Status:** Complete (2026-08-04)
 
 - [x] Bind preview and `ImageAnalysis` lifecycle-aware use cases.
+  (2026-08-16: the discarded-surface `Preview` use case was removed and the binding is now
+  `ImageAnalysis`-only. The SM-A546E vendor camera HAL attaches an internal ZSL stream to
+  the IMPL_DEF preview stream and aborts on an undersized ZSL crop, rebooting the device;
+  no consumed frame ever came from that surface. See
+  docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md.)
 - [x] Use a bounded backpressure strategy that discards stale analysis frames.
 - [x] Carry timestamp, sensor orientation, lens facing, crop, pixel format, and intrinsics with each frame.
 - [x] Close every `ImageProxy` exactly once.
@@ -1385,8 +1390,10 @@ public:
 
 **Completion evidence**
 
-- CameraX 1.6.1 binds exact-camera `Preview` and `ImageAnalysis` use cases to
-  an explicit lifecycle owner. Analysis remains `YUV_420_888`, uses
+- CameraX 1.6.1 binds an exact-camera `ImageAnalysis` use case to an explicit
+  lifecycle owner (originally alongside a discarded-surface `Preview`, removed
+  2026-08-16 for the SM-A546E vendor-HAL defect recorded in
+  docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md). Analysis remains `YUV_420_888`, uses
   `STRATEGY_KEEP_ONLY_LATEST`, and publishes metadata without accessing image
   planes or copying pixels into Unity.
 - Generation and session identities reject callbacks from stopped or replaced

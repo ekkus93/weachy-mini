@@ -121,7 +121,7 @@ public final class ReachyCameraFrameBridge {
                         sessionId);
                 deliveredSequence = 0L;
                 state = "Starting";
-                message = "Waiting for CameraX to bind Preview and ImageAnalysis.";
+                message = "Waiting for CameraX to bind ImageAnalysis.";
                 errorCode = "";
                 cameraId = requestedCameraId;
                 descriptor = requestedDescriptor;

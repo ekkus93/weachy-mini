@@ -11,7 +11,6 @@ import androidx.camera.core.CameraSelector;
 import androidx.camera.core.CameraState;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
-import androidx.camera.core.Preview;
 import androidx.camera.core.resolutionselector.ResolutionSelector;
 import androidx.camera.core.resolutionselector.ResolutionStrategy;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -44,6 +43,32 @@ final class ReachyCameraFrameBinder {
     private ReachyCameraFrameBinder() {
     }
 
+    /**
+     * Binds ImageAnalysis alone, deliberately without a Preview use case.
+     *
+     * <p>Samsung's Exynos 1380 camera HAL (SM-A546E, camera.s5e8835.so) attaches an internal
+     * Zero-Shutter-Lag stream to the IMPL_DEF preview stream and then asserts and aborts in
+     * {@code DeviceNodeStreamMetaUtil::updateCropSize} when its ZSL buffer is smaller than
+     * the full-sensor crop it computes:
+     *
+     * <pre>
+     * Max image(ServiceForZsl[0,3003]) buffer size (1440x1080)
+     *   &lt; Requested cropped image size (4080x3060)
+     * </pre>
+     *
+     * The abort kills the camera provider and reboots the whole device seconds after the
+     * first rear session starts. Captured logcat proves the standard escape hatch does not
+     * work: a {@code CONTROL_ENABLE_ZSL=false} capture-request option was delivered to the
+     * HAL ({@code android.control.enableZsl false} in the session template) and the HAL
+     * created its {@code ZSL_OUTPUT} stream anyway.
+     *
+     * <p>This bridge never renders a preview: the previous Preview use case fed a surface
+     * whose frames were discarded unread, and every consumed frame comes from the YUV_420_888
+     * ImageAnalysis stream, which the vendor ZSL does not touch. Binding analysis alone
+     * removes the stream the defective ZSL attaches to without changing what the app
+     * consumes. A HAL must reject an unsatisfiable configuration rather than abort, so this
+     * remains a workaround for a vendor defect, not a behavioural choice.
+     */
     static void bindProvider(
             ListenableFuture<ProcessCameraProvider> providerFuture,
             long expectedGeneration,
@@ -69,11 +94,6 @@ final class ReachyCameraFrameBinder {
                                                 ResolutionStrategy
                                                         .FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
                                 .build();
-                Preview nextPreview =
-                        new Preview.Builder()
-                                .setResolutionSelector(resolutionSelector)
-                                .setTargetRotation(targetRotation)
-                                .build();
                 ImageAnalysis nextAnalysis =
                         new ImageAnalysis.Builder()
                                 .setResolutionSelector(resolutionSelector)
@@ -83,11 +103,6 @@ final class ReachyCameraFrameBinder {
                                 .setBackpressureStrategy(
                                         ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build();
-                ReachyDiscardingPreviewSurfaceProvider nextSurfaceProvider =
-                        new ReachyDiscardingPreviewSurfaceProvider();
-                nextPreview.setSurfaceProvider(
-                        ReachyCameraFrameBridge.MAIN_EXECUTOR,
-                        nextSurfaceProvider);
                 final long analyzerGeneration = expectedGeneration;
                 nextAnalysis.setAnalyzer(
                         ReachyCameraFrameLifecycleController.requireAnalyzerExecutorLocked(),
@@ -104,13 +119,10 @@ final class ReachyCameraFrameBinder {
                 Camera nextCamera = provider.bindToLifecycle(
                         ReachyCameraFrameLifecycleController.requireLifecycleOwnerLocked(),
                         selector,
-                        nextPreview,
                         nextAnalysis);
                 ReachyCameraFrameBridge.cameraProvider = provider;
                 ReachyCameraFrameBridge.boundCamera = nextCamera;
-                ReachyCameraFrameBridge.preview = nextPreview;
                 ReachyCameraFrameBridge.imageAnalysis = nextAnalysis;
-                ReachyCameraFrameBridge.previewSurfaceProvider = nextSurfaceProvider;
                 ReachyCameraFrameBridge.state = "Starting";
                 ReachyCameraFrameBridge.message =
                         "CameraX use cases are bound; waiting for the camera device to open.";
@@ -204,7 +216,7 @@ final class ReachyCameraFrameBinder {
                         ReachyCameraFrameBridge.state = "Running";
                         ReachyCameraFrameBridge.errorCode = "";
                         ReachyCameraFrameBridge.message =
-                                "CameraX camera device is open with Preview and ImageAnalysis active.";
+                                "CameraX camera device is open with ImageAnalysis active.";
                     }
                     break;
                 case OPENING:
