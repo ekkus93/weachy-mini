@@ -20,6 +20,14 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
             Run("stalled physics is unavailable", StalledPhysicsIsUnavailable);
             Run("admission returns reduced profile", AdmissionReturnsReducedProfile);
             Run("admission fails closed on signal exception", AdmissionSignalFailure);
+            Run("pending artifact reservation shrinks admission",
+                PendingArtifactReservationShrinksAdmission);
+            Run("pending artifact reservation clamps to suspended",
+                PendingArtifactReservationClampsToSuspended);
+            Run("pending artifact reservation ignores unavailable memory",
+                PendingArtifactReservationIgnoresUnavailableMemory);
+            Run("negative pending artifact reservation is rejected",
+                NegativePendingArtifactReservationIsRejected);
             Run("preflight blocks oversized loaded profile", () =>
                 PreflightBlocksOversizedLoadedProfile().GetAwaiter().GetResult());
             Run("monitor cancels on stronger pressure", () =>
@@ -75,6 +83,134 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
             {
                 throw new InvalidOperationException("Signal failure exposed an executable profile.");
             }
+        }
+
+        // The numbers below are the real LG-H872 signal from the RMA-135 physical evidence:
+        // 3.69 GiB total with a 385,228,800 byte low-memory threshold puts the reduced floor
+        // at max(3*threshold, total/4) = 1,155,686,400. Admission runs before the model is
+        // resident, so an unreserved evaluation sees enough headroom to admit Nominal
+        // (context 1024 under the Conservative device ceiling) and the subsequent load then
+        // drops available memory under that floor -- at which point the governor only ever
+        // offers Reduced (context 768) and the freshly loaded provider can never fit inside
+        // the allowed envelope again. Reserving the artifact makes admission land on the
+        // profile that is actually survivable once the model is loaded.
+        private static LocalLlmResourceSnapshot BoundaryDeviceSnapshot(long availableBytes) =>
+            new LocalLlmResourceSnapshot(
+                3961413632L,
+                availableBytes,
+                385228800L,
+                false,
+                4,
+                LocalLlmThermalStatus.None,
+                LocalLlmPhysicsBudgetState.Healthy);
+
+        private static LocalLlmProviderAdmissionResult AdmitBoundaryDevice(
+            long availableBytes,
+            long pendingArtifactBytes) =>
+            LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                Baseline(),
+                new LocalLlmResourceGovernor(),
+                new RepeatingResourceSignals(BoundaryDeviceSnapshot(availableBytes)),
+                new RepeatingPhysicsBudgetSource(LocalLlmPhysicsBudgetState.Healthy),
+                pendingArtifactBytes);
+
+        private static void PendingArtifactReservationShrinksAdmission()
+        {
+            const long available = 1503238553L;
+            const long artifact = 396704416L;
+
+            LocalLlmProviderAdmissionResult unreserved = AdmitBoundaryDevice(available, 0L);
+            Equal(LocalLlmProviderAdmissionStatus.Ready, unreserved.Status);
+            LocalLlmExecutionProfile unreservedProfile = unreserved.EffectiveProfile ??
+                throw new InvalidOperationException("Expected an unreserved admission profile.");
+            Equal(1024, unreservedProfile.ContextTokens);
+            Equal(2, unreservedProfile.Threads);
+
+            LocalLlmProviderAdmissionResult reserved = AdmitBoundaryDevice(available, artifact);
+            Equal(LocalLlmProviderAdmissionStatus.Ready, reserved.Status);
+            LocalLlmExecutionProfile reservedProfile = reserved.EffectiveProfile ??
+                throw new InvalidOperationException("Expected a reserved admission profile.");
+            Equal(768, reservedProfile.ContextTokens);
+            Equal(1, reservedProfile.Threads);
+
+            // The whole point of the reservation: what admission hands back must still fit
+            // inside the envelope the governor will allow once the artifact is resident.
+            LocalLlmProviderAdmissionResult afterLoad =
+                AdmitBoundaryDevice(available - artifact, 0L);
+            LocalLlmExecutionProfile afterLoadProfile = afterLoad.EffectiveProfile ??
+                throw new InvalidOperationException("Expected a post-load envelope.");
+            if (LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
+                unreservedProfile, afterLoadProfile))
+            {
+                throw new InvalidOperationException(
+                    "The unreserved profile was expected to be trapped by the post-load envelope.");
+            }
+            if (!LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
+                reservedProfile, afterLoadProfile))
+            {
+                throw new InvalidOperationException(
+                    "The reserved profile must still fit once the artifact is resident.");
+            }
+        }
+
+        private static void PendingArtifactReservationClampsToSuspended()
+        {
+            // A reservation larger than available memory must clamp at zero rather than
+            // producing a negative signal, and zero available memory is a critical condition.
+            LocalLlmProviderAdmissionResult result =
+                AdmitBoundaryDevice(1503238553L, 8L * GiB);
+            Equal(LocalLlmProviderAdmissionStatus.Suspended, result.Status);
+            if (result.Succeeded || result.EffectiveProfile != null)
+            {
+                throw new InvalidOperationException(
+                    "A clamped reservation exposed an executable profile.");
+            }
+        }
+
+        private static void PendingArtifactReservationIgnoresUnavailableMemory()
+        {
+            // An unavailable memory signal keeps every memory field at zero. Charging a
+            // reservation against it would invent a number the device never reported, so the
+            // reservation must be a no-op and leave the unreserved decision untouched.
+            LocalLlmResourceSnapshot unknownMemory = new LocalLlmResourceSnapshot(
+                0L,
+                0L,
+                0L,
+                false,
+                4,
+                LocalLlmThermalStatus.None,
+                LocalLlmPhysicsBudgetState.Healthy);
+            LocalLlmProviderAdmissionResult unreserved =
+                LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                    Baseline(),
+                    new LocalLlmResourceGovernor(),
+                    new RepeatingResourceSignals(unknownMemory),
+                    new RepeatingPhysicsBudgetSource(LocalLlmPhysicsBudgetState.Healthy));
+            LocalLlmProviderAdmissionResult reserved =
+                LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                    Baseline(),
+                    new LocalLlmResourceGovernor(),
+                    new RepeatingResourceSignals(unknownMemory),
+                    new RepeatingPhysicsBudgetSource(LocalLlmPhysicsBudgetState.Healthy),
+                    396704416L);
+            Equal(unreserved.Status, reserved.Status);
+            Equal(
+                unreserved.EffectiveProfile?.ContextTokens ?? -1,
+                reserved.EffectiveProfile?.ContextTokens ?? -1);
+        }
+
+        private static void NegativePendingArtifactReservationIsRejected()
+        {
+            try
+            {
+                AdmitBoundaryDevice(1503238553L, -1L);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return;
+            }
+            throw new InvalidOperationException(
+                "A negative pending artifact reservation was accepted.");
         }
 
         private static async Task PreflightBlocksOversizedLoadedProfile()

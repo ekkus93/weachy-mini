@@ -137,15 +137,35 @@ namespace ReachyMini.LocalModels
             ValidateMonitorInterval(this.monitorInterval, nameof(monitorInterval));
         }
 
+        /// <param name="pendingArtifactBytes">
+        /// Bytes the caller is about to load and that the current memory signal therefore
+        /// does not yet account for. Admission runs BEFORE the model is loaded, so an
+        /// unreserved evaluation reports the memory of a process that has not paid for the
+        /// artifact yet. That lets a device admit a profile which loading immediately
+        /// invalidates: the load consumes the headroom, the next observation reports memory
+        /// pressure, and the freshly loaded profile no longer fits the allowed envelope.
+        /// Reserving the artifact up front makes admission answer the question that actually
+        /// matters -- what is safe to run once this model is resident. Zero (the default)
+        /// preserves the previous behaviour and must be used for every post-load evaluation,
+        /// where the artifact is already reflected in the real signal and reserving again
+        /// would double-count it. The reservation is deliberately conservative: it charges
+        /// the full artifact size without assuming how much of it a given runtime maps
+        /// lazily.
+        /// </param>
         public static LocalLlmProviderAdmissionResult EvaluateAdmission(
             LocalLlmExecutionProfile baselineProfile,
             LocalLlmResourceGovernor governor,
             ILocalLlmResourceSignalSource resourceSignals,
-            ILocalLlmPhysicsBudgetSource physicsBudget)
+            ILocalLlmPhysicsBudgetSource physicsBudget,
+            long pendingArtifactBytes = 0L)
         {
             if (baselineProfile == null)
             {
                 throw new ArgumentNullException(nameof(baselineProfile));
+            }
+            if (pendingArtifactBytes < 0L)
+            {
+                throw new ArgumentOutOfRangeException(nameof(pendingArtifactBytes));
             }
             if (governor == null)
             {
@@ -166,7 +186,8 @@ namespace ReachyMini.LocalModels
                     baselineProfile,
                     governor,
                     resourceSignals,
-                    physicsBudget);
+                    physicsBudget,
+                    pendingArtifactBytes);
                 return new LocalLlmProviderAdmissionResult(
                     decision.InferenceAllowed && decision.EffectiveProfile != null
                         ? LocalLlmProviderAdmissionStatus.Ready
@@ -403,11 +424,45 @@ namespace ReachyMini.LocalModels
             LocalLlmExecutionProfile baselineProfile,
             LocalLlmResourceGovernor governor,
             ILocalLlmResourceSignalSource resourceSignals,
-            ILocalLlmPhysicsBudgetSource physicsBudget)
+            ILocalLlmPhysicsBudgetSource physicsBudget,
+            long pendingArtifactBytes = 0L)
         {
             LocalLlmPhysicsBudgetState physics = physicsBudget.Capture();
             LocalLlmResourceSnapshot snapshot = resourceSignals.Capture(physics);
+            if (pendingArtifactBytes > 0L)
+            {
+                snapshot = ReserveAvailableMemory(snapshot, pendingArtifactBytes);
+            }
             return governor.Evaluate(baselineProfile, snapshot);
+        }
+
+        private static LocalLlmResourceSnapshot ReserveAvailableMemory(
+            LocalLlmResourceSnapshot snapshot,
+            long reserveBytes)
+        {
+            if (snapshot.TotalMemoryBytes <= 0L)
+            {
+                // The memory signal is explicitly unavailable, and an unavailable signal
+                // requires every memory field to stay zero. Charging a reservation against
+                // it would invent a number the device never reported; the governor already
+                // treats unknown memory as its own conservative condition.
+                return snapshot;
+            }
+
+            long available = snapshot.AvailableMemoryBytes - reserveBytes;
+            if (available < 0L)
+            {
+                available = 0L;
+            }
+            return new LocalLlmResourceSnapshot(
+                snapshot.TotalMemoryBytes,
+                available,
+                snapshot.LowMemoryThresholdBytes,
+                snapshot.SystemReportsLowMemory,
+                snapshot.LogicalProcessorCount,
+                snapshot.ThermalStatus,
+                snapshot.PhysicsBudgetState,
+                snapshot.RecentOutOfMemory);
         }
 
         private static LocalLlmGovernorDecision BuildOutOfMemoryDecision(

@@ -108,6 +108,17 @@ Given a valid total-memory signal:
 
 Android `lowMemory=true` always suspends regardless of ratios.
 
+Provider admission runs before the model artifact is resident, so the memory signal it reads
+belongs to a process that has not paid for the artifact yet. Admission therefore reserves the
+pending artifact size against available memory before applying the ratios above. Without that
+reservation a device can be admitted at a profile that loading immediately invalidates: the
+load consumes the headroom, the next observation reports memory pressure, and the profile that
+was just loaded no longer fits the allowed envelope. The reservation is deliberately
+conservative and charges the full artifact size without assuming how much of it a runtime maps
+lazily. It applies only to pre-load admission; every post-load evaluation reads the real signal
+unmodified, because the artifact is already reflected there and reserving again would
+double-count it.
+
 ## 8. Hysteresis
 
 Escalation is immediate. Recovery to a less restrictive mode requires three consecutive observations requesting the less restrictive mode. This prevents oscillation around a threshold. No automatic generation retry occurs when recovery completes.
@@ -150,6 +161,8 @@ Production integration must surface the current decision in the diagnostics prov
 Before provider creation, the integration layer evaluates admission and passes the reported effective profile to the existing `LocalLlmProvider.CreateAsync` path. Before every generation it samples again and refuses to start if the loaded provider profile exceeds the current safe envelope.
 
 When an in-flight generation receives a stronger resource decision than the loaded profile permits, the integration layer cancels through a linked cancellation token. It does not reset the conversation, retry automatically at the lower profile, or invisibly reload the model. Explicit provider recreation is required before a smaller profile can be used. The underlying RMA-134 cancellation/drain/release contract remains authoritative.
+
+`LocalLlmProviderRecreation.ForCurrentEnvelopeAsync` is that explicit recreation path. A denial caused by a shrunken envelope is otherwise permanent, because the governor keeps offering a profile smaller than the one already resident and no number of further observations can change that. Recreation is caller-invoked and never wired into the generation path: it neither runs nor replays a generation, substitutes no model or provider, and performs no network access. It releases the loaded provider before creating the replacement, because the shrunken envelope is commonly caused by the resident model itself and holding both would require twice the artifact footprint at exactly the wrong moment. If creation then fails, no provider remains and the caller is told so explicitly rather than being handed a released one.
 
 If cleanup fails, the provider must remain faulted/unavailable rather than starting another generation on uncertain native state.
 

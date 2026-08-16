@@ -65,12 +65,16 @@ namespace ReachyMini.Validation
                 LocalLlmExecutionProfile baselineProfile =
                     LocalLlmExecutionProfile.CreateRma133V6Baseline();
                 var governor = new LocalLlmResourceGovernor();
+                // Reserve the artifact the load is about to make resident. Without it,
+                // admission judges a process that has not paid for the model yet and can
+                // admit a profile that loading immediately invalidates.
                 LocalLlmProviderAdmissionResult admission =
                     LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
                         baselineProfile,
                         governor,
                         androidSignals,
-                        realPhysics);
+                        realPhysics,
+                        LocalLlmBehaviorContract.ArtifactBytes);
                 if (!admission.Succeeded || admission.Decision == null ||
                     admission.EffectiveProfile == null)
                 {
@@ -116,14 +120,16 @@ namespace ReachyMini.Validation
                     "load_ms=" + loadStopwatch.Elapsed.TotalMilliseconds.ToString(
                         "F3", CultureInfo.InvariantCulture));
 
-                var faultPhysics = new Rma135FaultInjectingPhysicsBudgetSource(realPhysics);
-                var coordinator = new LocalLlmGovernedGenerationCoordinator(
-                    provider,
-                    baselineProfile,
-                    governor,
-                    androidSignals,
-                    faultPhysics,
-                    MonitorInterval);
+                Rma135FaultInjectingPhysicsBudgetSource faultPhysics =
+                    new Rma135FaultInjectingPhysicsBudgetSource(realPhysics);
+                LocalLlmGovernedGenerationCoordinator coordinator =
+                    new LocalLlmGovernedGenerationCoordinator(
+                        provider,
+                        baselineProfile,
+                        governor,
+                        androidSignals,
+                        faultPhysics,
+                        MonitorInterval);
 
                 WriteCheckpoint(
                     "post_load_stabilization_started",
@@ -150,7 +156,12 @@ namespace ReachyMini.Validation
                         break;
                     }
                 }
-                if (postLoadInitialDecision == null || postLoadStabilizedDecision == null)
+                if (postLoadInitialDecision == null)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-135 post-load stabilization recorded no governor observation.");
+                }
+                if (postLoadStabilizedDecision == null)
                 {
                     // Diagnostics-only: the terminal acceptance report is never populated on
                     // this path (the exception below aborts before the report object is
@@ -184,10 +195,63 @@ namespace ReachyMini.Validation
                             .ToString(CultureInfo.InvariantCulture) ?? "suspended") +
                         " last_allowed_threads=" + (postLoadLastObservedDecision?.EffectiveProfile?.Threads
                             .ToString(CultureInfo.InvariantCulture) ?? "suspended"));
-                    throw new InvalidOperationException(
-                        "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
-                        postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
-                        " observations. No generation request was started.");
+                    // The loaded profile no longer fits the allowed envelope, which no amount
+                    // of further observation can change: the governor will keep offering a
+                    // smaller profile than the one already resident. RMA-135 answers this
+                    // with explicit provider recreation rather than by mutating the live
+                    // provider, so exercise exactly that documented path here.
+                    WriteCheckpoint(
+                        "provider_recreation_started",
+                        "The loaded profile exceeds the allowed envelope; explicitly recreating the provider at the currently allowed profile. No generation request has been started or replayed.");
+                    LocalLlmProviderRecreationResult recreation =
+                        await LocalLlmProviderRecreation.ForCurrentEnvelopeAsync(
+                            provider,
+                            manifest,
+                            approvedArtifact,
+                            baselineProfile,
+                            governor,
+                            androidSignals,
+                            faultPhysics,
+                            CancellationToken.None).ConfigureAwait(true);
+                    // Adopt whatever the recreation reports, including null, so the outer
+                    // cleanup never disposes a provider that was already released.
+                    provider = recreation.Provider;
+                    if (!recreation.Succeeded || provider == null ||
+                        recreation.Decision?.EffectiveProfile == null)
+                    {
+                        TryWriteCheckpoint(
+                            "provider_recreation_failed",
+                            "status=" + recreation.Status + " detail=" + recreation.Detail);
+                        throw new InvalidOperationException(
+                            "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
+                            postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                            " observations, and explicit provider recreation did not yield a runnable provider: status=" +
+                            recreation.Status + " detail=" + recreation.Detail);
+                    }
+                    if (!LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
+                        provider.ExecutionProfile,
+                        recreation.Decision.EffectiveProfile))
+                    {
+                        throw new InvalidOperationException(
+                            "RMA-135 recreated the local provider but the resulting profile still exceeds the allowed envelope.");
+                    }
+                    coordinator = new LocalLlmGovernedGenerationCoordinator(
+                        provider,
+                        baselineProfile,
+                        governor,
+                        androidSignals,
+                        faultPhysics,
+                        MonitorInterval);
+                    postLoadStabilizedDecision = recreation.Decision;
+                    WriteCheckpoint(
+                        "provider_recreated",
+                        "status=" + recreation.Status +
+                        " mode=" + recreation.Decision.Mode +
+                        " reasons=" + recreation.Decision.Reasons +
+                        " recreated_ctx=" + provider.ExecutionProfile.ContextTokens.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " recreated_threads=" + provider.ExecutionProfile.Threads.ToString(
+                            CultureInfo.InvariantCulture));
                 }
                 LocalLlmResourceSnapshot postLoadResources = androidSignals.Capture(
                     LocalLlmPhysicsBudgetState.Healthy);

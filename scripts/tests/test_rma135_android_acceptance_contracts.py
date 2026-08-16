@@ -17,6 +17,7 @@ ACCEPTANCE_TEXT = "".join(
     )
 )
 RUNNER = ROOT / "scripts/run_rma135_resource_governor_acceptance_android.sh"
+RECREATION = ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmProviderRecreation.cs"
 
 
 def require(text: str, needle: str, label: str) -> None:
@@ -144,6 +145,35 @@ def main() -> None:
         'r["post_load_stabilization_observations"]',
         "post-load stabilization report validation",
     )
+    # RMA-135 keeps the loaded execution profile immutable, so a shrunken envelope is
+    # resolved by explicit provider recreation rather than by mutating a live provider.
+    # Without that path the loaded provider is refused forever, because the governor keeps
+    # offering a profile smaller than the one already resident.
+    require(
+        text,
+        "LocalLlmProviderRecreation.ForCurrentEnvelopeAsync",
+        "explicit provider recreation for a shrunken envelope",
+    )
+    require(text, "provider_recreated", "provider recreation evidence")
+    require(
+        text,
+        "realPhysics,\n                        LocalLlmBehaviorContract.ArtifactBytes)",
+        "admission reserves the artifact the load is about to make resident",
+    )
+
+    recreation = RECREATION.read_text(encoding="utf-8")
+    require(recreation, "ForCurrentEnvelopeAsync", "recreation entry point")
+    # The shrunken envelope is usually caused by this very model, so the outgoing provider
+    # must be released before the replacement is created; holding both would need twice the
+    # artifact footprint exactly when the device has least to spare.
+    if recreation.index("DisposeAsync") > recreation.index("LocalLlmProvider.CreateAsync"):
+        raise AssertionError(
+            "provider recreation must release the loaded provider before creating its replacement"
+        )
+    # Recreation re-establishes a provider; it must never itself run or replay a generation.
+    forbid(recreation, "GenerateAsync", "generation inside provider recreation")
+    forbid(recreation, "HttpClient", "network access inside provider recreation")
+
     forbid(text, "CreateAndStartSimulationWorker", "duplicate simulation factory")
     forbid(text, "ReachySimSession.Create", "duplicate native session creation")
     forbid(text, "worker.Dispose()", "production worker disposal")
