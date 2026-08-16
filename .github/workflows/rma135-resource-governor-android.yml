@@ -96,6 +96,8 @@ jobs:
       - name: Pin an approved representative physical Android device
         if: steps.scope.outputs.relevant == 'true'
         shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
           sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
@@ -144,14 +146,34 @@ jobs:
               accepted+=("${serial}")
             fi
           done
-          if (( ${#accepted[@]} != 1 )); then
+          # A second phone may legitimately be attached to this host for unrelated work,
+          # so allow an explicit pin. Without one the exactly-one rule still applies,
+          # which is what keeps evidence from being attributed to the wrong device.
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            override_ok=0
+            for candidate in "${accepted[@]}"; do
+              if [[ "${candidate}" == "${serial_override}" ]]; then
+                override_ok=1
+                break
+              fi
+            done
+            if (( override_ok != 1 )); then
+              printf 'Pinned REACHY_PHYSICAL_DEVICE_SERIAL=%s is not an approved connected device.\n' \
+                "${serial_override}" >&2
+              "${adb_bin}" devices -l >&2
+              exit 1
+            fi
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} != 1 )); then
             printf 'Expected exactly one approved arm64-v8a API-%s+ representative device; found %s.\n' \
               "${minimum_api}" "${#accepted[@]}" >&2
             printf 'approved models: %s\n' "${approved_models[*]}" >&2
             "${adb_bin}" devices -l >&2
             exit 1
+          else
+            serial="${accepted[0]}"
           fi
-          serial="${accepted[0]}"
           "${adb_bin}" -s "${serial}" wait-for-device
           [[ "$("${adb_bin}" -s "${serial}" get-state | tr -d '\r')" == "device" ]] || {
             printf 'Pinned Android device is not ready: %s\n' "${serial}" >&2

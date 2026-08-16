@@ -270,6 +270,8 @@ jobs:
       - name: Pin one physical Android device
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
         shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
           mapfile -t physical_serials < <(
@@ -285,12 +287,32 @@ jobs:
               accepted+=("${serial}")
             fi
           done
-          if (( ${#accepted[@]} != 1 )); then
+          # A second phone may legitimately be attached to this host for unrelated work,
+          # so allow an explicit pin. Without one the exactly-one rule still applies,
+          # which is what keeps evidence from being attributed to the wrong device.
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            override_ok=0
+            for candidate in "${accepted[@]}"; do
+              if [[ "${candidate}" == "${serial_override}" ]]; then
+                override_ok=1
+                break
+              fi
+            done
+            if (( override_ok != 1 )); then
+              printf 'Pinned REACHY_PHYSICAL_DEVICE_SERIAL=%s is not an approved connected device.\n' \
+                "${serial_override}" >&2
+              adb devices -l >&2
+              exit 1
+            fi
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} != 1 )); then
             printf 'Expected exactly one physical arm64-v8a API-26+ device at suite start; found %s.\n'               "${#accepted[@]}" >&2
             adb devices -l >&2
             exit 1
+          else
+            serial="${accepted[0]}"
           fi
-          serial="${accepted[0]}"
           adb -s "${serial}" wait-for-device
           if [[ "$(adb -s "${serial}" get-state | tr -d '\r')" != "device" ]]; then
             printf 'Pinned Android device is not ready: %s\n' "${serial}" >&2
