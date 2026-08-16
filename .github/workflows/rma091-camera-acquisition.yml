@@ -168,7 +168,6 @@ jobs:
               'ReachyCameraDescriptor.java',
               'ReachyFrameIntrinsics.java',
               'ReachyFrameSnapshot.java',
-              'ReachyDiscardingPreviewSurfaceProvider.java',
               'ReachyCameraLifecycleOwner.java',
               'ReachyCameraFrameThreadFactory.java',
               'ReachyCameraErrorUtil.java',
@@ -194,9 +193,19 @@ jobs:
               if token not in gradle:
                   raise SystemExit(f'Missing pinned CameraX dependency: {token}')
 
+          # No Preview.Builder / Preview use case: the SM-A546E (Exynos 1380) vendor camera
+          # HAL attaches an internal ZSL stream to the IMPL_DEF preview stream and aborts,
+          # rebooting the device, when its ZSL buffer is smaller than the full-sensor crop
+          # it computes. The discarded-surface Preview use case never contributed a consumed
+          # frame, so acquisition binds ImageAnalysis alone. See
+          # docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md.
+          if 'Preview.Builder' in java or 'androidx.camera.core.Preview' in java:
+              raise SystemExit(
+                  'A Preview use case reintroduces the SM-A546E ZSL-abort defect; see '
+                  'docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md.'
+              )
           for token in [
               'ProcessCameraProvider',
-              'Preview.Builder',
               'ImageAnalysis.Builder',
               'bindToLifecycle',
               'ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST',

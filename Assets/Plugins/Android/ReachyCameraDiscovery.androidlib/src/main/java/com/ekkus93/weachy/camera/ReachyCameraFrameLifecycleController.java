@@ -1,7 +1,6 @@
 package com.ekkus93.weachy.camera;
 
 import androidx.camera.core.CameraState;
-import androidx.camera.core.Preview;
 
 import java.util.concurrent.ExecutorService;
 
@@ -36,24 +35,13 @@ final class ReachyCameraFrameLifecycleController {
         if (ReachyCameraFrameBridge.imageAnalysis != null) {
             ReachyCameraFrameBridge.imageAnalysis.clearAnalyzer();
         }
-        if (ReachyCameraFrameBridge.preview != null) {
-            ReachyCameraFrameBridge.preview.setSurfaceProvider((Preview.SurfaceProvider) null);
-        }
         if (ReachyCameraFrameBridge.lifecycleOwner != null) {
             ReachyCameraFrameBridge.lifecycleOwner.destroy();
         }
-        if (ReachyCameraFrameBridge.cameraProvider != null) {
-            if (ReachyCameraFrameBridge.preview != null
-                    && ReachyCameraFrameBridge.imageAnalysis != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(
-                        ReachyCameraFrameBridge.preview,
-                        ReachyCameraFrameBridge.imageAnalysis);
-            } else if (ReachyCameraFrameBridge.preview != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(ReachyCameraFrameBridge.preview);
-            } else if (ReachyCameraFrameBridge.imageAnalysis != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(
-                        ReachyCameraFrameBridge.imageAnalysis);
-            }
+        if (ReachyCameraFrameBridge.cameraProvider != null
+                && ReachyCameraFrameBridge.imageAnalysis != null) {
+            ReachyCameraFrameBridge.cameraProvider.unbind(
+                    ReachyCameraFrameBridge.imageAnalysis);
         }
 
         ReachyCameraFrameBridge.descriptor = null;
@@ -81,22 +69,17 @@ final class ReachyCameraFrameLifecycleController {
         }
         ReachyCameraFrameBridge.cameraStateObserver = null;
         ReachyCameraFrameBridge.boundCamera = null;
-        if (ReachyCameraFrameBridge.previewSurfaceProvider != null) {
-            ReachyCameraFrameBridge.previewSurfaceProvider.close();
-        }
         if (ReachyCameraFrameBridge.analyzerExecutor != null) {
             ReachyCameraFrameBridge.analyzerExecutor.shutdownNow();
         }
         ReachyCameraFrameBridge.cameraProvider = null;
         ReachyCameraFrameBridge.lifecycleOwner = null;
-        ReachyCameraFrameBridge.preview = null;
         ReachyCameraFrameBridge.imageAnalysis = null;
-        ReachyCameraFrameBridge.previewSurfaceProvider = null;
         ReachyCameraFrameBridge.analyzerExecutor = null;
         setInactiveLocked(
                 "Stopped",
                 "",
-                "CameraX camera device reached CLOSED; Preview and ImageAnalysis are fully released.");
+                "CameraX camera device reached CLOSED; ImageAnalysis is fully released.");
     }
 
     static void stopBoundUseCasesLocked() {
@@ -111,27 +94,13 @@ final class ReachyCameraFrameLifecycleController {
         if (ReachyCameraFrameBridge.imageAnalysis != null) {
             ReachyCameraFrameBridge.imageAnalysis.clearAnalyzer();
         }
-        if (ReachyCameraFrameBridge.preview != null) {
-            ReachyCameraFrameBridge.preview.setSurfaceProvider((Preview.SurfaceProvider) null);
-        }
-        if (ReachyCameraFrameBridge.cameraProvider != null) {
-            if (ReachyCameraFrameBridge.preview != null
-                    && ReachyCameraFrameBridge.imageAnalysis != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(
-                        ReachyCameraFrameBridge.preview,
-                        ReachyCameraFrameBridge.imageAnalysis);
-            } else if (ReachyCameraFrameBridge.preview != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(ReachyCameraFrameBridge.preview);
-            } else if (ReachyCameraFrameBridge.imageAnalysis != null) {
-                ReachyCameraFrameBridge.cameraProvider.unbind(
-                        ReachyCameraFrameBridge.imageAnalysis);
-            }
+        if (ReachyCameraFrameBridge.cameraProvider != null
+                && ReachyCameraFrameBridge.imageAnalysis != null) {
+            ReachyCameraFrameBridge.cameraProvider.unbind(
+                    ReachyCameraFrameBridge.imageAnalysis);
         }
         if (ReachyCameraFrameBridge.lifecycleOwner != null) {
             ReachyCameraFrameBridge.lifecycleOwner.destroy();
-        }
-        if (ReachyCameraFrameBridge.previewSurfaceProvider != null) {
-            ReachyCameraFrameBridge.previewSurfaceProvider.close();
         }
         if (ReachyCameraFrameBridge.analyzerExecutor != null) {
             ReachyCameraFrameBridge.analyzerExecutor.shutdownNow();
@@ -139,9 +108,7 @@ final class ReachyCameraFrameLifecycleController {
         ReachyCameraTextureFrameBridge.endSession(ReachyCameraFrameBridge.generation);
         ReachyCameraFrameBridge.cameraProvider = null;
         ReachyCameraFrameBridge.lifecycleOwner = null;
-        ReachyCameraFrameBridge.preview = null;
         ReachyCameraFrameBridge.imageAnalysis = null;
-        ReachyCameraFrameBridge.previewSurfaceProvider = null;
         ReachyCameraFrameBridge.analyzerExecutor = null;
         ReachyCameraFrameBridge.descriptor = null;
         ReachyCameraFrameBridge.latestFrame = null;

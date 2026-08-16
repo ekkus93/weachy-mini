@@ -12,7 +12,6 @@ import android.view.Surface;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraState;
 import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.lifecycle.Observer;
 
@@ -37,8 +36,8 @@ public final class ReachyCameraFrameBridge {
     // docs/LARGE_FILE_REFACTOR_TODO.md section 7.
     static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     // Package-private (not private): referenced directly by
-    // ReachyCameraFrameBinder.bindProvider when wiring up the Preview
-    // surface provider. See the "Tricky Shared State" guidance in
+    // ReachyCameraFrameBinder.bindProvider as the ProcessCameraProvider future
+    // listener's callback executor. See the "Tricky Shared State" guidance in
     // docs/LARGE_FILE_REFACTOR_TODO.md section 7.
     static final Executor MAIN_EXECUTOR = new Executor() {
         @Override
@@ -59,9 +58,7 @@ public final class ReachyCameraFrameBridge {
     static Camera boundCamera;
     static Observer<CameraState> cameraStateObserver;
     static ReachyCameraLifecycleOwner lifecycleOwner;
-    static Preview preview;
     static ImageAnalysis imageAnalysis;
-    static ReachyDiscardingPreviewSurfaceProvider previewSurfaceProvider;
     static ExecutorService analyzerExecutor;
 
     private ReachyCameraFrameBridge() {

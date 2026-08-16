@@ -146,7 +146,6 @@ jobs:
               'ReachyCameraDescriptor.java',
               'ReachyFrameIntrinsics.java',
               'ReachyFrameSnapshot.java',
-              'ReachyDiscardingPreviewSurfaceProvider.java',
               'ReachyCameraLifecycleOwner.java',
               'ReachyCameraFrameThreadFactory.java',
               'ReachyCameraErrorUtil.java',
