@@ -196,6 +196,27 @@ def main() -> None:
         "only a suspended admission is retried",
     )
     require(text, "admission_refused", "sustained admission refusal diagnostics")
+    # The spec forbids silently retrying THE CANCELLED REQUEST at a smaller profile behind
+    # the scenes; it does not forbid a distinct new request, which is what a real subsequent
+    # interaction does naturally. Only a resource-pressure cancellation is retried with a
+    # fresh request id -- a signal failure or resource exhaustion stays terminal.
+    require(text, "PostRecoveryGenerationAttemptBudget", "bounded post-recovery retry budget")
+    require(
+        text,
+        "PostRecoveryRetryInterval = TimeSpan.FromMilliseconds(250.0)",
+        "post-recovery retry pacing",
+    )
+    require(
+        text,
+        '"rma135-recovered-success-" +',
+        "each post-recovery attempt uses a distinct request id, not a replay",
+    )
+    require(
+        text,
+        "LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration ||",
+        "only resource-pressure statuses are retried",
+    )
+    require(text, "post_recovery_generation_exhausted", "sustained post-recovery refusal diagnostics")
     require(
         text,
         "creation.MandatoryPromptTokens",

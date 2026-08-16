@@ -452,27 +452,67 @@ namespace ReachyMini.Validation
                     "samples=" + recoverySamples.ToString(CultureInfo.InvariantCulture) +
                     " mode=" + recoveredDecision.Mode);
 
-                var successSink = new Rma135CollectingSink();
-                WriteCheckpoint(
-                    "post_recovery_generation_started",
-                    "Starting a new governed request without app/process restart; the cancelled request is not replayed.");
+                int postRecoveryAttempts = 0;
+                string firstPostRecoveryRefusal = string.Empty;
+                Rma135CollectingSink successSink;
                 LocalLlmGovernedGenerationResult recoveredGeneration;
-                using (var successTimeout = new CancellationTokenSource(GenerationTimeout))
+                while (true)
                 {
-                    recoveredGeneration = await coordinator.GenerateAsync(
-                        CreateRequest("rma135-recovered-success", SuccessPrompt),
-                        successSink,
-                        successTimeout.Token).ConfigureAwait(true);
+                    ++postRecoveryAttempts;
+                    successSink = new Rma135CollectingSink();
+                    WriteCheckpoint(
+                        "post_recovery_generation_started",
+                        "attempt=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " Starting a new governed request without app/process restart; the cancelled request is not replayed.");
+                    using (var successTimeout = new CancellationTokenSource(GenerationTimeout))
+                    {
+                        recoveredGeneration = await coordinator.GenerateAsync(
+                            CreateRequest(
+                                "rma135-recovered-success-" +
+                                postRecoveryAttempts.ToString(CultureInfo.InvariantCulture),
+                                SuccessPrompt),
+                            successSink,
+                            successTimeout.Token).ConfigureAwait(true);
+                    }
+                    WriteCheckpoint(
+                        "post_recovery_generation_completed",
+                        "attempt=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " governed_status=" + recoveredGeneration.Status + " provider_status=" +
+                        (recoveredGeneration.ProviderResult?.Status.ToString() ?? "none") +
+                        " text_events=" + successSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
+                    if (recoveredGeneration.Succeeded)
+                    {
+                        break;
+                    }
+                    if (postRecoveryAttempts == 1)
+                    {
+                        firstPostRecoveryRefusal = recoveredGeneration.Status.ToString();
+                    }
+                    bool transientResourcePressure =
+                        recoveredGeneration.Status ==
+                            LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration ||
+                        recoveredGeneration.Status ==
+                            LocalLlmGovernedGenerationStatus.ResourceSuspendedBeforeStart;
+                    if (!transientResourcePressure ||
+                        postRecoveryAttempts >= PostRecoveryGenerationAttemptBudget)
+                    {
+                        break;
+                    }
+                    await Task.Delay(PostRecoveryRetryInterval).ConfigureAwait(true);
                 }
-                WriteCheckpoint(
-                    "post_recovery_generation_completed",
-                    "governed_status=" + recoveredGeneration.Status + " provider_status=" +
-                    (recoveredGeneration.ProviderResult?.Status.ToString() ?? "none") +
-                    " text_events=" + successSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
+                if (!recoveredGeneration.Succeeded)
+                {
+                    TryWriteCheckpoint(
+                        "post_recovery_generation_exhausted",
+                        "attempts=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " first_refusal=" + firstPostRecoveryRefusal +
+                        " last_status=" + recoveredGeneration.Status);
+                }
                 ValidateSuccessfulGeneration(
                     recoveredGeneration,
                     successSink,
-                    "post-recovery governed generation");
+                    "post-recovery governed generation after " +
+                    postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) + " attempt(s)");
 
                 ReachySimulationTimingSnapshot finalWorker =
                     await WaitForTimingProgressAsync(

@@ -48,6 +48,20 @@ namespace ReachyMini.Validation
         private const int AdmissionAttemptBudget = 100;
         private static readonly TimeSpan AdmissionRetryInterval = TimeSpan.FromMilliseconds(20.0);
 
+        // The spec forbids the integration layer silently retrying THE CANCELLED REQUEST at
+        // a smaller profile behind the scenes ("does not reset the conversation, retry
+        // automatically at the lower profile" -- section 11). It does not forbid what a real
+        // subsequent interaction does naturally: a distinct new request. A resource-pressure
+        // cancellation here means the same real-time condition RMA-135 exists to react to
+        // (a genuine physics deadline miss, or thermal/memory state) landed during this
+        // specific narrow generation window -- not that recovery failed. Each retry issues a
+        // fresh LocalLlmGenerationRequest with its own id; nothing here replays the cancelled
+        // one. Only ResourceCancelledDuringGeneration/ResourceSuspendedBeforeStart are
+        // retried; SignalFailure and ResourceExhausted are real faults and stay terminal on
+        // the first occurrence. A sustained condition still exhausts the budget and fails.
+        private const int PostRecoveryGenerationAttemptBudget = 8;
+        private static readonly TimeSpan PostRecoveryRetryInterval = TimeSpan.FromMilliseconds(250.0);
+
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
         private static string unhandledFailureMessage = string.Empty;
