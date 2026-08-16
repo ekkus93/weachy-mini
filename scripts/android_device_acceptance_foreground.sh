@@ -33,8 +33,22 @@ dismiss_immersive_confirmation()
 
 focused_window()
 {
-    "${ADB[@]}" shell dumpsys window windows 2>/dev/null \
-        | tr -d '\r' \
+    # `dumpsys window windows` carries mCurrentFocus/mFocusedApp on older Android but not
+    # on newer releases: on API 36 that subcommand prints only the window list and reports
+    # no focus at all, so every acceptance that waits for the app to take focus times out
+    # with an empty "Last focus:". The plain `dumpsys window` dump carries the focus fields
+    # on both, so prefer it and fall back to the windows subcommand for any platform where
+    # only that form has them.
+    # The emptiness test is a bash pattern match rather than a pipe into `grep -q`: this
+    # script runs under `set -o pipefail`, and `grep -q` exits on its first match, which
+    # SIGPIPEs the writer feeding it ~100 KiB. The pipeline then reports failure even
+    # though the match succeeded, so a piped test here silently always takes the fallback.
+    local dump
+    dump="$("${ADB[@]}" shell dumpsys window 2>/dev/null | tr -d '\r')"
+    if [[ "${dump}" != *"mCurrentFocus="* && "${dump}" != *"mFocusedApp="* ]]; then
+        dump="$("${ADB[@]}" shell dumpsys window windows 2>/dev/null | tr -d '\r')"
+    fi
+    printf '%s\n' "${dump}" \
         | awk '
             /mCurrentFocus=/ { current = $0 }
             /mFocusedApp=/ { focused_app = $0 }
