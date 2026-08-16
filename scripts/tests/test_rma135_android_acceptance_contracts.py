@@ -216,7 +216,9 @@ def main() -> None:
         "LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration ||",
         "only resource-pressure statuses are retried",
     )
-    require(text, "post_recovery_generation_exhausted", "sustained post-recovery refusal diagnostics")
+    require(
+        text, "post_recovery_generation_exhausted", "sustained post-recovery refusal diagnostics"
+    )
     require(
         text,
         "creation.MandatoryPromptTokens",
