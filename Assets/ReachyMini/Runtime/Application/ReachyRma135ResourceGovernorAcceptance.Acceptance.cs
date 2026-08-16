@@ -131,6 +131,7 @@ namespace ReachyMini.Validation
                 int postLoadStabilizationObservations = 0;
                 LocalLlmGovernorDecision? postLoadInitialDecision = null;
                 LocalLlmGovernorDecision? postLoadStabilizedDecision = null;
+                LocalLlmGovernorDecision? postLoadLastObservedDecision = null;
                 while (postLoadStabilizationObservations < 12)
                 {
                     if (postLoadStabilizationObservations > 0)
@@ -140,6 +141,7 @@ namespace ReachyMini.Validation
                     ++postLoadStabilizationObservations;
                     LocalLlmGovernorDecision observed = coordinator.EvaluateCurrentBudget();
                     postLoadInitialDecision ??= observed;
+                    postLoadLastObservedDecision = observed;
                     if (observed.InferenceAllowed && observed.EffectiveProfile != null &&
                         LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
                             provider.ExecutionProfile, observed.EffectiveProfile))
@@ -150,6 +152,19 @@ namespace ReachyMini.Validation
                 }
                 if (postLoadInitialDecision == null || postLoadStabilizedDecision == null)
                 {
+                    // Diagnostics-only: the terminal acceptance report is never populated on
+                    // this path (the exception below aborts before the report object is
+                    // built), so without this checkpoint every field that would explain *why*
+                    // admission was refused (governor mode/reasons, last real physics sample)
+                    // is lost. Emit it before throwing; it does not change acceptance behavior.
+                    TryWriteCheckpoint(
+                        "post_load_stabilization_exhausted",
+                        "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
+                        " initial_mode=" + postLoadInitialDecision?.Mode +
+                        " initial_reasons=" + postLoadInitialDecision?.Reasons +
+                        " last_mode=" + postLoadLastObservedDecision?.Mode +
+                        " last_reasons=" + postLoadLastObservedDecision?.Reasons +
+                        " last_real_physics_state=" + faultPhysics.LastObservedRealState);
                     throw new InvalidOperationException(
                         "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
                         postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +

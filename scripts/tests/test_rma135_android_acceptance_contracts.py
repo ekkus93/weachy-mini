@@ -62,6 +62,16 @@ def main() -> None:
     require(text, "worker_steps_after_injection", "worker continuity evidence")
     require(text, "post_load_stabilization_started", "real post-load stabilization")
     require(text, "post_load_stabilized_mode", "post-load recovery evidence")
+    require(
+        text,
+        "post_load_stabilization_exhausted",
+        "post-load stabilization failure diagnostics",
+    )
+    require(
+        text,
+        "last_real_physics_state",
+        "last real physics sample in failure diagnostics",
+    )
     require(text, "ProfileFitsWithin", "loaded-profile post-load safety check")
     require(text, "recovery_observations", "explicit recovery evidence")
     require(
