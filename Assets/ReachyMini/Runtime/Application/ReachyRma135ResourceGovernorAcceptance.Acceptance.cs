@@ -75,12 +75,47 @@ namespace ReachyMini.Validation
                         androidSignals,
                         realPhysics,
                         LocalLlmBehaviorContract.ArtifactBytes);
+                // Admission takes a single physics sample, and a new deadline miss is an
+                // immediate suspension condition by design. On real hardware a miss is often
+                // transient -- the startup loop above needed several observations to find
+                // three consecutive admissible ones -- so a single unlucky sample must not be
+                // read as a device that cannot run local inference. Production would simply
+                // re-evaluate on the next request; give admission the same bounded patience
+                // the startup loop already uses, at the same interval. A genuinely sustained
+                // suspension still fails, and only Suspended is retried: a signal failure is
+                // a real fault and stays fail-visible.
+                int admissionAttempts = 1;
+                string firstAdmissionRefusal = admission.Succeeded
+                    ? string.Empty
+                    : admission.Decision?.Reasons.ToString() ?? admission.Status.ToString();
+                while (!admission.Succeeded &&
+                    admission.Status == LocalLlmProviderAdmissionStatus.Suspended &&
+                    admissionAttempts < AdmissionAttemptBudget)
+                {
+                    await Task.Delay(AdmissionRetryInterval).ConfigureAwait(true);
+                    ++admissionAttempts;
+                    admission = LocalLlmGovernedGenerationCoordinator.EvaluateAdmission(
+                        baselineProfile,
+                        governor,
+                        androidSignals,
+                        realPhysics,
+                        LocalLlmBehaviorContract.ArtifactBytes);
+                }
                 if (!admission.Succeeded || admission.Decision == null ||
                     admission.EffectiveProfile == null)
                 {
+                    TryWriteCheckpoint(
+                        "admission_refused",
+                        "attempts=" + admissionAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " status=" + admission.Status +
+                        " first_reasons=" + firstAdmissionRefusal +
+                        " last_reasons=" + (admission.Decision?.Reasons.ToString() ?? "none") +
+                        " detail=" + admission.Detail);
                     throw new InvalidOperationException(
-                        "RMA-135 provider admission refused local inference: status=" +
-                        admission.Status + " detail=" + admission.Detail);
+                        "RMA-135 provider admission refused local inference after " +
+                        admissionAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " attempts: status=" + admission.Status +
+                        " detail=" + admission.Detail);
                 }
                 LocalLlmExecutionProfile effectiveProfile = admission.EffectiveProfile;
                 WriteCheckpoint(
@@ -89,7 +124,11 @@ namespace ReachyMini.Validation
                     admission.Decision.DeviceProfile.Kind + " thermal=" +
                     initialResources.ThermalStatus + " ctx=" +
                     effectiveProfile.ContextTokens.ToString(CultureInfo.InvariantCulture) +
-                    " threads=" + effectiveProfile.Threads.ToString(CultureInfo.InvariantCulture));
+                    " threads=" + effectiveProfile.Threads.ToString(CultureInfo.InvariantCulture) +
+                    " attempts=" + admissionAttempts.ToString(CultureInfo.InvariantCulture) +
+                    " first_refusal=" + (firstAdmissionRefusal.Length == 0
+                        ? "none"
+                        : firstAdmissionRefusal));
 
                 LocalModelManifest manifest = CreateSelectedManifest();
                 LocalModelApprovedArtifact approvedArtifact = new LocalModelApprovedArtifact(

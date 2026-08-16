@@ -180,6 +180,22 @@ def main() -> None:
     # model's own tokenizer rather than estimated, and admission is re-evaluated against the
     # measured value when creation refuses the context it was given.
     require(text, "admission_remeasured", "admission re-evaluated against the measured prompt")
+    # A new physics deadline miss suspends admission by design, and those misses are often
+    # transient on real hardware. Admission is retried with the startup loop's interval and a
+    # comparable budget so one unlucky sample is not read as an unusable device; a sustained
+    # suspension still exhausts the budget and fails, and a signal failure is never retried.
+    require(text, "AdmissionAttemptBudget", "bounded admission retry budget")
+    require(
+        text,
+        "AdmissionRetryInterval = TimeSpan.FromMilliseconds(20.0)",
+        "admission retry pinned to the startup sampling interval",
+    )
+    require(
+        text,
+        "admission.Status == LocalLlmProviderAdmissionStatus.Suspended &&",
+        "only a suspended admission is retried",
+    )
+    require(text, "admission_refused", "sustained admission refusal diagnostics")
     require(
         text,
         "creation.MandatoryPromptTokens",

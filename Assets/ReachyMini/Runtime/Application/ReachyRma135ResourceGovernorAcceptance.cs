@@ -40,6 +40,14 @@ namespace ReachyMini.Validation
         private const int RecoveryObservationBudget = 40;
         private static readonly TimeSpan RecoveryObservationInterval = TimeSpan.FromMilliseconds(20.0);
 
+        // Admission samples physics once, and a new deadline miss suspends immediately by
+        // design. Those misses are frequently transient on real hardware, so admission is
+        // retried with the same interval and a comparable budget to WaitForPhysicsBudgetAsync
+        // rather than treating one unlucky sample as an unusable device. A sustained
+        // suspension still exhausts the budget and fails.
+        private const int AdmissionAttemptBudget = 100;
+        private static readonly TimeSpan AdmissionRetryInterval = TimeSpan.FromMilliseconds(20.0);
+
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
         private static string unhandledFailureMessage = string.Empty;
