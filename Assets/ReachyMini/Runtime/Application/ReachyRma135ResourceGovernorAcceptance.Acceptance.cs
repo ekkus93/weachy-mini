@@ -161,7 +161,9 @@ namespace ReachyMini.Validation
                     throw new InvalidOperationException(
                         "RMA-135 post-load stabilization recorded no governor observation.");
                 }
-                if (postLoadStabilizedDecision == null)
+                LocalLlmGovernorDecision initialDecision = postLoadInitialDecision;
+                LocalLlmGovernorDecision? stabilizedDecision = postLoadStabilizedDecision;
+                if (stabilizedDecision == null)
                 {
                     // Diagnostics-only: the terminal acceptance report is never populated on
                     // this path (the exception below aborts before the report object is
@@ -176,8 +178,8 @@ namespace ReachyMini.Validation
                     TryWriteCheckpoint(
                         "post_load_stabilization_exhausted",
                         "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
-                        " initial_mode=" + postLoadInitialDecision?.Mode +
-                        " initial_reasons=" + postLoadInitialDecision?.Reasons +
+                        " initial_mode=" + initialDecision.Mode +
+                        " initial_reasons=" + initialDecision.Reasons +
                         " last_mode=" + postLoadLastObservedDecision?.Mode +
                         " last_reasons=" + postLoadLastObservedDecision?.Reasons +
                         " last_real_physics_state=" + faultPhysics.LastObservedRealState +
@@ -216,8 +218,10 @@ namespace ReachyMini.Validation
                     // Adopt whatever the recreation reports, including null, so the outer
                     // cleanup never disposes a provider that was already released.
                     provider = recreation.Provider;
+                    LocalLlmGovernorDecision? recreatedDecision = recreation.Decision;
+                    LocalLlmExecutionProfile? recreatedAllowed = recreatedDecision?.EffectiveProfile;
                     if (!recreation.Succeeded || provider == null ||
-                        recreation.Decision?.EffectiveProfile == null)
+                        recreatedDecision == null || recreatedAllowed == null)
                     {
                         TryWriteCheckpoint(
                             "provider_recreation_failed",
@@ -230,7 +234,7 @@ namespace ReachyMini.Validation
                     }
                     if (!LocalLlmGovernedGenerationCoordinator.ProfileFitsWithin(
                         provider.ExecutionProfile,
-                        recreation.Decision.EffectiveProfile))
+                        recreatedAllowed))
                     {
                         throw new InvalidOperationException(
                             "RMA-135 recreated the local provider but the resulting profile still exceeds the allowed envelope.");
@@ -242,12 +246,12 @@ namespace ReachyMini.Validation
                         androidSignals,
                         faultPhysics,
                         MonitorInterval);
-                    postLoadStabilizedDecision = recreation.Decision;
+                    stabilizedDecision = recreatedDecision;
                     WriteCheckpoint(
                         "provider_recreated",
                         "status=" + recreation.Status +
-                        " mode=" + recreation.Decision.Mode +
-                        " reasons=" + recreation.Decision.Reasons +
+                        " mode=" + recreatedDecision.Mode +
+                        " reasons=" + recreatedDecision.Reasons +
                         " recreated_ctx=" + provider.ExecutionProfile.ContextTokens.ToString(
                             CultureInfo.InvariantCulture) +
                         " recreated_threads=" + provider.ExecutionProfile.Threads.ToString(
@@ -258,10 +262,10 @@ namespace ReachyMini.Validation
                 WriteCheckpoint(
                     "post_load_stabilized",
                     "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
-                    " initial_mode=" + postLoadInitialDecision.Mode +
-                    " initial_reasons=" + postLoadInitialDecision.Reasons +
-                    " final_mode=" + postLoadStabilizedDecision.Mode +
-                    " final_reasons=" + postLoadStabilizedDecision.Reasons +
+                    " initial_mode=" + initialDecision.Mode +
+                    " initial_reasons=" + initialDecision.Reasons +
+                    " final_mode=" + stabilizedDecision.Mode +
+                    " final_reasons=" + stabilizedDecision.Reasons +
                     " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(
                         CultureInfo.InvariantCulture));
 
@@ -433,10 +437,10 @@ namespace ReachyMini.Validation
                     production_runtime_model_hash = productionRuntime.ModelHash,
                     post_load_available_memory_bytes = postLoadResources.AvailableMemoryBytes,
                     post_load_stabilization_observations = postLoadStabilizationObservations,
-                    post_load_initial_mode = postLoadInitialDecision.Mode.ToString(),
-                    post_load_initial_reasons = postLoadInitialDecision.Reasons.ToString(),
-                    post_load_stabilized_mode = postLoadStabilizedDecision.Mode.ToString(),
-                    post_load_stabilized_reasons = postLoadStabilizedDecision.Reasons.ToString(),
+                    post_load_initial_mode = initialDecision.Mode.ToString(),
+                    post_load_initial_reasons = initialDecision.Reasons.ToString(),
+                    post_load_stabilized_mode = stabilizedDecision.Mode.ToString(),
+                    post_load_stabilized_reasons = stabilizedDecision.Reasons.ToString(),
                     physics_fault_injection_kind = "controlled_one_shot_budget_exceeded",
                     physics_fault_injection_count = faultPhysics.InjectedCount,
                     physics_underlying_state_at_injection = faultPhysics.UnderlyingStateAtInjection.ToString(),
