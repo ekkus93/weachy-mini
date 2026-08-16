@@ -14,7 +14,7 @@ REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma134-qwen3-0.6b-q4_k_m.gguf"
 REMOTE_CHECKPOINT_GLOB="${REMOTE_FILES_DIR}/rma134-local-llm-checkpoint-*.json"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
 TIMEOUT_SECONDS="${RMA134_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
-EXPECTED_DEVICE_MODEL="${RMA134_EXPECTED_DEVICE_MODEL:-LG-H872}"
+DEVICE_MATRIX_PATH="models/reachy-mini/android-device-matrix.json"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
 
@@ -93,7 +93,21 @@ trap on_exit EXIT
 
 [[ "$("${ADB[@]}" get-state | tr -d '\r\n')" == "device" ]] || { printf '%s\n' 'RMA-134 adb device is unavailable.' >&2; exit 1; }
 model="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"; abi="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"; sdk="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"; qemu="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')"; hardware="$("${ADB[@]}" shell getprop ro.hardware | tr -d '\r')"
-[[ "${model}" == "${EXPECTED_DEVICE_MODEL}" && "${abi}" == "arm64-v8a" && "${sdk}" == "26" ]] || { printf 'Device mismatch model=%s abi=%s sdk=%s\n' "${model}" "${abi}" "${sdk}" >&2; exit 1; }
+# Approved devices and the minimum API come from the RMA-184 representative-device
+# matrix so this gate has a single source of truth and cannot diverge from the
+# published support policy.
+mapfile -t APPROVED_DEVICE_MODELS < <(python3 -c 'import json,sys; print("\n".join(d["model"] for d in json.load(open(sys.argv[1], encoding="utf-8"))["representative_devices"]))' "${DEVICE_MATRIX_PATH}")
+MINIMUM_ANDROID_API="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["support_policy"]["minimum_android_api"])' "${DEVICE_MATRIX_PATH}")"
+model_approved=0
+for approved in "${APPROVED_DEVICE_MODELS[@]}"; do
+  if [[ "${model}" == "${approved}" ]]; then model_approved=1; break; fi
+done
+if [[ "${model_approved}" != "1" || "${abi}" != "arm64-v8a" ]] || \
+   [[ ! "${sdk}" =~ ^[0-9]+$ ]] || (( sdk < MINIMUM_ANDROID_API )); then
+  printf 'Device is not an approved representative device: model=%s abi=%s sdk=%s (minimum api %s)\n' \
+    "${model}" "${abi}" "${sdk}" "${MINIMUM_ANDROID_API}" >&2
+  exit 1
+fi
 [[ "${qemu}" != "1" && "${hardware,,}" != *goldfish* && "${hardware,,}" != *ranchu* ]] || { printf '%s\n' 'Emulator evidence refused.' >&2; exit 1; }
 printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' "${DEVICE_SERIAL}" "${model}" "${abi}" "${sdk}" "${hardware}" > "${REPORT_DIR}/device.txt"
 APK_SHA256="$(sha256sum "${APK_PATH}" | awk '{print $1}')"

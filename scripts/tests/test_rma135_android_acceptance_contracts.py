@@ -202,9 +202,9 @@ def main() -> None:
         "acceptance consumes the measured mandatory prompt cost",
     )
 
-    governor = (ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs").read_text(
-        encoding="utf-8"
-    )
+    governor = (
+        ROOT / "Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs"
+    ).read_text(encoding="utf-8")
     require(governor, "mandatoryPromptTokens", "governor accounts for the mandatory prompt")
     require(
         governor,

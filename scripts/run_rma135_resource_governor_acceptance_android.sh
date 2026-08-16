@@ -15,7 +15,7 @@ REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma135-qwen3-0.6b-q4_k_m.gguf"
 REMOTE_CHECKPOINT_GLOB="${REMOTE_FILES_DIR}/rma135-resource-governor-checkpoint-*.json"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
 TIMEOUT_SECONDS="${RMA135_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
-EXPECTED_DEVICE_MODEL="${RMA135_EXPECTED_DEVICE_MODEL:-LG-H872}"
+DEVICE_MATRIX_PATH="models/reachy-mini/android-device-matrix.json"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 
 mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
@@ -136,10 +136,42 @@ abi="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
 sdk="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
 qemu="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')"
 hardware="$("${ADB[@]}" shell getprop ro.hardware | tr -d '\r')"
-[[ "${model}" == "${EXPECTED_DEVICE_MODEL}" && "${abi}" == "arm64-v8a" && "${sdk}" == "26" ]] || {
-  printf 'Device mismatch model=%s abi=%s sdk=%s\n' "${model}" "${abi}" "${sdk}" >&2
+# The approved devices and the minimum API come from the RMA-184 representative-device
+# matrix so this gate has a single source of truth and cannot silently diverge from the
+# published support policy. Pinning one exact model and one exact API meant the
+# acceptance could only ever run on the low-class phone, which is also the only device
+# that cannot report API-29 thermal telemetry.
+mapfile -t APPROVED_DEVICE_MODELS < <(python3 - "${DEVICE_MATRIX_PATH}" <<'DEVICE_MATRIX_PY'
+import json
+import sys
+
+matrix = json.load(open(sys.argv[1], encoding="utf-8"))
+for device in matrix["representative_devices"]:
+    print(device["model"])
+DEVICE_MATRIX_PY
+)
+MINIMUM_ANDROID_API="$(python3 - "${DEVICE_MATRIX_PATH}" <<'DEVICE_MATRIX_API_PY'
+import json
+import sys
+
+matrix = json.load(open(sys.argv[1], encoding="utf-8"))
+print(matrix["support_policy"]["minimum_android_api"])
+DEVICE_MATRIX_API_PY
+)"
+model_approved=0
+for approved in "${APPROVED_DEVICE_MODELS[@]}"; do
+  if [[ "${model}" == "${approved}" ]]; then
+    model_approved=1
+    break
+  fi
+done
+if [[ "${model_approved}" != "1" || "${abi}" != "arm64-v8a" ]] || \
+   [[ ! "${sdk}" =~ ^[0-9]+$ ]] || (( sdk < MINIMUM_ANDROID_API )); then
+  printf 'Device is not an approved representative device: model=%s abi=%s sdk=%s (minimum api %s)\n' \
+    "${model}" "${abi}" "${sdk}" "${MINIMUM_ANDROID_API}" >&2
+  printf 'approved models: %s\n' "${APPROVED_DEVICE_MODELS[*]}" >&2
   exit 1
-}
+fi
 [[ "${qemu}" != "1" && "${hardware,,}" != *goldfish* && "${hardware,,}" != *ranchu* ]] || {
   printf '%s\n' 'Emulator evidence refused.' >&2
   exit 1

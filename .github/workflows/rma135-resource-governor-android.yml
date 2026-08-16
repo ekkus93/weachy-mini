@@ -93,7 +93,7 @@ jobs:
           echo "relevant=${relevant}" >> "$GITHUB_OUTPUT"
           echo "scope_base=${scope_base}" >> "$GITHUB_OUTPUT"
 
-      - name: Pin LG-H872 physical Android device
+      - name: Pin an approved representative physical Android device
         if: steps.scope.outputs.relevant == 'true'
         shell: bash
         run: |
@@ -108,6 +108,16 @@ jobs:
             exit 1
           }
 
+          # Approved devices and the minimum API come from the RMA-184 representative-device
+          # matrix, so this gate has a single source of truth and cannot silently diverge
+          # from the published support policy. Pinning one exact model and one exact API
+          # meant physical acceptance could only ever run on the low-class phone, which is
+          # also the only device that cannot report API-29 thermal telemetry.
+          matrix_path='models/reachy-mini/android-device-matrix.json'
+          mapfile -t approved_models < <(python3 -c 'import json,sys; print("\n".join(d["model"] for d in json.load(open(sys.argv[1], encoding="utf-8"))["representative_devices"]))' "${matrix_path}")
+          minimum_api="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["support_policy"]["minimum_android_api"])' "${matrix_path}")"
+          printf 'approved_models=%s minimum_api=%s\n' "${approved_models[*]}" "${minimum_api}"
+
           mapfile -t serials < <(
             "${adb_bin}" devices \
               | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
@@ -121,14 +131,23 @@ jobs:
             qemu="$("${adb_bin}" -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
             printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' \
               "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
-            if [[ "${state}" == "device" && "${model}" == "LG-H872" && \
-                  "${abi}" == "arm64-v8a" && "${sdk}" == "26" && "${qemu}" != "1" ]]; then
+            model_approved=0
+            for approved in "${approved_models[@]}"; do
+              if [[ "${model}" == "${approved}" ]]; then
+                model_approved=1
+                break
+              fi
+            done
+            if [[ "${state}" == "device" && "${model_approved}" == "1" && \
+                  "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ && \
+                  "${qemu}" != "1" ]] && (( sdk >= minimum_api )); then
               accepted+=("${serial}")
             fi
           done
           if (( ${#accepted[@]} != 1 )); then
-            printf 'Expected exactly one LG-H872 arm64-v8a API-26 device; found %s.\n' \
-              "${#accepted[@]}" >&2
+            printf 'Expected exactly one approved arm64-v8a API-%s+ representative device; found %s.\n' \
+              "${minimum_api}" "${#accepted[@]}" >&2
+            printf 'approved models: %s\n' "${approved_models[*]}" >&2
             "${adb_bin}" devices -l >&2
             exit 1
           fi
