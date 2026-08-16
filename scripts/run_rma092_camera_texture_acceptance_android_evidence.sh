@@ -233,7 +233,11 @@ if frame.get("mirrored") is not expected_mirror:
 rotation = int(frame.get("rotation_degrees", -1))
 if rotation not in {0, 90, 180, 270}:
     raise SystemExit(1)
-if previous_rotation and rotation == int(previous_rotation):
+# The app is locked to portrait (see AndroidBuild.ConfigureMobileOrientation), so a
+# forced system display-rotation attempt must not change the reported frame rotation.
+# previous_rotation is passed for the post-rotation-attempt stage to prove the lock
+# holds under a real attempt, not merely that nothing asked for one.
+if previous_rotation and rotation != int(previous_rotation):
     raise SystemExit(1)
 
 # Prefer a real non-uniform live-camera capture whenever the unattended scene

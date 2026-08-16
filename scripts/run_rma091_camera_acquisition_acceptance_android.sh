@@ -319,12 +319,17 @@ elif condition == "resumed":
         and integer("application_resume_count") >= 1
         and common_frame_contract()
     )
-elif condition == "rotation_changed":
+elif condition == "rotation_unaffected":
+    # The app is locked to portrait, so a forced system display-rotation attempt must
+    # not change the camera frame's reported rotation: Android does not rotate a
+    # fixed-orientation activity's window, and CameraX derives frame.rotation_degrees
+    # from that window's display rotation. This proves the lock actually holds under a
+    # real rotation attempt, not merely that nothing asked for one.
     command_id, original_rotation = args
     matched = (
         report.get("last_command_id") == command_id
         and report.get("current_state") == "Running"
-        and integer("frame.rotation_degrees") != int(original_rotation)
+        and integer("frame.rotation_degrees") == int(original_rotation)
         and common_frame_contract()
     )
 elif condition == "revoked":
@@ -462,9 +467,14 @@ ORIGINAL_FRAME_ROTATION="$(
 
 write_command rotation-stop stop
 wait_for_report \
-    'CameraX stop before device rotation' \
+    'CameraX stop before a forced device-rotation attempt' \
     "${REPORT_DIR}/07-rotation-stopped.json" \
     state Stopped rotation-stop
+# The app is locked to portrait (see AndroidBuild.ConfigureMobileOrientation). This
+# still forces the system-level display rotation the same way a physical device
+# rotation would, then proves CameraX's reported frame rotation does not change and
+# streaming is not disrupted -- the lock holding under a real rotation attempt, not
+# merely the absence of one.
 "${ADB[@]}" shell settings put system accelerometer_rotation 0
 CURRENT_USER_ROTATION="$(
     "${ADB[@]}" shell settings get system user_rotation | tr -d '\r'
@@ -484,13 +494,13 @@ sleep 3
     > "${REPORT_DIR}/display-rotated.txt"
 write_command rear-rotated start rear
 wait_for_report \
-    'rotated rear CameraX metadata' \
+    'the rear CameraX session after a forced device-rotation attempt' \
     "${REPORT_DIR}/08-rear-rotated.json" \
     running rear-rotated Rear 5
 wait_for_report \
-    'CameraX rotation metadata to change with display rotation' \
+    'CameraX rotation metadata to stay fixed under the portrait lock' \
     "${REPORT_DIR}/09-rotation-changed.json" \
-    rotation_changed rear-rotated "${ORIGINAL_FRAME_ROTATION}"
+    rotation_unaffected rear-rotated "${ORIGINAL_FRAME_ROTATION}"
 
 write_command switch-stop stop
 wait_for_report \
@@ -587,8 +597,8 @@ if integer(resumed, "paused_transition_count") < 1 or integer(resumed, "resumed_
     raise SystemExit(f"CameraX pause/resume transitions were not observed: {resumed}")
 if integer(rear_restarted, "session_count") < 2:
     raise SystemExit(f"Repeated start/stop did not create a new session: {rear_restarted}")
-if (rotated.get("frame") or {}).get("rotation_degrees") == (rear_restarted.get("frame") or {}).get("rotation_degrees"):
-    raise SystemExit(f"Device rotation did not change frame metadata: {rotated}")
+if (rotated.get("frame") or {}).get("rotation_degrees") != (rear_restarted.get("frame") or {}).get("rotation_degrees"):
+    raise SystemExit(f"Portrait lock did not hold under a forced device-rotation attempt: {rotated}")
 if front.get("current_state") != "Running" or not front.get("front_frame_seen"):
     raise SystemExit(f"Front acquisition did not run: {front}")
 if not front.get("rear_frame_seen"):
@@ -611,7 +621,7 @@ summary = {
     "session_count": integer(pre_revoke, "session_count"),
     "frame_observation_count": integer(pre_revoke, "frame_observation_count"),
     "initial_rotation_degrees": (rear_restarted.get("frame") or {}).get("rotation_degrees"),
-    "rotated_rotation_degrees": (rotated.get("frame") or {}).get("rotation_degrees"),
+    "rotation_degrees_after_forced_rotation_attempt": (rotated.get("frame") or {}).get("rotation_degrees"),
     "permission_revocation_state": revoked.get("current_state"),
 }
 (report_dir / "summary.json").write_text(

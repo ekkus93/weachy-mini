@@ -126,9 +126,13 @@ REAR_ROTATION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))
 write_command rotation-stop stop
 wait_for_report \
     "${REMOTE_ACQUISITION_RESULT}" \
-    'CameraX stop before display rotation' \
+    'CameraX stop before a forced device-rotation attempt' \
     "${REPORT_DIR}/03-rotation-stopped.json" \
     acquisition_stopped rotation-stop
+# The app is locked to portrait (see AndroidBuild.ConfigureMobileOrientation). This
+# still forces the system-level display rotation the same way a physical device
+# rotation would, then proves the RGB texture orientation does not change -- the lock
+# holding under a real rotation attempt, not merely the absence of one.
 "${ADB[@]}" shell settings put system accelerometer_rotation 0
 CURRENT_USER_ROTATION="$(
     "${ADB[@]}" shell settings get system user_rotation | tr -d '\r'
@@ -149,11 +153,11 @@ sleep 3
 write_command rear-rotated start rear
 wait_for_report \
     "${REMOTE_ACQUISITION_RESULT}" \
-    'the rotated rear CameraX session' \
+    'the rear CameraX session after a forced device-rotation attempt' \
     "${REPORT_DIR}/04-rear-rotated-running.json" \
     acquisition_running rear-rotated Rear
 wait_for_texture_stage \
-    'the rotated rear RGB texture evidence' \
+    'the rear RGB texture evidence after a forced device-rotation attempt' \
     "${REPORT_DIR}/05-rear-rotated-texture.json" \
     "${REPORT_DIR}/05-rear-rotated-stage.txt" \
     "${REPORT_DIR}/05-rear-rotated-verdict.json" \
@@ -229,8 +233,11 @@ for prefix in ("02-rear", "05-rear-rotated", "08-front"):
         "synthetic_rgb_range": verdict.get("synthetic_rgb_range"),
     })
 
-if stages[0]["rotation_degrees"] == stages[1]["rotation_degrees"]:
-    raise SystemExit(f"Display rotation did not change RGB texture orientation: {stages}")
+if stages[0]["rotation_degrees"] != stages[1]["rotation_degrees"]:
+    raise SystemExit(
+        f"Portrait lock did not hold RGB texture orientation fixed under a forced "
+        f"device-rotation attempt: {stages}"
+    )
 front_report = json.loads((report_dir / "08-front-texture.json").read_text(encoding="utf-8"))
 front_frame = front_report.get("frame") or {}
 if front_frame.get("lens_facing") != "Front" or front_frame.get("mirrored") is not True:

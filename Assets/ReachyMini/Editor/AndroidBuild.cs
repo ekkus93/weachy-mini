@@ -87,24 +87,39 @@ namespace ReachyMini.Editor
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
         }
 
+        // The app is locked to portrait. This was originally auto-rotation across all four
+        // orientations; that was dropped to avoid landscape-layout work the product does not
+        // need. Physical device rotation (e.g. the user turning the phone in hand) is still a
+        // real event the app must tolerate -- the sensor keeps reporting it and downstream
+        // consumers (camera reprojection, the resource governor) still see it -- the interface
+        // orientation itself simply no longer follows it.
+        //
+        // Unity does not treat a fixed defaultInterfaceOrientation as self-sufficient: it still
+        // combines the allowedAutorotateTo* flag matching that orientation to resolve the
+        // manifest's android:screenOrientation. With every flag false -- including Portrait's
+        // own -- Unity resolved to SCREEN_ORIENTATION_UNSPECIFIED rather than portrait, which
+        // was caught only by installing a build and reading the live requestedOrientation off
+        // the device; the compiled manifest alone did not make this obvious. Setting exactly
+        // allowedAutorotateToPortrait true (with the upside-down and both landscape flags
+        // false) is the combination that resolves to android:screenOrientation="portrait".
         private static void ConfigureMobileOrientation()
         {
             PlayerSettings.defaultInterfaceOrientation =
-                UIOrientation.AutoRotation;
+                UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
-            PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
-            PlayerSettings.allowedAutorotateToLandscapeLeft = true;
-            PlayerSettings.allowedAutorotateToLandscapeRight = true;
+            PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+            PlayerSettings.allowedAutorotateToLandscapeLeft = false;
+            PlayerSettings.allowedAutorotateToLandscapeRight = false;
 
             if (PlayerSettings.defaultInterfaceOrientation !=
-                    UIOrientation.AutoRotation ||
+                    UIOrientation.Portrait ||
                 !PlayerSettings.allowedAutorotateToPortrait ||
-                !PlayerSettings.allowedAutorotateToPortraitUpsideDown ||
-                !PlayerSettings.allowedAutorotateToLandscapeLeft ||
-                !PlayerSettings.allowedAutorotateToLandscapeRight)
+                PlayerSettings.allowedAutorotateToPortraitUpsideDown ||
+                PlayerSettings.allowedAutorotateToLandscapeLeft ||
+                PlayerSettings.allowedAutorotateToLandscapeRight)
             {
                 throw new InvalidOperationException(
-                    "Unity did not retain the required Android auto-rotation settings.");
+                    "Unity did not retain the required Android portrait-lock settings.");
             }
         }
 
