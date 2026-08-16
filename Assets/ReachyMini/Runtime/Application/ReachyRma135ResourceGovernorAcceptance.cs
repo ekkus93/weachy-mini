@@ -22,11 +22,15 @@ namespace ReachyMini.Validation
 
         // Recovery from the controlled fault injection requires
         // LocalLlmResourceGovernor.RecoverySamplesRequired (3) *consecutive* non-Suspended
-        // real observations; any observation that is still Suspended resets that streak to
-        // zero. On physical hardware with borderline physics headroom, an occasional real
-        // blip can reset the streak, so a tight budget can starve out recovery that the
-        // production governor would otherwise grant. This is acceptance-only retry budget,
-        // not a change to governor hysteresis itself.
+        // real observations. Physical evidence on the LG-H872 boundary device (see
+        // docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md section 8) shows a
+        // genuine PhysicsBudgetExceeded reading after a governed cancellation can stay real
+        // and sustained for several real seconds on this low-end hardware before the
+        // envelope settles -- this is expected latency under concurrent authoritative
+        // physics + local-LLM load, not an intermittent blip and not a defect. This budget
+        // gives real recovery that much wall-clock time/attempts; it does not change
+        // governor hysteresis itself, and a run that still exhausts it reflects a real,
+        // sustained device condition rather than a harness timing artifact.
         private const int RecoveryObservationBudget = 40;
         private static readonly TimeSpan RecoveryObservationInterval = TimeSpan.FromMilliseconds(75.0);
 

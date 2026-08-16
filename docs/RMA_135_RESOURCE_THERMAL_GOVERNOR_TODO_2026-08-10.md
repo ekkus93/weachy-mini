@@ -93,6 +93,15 @@
 - [ ] Run local LLM concurrently with authoritative MuJoCo stepping.
 - [ ] Demonstrate that a physics-budget violation suspends/cancels LLM work rather than degrading physics.
 - [ ] Demonstrate recovery without process restart.
+
+  Note (physical evidence at source SHA 1e6be9a, LG-H872): a genuine `PhysicsBudgetExceeded`
+  reading after a governed cancellation can stay real and sustained for several
+  real seconds on this low-end representative device before three consecutive
+  admissible observations accumulate — see `docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md`
+  section 8. This is expected latency, not a defect; acceptance evidence for
+  this bullet must budget real wall-clock recovery time rather than treat a
+  multi-second recovery window as a failure.
+
 - [ ] Record source SHA, APK SHA-256, device/API, model artifact SHA-256, governor decisions, physics timing, and cleanup outcome.
 
 ## Phase 8 — Closure

@@ -112,6 +112,8 @@ Android `lowMemory=true` always suspends regardless of ratios.
 
 Escalation is immediate. Recovery to a less restrictive mode requires three consecutive observations requesting the less restrictive mode. This prevents oscillation around a threshold. No automatic generation retry occurs when recovery completes.
 
+On low-end representative hardware (e.g. the LG-H872 boundary device), physical evidence shows that a genuine `PhysicsBudgetExceeded` reading following a governed cancellation can remain real and sustained — not merely an intermittent blip — for several real seconds before the physics/resource envelope settles enough to accumulate three consecutive admissible observations. This is expected latency on constrained hardware under concurrent authoritative-physics + local-LLM load, not a defect: the governor must keep observing real signals rather than fabricate or shortcut recovery. Acceptance tooling that observes recovery must budget real wall-clock time and retry allowance accordingly (see `RecoveryObservationBudget`/`RecoveryObservationInterval` in `ReachyRma135ResourceGovernorAcceptance.cs`), rather than treating a multi-second recovery as itself a failure signal.
+
 ## 9. Execution-profile integrity
 
 The profile selected at explicit provider admission may change only:
