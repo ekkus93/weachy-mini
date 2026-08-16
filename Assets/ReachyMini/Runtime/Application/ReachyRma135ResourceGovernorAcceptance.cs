@@ -22,17 +22,23 @@ namespace ReachyMini.Validation
 
         // Recovery from the controlled fault injection requires
         // LocalLlmResourceGovernor.RecoverySamplesRequired (3) *consecutive* non-Suspended
-        // real observations. Physical evidence on the LG-H872 boundary device (see
-        // docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md section 8) shows a
-        // genuine PhysicsBudgetExceeded reading after a governed cancellation can stay real
-        // and sustained for several real seconds on this low-end hardware before the
-        // envelope settles -- this is expected latency under concurrent authoritative
-        // physics + local-LLM load, not an intermittent blip and not a defect. This budget
-        // gives real recovery that much wall-clock time/attempts; it does not change
-        // governor hysteresis itself, and a run that still exhausts it reflects a real,
-        // sustained device condition rather than a harness timing artifact.
+        // real observations.
+        //
+        // The observation INTERVAL is not a free tuning knob:
+        // ReachyLocalLlmPhysicsBudgetTracker.Observe reports Exceeded when the deadline-miss
+        // counter advanced at all since the previous observation. Each sample therefore
+        // covers the whole gap since the last one, so a wider interval makes an individual
+        // sample strictly MORE likely to report Exceeded (a 2 ms timestep means a 20 ms gap
+        // spans ~10 physics steps but a 75 ms gap spans ~37). Spacing samples further apart
+        // to "give the device time to settle" is counterproductive: it lowers the odds of
+        // ever observing three consecutive admissible samples.
+        //
+        // 20 ms matches WaitForPhysicsBudgetAsync, the startup stabilization loop, which
+        // needs the same three-consecutive-admissible streak on the same device moments
+        // earlier and succeeds reliably. The larger COUNT is the safe knob for granting more
+        // real recovery opportunity, so the budget is generous while the window stays tight.
         private const int RecoveryObservationBudget = 40;
-        private static readonly TimeSpan RecoveryObservationInterval = TimeSpan.FromMilliseconds(75.0);
+        private static readonly TimeSpan RecoveryObservationInterval = TimeSpan.FromMilliseconds(20.0);
 
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;

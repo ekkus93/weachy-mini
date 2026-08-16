@@ -108,6 +108,29 @@ def main() -> None:
         "Task.Delay(PostLoadSettleSampleInterval).GetAwaiter().GetResult()",
         "acceptance-only post-load settling wait",
     )
+    # ReachyLocalLlmPhysicsBudgetTracker.Observe reports Exceeded when the deadline-miss
+    # counter advanced at all since the previous observation, so every sample covers the
+    # whole gap since the last one. A settle wait must therefore never double as the
+    # measurement window: after settling, one sample is discarded to re-baseline the
+    # tracker and the sample that is used covers only PostLoadMeasurementWindow. Widening
+    # these windows makes physics look WORSE, not better; keep them at the startup loop's
+    # 20 ms and grant extra recovery opportunity via sample count instead.
+    require(
+        text,
+        "Task.Delay(PostLoadMeasurementWindow).GetAwaiter().GetResult()",
+        "post-load measurement window decoupled from the settle wait",
+    )
+    require(
+        text,
+        "PostLoadMeasurementWindow =\n            TimeSpan.FromMilliseconds(20.0)",
+        "post-load measurement window pinned to the startup sampling interval",
+    )
+    require(
+        text,
+        "RecoveryObservationInterval = TimeSpan.FromMilliseconds(20.0)",
+        "recovery sampling pinned to the startup sampling interval",
+    )
+    require(text, "Task.Delay(20)", "startup stabilization sampling interval")
     require(
         text,
         "LastObservedRealState != LocalLlmPhysicsBudgetState.Healthy &&",

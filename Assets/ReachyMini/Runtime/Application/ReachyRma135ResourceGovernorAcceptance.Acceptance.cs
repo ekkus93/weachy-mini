@@ -157,6 +157,11 @@ namespace ReachyMini.Validation
                     // built), so without this checkpoint every field that would explain *why*
                     // admission was refused (governor mode/reasons, last real physics sample)
                     // is lost. Emit it before throwing; it does not change acceptance behavior.
+                    // Memory is reported alongside the governor reasons because a
+                    // MemoryPressure reason is only actionable next to the available-memory
+                    // value and the threshold it fell under.
+                    LocalLlmResourceSnapshot exhaustedResources = androidSignals.Capture(
+                        faultPhysics.LastObservedRealState);
                     TryWriteCheckpoint(
                         "post_load_stabilization_exhausted",
                         "samples=" + postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
@@ -164,7 +169,21 @@ namespace ReachyMini.Validation
                         " initial_reasons=" + postLoadInitialDecision?.Reasons +
                         " last_mode=" + postLoadLastObservedDecision?.Mode +
                         " last_reasons=" + postLoadLastObservedDecision?.Reasons +
-                        " last_real_physics_state=" + faultPhysics.LastObservedRealState);
+                        " last_real_physics_state=" + faultPhysics.LastObservedRealState +
+                        " available_memory=" + exhaustedResources.AvailableMemoryBytes.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " total_memory=" + exhaustedResources.TotalMemoryBytes.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " low_memory_threshold=" + exhaustedResources.LowMemoryThresholdBytes.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " loaded_ctx=" + provider.ExecutionProfile.ContextTokens.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " loaded_threads=" + provider.ExecutionProfile.Threads.ToString(
+                            CultureInfo.InvariantCulture) +
+                        " last_allowed_ctx=" + (postLoadLastObservedDecision?.EffectiveProfile?.ContextTokens
+                            .ToString(CultureInfo.InvariantCulture) ?? "suspended") +
+                        " last_allowed_threads=" + (postLoadLastObservedDecision?.EffectiveProfile?.Threads
+                            .ToString(CultureInfo.InvariantCulture) ?? "suspended"));
                     throw new InvalidOperationException(
                         "The real post-model-load physics/resource envelope did not recover enough to admit the already-loaded provider after " +
                         postLoadStabilizationObservations.ToString(CultureInfo.InvariantCulture) +
