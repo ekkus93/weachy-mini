@@ -282,9 +282,18 @@ namespace ReachyMini.AppState
                     rearRotationDegrees = frame.RotationDegrees;
                     return true;
                 }
+                // This no longer requires frame.RotationDegrees != rearRotationDegrees.
+                // That condition predates the portrait lock (AndroidBuild.
+                // ConfigureMobileOrientation): the app is now fixed to portrait, so a
+                // forced device-rotation attempt is expected to leave RotationDegrees
+                // UNCHANGED, and the requirement below was structurally unsatisfiable --
+                // 100% reproducible timeout, not a flake. Capturing again on the first
+                // eligible frame of the restarted session is correct on its own; the
+                // rotation-held-lock invariant is verified downstream by
+                // validate_texture_stage's previous_rotation comparison, not by gating
+                // the capture itself.
                 if (rearCaptureWritten &&
                     !rotatedCaptureWritten &&
-                    frame.RotationDegrees != rearRotationDegrees &&
                     TryCapture(output, RotatedCaptureFileName))
                 {
                     rotatedCaptureWritten = true;
