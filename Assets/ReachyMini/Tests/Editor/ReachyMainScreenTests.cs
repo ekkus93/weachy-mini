@@ -147,7 +147,7 @@ namespace ReachyMini.Tests
                 screen.RequestCameraPreview();
                 StringAssert.Contains(
                     "Camera preview unavailable",
-                    screen.Snapshot.Detail);
+                    screen.SettingsSnapshot!.StatusMessage);
                 Assert.That(screen.CameraPreviewActive, Is.False);
                 Assert.That(screen.CameraPreviewTexture, Is.Null);
 

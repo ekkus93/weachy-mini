@@ -50,6 +50,15 @@ namespace ReachyMini.Tests
                     "Development authoritative rendering assertion failed:.*" +
                     "position_tolerance=.*rotation_tolerance=",
                     RegexOptions.CultureInvariant));
+            // ValidateRenderedPoseInvariantCore always calls EnterFault after the
+            // development-only Debug.Assert above, which logs a second, structured
+            // Error (event_id "renderer.faulted"). ignoreFailingMessages alone does
+            // not cover it once an explicit LogAssert.Expect is also registered in
+            // the same call, so it must be expected here too or this test fails on
+            // the second, unrelated-looking log.
+            LogAssert.Expect(
+                LogType.Error,
+                new Regex("\"event_id\":\"renderer.faulted\"", RegexOptions.CultureInvariant));
             Assert.That(
                 InvokeWithExpectedStructuredError(
                     () => renderer!.AssertRenderedPoseInvariant()),

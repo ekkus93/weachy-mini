@@ -33,11 +33,16 @@ namespace ReachyMini.AppState
 
         public void RequestCameraPreview()
         {
-            ReachyMainScreenStateStore store = RequireStore();
+            // Camera preview is a settings-panel action, like the other actions
+            // around it (calibration, reprojection diagnostics, local-model
+            // controls) -- unavailability is reported through the settings store
+            // (SettingsSnapshot.StatusMessage), not the main-screen interaction
+            // store RequestMicrophone()/RequestCameraSelection() use.
+            ReachySettingsStateStore settings = RequireSettings();
             ReachyCameraCapabilitySnapshot camera = RequireCameraCapabilities();
             if (camera.Permission != ReachyCameraPermissionState.Granted)
             {
-                store.ReportUnavailableAction(
+                settings.ReportUnavailableAction(
                     "Camera preview",
                     "camera permission has not been granted yet -- use REQUEST CAMERA ACCESS first");
                 return;
@@ -46,13 +51,13 @@ namespace ReachyMini.AppState
             ReachyAndroidCameraAcquisition? acquisition = LocateCameraAcquisition();
             if (acquisition == null)
             {
-                store.ReportUnavailableAction(
+                settings.ReportUnavailableAction(
                     "Camera preview",
                     "the camera acquisition pipeline is not installed on this device");
                 return;
             }
 
-            ReachyCameraFacing facing = RequireSettings().Current.PreferredCameraFacing;
+            ReachyCameraFacing facing = settings.Current.PreferredCameraFacing;
             if (facing == ReachyCameraFacing.Unconfigured)
             {
                 facing = ReachyCameraFacing.Rear;
