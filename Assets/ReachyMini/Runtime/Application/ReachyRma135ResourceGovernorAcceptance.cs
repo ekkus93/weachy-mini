@@ -60,7 +60,19 @@ namespace ReachyMini.Validation
         // retried; SignalFailure and ResourceExhausted are real faults and stay terminal on
         // the first occurrence. A sustained condition still exhausts the budget and fails.
         private const int PostRecoveryGenerationAttemptBudget = 8;
-        private static readonly TimeSpan PostRecoveryRetryInterval = TimeSpan.FromMilliseconds(250.0);
+
+        // A flat delay between attempts was found (2026-08-17, real hardware) to starve the
+        // governor's hysteresis recovery of samples: RecoverySamplesRequired (3) consecutive
+        // clean observations only advance on an EvaluateCurrentBudget call, and a fixed gap
+        // between attempts contributes none. On a device with a low but real steady deadline-
+        // miss rate, a fresh miss lands often enough (about once every two attempts, observed)
+        // to keep resetting the streak before it reaches 3 -- a governor-cadence problem, not
+        // sustained physics pressure or cleanup-path contention. Before every retry after the
+        // first, actively poll at the same proven interval WaitForPhysicsBudgetAsync and the
+        // governor_recovery loop above use, giving hysteresis the same fair chance to converge
+        // it already gets at those call sites, instead of hoping a blind wait happens to land
+        // outside the device's miss cadence.
+        private const int PostRecoveryPreflightObservationBudget = 100;
 
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;

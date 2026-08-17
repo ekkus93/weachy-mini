@@ -550,7 +550,34 @@ namespace ReachyMini.Validation
                     {
                         break;
                     }
-                    await Task.Delay(PostRecoveryRetryInterval).ConfigureAwait(true);
+
+                    // Actively wait for the governor to report a genuinely admissible state
+                    // before spending another attempt, sampling at the same interval and
+                    // pattern as the governor_recovery loop above -- see
+                    // PostRecoveryPreflightObservationBudget for why a flat delay here
+                    // previously starved hysteresis recovery of samples. Exhausting this wait
+                    // is not itself terminal: the attempt below still runs, and its own
+                    // governed status (most likely ResourceSuspendedBeforeStart again) is what
+                    // decides whether the outer loop continues or stops.
+                    int preflightSamples = 0;
+                    LocalLlmGovernorDecision? preflightDecision = null;
+                    while (preflightSamples < PostRecoveryPreflightObservationBudget)
+                    {
+                        await Task.Delay(RecoveryObservationInterval).ConfigureAwait(true);
+                        ++preflightSamples;
+                        LocalLlmGovernorDecision sampled = coordinator.EvaluateCurrentBudget();
+                        if (sampled.Mode != LocalLlmGovernorMode.Suspended)
+                        {
+                            preflightDecision = sampled;
+                            break;
+                        }
+                    }
+                    WriteCheckpoint(
+                        "post_recovery_preflight_wait_completed",
+                        "attempt=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
+                        " samples=" + preflightSamples.ToString(CultureInfo.InvariantCulture) +
+                        " ready=" + (preflightDecision != null) +
+                        " mode=" + (preflightDecision?.Mode.ToString() ?? "still-suspended"));
                 }
                 if (!recoveredGeneration.Succeeded)
                 {

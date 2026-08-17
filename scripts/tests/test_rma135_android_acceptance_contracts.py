@@ -201,10 +201,25 @@ def main() -> None:
     # interaction does naturally. Only a resource-pressure cancellation is retried with a
     # fresh request id -- a signal failure or resource exhaustion stays terminal.
     require(text, "PostRecoveryGenerationAttemptBudget", "bounded post-recovery retry budget")
+    # A flat delay between post-recovery attempts was found (real hardware, 2026-08-17) to
+    # starve the governor's hysteresis recovery of samples: a fresh, real deadline miss lands
+    # often enough on a device with a low steady miss rate to keep resetting the 3-consecutive-
+    # clean streak before it ever completes. Between attempts, actively poll at the same
+    # interval the governor_recovery loop already uses successfully, instead of a blind delay.
     require(
         text,
-        "PostRecoveryRetryInterval = TimeSpan.FromMilliseconds(250.0)",
-        "post-recovery retry pacing",
+        "PostRecoveryPreflightObservationBudget",
+        "bounded pre-attempt hysteresis observation budget",
+    )
+    require(
+        text,
+        "sampled = coordinator.EvaluateCurrentBudget();",
+        "pre-attempt polling samples the same governor decision as governor_recovery",
+    )
+    require(
+        text,
+        "post_recovery_preflight_wait_completed",
+        "pre-attempt hysteresis wait diagnostics",
     )
     require(
         text,
