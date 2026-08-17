@@ -2632,24 +2632,40 @@ provider-driven intents) needs perception and provider both Ready.
       `IReachyBehaviorService`'s currently-empty interface (gesture-trigger +
       HUD state members; every `IReachy*Service` is a zero-member marker
       today).
-- [ ] **Phase A -- camera frame acquisition.** Mostly wiring, not new design.
-      `ReachyAndroidCameraAcquisition`/`ReachyAndroidCameraTextureBridge` are
-      already auto-instantiated in the live app by a second, independent
-      bootstrap (`ReachyCameraAcquisitionBootstrap`) -- discovery and
-      acquisition just never rendezvous except via `FindAnyObjectByType`, and
-      `StartPreferred(...)` is called from exactly two places, both gated
-      behind the acceptance-only `reachy_rma091_acceptance` launch-intent
-      extra. No UI ever renders the resulting texture either
-      (`ReachyCameraHomographyWarpPipeline` is never instantiated anywhere).
-      Needs: thread the acquisition/bridge instances into
-      `ReachySettingsApplicationCompositionProvider` instead of two
-      disconnected bootstraps, a real user-triggered start (mirroring the
-      mic's explicit-action requirement -- CameraX binding itself pops no
-      fresh permission dialog once already Granted, so auto-start on Granted
-      is technically possible, but the acquisition state machine's
-      start/stop toggle shape suggests explicit-action was the intent; this
-      is a product decision to confirm), and something to actually render
-      the preview.
+- [x] **Phase A -- camera frame acquisition.** Complete (2026-08-17).
+      `ReachyMainScreen.RequestCameraPreview()`
+      (`Assets/ReachyMini/Runtime/Application/ReachyMainScreen.CameraPreview.cs`)
+      now locates the already-auto-instantiated
+      `ReachyAndroidCameraAcquisition`/`ReachyAndroidCameraTextureBridge` pair
+      lazily via `FindAnyObjectByType` and calls `Toggle(facing)` once camera
+      permission is confirmed Granted; the settings panel renders
+      `CameraPreviewTexture` via `GUI.DrawTexture` while active. This
+      deliberately diverges from this item's original "thread the
+      acquisition/bridge instances into
+      `ReachySettingsApplicationCompositionProvider`" framing: lazy discovery
+      from the main-screen code was chosen instead, to avoid restructuring the
+      two independent `AfterSceneLoad` bootstraps under time pressure. Both
+      bootstraps still exist unchanged; only the main-screen action's target
+      changed. Unavailability (no permission, pipeline not installed) reports
+      through the settings store per the settings-panel-action convention,
+      matching calibration/reprojection/local-model controls, not the
+      HUD-level microphone/camera-selector convention.
+      `ReachyProductionApplicationCompositionProvider` remains confirmed dead
+      code, not removed in this pass.
+      **Completion evidence:** commits `fa3319c` (initial wiring),
+      `5104cee` (fixed wrong state-store target caught by CI, plus an
+      unrelated pre-existing `ReachyAuthoritativeInvariantTests` bug also
+      caught by the same CI run). Self-hosted run `32075804253` passed Unity
+      edit-mode tests, the ARM64 API-26 IL2CPP build, and -- with the
+      physical SM-A546E device pinned -- RMA-090/091/092 camera acceptance,
+      RMA-111/154 tracking/visual-servo acceptance, RMA-022 lifecycle
+      acceptance, and authoritative-rendering acceptance, all on exact commit
+      `5104cee`. Caveat: RMA-090/091/092's acceptance harnesses exercise
+      `ReachyAndroidCameraAcquisition`/`ReachyAndroidCameraTextureBridge`
+      directly via a launch-intent extra, not `RequestCameraPreview()`
+      itself -- the new settings-panel button is covered by Unity Editor
+      unit tests (`ReachyMainScreenTests`, `ReachySettingsScreenTests`) but
+      not yet by an on-device acceptance harness tapping the actual button.
 - [ ] **Phase B -- provider selection, local LLM subset.** The largest single
       piece. Local LLM is fully built and proven end to end (admission ->
       create -> govern -> recreate -> dispose via
