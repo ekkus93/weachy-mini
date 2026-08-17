@@ -81,17 +81,20 @@
       "model": "SM-A546E",
       "soc": "Samsung Exynos 1380",
       "android_version": "16",
-      "android_api": null,
+      "android_api": 36,
       "ram_configuration_gib": [6, 8],
-      "ram_observation_status": "runtime_probe_required_for_installed_variant",
+      "ram_observation_status": "6gib_variant_measured_via_rma184_device_probe_8gib_unverified",
       "graphics_api": "Vulkan",
       "gpu": "Mali-G68 MP5",
-      "camera_capability": "rear_and_front_hardware_present_runtime_probe_required",
-      "on_device_asr": "runtime_probe_required",
-      "offline_tts": "runtime_probe_required",
-      "support_status": "pending_measurement",
-      "measurement_status": "pending_rma184_device_probe",
-      "evidence": []
+      "camera_capability": "rear_and_front_camera_paths_physically_validated",
+      "on_device_asr": "explicit_api_available_but_runtime_probe_faulted_unexplained",
+      "offline_tts": "available_per_runtime_probe_audible_acceptance_pending",
+      "support_status": "supported_with_limitations",
+      "measurement_status": "partial_rma184_device_probe_evidence",
+      "evidence": [
+        "docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md",
+        "docs/validation/RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md"
+      ]
     },
     {
       "id": "oneplus-11-5g",
