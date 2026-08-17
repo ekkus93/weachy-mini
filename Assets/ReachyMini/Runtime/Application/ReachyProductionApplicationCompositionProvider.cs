@@ -81,7 +81,7 @@ namespace ReachyMini.AppState
                         ReachyServiceKind.Audio,
                         ReachyServiceCriticality.Optional,
                         Array.Empty<ReachyServiceKind>(),
-                        resolver => new ReachyUnavailableAudioApplicationService()),
+                        resolver => new ReachyAndroidSpeechCapabilityApplicationService()),
                     new ReachyServiceRegistration(
                         "provider-selection",
                         ReachyServiceKind.Provider,
@@ -261,25 +261,6 @@ namespace ReachyMini.AppState
         }
     }
 
-    internal sealed class ReachyUnavailableAudioApplicationService :
-        ReachyApplicationServiceBase,
-        IReachyAudioService
-    {
-        public ReachyUnavailableAudioApplicationService()
-            : base(
-                "speech-audio",
-                ReachyServiceKind.Audio,
-                ReachyServiceCriticality.Optional)
-        {
-        }
-
-        protected override void OnInitialize()
-        {
-            SetUnavailable(
-                "Microphone capture and speech playback are not implemented until the speech phase.");
-        }
-    }
-
     internal sealed class ReachyUnavailableProviderApplicationService :
         ReachyApplicationServiceBase,
         IReachyProviderService
@@ -448,6 +429,11 @@ namespace ReachyMini.AppState
                 ApplyProviderGovernorDiagnostics();
             }
 
+            if (eventArgs.Health.Kind == ReachyServiceKind.Audio)
+            {
+                ApplyMicrophoneAvailability(eventArgs.Health.State);
+            }
+
             if (eventArgs.Health.Criticality == ReachyServiceCriticality.Required &&
                 (eventArgs.Health.State == ReachyServiceState.Faulted ||
                  eventArgs.Health.State == ReachyServiceState.Unavailable))
@@ -456,6 +442,26 @@ namespace ReachyMini.AppState
                     ReachyInteractionState.Error,
                     $"{eventArgs.Health.ServiceId}: {eventArgs.Health.Message}");
             }
+        }
+
+        // The microphone button is only ever enabled once a real ASR/TTS provider was
+        // actually found usable (ReachyAndroidSpeechCapabilityApplicationService
+        // reaches Ready) -- Degraded still means no usable provider was found (or the
+        // permission request has not resolved yet), so it must not enable the button.
+        private void ApplyMicrophoneAvailability(ReachyServiceState audioState)
+        {
+            ReachyMainScreenSnapshot current = stateStore.Current;
+            bool microphoneAvailable = audioState == ReachyServiceState.Ready;
+            if (microphoneAvailable == current.MicrophoneAvailable)
+            {
+                return;
+            }
+            stateStore.SetCapabilities(
+                current.ActiveCamera,
+                current.CameraSelectionAvailable,
+                current.ActiveProvider,
+                current.ProviderLocation,
+                microphoneAvailable);
         }
 
         private void ApplyProviderGovernorDiagnostics()

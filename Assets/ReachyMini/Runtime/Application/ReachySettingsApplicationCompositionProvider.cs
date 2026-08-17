@@ -111,10 +111,8 @@ namespace ReachyMini.AppState
                         "speech-audio",
                         ReachyServiceKind.Audio,
                         ReachyServiceCriticality.Optional,
-                        new[] { ReachyServiceKind.Persistence },
-                        resolver => new ReachySettingsAudioApplicationService(
-                            resolver.GetRequired<ReachySettingsPersistenceApplicationService>(
-                                ReachyServiceKind.Persistence).Settings)),
+                        Array.Empty<ReachyServiceKind>(),
+                        resolver => new ReachyAndroidSpeechCapabilityApplicationService()),
                     new ReachyServiceRegistration(
                         "provider-selection",
                         ReachyServiceKind.Provider,
@@ -203,55 +201,6 @@ namespace ReachyMini.AppState
         }
     }
 
-    internal sealed class ReachySettingsAudioApplicationService :
-        ReachyApplicationServiceBase,
-        IReachyAudioService
-    {
-        private readonly ReachySettingsStateStore settings;
-
-        public ReachySettingsAudioApplicationService(
-            ReachySettingsStateStore settings)
-            : base(
-                "speech-audio",
-                ReachyServiceKind.Audio,
-                ReachyServiceCriticality.Optional)
-        {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        }
-
-        protected override void OnInitialize()
-        {
-            settings.Changed += OnSettingsChanged;
-            PublishCurrentHealth();
-        }
-
-        protected override void OnDispose()
-        {
-            settings.Changed -= OnSettingsChanged;
-        }
-
-        private void OnSettingsChanged(
-            object? sender,
-            ReachySettingsChangedEventArgs eventArgs)
-        {
-            PublishCurrentHealth();
-        }
-
-        private void PublishCurrentHealth()
-        {
-            ReachyProviderSelection asr =
-                settings.Current.GetProvider(ReachyProviderKind.Asr);
-            ReachyProviderSelection tts =
-                settings.Current.GetProvider(ReachyProviderKind.Tts);
-            SetUnavailable(
-                "Speech preferences are stored but audio capture/playback are not " +
-                $"installed. ASR={asr.DisplayName} " +
-                $"({ReachySettingsStateStore.GetConnectivityLabel(asr.Connectivity)}); " +
-                $"TTS={tts.DisplayName} " +
-                $"({ReachySettingsStateStore.GetConnectivityLabel(tts.Connectivity)})." );
-        }
-    }
-
     internal sealed class ReachySettingsProviderApplicationService :
         ReachyApplicationServiceBase,
         IReachyProviderService
@@ -320,6 +269,7 @@ namespace ReachyMini.AppState
     {
         private readonly ReachyMainScreen screen;
         private readonly ReachyProductionAuthoritativeRuntime runtime;
+        private readonly IReachyAudioService audio;
         private readonly IReachyApplicationService[] dependencies;
         private readonly ReachySettingsPersistenceApplicationService persistence;
         private readonly ReachyAndroidCameraDiscovery cameraDiscovery;
@@ -350,11 +300,12 @@ namespace ReachyMini.AppState
                 throw new ArgumentNullException(nameof(persistence));
             this.cameraDiscovery = cameraDiscovery ??
                 throw new ArgumentNullException(nameof(cameraDiscovery));
+            this.audio = audio ?? throw new ArgumentNullException(nameof(audio));
             dependencies = new IReachyApplicationService[]
             {
                 simulation ?? throw new ArgumentNullException(nameof(simulation)),
                 camera ?? throw new ArgumentNullException(nameof(camera)),
-                audio ?? throw new ArgumentNullException(nameof(audio)),
+                this.audio,
                 provider ?? throw new ArgumentNullException(nameof(provider)),
                 perception ?? throw new ArgumentNullException(nameof(perception)),
                 behavior ?? throw new ArgumentNullException(nameof(behavior)),
@@ -438,6 +389,11 @@ namespace ReachyMini.AppState
             object? sender,
             ReachyServiceHealthChangedEventArgs eventArgs)
         {
+            if (eventArgs.Health.Kind == ReachyServiceKind.Audio)
+            {
+                UpdateMainScreenCapabilities();
+            }
+
             if (eventArgs.Health.Criticality == ReachyServiceCriticality.Required &&
                 (eventArgs.Health.State == ReachyServiceState.Faulted ||
                  eventArgs.Health.State == ReachyServiceState.Unavailable))
@@ -474,7 +430,7 @@ namespace ReachyMini.AppState
                     : sendsOffDevice
                         ? ReachyProviderLocation.Cloud
                         : ReachyProviderLocation.Local,
-                false);
+                audio.Health.State == ReachyServiceState.Ready);
         }
 
         private ReachySettingsResetOutcome ResetSimulation()

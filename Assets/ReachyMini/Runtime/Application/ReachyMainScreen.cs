@@ -222,7 +222,8 @@ namespace ReachyMini.AppState
             {
                 store.ReportUnavailableAction(
                     "Microphone",
-                    "audio capture is not implemented until the speech phase");
+                    "no usable on-device speech provider was found, or microphone " +
+                    "permission has not been granted yet");
                 return;
             }
             store.SetInteraction(
