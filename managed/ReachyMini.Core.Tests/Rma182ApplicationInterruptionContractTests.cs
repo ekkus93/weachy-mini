@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using ReachyMini.AppState;
+using ReachyMini.Behavior;
 using ReachyMini.Conversation;
 
 namespace ReachyMini.Core.Tests
@@ -232,6 +233,28 @@ namespace ReachyMini.Core.Tests
             public void ResumeAfterApplicationInterruption()
             {
                 events.Add("resume:" + Kind);
+            }
+
+            public ReachyBehaviorServiceSnapshot Snapshot { get; } =
+                new ReachyBehaviorServiceSnapshot(
+                    ReachyBehaviorServiceExecutionState.Idle,
+                    ReachyBaselineBehaviorKind.NeutralIdle,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyBehaviorServiceSnapshotChangedEventArgs>?
+                SnapshotChanged
+            {
+                add { }
+                remove { }
+            }
+
+            public bool TryTriggerGesture(
+                ReachyBaselineBehaviorKind gesture,
+                out string diagnosticCode)
+            {
+                diagnosticCode = "test-double-does-not-execute-gestures";
+                return false;
             }
 
             protected override void OnInitialize()

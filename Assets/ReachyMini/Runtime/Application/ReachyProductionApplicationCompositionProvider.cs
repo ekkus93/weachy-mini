@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using ReachyMini.Behavior;
 using ReachyMini.Presentation;
 using ReachyMini.Rendering;
 using ReachyMini.Simulation;
@@ -303,12 +304,36 @@ namespace ReachyMini.AppState
         ReachyApplicationServiceBase,
         IReachyBehaviorService
     {
+        private readonly ReachyBehaviorServiceSnapshot snapshot =
+            new ReachyBehaviorServiceSnapshot(
+                ReachyBehaviorServiceExecutionState.Idle,
+                ReachyBaselineBehaviorKind.NeutralIdle,
+                "Interactive behavior is unavailable until provider and perception services are configured.",
+                0UL);
+
         public ReachyUnavailableBehaviorApplicationService()
             : base(
                 "behavior",
                 ReachyServiceKind.Behavior,
                 ReachyServiceCriticality.Optional)
         {
+        }
+
+        public ReachyBehaviorServiceSnapshot Snapshot => snapshot;
+
+        public event EventHandler<ReachyBehaviorServiceSnapshotChangedEventArgs>?
+            SnapshotChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool TryTriggerGesture(
+            ReachyBaselineBehaviorKind gesture,
+            out string diagnosticCode)
+        {
+            diagnosticCode = "behavior-service-unavailable";
+            return false;
         }
 
         protected override void OnInitialize()

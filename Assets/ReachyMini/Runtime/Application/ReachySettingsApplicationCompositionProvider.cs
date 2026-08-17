@@ -150,13 +150,21 @@ namespace ReachyMini.AppState
                         },
                         resolver =>
                         {
+                            // RMA-195 phase A: baseline behavior only needs the
+                            // authoritative runtime (captured via `runtime`
+                            // below, not through the Simulation service
+                            // boundary). Provider/Perception stay declared
+                            // dependencies for composition ordering and future
+                            // phases (B/C), but the real service does not
+                            // consume them yet -- they are both still
+                            // permanently-Unavailable stubs today.
                             resolver.GetRequired<IReachySimulationService>(
                                 ReachyServiceKind.Simulation);
                             resolver.GetRequired<IReachyProviderService>(
                                 ReachyServiceKind.Provider);
                             resolver.GetRequired<IReachyPerceptionService>(
                                 ReachyServiceKind.Perception);
-                            return new ReachyUnavailableBehaviorApplicationService();
+                            return new ReachyBaselineBehaviorApplicationService(runtime);
                         }),
                     new ReachyServiceRegistration(
                         "durable-settings",

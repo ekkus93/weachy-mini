@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using ReachyMini.AppState;
+using ReachyMini.Behavior;
 
 namespace ReachyMini.Application.Tests
 {
@@ -608,6 +609,28 @@ namespace ReachyMini.Application.Tests
                     ReachyServiceCriticality.Optional,
                     events)
             {
+            }
+
+            public ReachyBehaviorServiceSnapshot Snapshot { get; } =
+                new ReachyBehaviorServiceSnapshot(
+                    ReachyBehaviorServiceExecutionState.Idle,
+                    ReachyBaselineBehaviorKind.NeutralIdle,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyBehaviorServiceSnapshotChangedEventArgs>?
+                SnapshotChanged
+            {
+                add { }
+                remove { }
+            }
+
+            public bool TryTriggerGesture(
+                ReachyBaselineBehaviorKind gesture,
+                out string diagnosticCode)
+            {
+                diagnosticCode = "test-double-does-not-execute-gestures";
+                return false;
             }
         }
 

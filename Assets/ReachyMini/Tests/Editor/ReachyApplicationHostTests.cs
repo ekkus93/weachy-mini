@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using ReachyMini.AppState;
+using ReachyMini.Behavior;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
@@ -204,6 +205,28 @@ namespace ReachyMini.Tests
         protected override void OnDispose()
         {
             events.Add($"dispose:{ServiceId}");
+        }
+
+        public ReachyBehaviorServiceSnapshot Snapshot { get; } =
+            new ReachyBehaviorServiceSnapshot(
+                ReachyBehaviorServiceExecutionState.Idle,
+                ReachyBaselineBehaviorKind.NeutralIdle,
+                "test double",
+                0UL);
+
+        public event EventHandler<ReachyBehaviorServiceSnapshotChangedEventArgs>?
+            SnapshotChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool TryTriggerGesture(
+            ReachyBaselineBehaviorKind gesture,
+            out string diagnosticCode)
+        {
+            diagnosticCode = "test-double-does-not-execute-gestures";
+            return false;
         }
     }
 }

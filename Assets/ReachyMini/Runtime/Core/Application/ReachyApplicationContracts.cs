@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using ReachyMini.Behavior;
 
 namespace ReachyMini.AppState
 {
@@ -179,8 +180,66 @@ namespace ReachyMini.AppState
     {
     }
 
+    // RMA-195 phase A: the execution state a behavior service is currently in,
+    // surfaced to the HUD/diagnostics so "why isn't Reachy moving" is always
+    // answerable rather than silently stuck.
+    public enum ReachyBehaviorServiceExecutionState
+    {
+        Idle = 0,
+        ExecutingGesture = 1,
+        SafetyBlocked = 2,
+        Paused = 3,
+    }
+
+    public sealed class ReachyBehaviorServiceSnapshot
+    {
+        public ReachyBehaviorServiceSnapshot(
+            ReachyBehaviorServiceExecutionState executionState,
+            ReachyBaselineBehaviorKind currentBehavior,
+            string statusMessage,
+            ulong revision)
+        {
+            ExecutionState = executionState;
+            CurrentBehavior = currentBehavior;
+            StatusMessage = statusMessage ??
+                throw new ArgumentNullException(nameof(statusMessage));
+            Revision = revision;
+        }
+
+        public ReachyBehaviorServiceExecutionState ExecutionState { get; }
+
+        public ReachyBaselineBehaviorKind CurrentBehavior { get; }
+
+        public string StatusMessage { get; }
+
+        public ulong Revision { get; }
+    }
+
+    public sealed class ReachyBehaviorServiceSnapshotChangedEventArgs : EventArgs
+    {
+        public ReachyBehaviorServiceSnapshotChangedEventArgs(
+            ReachyBehaviorServiceSnapshot snapshot)
+        {
+            Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        public ReachyBehaviorServiceSnapshot Snapshot { get; }
+    }
+
     public interface IReachyBehaviorService : IReachyApplicationService
     {
+        ReachyBehaviorServiceSnapshot Snapshot { get; }
+
+        event EventHandler<ReachyBehaviorServiceSnapshotChangedEventArgs>? SnapshotChanged;
+
+        // Requests a baseline gesture/pose by kind. Only kinds with a
+        // zero-argument request factory that needs neither perception (gaze
+        // targets, RMA-195 phase C) nor a provider-supplied drive signal
+        // (speech energy, phase D) are accepted; everything else fails closed
+        // with a diagnostic code rather than silently no-op'ing.
+        bool TryTriggerGesture(
+            ReachyBaselineBehaviorKind gesture,
+            out string diagnosticCode);
     }
 
     public interface IReachyPersistenceService : IReachyApplicationService
