@@ -2160,25 +2160,92 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-134 — Implement local LLM provider
 
-- [ ] Stream tokens/events on a worker thread.
-- [ ] Support cancellation and conversation reset.
-- [ ] Enforce context and output limits.
-- [ ] Validate generated behavior intent.
-- [ ] Fall back only to an explicit local “unavailable” state, not a hidden cloud request.
+**Status:** Complete (checkbox audit 2026-08-17; underlying work predates this date)
+
+- [x] Stream tokens/events on a worker thread.
+- [x] Support cancellation and conversation reset.
+- [x] Enforce context and output limits.
+- [x] Validate generated behavior intent.
+- [x] Fall back only to an explicit local “unavailable” state, not a hidden cloud request.
+
+**Completion evidence**
+
+- `ReachyLocalLlmProvider.GenerateAsync` dispatches generation via `Task.Run`
+  (`Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Generation.cs:78-86`)
+  and streams fragments through `ILocalLlmStreamSink.OnEventAsync`
+  (`ReachyLocalLlmProvider.Streaming.cs:91-151`); proven non-blocking by
+  `managed/ReachyMini.LocalLlm.Tests/Program.GenerationSuccessTests.cs`.
+- Cancellation/reset rotates a conversation epoch and cancels the active
+  generation (`ReachyLocalLlmProvider.Generation.cs:90-102`,
+  `ReachyLocalLlmProvider.Streaming.cs:223-253`); tested by
+  `managed/ReachyMini.LocalLlm.Tests/Program.ContextAndConcurrencyTests.cs`.
+- Context/output limits enforced against `profile.ContextTokens`
+  (`ReachyLocalLlmProvider.Generation.cs:239-248`) and a per-fragment UTF-8
+  byte budget (`ReachyLocalLlmProvider.Streaming.cs:120-125`); tested by
+  `Program.ContextAndConcurrencyTests.cs` and `Program.IntentAndOutputLimitTests.cs`.
+- Grammar-constrained generation plus a post-hoc parse gate
+  (`ReachyLocalLlmProvider.Generation.cs:254-262`,
+  `ReachyLocalLlmProvider.Streaming.cs:277-307`) rejects malformed intents
+  rather than repairing them; tested by
+  `Program.IntentAndOutputLimitTests.cs:TestInvalidIntentIsNotRepairedAsync`.
+- `GenerateAsync` returns an explicit `LocalLlmGenerationStatus.Unavailable`
+  when not ready and never invokes another provider; no cloud reference
+  exists anywhere under `Assets/.../LocalModels/*.cs`.
+- All wired into permanent CI gate
+  `.github/workflows/rma134-local-llm-provider.yml`.
 
 ## RMA-135 — Implement resource and thermal governor
 
-- [ ] Read Android thermal/memory signals where available.
-- [ ] Define device profiles.
-- [ ] Reduce LLM threads/context/batch or suspend inference before compromising physics.
-- [ ] Report throttling to diagnostics and UI.
-- [ ] Test OOM and cancellation cleanup.
+**Status:** Governance mechanism complete (checkbox audit 2026-08-17); physical
+acceptance criteria remain genuinely open per the thermal finding below, not stale.
+
+- [x] Read Android thermal/memory signals where available.
+- [x] Define device profiles.
+- [x] Reduce LLM threads/context/batch or suspend inference before compromising physics.
+- [x] Report throttling to diagnostics and UI.
+- [x] Test OOM and cancellation cleanup.
+
+**Completion evidence**
+
+- `ReachyAndroidLocalLlmResourceSignalSource.Capture` reads
+  `PowerManager.getCurrentThermalStatus` and `ActivityManager.MemoryInfo`
+  (`Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs:42-150`,
+  `#if UNITY_ANDROID && !UNITY_EDITOR`, verified by a source-content contract
+  test since it cannot run in managed CI:
+  `scripts/tests/test_rma135_resource_governor.py`).
+- `LocalLlmDeviceProfile.Select` defines Conservative/Balanced/Performance
+  tiers by RAM/core count
+  (`Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmResourceGovernor.cs:143-205`),
+  exercised by `managed/ReachyMini.ResourceGovernor.Tests/Program.cs` and
+  `managed/ReachyMini.ResourceGovernor.Integration.Tests/Program.cs`.
+- `LocalLlmResourceGovernor.Evaluate`/`BuildEffectiveProfile` shrinks
+  context/batch/threads under pressure and forces `Suspended`
+  unconditionally on a physics deadline miss
+  (`LocalLlmResourceGovernor.cs:254-397`, fed by
+  `Assets/ReachyMini/Runtime/Core/Application/ReachyLocalLlmPhysicsBudgetTracker.cs:28-58`).
+- `LocalLlmGovernorDiagnosticsSnapshot.Create` and
+  `ReachyProviderGovernorMainScreenProjection.Create` map governor decisions
+  to diagnostics/HUD state
+  (`Assets/ReachyMini/Runtime/Core/LocalModels/LocalLlmGovernorDiagnostics.cs:69-121`,
+  `Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs:51-115`).
+- OOM handled at both the provider (fault/cleanup/reload path,
+  `ReachyLocalLlmProvider.Streaming.cs:309-333`) and governor (latch requiring
+  3 consecutive nominal observations to clear, `LocalLlmResourceGovernor.cs:234,341-346`)
+  layers; tested by `managed/ReachyMini.LocalLlm.Tests/Program.OutOfMemoryTests.cs`
+  and `managed/ReachyMini.ResourceGovernor.Integration.Tests/Program.cs`.
+- All wired into permanent CI gate
+  `.github/workflows/rma135-resource-thermal-governor.yml`.
 
 **Acceptance criteria — local LLM portion**
 
 - [ ] The selected local model loads and produces a validated intent offline on a representative phone.
 - [ ] Physics timing remains within the defined budget during generation.
-- [ ] Model failure is recoverable without restarting the app.
+- [x] Model failure is recoverable without restarting the app -- `LocalLlmProvider.ReloadAsync`
+      performs in-process unload/reload recovery without an app restart
+      (`ReachyLocalLlmProvider.Core.cs:131-277`), proven by
+      `Program.OutOfMemoryTests.cs:TestOutOfMemoryReloadRecoveryAndSecondGenerationAsync`
+      (fault -> explicit reload -> successful second generation) and
+      `Program.ReloadAndDisposeTests.cs`.
 
 **Open finding (2026-08-17)** — physical acceptance on the SM-A546E (mid class) is
 currently blocked by a genuine device thermal characteristic, not a governor bug: the
