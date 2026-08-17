@@ -2556,10 +2556,20 @@ Order of preservation:
 
 ## RMA-183 — Handle memory and storage pressure
 
-- [ ] Respond to low-memory callbacks.
-- [ ] Release caches and optional models without corrupting active state.
-- [ ] Handle low storage during model download and diagnostics export.
-- [ ] Provide cleanup UI.
+**Status:** Complete (2026-08-17)
+
+- [x] Respond to low-memory callbacks.
+- [x] Release caches and optional models without corrupting active state.
+- [x] Handle low storage during model download and diagnostics export.
+- [x] Provide cleanup UI.
+
+**Completion evidence**
+
+- `ReachyApplicationHostBehaviour` subscribes `OnLowMemory` to Unity's `Application.lowMemory` for the life of the host, releasing the camera texture bridge, sweeping every `ReachyMemoryPressureRegistry` participant, and calling `Resources.UnloadUnusedAssets()`, with the outcome recorded via `ReachyDiagnosticEventIds.ApplicationLowMemoryHandled`.
+- The local LLM provider registers itself as an `IReachyMemoryPressureParticipant`: idle models are unloaded and their handle cleared, while a model that is `Loading` or `Generating` reports `RetainedActiveState` and is left untouched, so a memory sweep never corrupts an in-flight interaction.
+- Model package downloads recheck free storage every `StorageRecheckIntervalBytes` (4 MiB) written rather than only at the start, surface a `StoragePressureIOException` on exhaustion, and leave the manifest-bound partial file resumable instead of deleting it.
+- Diagnostic bundle export preflights free space against `ReachyDiagnosticBundleExporter.MaximumBundleBytes` plus a 16 MiB safety reserve before writing, throwing `ReachyDiagnosticBundleInsufficientStorageException`; `ReachyDiagnosticBundleExportCoordinator` catches it and surfaces an actionable "Use Recoverable Storage Cleanup and retry" message instead of a partial/corrupt bundle.
+- The Settings screen exposes a "Clean Up Recoverable Storage" action; `ReachyStorageCleanupCoordinator` removes only its own owned diagnostic artifacts and the shared cache (`Caching.ClearCache()`), refusing reparse points, and explicitly preserves installed models, settings, credentials, and user state.
 
 ## RMA-184 — Representative-device matrix
 
