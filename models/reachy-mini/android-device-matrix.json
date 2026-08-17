@@ -93,7 +93,8 @@
       "measurement_status": "partial_rma184_device_probe_evidence",
       "evidence": [
         "docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md",
-        "docs/validation/RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md"
+        "docs/validation/RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md",
+        "docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md"
       ]
     },
     {

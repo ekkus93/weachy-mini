@@ -2180,6 +2180,16 @@ public interface ITtsProvider : IAsyncDisposable
 - [ ] Physics timing remains within the defined budget during generation.
 - [ ] Model failure is recoverable without restarting the app.
 
+**Open finding (2026-08-17)** — physical acceptance on the SM-A546E (mid class) is
+currently blocked by a genuine device thermal characteristic, not a governor bug: the
+combined MuJoCo physics + local-LLM workload alone drives the SoC into light thermal
+throttling within roughly 15 seconds, even from a measured-cool start, so post-recovery
+generation retries keep hitting real, sustained deadline misses. See
+`docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md` for the full evidence.
+The governor-cadence bug that was masking this (hysteresis recovery starved of samples
+between retries) was found and fixed the same day; the retry mechanism now converges
+reliably and the remaining failure is thermal, not code.
+
 ---
 
 # Phase 15 — OpenAI and OpenAI-compatible cloud providers
