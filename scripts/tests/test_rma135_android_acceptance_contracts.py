@@ -219,6 +219,27 @@ def main() -> None:
     require(
         text, "post_recovery_generation_exhausted", "sustained post-recovery refusal diagnostics"
     )
+    # Diagnoses whether the ~2.7 s of sustained physics pressure observed after a governed
+    # cancellation on real hardware is genuine (deadline misses keep accumulating through the
+    # retry window, e.g. the cancellation/cleanup path itself contending with the physics
+    # thread) or a governor/hysteresis-side artifact (misses plateau while refusals continue).
+    # These are passive reads of counters the worker already produced; they never drive the
+    # retry decision itself, only the evidence.
+    require(
+        text,
+        "worker_deadline_miss_delta=",
+        "per-attempt physics worker deadline-miss telemetry",
+    )
+    require(
+        text,
+        "governor_reasons=",
+        "per-attempt governor decision reasons captured for post-recovery retries",
+    )
+    require(
+        text,
+        "worker_deadline_misses_during_retry_window=",
+        "cumulative retry-window deadline-miss telemetry on sustained refusal",
+    )
     require(
         text,
         "creation.MandatoryPromptTokens",

@@ -456,6 +456,26 @@ namespace ReachyMini.Validation
                 string firstPostRecoveryRefusal = string.Empty;
                 Rma135CollectingSink successSink;
                 LocalLlmGovernedGenerationResult recoveredGeneration;
+
+                // Diagnostic instrumentation only: baseline the physics worker's own timing
+                // counters right where the retry window starts, distinct from afterInjection
+                // (captured much earlier, at the original fault injection). Every attempt
+                // below reports the delta from the PREVIOUS attempt's snapshot, so the
+                // evidence artifact can show whether real deadline misses keep accumulating
+                // throughout the retry window (sustained physics pressure, possibly the
+                // cancellation/cleanup path itself contending with the physics thread) or
+                // plateau while the governor keeps refusing anyway (a governor/hysteresis-side
+                // explanation instead). TryGetLatestTimingSnapshot is a passive read of
+                // counters the worker already produced; it does not perturb the physics or
+                // hysteresis sampling the coordinator performs on its own.
+                ReachySimulationTimingSnapshot postRecoveryBaselineTiming = afterInjection;
+                if (productionRuntime.TryGetLatestTimingSnapshot(
+                    out ReachySimulationTimingSnapshot postRecoveryStartTiming))
+                {
+                    postRecoveryBaselineTiming = postRecoveryStartTiming;
+                }
+                ReachySimulationTimingSnapshot postRecoveryPreviousTiming = postRecoveryBaselineTiming;
+
                 while (true)
                 {
                     ++postRecoveryAttempts;
@@ -474,12 +494,44 @@ namespace ReachyMini.Validation
                             successSink,
                             successTimeout.Token).ConfigureAwait(true);
                     }
+
+                    string workerTelemetry = "worker_snapshot_unavailable";
+                    if (productionRuntime.TryGetLatestTimingSnapshot(
+                        out ReachySimulationTimingSnapshot postRecoveryTiming))
+                    {
+                        ulong stepDelta =
+                            postRecoveryTiming.TotalStepCount >= postRecoveryPreviousTiming.TotalStepCount
+                                ? postRecoveryTiming.TotalStepCount - postRecoveryPreviousTiming.TotalStepCount
+                                : 0UL;
+                        ulong missDelta =
+                            postRecoveryTiming.DeadlineMissCount >= postRecoveryPreviousTiming.DeadlineMissCount
+                                ? postRecoveryTiming.DeadlineMissCount - postRecoveryPreviousTiming.DeadlineMissCount
+                                : 0UL;
+                        workerTelemetry =
+                            "worker_steps=" +
+                            postRecoveryTiming.TotalStepCount.ToString(CultureInfo.InvariantCulture) +
+                            " worker_step_delta=" + stepDelta.ToString(CultureInfo.InvariantCulture) +
+                            " worker_deadline_misses=" +
+                            postRecoveryTiming.DeadlineMissCount.ToString(CultureInfo.InvariantCulture) +
+                            " worker_deadline_miss_delta=" + missDelta.ToString(CultureInfo.InvariantCulture) +
+                            " worker_accumulated_lag_us=" +
+                            (postRecoveryTiming.AccumulatedLagSeconds * 1000000.0).ToString(
+                                "F0", CultureInfo.InvariantCulture) +
+                            " worker_last_step_duration_us=" +
+                            (postRecoveryTiming.LastStepDurationSeconds * 1000000.0).ToString(
+                                "F0", CultureInfo.InvariantCulture);
+                        postRecoveryPreviousTiming = postRecoveryTiming;
+                    }
                     WriteCheckpoint(
                         "post_recovery_generation_completed",
                         "attempt=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
                         " governed_status=" + recoveredGeneration.Status + " provider_status=" +
                         (recoveredGeneration.ProviderResult?.Status.ToString() ?? "none") +
-                        " text_events=" + successSink.TextEventCount.ToString(CultureInfo.InvariantCulture));
+                        " text_events=" + successSink.TextEventCount.ToString(CultureInfo.InvariantCulture) +
+                        " governor_mode=" + (recoveredGeneration.Decision?.Mode.ToString() ?? "none") +
+                        " governor_reasons=" + (recoveredGeneration.Decision?.Reasons.ToString() ?? "none") +
+                        " last_real_physics_state=" + faultPhysics.LastObservedRealState +
+                        " " + workerTelemetry);
                     if (recoveredGeneration.Succeeded)
                     {
                         break;
@@ -502,11 +554,24 @@ namespace ReachyMini.Validation
                 }
                 if (!recoveredGeneration.Succeeded)
                 {
+                    ulong windowSteps =
+                        postRecoveryPreviousTiming.TotalStepCount >= postRecoveryBaselineTiming.TotalStepCount
+                            ? postRecoveryPreviousTiming.TotalStepCount - postRecoveryBaselineTiming.TotalStepCount
+                            : 0UL;
+                    ulong windowMisses =
+                        postRecoveryPreviousTiming.DeadlineMissCount >= postRecoveryBaselineTiming.DeadlineMissCount
+                            ? postRecoveryPreviousTiming.DeadlineMissCount -
+                                postRecoveryBaselineTiming.DeadlineMissCount
+                            : 0UL;
                     TryWriteCheckpoint(
                         "post_recovery_generation_exhausted",
                         "attempts=" + postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) +
                         " first_refusal=" + firstPostRecoveryRefusal +
-                        " last_status=" + recoveredGeneration.Status);
+                        " last_status=" + recoveredGeneration.Status +
+                        " worker_steps_during_retry_window=" +
+                        windowSteps.ToString(CultureInfo.InvariantCulture) +
+                        " worker_deadline_misses_during_retry_window=" +
+                        windowMisses.ToString(CultureInfo.InvariantCulture));
                 }
                 ValidateSuccessfulGeneration(
                     recoveredGeneration,
