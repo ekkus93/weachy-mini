@@ -315,13 +315,6 @@ namespace ReachyMini.AppState
             RequireSettings().CyclePreferredCameraFacing();
         }
 
-        public void RequestCameraPreview()
-        {
-            RequireSettings().ReportUnavailableAction(
-                "Camera preview",
-                "RMA-090 discovers capabilities only; CameraX preview and ImageAnalysis begin in RMA-091");
-        }
-
         public void RequestCameraCalibration()
         {
             RequireSettings().ReportUnavailableAction(
@@ -429,6 +422,7 @@ namespace ReachyMini.AppState
             requestCameraAccess = null;
             diagnosticsProvider = null;
             resetSimulation = null;
+            ReleaseCameraPreview();
         }
 
         private void OnStateChanged(

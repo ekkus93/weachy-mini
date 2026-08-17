@@ -207,12 +207,35 @@ namespace ReachyMini.AppState
             y += 54f;
             if (GUI.Button(
                     new Rect(area.x, y, area.width, 44f),
-                    "PREVIEW / IMAGE ANALYSIS — RMA-091",
+                    CameraPreviewActive
+                        ? "STOP PREVIEW / IMAGE ANALYSIS"
+                        : "START PREVIEW / IMAGE ANALYSIS",
                     smallButtonStyle!))
             {
                 RequestCameraPreview();
             }
             y += 52f;
+            if (CameraPreviewActive)
+            {
+                Texture? previewTexture = CameraPreviewTexture;
+                float previewHeight = area.width * 0.75f;
+                if (previewTexture != null)
+                {
+                    GUI.DrawTexture(
+                        new Rect(area.x, y, area.width, previewHeight),
+                        previewTexture,
+                        ScaleMode.ScaleToFit);
+                }
+                else
+                {
+                    GUI.Label(
+                        new Rect(area.x, y, area.width, 42f),
+                        "Preview session starting; no frame uploaded yet.",
+                        panelBodyStyle!);
+                    previewHeight = 42f;
+                }
+                y += previewHeight + 8f;
+            }
             if (GUI.Button(
                     new Rect(area.x, y, area.width, 44f),
                     $"CALIBRATION  {current.CameraCalibrationProfile}",
