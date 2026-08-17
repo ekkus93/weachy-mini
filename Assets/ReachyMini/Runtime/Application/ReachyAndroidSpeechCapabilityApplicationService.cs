@@ -17,12 +17,19 @@ namespace ReachyMini.AppState
     // ReachyProductionApplicationCompositionProvider and
     // ReachySettingsApplicationCompositionProvider previously stubbed "speech-audio"
     // permanently Unavailable with a message dating to 2026-07-31, before speech was
-    // built; this replaces that with a real, on-device probe. Requests the
-    // RECORD_AUDIO permission if it has not been granted yet, then probes on-device
-    // ASR, system ASR (broader API-level coverage than the explicit on-device path,
-    // which requires API 31+), and offline TTS. The service reports Ready if any one
-    // of the three is usable, matching how a real subsequent interaction would pick
+    // built; this replaces that with a real, on-device probe of on-device ASR,
+    // system ASR (broader API-level coverage than the explicit on-device path, which
+    // requires API 31+), and offline TTS. The service reports Ready if any one of the
+    // three is usable, matching how a real subsequent interaction would pick
     // whichever provider actually works on this device.
+    //
+    // This deliberately never requests the RECORD_AUDIO permission itself: RMA-090
+    // requires that the app not proactively surface a permission dialog on launch
+    // (only in response to an explicit user action), the same contract camera
+    // permission already follows. If the permission has not been granted yet, this
+    // reports Unavailable rather than requesting it; a later explicit user action
+    // (tapping the microphone) is the appropriate place to request it, not
+    // composition startup.
     internal sealed class ReachyAndroidSpeechCapabilityApplicationService :
         ReachyApplicationServiceBase,
         IReachyAudioService
@@ -31,9 +38,6 @@ namespace ReachyMini.AppState
         private static readonly TimeSpan ProbeUtteranceTimeout = TimeSpan.FromSeconds(15.0);
 
         private CancellationTokenSource? probeCancellation;
-#if UNITY_ANDROID
-        private PermissionCallbacks? permissionCallbacks;
-#endif
 
         public ReachyAndroidSpeechCapabilityApplicationService()
             : base(
@@ -52,16 +56,16 @@ namespace ReachyMini.AppState
                 return;
             }
 
-            probeCancellation = new CancellationTokenSource();
 #if UNITY_ANDROID
-            if (Permission.HasUserAuthorizedPermission(Permission.Microphone))
+            if (!Permission.HasUserAuthorizedPermission(Permission.Microphone))
             {
-                _ = ProbeAsync(probeCancellation.Token);
+                SetUnavailable(
+                    "Microphone permission has not been granted. Grant it via an explicit " +
+                    "user action; it is never requested automatically on launch.");
                 return;
             }
-
-            SetDegraded("Requesting microphone permission before probing speech capability.");
-            RequestMicrophonePermission();
+            probeCancellation = new CancellationTokenSource();
+            _ = ProbeAsync(probeCancellation.Token);
 #else
             SetUnavailable(
                 "This build target does not include Android microphone permission support.");
@@ -70,36 +74,10 @@ namespace ReachyMini.AppState
 
         protected override void OnDispose()
         {
-#if UNITY_ANDROID
-            permissionCallbacks = null;
-#endif
             probeCancellation?.Cancel();
             probeCancellation?.Dispose();
             probeCancellation = null;
         }
-
-#if UNITY_ANDROID
-        private void RequestMicrophonePermission()
-        {
-            var callbacks = new PermissionCallbacks();
-            permissionCallbacks = callbacks;
-            callbacks.PermissionGranted += grantedPermission =>
-            {
-                permissionCallbacks = null;
-                CancellationTokenSource? cancellation = probeCancellation;
-                if (cancellation != null)
-                {
-                    _ = ProbeAsync(cancellation.Token);
-                }
-            };
-            callbacks.PermissionDenied += deniedPermission =>
-            {
-                permissionCallbacks = null;
-                SetUnavailable("Microphone permission was denied.");
-            };
-            Permission.RequestUserPermission(Permission.Microphone, callbacks);
-        }
-#endif
 
         private async Task ProbeAsync(CancellationToken cancellationToken)
         {
