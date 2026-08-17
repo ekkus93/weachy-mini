@@ -2609,24 +2609,82 @@ tested (RMA-090/091 camera acquisition, RMA-121/134 speech and local LLM, the
 deterministic behavior planner). Discovered while investigating why the
 main-screen microphone button reported unavailable -- fc715e6/022535f fixed
 the microphone leg specifically; the same gap exists for provider selection,
-perception, behavior, and possibly camera frame acquisition.
+perception, behavior, and camera frame acquisition.
 
-- [ ] Provider selection: `ReachySettingsProviderApplicationService` only
-      counts configured preferences; it never instantiates a real
-      `LocalLlmGovernedGenerationCoordinator` or cloud provider client.
-- [ ] Perception: `ReachyUnavailablePerceptionApplicationService` reports
-      `SetUnavailable` unconditionally in both composition providers.
-- [ ] Behavior: `ReachyUnavailableBehaviorApplicationService` reports
-      `SetUnavailable` unconditionally in both composition providers.
-- [ ] Camera frame acquisition: `ReachyDiscoveredCameraApplicationService`
-      still reports "Frame acquisition remains unavailable until RMA-091" even
-      though RMA-091 shipped as its own acceptance harness -- confirm whether
-      frame acquisition is genuinely unwired here or the message is merely
-      stale, then fix whichever is true.
-- [ ] `ReachyProductionApplicationCompositionProvider` appears to be dead code
-      (not referenced by `ReachyMainScreenBootstrap`, which always constructs
-      `ReachySettingsApplicationCompositionProvider`) -- confirm and remove
-      it, or document why it is intentionally kept.
+**Scoped (2026-08-17)** — four parallel investigations of the real code
+(not guesses) sharpened this into a dependency graph and phased plan. Baseline
+behavior has zero dependency on the other three and can land first; camera
+acquisition and provider selection are independent of each other; perception
+needs camera acquisition; the full closed loop (gaze-tracking behavior,
+provider-driven intents) needs perception and provider both Ready.
+
+- [ ] **Phase A -- baseline behavior (no perception/provider needed).**
+      `ReachyBaselineBehaviorLibrary` + `ReachyBehaviorTrajectoryExecutor` +
+      `ReachyProductionBehaviorControllerTargetSink` can drive safe idle/
+      gesture motion against `ReachyProductionAuthoritativeRuntime` alone;
+      RMA-154's acceptance harness already proves planner -> executor ->
+      target-sink end-to-end (`ReachyRma154VisualServoAcceptance.cs`), minus
+      its single-shot/self-terminating scaffolding. Real new work is
+      service-level, not mechanical: continuous supervised execution instead
+      of RMA-154's fixed-timeout single run, a safety-abort policy driven by
+      `ReachyBehaviorAuthoritativeSafety`, app-pause/resume integration
+      (`IReachyApplicationInterruptionParticipant`), and designing
+      `IReachyBehaviorService`'s currently-empty interface (gesture-trigger +
+      HUD state members; every `IReachy*Service` is a zero-member marker
+      today).
+- [ ] **Phase A -- camera frame acquisition.** Mostly wiring, not new design.
+      `ReachyAndroidCameraAcquisition`/`ReachyAndroidCameraTextureBridge` are
+      already auto-instantiated in the live app by a second, independent
+      bootstrap (`ReachyCameraAcquisitionBootstrap`) -- discovery and
+      acquisition just never rendezvous except via `FindAnyObjectByType`, and
+      `StartPreferred(...)` is called from exactly two places, both gated
+      behind the acceptance-only `reachy_rma091_acceptance` launch-intent
+      extra. No UI ever renders the resulting texture either
+      (`ReachyCameraHomographyWarpPipeline` is never instantiated anywhere).
+      Needs: thread the acquisition/bridge instances into
+      `ReachySettingsApplicationCompositionProvider` instead of two
+      disconnected bootstraps, a real user-triggered start (mirroring the
+      mic's explicit-action requirement -- CameraX binding itself pops no
+      fresh permission dialog once already Granted, so auto-start on Granted
+      is technically possible, but the acquisition state machine's
+      start/stop toggle shape suggests explicit-action was the intent; this
+      is a product decision to confirm), and something to actually render
+      the preview.
+- [ ] **Phase B -- provider selection, local LLM subset.** The largest single
+      piece. Local LLM is fully built and proven end to end (admission ->
+      create -> govern -> recreate -> dispose via
+      `LocalLlmGovernedGenerationCoordinator` /
+      `LocalLlmProviderRecreation.ForCurrentEnvelopeAsync`), but real design
+      decisions remain: `ReachyApplicationServiceBase.OnInitialize()` is
+      synchronous while model loading is not (naive async-void would race
+      the base class's auto-`SetReady`); lazy-vs-eager loading given a ~700
+      MB artifact and physics-worker memory coexistence (the exact hazard
+      RMA-135 exists to police); no mapping exists yet from settings' coarse
+      `ReachyProviderSelection` enum to a concrete `LocalModelManifest`; and
+      `IReachyProviderService` needs real members (today a zero-member
+      marker) that perception/behavior can actually consume.
+- [ ] **Phase C -- perception, tracking-only.** Depends on Phase A's camera
+      acquisition. `ReachyBoundedWorldModel` +
+      `ReachyOnDeviceLightweightTracker` + `ReachyAndroidMlKitTrackingBackend`
+      are real and proven by RMA-111's acceptance harness, but against a
+      decoded static fixture, not a live frame -- needs a new
+      `IReachyVisionFrameSource` bridge from `ReachyAndroidCameraTextureBridge`
+      output, plus real `IReachyPerceptionService` interface design
+      (snapshot accessor, changed event, tracked-object query surface).
+- [ ] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
+      full closed loop.** No cloud LLM provider class exists at all today
+      (unlike ASR/TTS/VLM cloud, which do) -- this is new code, not wiring,
+      following the OpenAI-compatible ASR/TTS providers as the pattern. VLM
+      scene description (`ReachyVlmScheduler`,
+      `ReachyOpenAiVisionLanguageProviders`) and provider-driven behavior
+      intents (`ReachyBehaviorIntentContracts`) both gate on this landing
+      first. First cloud-provider enablement must route through
+      `ReachyProviderFallbackPolicyEngine`'s privacy-boundary confirmation,
+      matching the existing local/cloud disclosure contract.
+- [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
+      (never referenced by `ReachyMainScreenBootstrap`, which always
+      constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,
+      or document why it is intentionally kept.
 
 Blocks RMA-190's "On-device ASR -> local LLM -> behavior -> offline TTS" and
 "Front camera -> head rotation -> transformed Reachy-eye frame" scenarios, and
