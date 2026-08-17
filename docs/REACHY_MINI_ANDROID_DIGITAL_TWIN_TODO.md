@@ -2598,7 +2598,49 @@ Order of preservation:
 
 # Phase 20 — End-to-end validation and release gate
 
+## RMA-195 — Wire the application composition to real subsystems
+
+**Open finding (2026-08-17)** — the real, shipping composition
+(`ReachyMainScreenBootstrap` -> `ReachySettingsApplicationCompositionProvider`,
+confirmed by tracing the Bootstrap scene's runtime install path, not guessed)
+still permanently stubs every service on the path from user input to robot
+behavior, even though each underlying subsystem is real and independently
+tested (RMA-090/091 camera acquisition, RMA-121/134 speech and local LLM, the
+deterministic behavior planner). Discovered while investigating why the
+main-screen microphone button reported unavailable -- fc715e6/022535f fixed
+the microphone leg specifically; the same gap exists for provider selection,
+perception, behavior, and possibly camera frame acquisition.
+
+- [ ] Provider selection: `ReachySettingsProviderApplicationService` only
+      counts configured preferences; it never instantiates a real
+      `LocalLlmGovernedGenerationCoordinator` or cloud provider client.
+- [ ] Perception: `ReachyUnavailablePerceptionApplicationService` reports
+      `SetUnavailable` unconditionally in both composition providers.
+- [ ] Behavior: `ReachyUnavailableBehaviorApplicationService` reports
+      `SetUnavailable` unconditionally in both composition providers.
+- [ ] Camera frame acquisition: `ReachyDiscoveredCameraApplicationService`
+      still reports "Frame acquisition remains unavailable until RMA-091" even
+      though RMA-091 shipped as its own acceptance harness -- confirm whether
+      frame acquisition is genuinely unwired here or the message is merely
+      stale, then fix whichever is true.
+- [ ] `ReachyProductionApplicationCompositionProvider` appears to be dead code
+      (not referenced by `ReachyMainScreenBootstrap`, which always constructs
+      `ReachySettingsApplicationCompositionProvider`) -- confirm and remove
+      it, or document why it is intentionally kept.
+
+Blocks RMA-190's "On-device ASR -> local LLM -> behavior -> offline TTS" and
+"Front camera -> head rotation -> transformed Reachy-eye frame" scenarios, and
+RMA-194's "Selected benchmark-backed local LLM works without blocking physics"
+and "Behavior planner validates all AI output" release criteria: none of these
+can be exercised end-to-end in the live app until this composition wiring
+exists, regardless of how well each underlying subsystem tests in isolation.
+
 ## RMA-190 — Build automated end-to-end scenarios
+
+**Blocked by RMA-195** — every scenario below needs the composition layer
+actually wired to provider selection, perception, and behavior, not just the
+underlying subsystems tested in isolation.
+
 
 - [ ] Offline launch with no network.
 - [ ] MuJoCo full model load and neutral reset.
