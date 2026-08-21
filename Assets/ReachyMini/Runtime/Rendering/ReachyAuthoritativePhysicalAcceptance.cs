@@ -91,30 +91,10 @@ namespace ReachyMini.Rendering
                 yield break;
             }
 
-            // RMA-195 phase A made the "behavior" service a real,
-            // continuously-running loop that re-plans NeutralIdle against
-            // this same runtime roughly every 250ms. Left running, it races
-            // this acceptance's own SubmitPositionTargets(PoseA/PoseB) calls
-            // for control of the robot's joints -- whichever command lands
-            // last before a pose sample wins, which is exactly why
-            // body_yaw_moved intermittently reads false even though the
-            // acceptance's own command was accepted. Suspend it for the
-            // duration of this run and resume it unconditionally afterwards
-            // (including on every Fail() exit path below).
-            IReachyApplicationInterruptionParticipant? behavior =
-                FindBehaviorInterruptionParticipant();
-            behavior?.PauseForApplicationInterruption();
-            try
-            {
-                yield return RunAcceptanceAfterSuspendingBehavior(
-                    runtime,
-                    root,
-                    renderer);
-            }
-            finally
-            {
-                behavior?.ResumeAfterApplicationInterruption();
-            }
+            yield return RunAcceptanceAfterSuspendingBehavior(
+                runtime,
+                root,
+                renderer);
         }
 
         private IReachyApplicationInterruptionParticipant?
@@ -192,6 +172,46 @@ namespace ReachyMini.Rendering
                 yield break;
             }
 
+            // RMA-195 phase A made the "behavior" service a real,
+            // continuously-running loop that re-plans NeutralIdle against
+            // this same runtime roughly every 250ms. By this point the
+            // runtime is confirmed Running, which only happens after
+            // ReachyApplicationHostBehaviour.StartApplication() has already
+            // constructed and initialized every service in the composition
+            // (including behavior) -- looking this up any earlier (e.g.
+            // before the wait loop above) is unreliable, since the host's
+            // own Start() may not have run yet on this same frame. Left
+            // running, the loop races this acceptance's own
+            // SubmitPositionTargets(PoseA/PoseB) calls for control of the
+            // robot's joints -- whichever command lands last before a pose
+            // sample wins, which is exactly why body_yaw_moved
+            // intermittently reads false even though the acceptance's own
+            // command was accepted. Suspend it for the duration of the pose
+            // sequence and resume it unconditionally afterwards (including
+            // on every Fail() exit path below).
+            IReachyApplicationInterruptionParticipant? behavior =
+                FindBehaviorInterruptionParticipant();
+            behavior?.PauseForApplicationInterruption();
+            try
+            {
+                yield return DrivePoseSequence(
+                    runtime,
+                    root,
+                    renderer,
+                    baselineState);
+            }
+            finally
+            {
+                behavior?.ResumeAfterApplicationInterruption();
+            }
+        }
+
+        private IEnumerator DrivePoseSequence(
+            ReachyProductionAuthoritativeRuntime runtime,
+            ReachyPresentationRoot root,
+            ReachyAuthoritativeRenderer renderer,
+            ReachyAuthoritativePoseSnapshot baselineState)
+        {
             ReachyPresentationBody[] bodies = root.GetCanonicalBodies();
             Dictionary<string, BodyWorldPose> baseline = CaptureWorldPoses(bodies);
             ulong initialSequence = baselineState.Sequence;
