@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using ReachyMini.AppState;
 using ReachyMini.Presentation;
 using ReachyMini.Simulation;
 using UnityEngine;
@@ -90,6 +91,59 @@ namespace ReachyMini.Rendering
                 yield break;
             }
 
+            // RMA-195 phase A made the "behavior" service a real,
+            // continuously-running loop that re-plans NeutralIdle against
+            // this same runtime roughly every 250ms. Left running, it races
+            // this acceptance's own SubmitPositionTargets(PoseA/PoseB) calls
+            // for control of the robot's joints -- whichever command lands
+            // last before a pose sample wins, which is exactly why
+            // body_yaw_moved intermittently reads false even though the
+            // acceptance's own command was accepted. Suspend it for the
+            // duration of this run and resume it unconditionally afterwards
+            // (including on every Fail() exit path below).
+            IReachyApplicationInterruptionParticipant? behavior =
+                FindBehaviorInterruptionParticipant();
+            behavior?.PauseForApplicationInterruption();
+            try
+            {
+                yield return RunAcceptanceAfterSuspendingBehavior(
+                    runtime,
+                    root,
+                    renderer);
+            }
+            finally
+            {
+                behavior?.ResumeAfterApplicationInterruption();
+            }
+        }
+
+        private IReachyApplicationInterruptionParticipant?
+            FindBehaviorInterruptionParticipant()
+        {
+            ReachyApplicationHostBehaviour? hostBehaviour =
+                GetComponentInChildren<ReachyApplicationHostBehaviour>();
+            ReachyApplicationHost? host = hostBehaviour?.Host;
+            if (host == null)
+            {
+                return null;
+            }
+            try
+            {
+                return host.GetRequiredService<IReachyBehaviorService>(
+                        ReachyServiceKind.Behavior)
+                    as IReachyApplicationInterruptionParticipant;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        private IEnumerator RunAcceptanceAfterSuspendingBehavior(
+            ReachyProductionAuthoritativeRuntime runtime,
+            ReachyPresentationRoot root,
+            ReachyAuthoritativeRenderer renderer)
+        {
             PublishProgress(
                 "waiting_for_runtime",
                 "Waiting for the production simulator and renderer to bind.");

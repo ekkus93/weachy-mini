@@ -138,6 +138,57 @@ namespace ReachyMini.AppState
 #if UNITY_ANDROID && !UNITY_EDITOR
             ReachyProductionAuthoritativeRuntime runtime =
                 await WaitForRuntimeAsync();
+
+            // RMA-195 phase A made the "behavior" service a real,
+            // continuously-running loop that re-plans NeutralIdle against
+            // this same runtime roughly every 250ms. Left running, it races
+            // this acceptance's own ResetNeutral() calls and its own
+            // ReachyProductionBehaviorControllerTargetSink usage below for
+            // control of the robot's joints. Suspend it for the duration of
+            // this run and resume it unconditionally afterwards.
+            IReachyApplicationInterruptionParticipant? behavior =
+                FindBehaviorInterruptionParticipant();
+            behavior?.PauseForApplicationInterruption();
+            try
+            {
+                return await RunAfterSuspendingBehaviorAsync(runtime);
+            }
+            finally
+            {
+                behavior?.ResumeAfterApplicationInterruption();
+            }
+#else
+            await Task.Yield();
+            throw new PlatformNotSupportedException(
+                "RMA-154 physical acceptance requires an Android player build.");
+#endif
+        }
+
+        private static IReachyApplicationInterruptionParticipant?
+            FindBehaviorInterruptionParticipant()
+        {
+            ReachyApplicationHostBehaviour? hostBehaviour =
+                Object.FindAnyObjectByType<ReachyApplicationHostBehaviour>();
+            ReachyApplicationHost? host = hostBehaviour?.Host;
+            if (host == null)
+            {
+                return null;
+            }
+            try
+            {
+                return host.GetRequiredService<IReachyBehaviorService>(
+                        ReachyServiceKind.Behavior)
+                    as IReachyApplicationInterruptionParticipant;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
+
+        private static async Task<Report> RunAfterSuspendingBehaviorAsync(
+            ReachyProductionAuthoritativeRuntime runtime)
+        {
             using var overallTimeout = new CancellationTokenSource(
                 OverallAcceptanceTimeoutMilliseconds);
             CancellationToken cancellationToken = overallTimeout.Token;
@@ -268,11 +319,6 @@ namespace ReachyMini.AppState
                 syntheticFeedback.ProducedFrameCount,
                 syntheticFeedback.ObservedPhysicalMotion,
                 syntheticFeedback.ObservedPostMotionTransformedFrame);
-#else
-            await Task.Yield();
-            throw new PlatformNotSupportedException(
-                "RMA-154 physical acceptance requires an Android player build.");
-#endif
         }
 
         private static async Task<ReachyProductionAuthoritativeRuntime>
