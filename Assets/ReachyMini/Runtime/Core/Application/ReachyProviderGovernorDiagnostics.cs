@@ -1,6 +1,8 @@
 #nullable enable
 
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using ReachyMini.LocalModels;
 
 namespace ReachyMini.AppState
@@ -8,6 +10,19 @@ namespace ReachyMini.AppState
     public interface IReachyProviderGovernorDiagnosticsSource
     {
         LocalLlmGovernorDiagnosticsSnapshot GovernorDiagnostics { get; }
+    }
+
+    // RMA-195 phase B: an optional capability an IReachyProviderService
+    // implementation can be `as`-cast to when it actually offers local-LLM
+    // text generation. Kept separate from IReachyProviderService itself
+    // because that boundary is shared by ASR/TTS/VLM providers too, which
+    // have no local-LLM-shaped generation entry point.
+    public interface ILocalLlmProviderCapability
+    {
+        Task<LocalLlmGovernedGenerationResult> GenerateAsync(
+            LocalLlmGenerationRequest request,
+            ILocalLlmStreamSink sink,
+            CancellationToken cancellationToken);
     }
 
     public sealed class ReachyProviderGovernorMainScreenProjection

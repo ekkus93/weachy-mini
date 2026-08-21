@@ -172,8 +172,81 @@ namespace ReachyMini.AppState
     {
     }
 
+    // RMA-195 phase B: the execution state a provider service is currently
+    // in, surfaced to the HUD/diagnostics the same way
+    // ReachyBehaviorServiceExecutionState answers "why isn't Reachy
+    // moving" for behavior. NotLoaded/Loading/Ready/Generating mirror
+    // LocalLlmProviderState (ReachyLocalLlmContracts.cs); Suspended
+    // reflects the RMA-135 resource governor holding inference back rather
+    // than a fault.
+    public enum ReachyProviderServiceExecutionState
+    {
+        NotLoaded = 0,
+        Loading = 1,
+        Ready = 2,
+        Generating = 3,
+        Suspended = 4,
+        Faulted = 5,
+    }
+
+    public sealed class ReachyProviderServiceSnapshot
+    {
+        public ReachyProviderServiceSnapshot(
+            ReachyProviderServiceExecutionState executionState,
+            string activeModelId,
+            string statusMessage,
+            ulong revision)
+        {
+            ExecutionState = executionState;
+            ActiveModelId = activeModelId ??
+                throw new ArgumentNullException(nameof(activeModelId));
+            StatusMessage = statusMessage ??
+                throw new ArgumentNullException(nameof(statusMessage));
+            Revision = revision;
+        }
+
+        public ReachyProviderServiceExecutionState ExecutionState { get; }
+
+        // Empty when no model is loaded (NotLoaded/Loading/Faulted).
+        public string ActiveModelId { get; }
+
+        public string StatusMessage { get; }
+
+        public ulong Revision { get; }
+    }
+
+    public sealed class ReachyProviderServiceSnapshotChangedEventArgs : EventArgs
+    {
+        public ReachyProviderServiceSnapshotChangedEventArgs(
+            ReachyProviderServiceSnapshot snapshot)
+        {
+            Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        public ReachyProviderServiceSnapshot Snapshot { get; }
+    }
+
+    // Deliberately generic across every ReachyProviderKind (ASR/TTS/LLM/VLM),
+    // matching the single ReachyServiceKind.Provider boundary they all share
+    // -- ProviderSnapshot/ProviderSnapshotChanged answer only "what is this
+    // provider service doing right now". Kind-specific capabilities (e.g.
+    // local-LLM text generation) are exposed through separate, optional
+    // capability interfaces implementers can be `as`-cast to
+    // (ILocalLlmProviderCapability, IReachyProviderGovernorDiagnosticsSource
+    // in ReachyProviderGovernorDiagnostics.cs), not folded in here.
+    //
+    // Named "ProviderSnapshot", not the bare "Snapshot" IReachyBehaviorService
+    // uses, because several test doubles in this codebase deliberately
+    // implement every IReachy*Service marker interface on one class to
+    // exercise the full 8-kind composition; a same-named "Snapshot" member
+    // on two of those interfaces (different return types) would force
+    // explicit interface implementation everywhere such a double exists.
     public interface IReachyProviderService : IReachyApplicationService
     {
+        ReachyProviderServiceSnapshot ProviderSnapshot { get; }
+
+        event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
+            ProviderSnapshotChanged;
     }
 
     public interface IReachyPerceptionService : IReachyApplicationService

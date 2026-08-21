@@ -578,6 +578,20 @@ namespace ReachyMini.Application.Tests
                     failInitialization)
             {
             }
+
+            public ReachyProviderServiceSnapshot ProviderSnapshot { get; } =
+                new ReachyProviderServiceSnapshot(
+                    ReachyProviderServiceExecutionState.NotLoaded,
+                    string.Empty,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
+                ProviderSnapshotChanged
+            {
+                add { }
+                remove { }
+            }
         }
 
         private sealed class PerceptionService :

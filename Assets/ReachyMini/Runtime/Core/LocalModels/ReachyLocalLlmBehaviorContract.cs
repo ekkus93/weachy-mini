@@ -22,6 +22,13 @@ namespace ReachyMini.LocalModels
         internal const string GrammarSha256 =
             "2c333f6bb576e025c80b0e4050bbc816247817ebe6f145361360e6eec71eb734";
 
+        private static readonly string[] SelectedManifestStopSequences =
+        {
+            "<|im_end|>",
+            "<|endoftext|>",
+        };
+        private static readonly string[] SelectedManifestAndroidAbis = { "arm64-v8a" };
+
         internal const string SystemPrompt =
             "You are Reachy Mini's high-level behavior-intent generator. Return exactly one JSON object and nothing else. Do not emit Markdown, explanations, reasoning, XML, thinking tags, or executable code. Never emit joint angles, motor commands, torques, velocities, raw positions, or Cartesian coordinates.\n" +
             "\n" +
@@ -162,11 +169,11 @@ namespace ReachyMini.LocalModels
                 new LocalModelInferenceProfile(
                     40960,
                     "GGUF-embedded template is authoritative for RMA-134 generation.",
-                    new[] { "<|im_end|>", "<|endoftext|>" },
+                    SelectedManifestStopSequences,
                     new LocalModelMemoryEstimate(740380672L, 2048, 256),
                     4),
                 new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
+                    SelectedManifestAndroidAbis,
                     26,
                     Array.Empty<string>(),
                     740380672L,

@@ -257,6 +257,20 @@ namespace ReachyMini.Core.Tests
                 return false;
             }
 
+            public ReachyProviderServiceSnapshot ProviderSnapshot { get; } =
+                new ReachyProviderServiceSnapshot(
+                    ReachyProviderServiceExecutionState.NotLoaded,
+                    string.Empty,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
+                ProviderSnapshotChanged
+            {
+                add { }
+                remove { }
+            }
+
             protected override void OnInitialize()
             {
                 SetReady("ready");
