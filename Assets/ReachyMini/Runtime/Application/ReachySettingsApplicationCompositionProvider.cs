@@ -139,7 +139,7 @@ namespace ReachyMini.AppState
                             return new ReachyUnavailablePerceptionApplicationService();
                         }),
                     new ReachyServiceRegistration(
-                        "behavior",
+                        "baseline-behavior",
                         ReachyServiceKind.Behavior,
                         ReachyServiceCriticality.Optional,
                         new[]
