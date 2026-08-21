@@ -279,6 +279,20 @@ namespace ReachyMini.AppState
             SetUnavailable(
                 "No local or cloud provider is configured; provider selection begins in RMA-082.");
         }
+
+        public ReachyProviderServiceSnapshot ProviderSnapshot { get; } =
+            new ReachyProviderServiceSnapshot(
+                ReachyProviderServiceExecutionState.NotLoaded,
+                string.Empty,
+                "provider selection unavailable",
+                0UL);
+
+        public event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
+            ProviderSnapshotChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     internal sealed class ReachyUnavailablePerceptionApplicationService :

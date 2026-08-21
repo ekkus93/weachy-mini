@@ -118,9 +118,10 @@ namespace ReachyMini.AppState
                         ReachyServiceKind.Provider,
                         ReachyServiceCriticality.Optional,
                         new[] { ReachyServiceKind.Persistence },
-                        resolver => new ReachySettingsProviderApplicationService(
+                        resolver => new ReachyLocalLlmProviderApplicationService(
                             resolver.GetRequired<ReachySettingsPersistenceApplicationService>(
-                                ReachyServiceKind.Persistence).Settings)),
+                                ReachyServiceKind.Persistence).Settings,
+                            runtime)),
                     new ReachyServiceRegistration(
                         "perception",
                         ReachyServiceKind.Perception,
@@ -206,67 +207,6 @@ namespace ReachyMini.AppState
                                 ReachyServiceKind.Persistence),
                             discovery)),
                 });
-        }
-    }
-
-    internal sealed class ReachySettingsProviderApplicationService :
-        ReachyApplicationServiceBase,
-        IReachyProviderService
-    {
-        private readonly ReachySettingsStateStore settings;
-
-        public ReachySettingsProviderApplicationService(
-            ReachySettingsStateStore settings)
-            : base(
-                "provider-selection",
-                ReachyServiceKind.Provider,
-                ReachyServiceCriticality.Optional)
-        {
-            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        }
-
-        protected override void OnInitialize()
-        {
-            settings.Changed += OnSettingsChanged;
-            PublishCurrentHealth();
-        }
-
-        protected override void OnDispose()
-        {
-            settings.Changed -= OnSettingsChanged;
-        }
-
-        private void OnSettingsChanged(
-            object? sender,
-            ReachySettingsChangedEventArgs eventArgs)
-        {
-            PublishCurrentHealth();
-        }
-
-        private void PublishCurrentHealth()
-        {
-            int configured = 0;
-            int networkRequired = 0;
-            foreach (ReachyProviderSelection provider in
-                     settings.Current.ProviderSelections)
-            {
-                if (provider.Execution != ReachyProviderExecution.Unconfigured)
-                {
-                    ++configured;
-                }
-                if (provider.Connectivity ==
-                    ReachyConnectivityRequirement.NetworkRequired)
-                {
-                    ++networkRequired;
-                }
-            }
-
-            SetUnavailable(
-                configured == 0
-                    ? "No ASR, TTS, LLM, or VLM provider is configured."
-                    : $"{configured} provider preference(s) are stored, including " +
-                      $"{networkRequired} network-required selection(s), but provider " +
-                      "runtime integrations and credentials are not installed.");
         }
     }
 

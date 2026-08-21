@@ -228,5 +228,19 @@ namespace ReachyMini.Tests
             diagnosticCode = "test-double-does-not-execute-gestures";
             return false;
         }
+
+        public ReachyProviderServiceSnapshot ProviderSnapshot { get; } =
+            new ReachyProviderServiceSnapshot(
+                ReachyProviderServiceExecutionState.NotLoaded,
+                string.Empty,
+                "test double",
+                0UL);
+
+        public event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
+            ProviderSnapshotChanged
+        {
+            add { }
+            remove { }
+        }
     }
 }
