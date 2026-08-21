@@ -26,7 +26,7 @@ namespace ReachyMini.Validation
                 "artifact_verified",
                 "bytes=" + artifact.bytes.ToString(CultureInfo.InvariantCulture) + " sha256=" + artifact.sha256);
 
-            LocalModelManifest manifest = CreateSelectedManifest();
+            LocalModelManifest manifest = LocalLlmBehaviorContract.CreateSelectedManifest();
             LocalModelApprovedArtifact approvedArtifact = new LocalModelApprovedArtifact(
                 LocalLlmBehaviorContract.ManifestId,
                 LocalLlmBehaviorContract.ModelId,
@@ -389,40 +389,6 @@ namespace ReachyMini.Validation
                 throw new InvalidOperationException("RMA-134 staged model SHA-256 mismatch: " + hash + ".");
             }
             return new Rma134ArtifactVerification { bytes = file.Length, sha256 = hash };
-        }
-
-        private static LocalModelManifest CreateSelectedManifest()
-        {
-            return new LocalModelManifest(
-                1,
-                new LocalModelIdentity(
-                    LocalLlmBehaviorContract.ManifestId,
-                    LocalLlmBehaviorContract.ModelId,
-                    "Qwen3 0.6B Q4_K_M",
-                    "q4_k_m-8e42d41",
-                    new Uri("https://huggingface.co/Qwen/Qwen3-0.6B-GGUF"),
-                    "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
-                    "Apache-2.0",
-                    false,
-                    string.Empty),
-                new LocalModelRuntimeRequirement("reachy_llama", 2, false),
-                new LocalModelArtifact(
-                    "qwen3/qwen3-0.6b-q4_k_m.gguf",
-                    LocalLlmBehaviorContract.ArtifactBytes,
-                    LocalLlmBehaviorContract.ArtifactSha256),
-                new LocalModelGgufMetadata(3, "qwen3", "Q4_K_M", 596049920L, "gpt2", "qwen2"),
-                new LocalModelInferenceProfile(
-                    40960,
-                    "GGUF-embedded template is authoritative for RMA-134 generation.",
-                    new[] { "<|im_end|>", "<|endoftext|>" },
-                    new LocalModelMemoryEstimate(740380672L, 2048, 256),
-                    4),
-                new LocalModelDeviceCompatibility(
-                    new[] { "arm64-v8a" },
-                    26,
-                    Array.Empty<string>(),
-                    740380672L,
-                    2));
         }
 
         private static LocalLlmGenerationRequest CreateRequest(string requestId, string prompt)

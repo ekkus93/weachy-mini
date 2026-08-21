@@ -124,6 +124,55 @@ namespace ReachyMini.LocalModels
             }
         }
 
+        /// <summary>
+        /// The exact RMA-133-selected Qwen3 manifest this contract validates against,
+        /// shared by every production/acceptance caller that needs a concrete
+        /// <see cref="LocalModelManifest"/> instance rather than just the identity
+        /// constants above. Previously hand-duplicated identically in both
+        /// ReachyRma134LocalLlmAcceptance and ReachyRma135ResourceGovernorAcceptance;
+        /// RMA-195 phase B's provider-selection wiring is a third caller that needs the
+        /// same manifest, so this is the shared source of truth instead of a third copy.
+        /// </summary>
+        internal static LocalModelManifest CreateSelectedManifest()
+        {
+            return new LocalModelManifest(
+                1,
+                new LocalModelIdentity(
+                    ManifestId,
+                    ModelId,
+                    "Qwen3 0.6B Q4_K_M",
+                    "q4_k_m-8e42d41",
+                    new Uri("https://huggingface.co/Qwen/Qwen3-0.6B-GGUF"),
+                    "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+                    "Apache-2.0",
+                    false,
+                    string.Empty),
+                new LocalModelRuntimeRequirement("reachy_llama", 2, false),
+                new LocalModelArtifact(
+                    "qwen3/qwen3-0.6b-q4_k_m.gguf",
+                    ArtifactBytes,
+                    ArtifactSha256),
+                new LocalModelGgufMetadata(
+                    3,
+                    "qwen3",
+                    "Q4_K_M",
+                    596049920L,
+                    "gpt2",
+                    "qwen2"),
+                new LocalModelInferenceProfile(
+                    40960,
+                    "GGUF-embedded template is authoritative for RMA-134 generation.",
+                    new[] { "<|im_end|>", "<|endoftext|>" },
+                    new LocalModelMemoryEstimate(740380672L, 2048, 256),
+                    4),
+                new LocalModelDeviceCompatibility(
+                    new[] { "arm64-v8a" },
+                    26,
+                    Array.Empty<string>(),
+                    740380672L,
+                    2));
+        }
+
         internal static bool TryParseIntent(
             string response,
             out ReachyBehaviorIntent? intent,
