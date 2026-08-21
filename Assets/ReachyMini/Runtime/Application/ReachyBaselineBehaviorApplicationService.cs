@@ -48,6 +48,15 @@ namespace ReachyMini.AppState
         private ReachyBaselineBehaviorRequest currentTarget =
             ReachyBaselineBehaviorRequest.NeutralIdle();
 
+        // Guards snapshot publishes against a race where a background loop
+        // iteration is already past its cancellation check (and therefore
+        // about to publish a stale Idle/SafetyBlocked snapshot) at the exact
+        // moment Pause/Dispose stops it. StopLoop() bumps this under
+        // snapshotSync before cancelling, so any publish still tagged with
+        // the old generation is discarded instead of racing the Paused
+        // snapshot published right after StopLoop() returns.
+        private int generation;
+
         // Written by TryTriggerGesture (any caller thread) and consumed by
         // RunLoopAsync (the background loop thread) -- both sides go through
         // Interlocked.Exchange so the field is not also declared `volatile`
@@ -152,7 +161,12 @@ namespace ReachyMini.AppState
         {
             var cancellation = new CancellationTokenSource();
             loopCancellation = cancellation;
-            _ = Task.Run(() => RunLoopAsync(cancellation.Token));
+            int loopGeneration;
+            lock (snapshotSync)
+            {
+                loopGeneration = ++generation;
+            }
+            _ = Task.Run(() => RunLoopAsync(cancellation.Token, loopGeneration));
         }
 
         private void StopLoop()
@@ -162,6 +176,15 @@ namespace ReachyMini.AppState
             if (cancellation == null)
             {
                 return;
+            }
+            lock (snapshotSync)
+            {
+                // Invalidate the current generation before cancelling so any
+                // publish already past this loop's own cancellation check
+                // (see RunLoopAsync) is dropped by PublishSnapshot rather
+                // than racing whatever the caller (Pause/Dispose) publishes
+                // next.
+                ++generation;
             }
             cancellation.Cancel();
             cancellation.Dispose();
@@ -173,7 +196,9 @@ namespace ReachyMini.AppState
             // window here does not race a fresh StartLoop().
         }
 
-        private async Task RunLoopAsync(CancellationToken cancellationToken)
+        private async Task RunLoopAsync(
+            CancellationToken cancellationToken,
+            int loopGeneration)
         {
             try
             {
@@ -193,7 +218,8 @@ namespace ReachyMini.AppState
                         PublishSnapshot(
                             ReachyBehaviorServiceExecutionState.Idle,
                             currentTarget.Kind,
-                            "Waiting for the authoritative simulation to start.");
+                            "Waiting for the authoritative simulation to start.",
+                            loopGeneration);
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
                         continue;
@@ -204,7 +230,8 @@ namespace ReachyMini.AppState
                         PublishSnapshot(
                             ReachyBehaviorServiceExecutionState.SafetyBlocked,
                             currentTarget.Kind,
-                            "Motion is blocked by an active safety interlock.");
+                            "Motion is blocked by an active safety interlock.",
+                            loopGeneration);
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
                         continue;
@@ -223,7 +250,8 @@ namespace ReachyMini.AppState
                             ReachyBehaviorServiceExecutionState.Idle,
                             currentTarget.Kind,
                             "Baseline plan '" + planResult.PlannerResult.DiagnosticCode +
-                                "' was not produced; retrying neutral idle.");
+                                "' was not produced; retrying neutral idle.",
+                            loopGeneration);
                         currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
@@ -233,7 +261,8 @@ namespace ReachyMini.AppState
                     PublishSnapshot(
                         ReachyBehaviorServiceExecutionState.ExecutingGesture,
                         currentTarget.Kind,
-                        "Executing " + currentTarget.Kind + ".");
+                        "Executing " + currentTarget.Kind + ".",
+                        loopGeneration);
                     ReachyBehaviorTrajectoryExecutionResult executionResult =
                         await executor.ExecuteAsync(
                             planResult.PlannerResult.Plan,
@@ -252,7 +281,8 @@ namespace ReachyMini.AppState
                             currentTarget.Kind,
                             "Trajectory submission rejected (" +
                                 executionResult.DiagnosticCode +
-                                "); reverting to neutral idle.");
+                                "); reverting to neutral idle.",
+                            loopGeneration);
                         currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
@@ -266,7 +296,8 @@ namespace ReachyMini.AppState
                     PublishSnapshot(
                         ReachyBehaviorServiceExecutionState.Idle,
                         currentTarget.Kind,
-                        "Baseline behavior settled on " + currentTarget.Kind + ".");
+                        "Baseline behavior settled on " + currentTarget.Kind + ".",
+                        loopGeneration);
                     await Task.Delay(SustainedReplanIntervalMilliseconds, cancellationToken)
                         .ConfigureAwait(false);
                 }
@@ -324,11 +355,22 @@ namespace ReachyMini.AppState
         private void PublishSnapshot(
             ReachyBehaviorServiceExecutionState state,
             ReachyBaselineBehaviorKind kind,
-            string message)
+            string message,
+            int? requiredGeneration = null)
         {
             ReachyBehaviorServiceSnapshot next;
             lock (snapshotSync)
             {
+                if (requiredGeneration.HasValue &&
+                    requiredGeneration.Value != generation)
+                {
+                    // StopLoop() already bumped `generation` (Pause/Dispose/a
+                    // fresh Resume raced ahead of this iteration, which was
+                    // already past its own cancellation-token check). Drop
+                    // the stale publish instead of clobbering whatever the
+                    // caller publishes right after StopLoop() returns.
+                    return;
+                }
                 next = new ReachyBehaviorServiceSnapshot(
                     state,
                     kind,
