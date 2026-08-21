@@ -2685,20 +2685,41 @@ acquisition and provider selection are independent of each other; perception
 needs camera acquisition; the full closed loop (gaze-tracking behavior,
 provider-driven intents) needs perception and provider both Ready.
 
-- [ ] **Phase A -- baseline behavior (no perception/provider needed).**
-      `ReachyBaselineBehaviorLibrary` + `ReachyBehaviorTrajectoryExecutor` +
-      `ReachyProductionBehaviorControllerTargetSink` can drive safe idle/
-      gesture motion against `ReachyProductionAuthoritativeRuntime` alone;
-      RMA-154's acceptance harness already proves planner -> executor ->
-      target-sink end-to-end (`ReachyRma154VisualServoAcceptance.cs`), minus
-      its single-shot/self-terminating scaffolding. Real new work is
-      service-level, not mechanical: continuous supervised execution instead
-      of RMA-154's fixed-timeout single run, a safety-abort policy driven by
-      `ReachyBehaviorAuthoritativeSafety`, app-pause/resume integration
-      (`IReachyApplicationInterruptionParticipant`), and designing
-      `IReachyBehaviorService`'s currently-empty interface (gesture-trigger +
-      HUD state members; every `IReachy*Service` is a zero-member marker
-      today).
+- [x] **Phase A -- baseline behavior (no perception/provider needed).**
+      Complete (2026-08-21). `ReachyBaselineBehaviorApplicationService`
+      (`Assets/ReachyMini/Runtime/Application/ReachyBaselineBehaviorApplicationService.cs`)
+      replaces the permanently-Unavailable stub in
+      `ReachySettingsApplicationCompositionProvider`'s "behavior"
+      registration with a real continuous
+      planner -> executor -> target-sink loop against
+      `ReachyProductionAuthoritativeRuntime` alone (`worldSnapshot` is
+      hardcoded `null` and `workspaceClear` hardcoded `true` -- deliberately
+      zero perception/provider dependency, per this item's scope; Phase C
+      replaces the hardcoded `workspaceClear` once perception lands). It
+      re-plans indefinitely rather than RMA-154's fixed single run, aborts
+      in-flight motion via `ReachyBehaviorAuthoritativeSafety`, integrates
+      app-pause/resume through `IReachyApplicationInterruptionParticipant`,
+      and gives `IReachyBehaviorService` real members (`Snapshot`,
+      `SnapshotChanged`, `TryTriggerGesture`) in place of the previous
+      zero-member marker (`ReachyApplicationContracts.cs`).
+      **Completion evidence:** commits `cd1d84b` (initial service),
+      `1119227` (fixed a `ServiceId` mismatch between the "behavior"
+      registration and the service's own identity, caught by CI --
+      `ReachyApplicationComposition.ValidateServiceContract` rejects any
+      factory whose result doesn't match its registration), `71e12d6`
+      (fixed a genuine Pause-vs-loop-thread snapshot-publish race caught by
+      CI, via a lock-guarded generation counter), `374f98b` and `63a4202`
+      (the continuous loop and the RMA-195/RMA-154 physical acceptance
+      harnesses share one production `ReachyProductionAuthoritativeRuntime`
+      instance with no arbitration -- both harnesses now pause behavior via
+      `IReachyApplicationInterruptionParticipant` for their pose-driving
+      window; `63a4202` additionally fixed a lookup-ordering bug in the
+      first attempt, since a Unity Start()-order race could look up the
+      host before its own Start() had run). Self-hosted run `32528147482`
+      passed Unity edit-mode tests (148/148, including six new
+      `ReachyBaselineBehaviorApplicationServiceTests`) and -- with the
+      physical device pinned -- RMA-090/091/092/111/154/022 acceptance and
+      authoritative-rendering acceptance, all on exact commit `63a4202`.
 - [x] **Phase A -- camera frame acquisition.** Complete (2026-08-17).
       `ReachyMainScreen.RequestCameraPreview()`
       (`Assets/ReachyMini/Runtime/Application/ReachyMainScreen.CameraPreview.cs`)
