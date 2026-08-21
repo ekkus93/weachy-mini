@@ -2754,19 +2754,60 @@ provider-driven intents) needs perception and provider both Ready.
       itself -- the new settings-panel button is covered by Unity Editor
       unit tests (`ReachyMainScreenTests`, `ReachySettingsScreenTests`) but
       not yet by an on-device acceptance harness tapping the actual button.
-- [ ] **Phase B -- provider selection, local LLM subset.** The largest single
-      piece. Local LLM is fully built and proven end to end (admission ->
-      create -> govern -> recreate -> dispose via
-      `LocalLlmGovernedGenerationCoordinator` /
-      `LocalLlmProviderRecreation.ForCurrentEnvelopeAsync`), but real design
-      decisions remain: `ReachyApplicationServiceBase.OnInitialize()` is
-      synchronous while model loading is not (naive async-void would race
-      the base class's auto-`SetReady`); lazy-vs-eager loading given a ~700
-      MB artifact and physics-worker memory coexistence (the exact hazard
-      RMA-135 exists to police); no mapping exists yet from settings' coarse
-      `ReachyProviderSelection` enum to a concrete `LocalModelManifest`; and
-      `IReachyProviderService` needs real members (today a zero-member
-      marker) that perception/behavior can actually consume.
+- [x] **Phase B -- provider selection, local LLM subset.** Complete
+      (2026-08-21), scoped narrowly: wires the one provider path that is
+      actually fully built end to end today, `(Llm, OnDevice)`.
+      ASR/TTS/VLM and any AndroidService/Cloud execution stay exactly as
+      before ("stored but not integrated") -- out of scope, unchanged.
+      Also deliberately excludes the model install/import UI
+      (`ReachyMainScreen.RequestLocalModelInstall/Import/Select/Delete`
+      remain stubs, a separate and materially larger piece); on a fresh
+      device this honestly reports "no compatible local model is
+      installed" via the real `LocalModelPackageManager`-managed store,
+      not a shortcut.
+      `ReachyLocalLlmProviderApplicationService`
+      (`Assets/ReachyMini/Runtime/Application/ReachyLocalLlmProviderApplicationService.cs`)
+      resolves the four design questions this item originally raised: (1)
+      `OnInitialize()` never triggers a model load at all -- avoids the
+      sync/async hazard entirely rather than racing it, since there is no
+      "Loading" `ReachyServiceState` to hold at and a ~700MB load isn't
+      worth risking the same tolerated race
+      `ReachyAndroidSpeechCapabilityApplicationService` already has
+      elsewhere in this codebase; loading is fully lazy, triggered by the
+      first `GenerateAsync` call. (2) Loading is lazy-only (no eager
+      preload), naturally sidestepping the physics-worker memory
+      coexistence question -- nothing loads until a real generation
+      request needs it. (3) `LocalLlmBehaviorContract.CreateSelectedManifest()`
+      is the settings-selection -> manifest mapping (only one manifest is
+      production-approved today, so this is a lookup, not a catalog;
+      extracted from two byte-identical copies previously hand-duplicated
+      in the RMA-134/135 acceptance harnesses). (4) `IReachyProviderService`
+      gained real members: `ProviderSnapshot`/`ProviderSnapshotChanged`
+      (named to avoid colliding with `IReachyBehaviorService`'s
+      same-shaped `Snapshot`/`SnapshotChanged` on the generic 8-interface
+      test doubles this codebase uses), plus two optional capability
+      interfaces implementers can be `as`-cast to:
+      `ILocalLlmProviderCapability` (the real `GenerateAsync` entry
+      point) and the pre-existing `IReachyProviderGovernorDiagnosticsSource`.
+      **Completion evidence:** commits `fdc63e5` (shared manifest-factory
+      refactor), `0fa4850` (contract extension, verified locally via
+      `dotnet run` on both managed test suites), `ef67161` (the service
+      itself + wiring + tests). Self-hosted run `32532159228` (commit
+      `ef67161`) passed Unity edit-mode tests 155/155 (7 new
+      `ReachyLocalLlmProviderApplicationServiceTests`) and every
+      physical-device acceptance stage (RMA-090/091/092/111/154/022,
+      authoritative rendering), all with the phone pinned; the separate
+      `RMA-135 resource and thermal governor` gate (`32532159377`) and
+      the general `CI` workflow (`32532159258`) both passed too,
+      confirming the shared manifest-factory refactor didn't regress
+      RMA-134/135. Caveat: the real load/admission/generate path only
+      runs when a compatible model is actually installed via
+      `LocalModelPackageManager` -- which nothing in the live app can do
+      yet (see the excluded install/import UI above) -- so it is proven
+      by the RMA-134/135 physical acceptance harnesses (which push the
+      artifact directly) and by 7 new EditMode tests covering every
+      off-Android/no-model-installed fail-closed path, not yet by an
+      end-to-end on-device run through the live composition.
 - [ ] **Phase C -- perception, tracking-only.** Depends on Phase A's camera
       acquisition. `ReachyBoundedWorldModel` +
       `ReachyOnDeviceLightweightTracker` + `ReachyAndroidMlKitTrackingBackend`
