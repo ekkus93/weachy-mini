@@ -18,9 +18,11 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Persistence.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Mutators.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.CameraPreview.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Hud.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsPanel.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.StorageCleanup.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Styles.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs'
@@ -116,7 +118,26 @@ jobs:
               for name in settings_state_files
               if (app_dir / name).exists()
           )
-          screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
+          # ReachyMainScreen is likewise split into several partial-class files
+          # in the same directory (RequestCameraPreview lives in
+          # .CameraPreview.cs, not the base file); concatenate all of them so
+          # this check covers the full class regardless of which file a given
+          # member lives in.
+          application_dir = Path('Assets/ReachyMini/Runtime/Application')
+          main_screen_files = [
+              'ReachyMainScreen.cs',
+              'ReachyMainScreen.CameraPreview.cs',
+              'ReachyMainScreen.Hud.cs',
+              'ReachyMainScreen.SettingsPanel.cs',
+              'ReachyMainScreen.SettingsSections.cs',
+              'ReachyMainScreen.StorageCleanup.cs',
+              'ReachyMainScreen.Styles.cs',
+          ]
+          screen = ''.join(
+              (application_dir / name).read_text(encoding='utf-8')
+              for name in main_screen_files
+              if (application_dir / name).exists()
+          )
           persistence = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsPersistence.cs').read_text(encoding='utf-8')
           composition = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs').read_text(encoding='utf-8')
 
