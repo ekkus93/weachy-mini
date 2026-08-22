@@ -2089,9 +2089,11 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 ## RMA-120 — Define independent speech provider contracts
 
-- [ ] Define `IAsrProvider` and `ITtsProvider` separately.
-- [ ] Include availability, locality/network requirement, language/voice capability, start/cancel/dispose, and structured errors.
-- [ ] Prevent provider implementation from initiating an unauthorized fallback.
+- [x] Define `IAsrProvider` and `ITtsProvider` separately.
+- [x] Include availability, locality/network requirement, language/voice capability, start/cancel/dispose, and structured errors.
+- [x] Prevent provider implementation from initiating an unauthorized fallback.
+
+**Status:** Complete. **Completion evidence (2026-08-06):** `Assets/ReachyMini/Runtime/Core/Speech/AsrProviderContracts.cs` (`IAsrProvider`), `TtsProviderContracts.cs` (`ITtsProvider`), `SpeechProviderPrimitives.cs` (`SpeechProviderPolicy` defaults `AutomaticProviderFallbackEnabled`/`CrossPrivacyBoundaryFallbackEnabled`/`AutomaticRetryEnabled` to `false`); `SpeechProviderContract.ValidateProviderForOperation`/`ValidateEventOrigin` enforce fail-closed identity. Tested by `managed/ReachyMini.SpeechContracts.Tests`, gated by `.github/workflows/rma120-speech-provider-contracts.yml`, validated in `docs/validation/RMA_120_SPEECH_PROVIDER_CONTRACTS_VALIDATION_2026-08-06.md`.
 
 Suggested contract shape:
 
@@ -2120,51 +2122,63 @@ public interface ITtsProvider : IAsyncDisposable
 
 ## RMA-121 — Implement Android on-device ASR
 
-- [ ] Discover whether explicit on-device recognition is available.
-- [ ] Create the on-device recognizer only after microphone permission.
-- [ ] Support configured language and recognition support checks where available.
-- [ ] Handle partial/final results, no-match, busy, timeout, cancellation, service death, and language-model absence.
-- [ ] Marshal callbacks safely to application state.
-- [ ] Destroy the recognizer on teardown.
+- [x] Discover whether explicit on-device recognition is available.
+- [x] Create the on-device recognizer only after microphone permission.
+- [x] Support configured language and recognition support checks where available.
+- [x] Handle partial/final results, no-match, busy, timeout, cancellation, service death, and language-model absence.
+- [x] Marshal callbacks safely to application state.
+- [x] Destroy the recognizer on teardown.
 
 **Prohibited**
 
-- [ ] Do not use `EXTRA_PREFER_OFFLINE` as proof that processing is local.
-- [ ] Do not fall back to system/cloud recognition silently.
+- [x] Do not use `EXTRA_PREFER_OFFLINE` as proof that processing is local.
+- [x] Do not fall back to system/cloud recognition silently.
+
+**Status:** Complete. **Completion evidence (2026-08-07):** `Assets/ReachyMini/Runtime/Core/Speech/AndroidOnDeviceAsrProvider.cs`/`.Recognition.cs`/`.Readiness.cs`, Java bridge `Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/.../ReachyOnDeviceAsrBridge.java`. `managed/ReachyMini.AndroidOnDeviceAsr.Tests/Rma121SourceContracts.cs` asserts `isOnDeviceRecognitionAvailable`/`createOnDeviceSpeechRecognizer`/mic-permission gate/`recognizer.destroy()` and explicitly rejects `EXTRA_PREFER_OFFLINE` and silent-fallback patterns (33 deterministic contracts). Gated by `.github/workflows/rma121-android-on-device-asr.yml`, validated in `docs/validation/RMA_121_ANDROID_ON_DEVICE_ASR_VALIDATION_2026-08-07.md`.
 
 ## RMA-122 — Implement Android system ASR as explicit option
 
-- [ ] Clearly label it as device-provider controlled and potentially network-backed.
-- [ ] Keep it distinct from the on-device provider in settings and diagnostics.
-- [ ] Apply the same lifecycle/error tests.
+- [x] Clearly label it as device-provider controlled and potentially network-backed.
+- [x] Keep it distinct from the on-device provider in settings and diagnostics.
+- [x] Apply the same lifecycle/error tests.
+
+**Status:** Complete. **Completion evidence (2026-08-07):** `Assets/ReachyMini/Runtime/Core/Speech/AndroidSystemAsrProvider.cs` (distinct descriptor, `NetworkFailure`/`NetworkTimeout` kinds), `ReachyAndroidSpeechCapabilityApplicationService.cs` emits distinct `on_device_asr=`/`system_asr=` diagnostics. `managed/ReachyMini.AndroidSystemAsr.Tests/Rma122SourceContracts.cs` (29 deterministic contracts) requires `SpeechRecognizer.createSpeechRecognizer` and rejects substitution with the RMA-121 on-device provider. Gated by `.github/workflows/rma122-android-system-asr.yml`, validated in `docs/validation/RMA_122_ANDROID_SYSTEM_ASR_VALIDATION_2026-08-07.md`.
 
 ## RMA-123 — Implement Android offline TTS
 
-- [ ] Initialize TextToSpeech asynchronously.
-- [ ] Enumerate voices and filter for voices not requiring a network connection.
-- [ ] Select a voice by locale and user preference.
-- [ ] Handle missing voice data and installation guidance.
-- [ ] Report start, done, stop, and error events.
-- [ ] Release the engine on teardown.
+- [x] Initialize TextToSpeech asynchronously.
+- [x] Enumerate voices and filter for voices not requiring a network connection.
+- [x] Select a voice by locale and user preference.
+- [x] Handle missing voice data and installation guidance.
+- [x] Report start, done, stop, and error events.
+- [x] Release the engine on teardown.
+
+**Status:** Complete. **Completion evidence (2026-08-07):** `Assets/ReachyMini/Runtime/Core/Speech/AndroidOfflineTtsProvider.cs`/`.Internal.cs`. `managed/ReachyMini.AndroidOfflineTts.Tests/Rma123SourceContracts.cs` (38 deterministic contracts) requires async `TextToSpeech` init, `voice.isNetworkConnectionRequired()` filtering, `KEY_FEATURE_NOT_INSTALLED` handling, `UtteranceProgressListener` start/done/stop/error, `tts.shutdown()`; rejects closest-match `setLanguage`, auto-install `startActivity`, and cloud endpoints. Gated by `.github/workflows/rma123-android-offline-tts.yml`, validated in `docs/validation/RMA_123_ANDROID_OFFLINE_TTS_VALIDATION_2026-08-07.md` and its final-evidence addendum.
 
 ## RMA-124 — Implement Android system/network TTS as explicit option
 
-- [ ] List network-required status per voice.
-- [ ] Require explicit selection for network-required voices.
-- [ ] Do not auto-select one when offline TTS is unavailable.
+- [x] List network-required status per voice.
+- [x] Require explicit selection for network-required voices.
+- [x] Do not auto-select one when offline TTS is unavailable.
+
+**Status:** Complete. **Completion evidence (2026-08-07):** `Assets/ReachyMini/Runtime/Core/Speech/AndroidSystemTtsProvider.cs` (per-voice `NetworkRequirement`, `explicitlySelectedNetworkVoiceId` gate) and `.Internal.cs` ("network TTS is never selected automatically"). Gated by `.github/workflows/rma124-android-system-tts.yml`, validated in `docs/validation/RMA_124_ANDROID_SYSTEM_NETWORK_TTS_VALIDATION_2026-08-07.md`.
 
 ## RMA-125 — Add microphone/audio focus state machine
 
-- [ ] Request and release audio focus.
-- [ ] Coordinate listening and speaking to avoid self-transcription.
-- [ ] Handle phone call, alarm, Bluetooth route, headphone changes, and other focus loss where exposed.
-- [ ] Keep the single-microphone limitation explicit.
+- [x] Request and release audio focus.
+- [x] Coordinate listening and speaking to avoid self-transcription.
+- [x] Handle phone call, alarm, Bluetooth route, headphone changes, and other focus loss where exposed.
+- [x] Keep the single-microphone limitation explicit.
+
+**Status:** Complete. **Completion evidence (2026-08-07):** `Assets/ReachyMini/Runtime/Core/Speech/SpeechAudioFocusCoordinator.cs` (single-lease `AcquireAsync`), `SpeechAudioFocusContracts.cs` (`SpeechAudioInterruptionKind`: `PermanentFocusLoss`/`TransientFocusLoss`/`DuckRequested`/`AudioRouteChanged`/`BecomingNoisy`/`PhoneOrCommunicationMode`/`AlarmPlayback`/`MicrophoneMuted`; `SingleMicrophoneOnly`). Tested by `managed/ReachyMini.SpeechAudioFocus.Tests` (16 cases), gated by `.github/workflows/rma125-speech-audio-focus.yml`, validated in `docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md`.
 
 **Acceptance criteria — offline speech portion**
 
 - [ ] On a device with installed services, the user can converse using Android on-device ASR and offline TTS with networking disabled.
 - [ ] Missing services produce visible setup guidance.
 - [ ] No audio is sent to a cloud provider unless explicitly selected.
+
+**Status:** Genuinely open (not stale). `docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md`'s "Physical offline-speech acceptance blocker" section states RMA-125 is not closed until a device with suitable installed Android services demonstrates the offline conversation path with networking disabled; the current physical test phone (API 26) cannot run RMA-121's API-31 on-device recognizer. The code/contract level is otherwise fully evidenced above (no cloud references in the offline ASR/TTS paths; explicit rejection of `OpenAI`/`http(s)://` in the RMA-121/123 source contracts) but this block is deliberately left for physical-device proof.
 
 ---
 
