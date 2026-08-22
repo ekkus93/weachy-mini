@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Threading.Tasks;
 using ReachyMini.Diagnostics;
 using UnityEngine;
 
@@ -47,6 +48,7 @@ namespace ReachyMini.AppState
         private Action? requestCameraAccess;
         private Func<ReachyDiagnosticsScreenSnapshot>? diagnosticsProvider;
         private Func<ReachyDiagnosticBundleExportOutcome>? diagnosticBundleExporter;
+        private Func<Task>? conversationTurnOperation;
         private string diagnosticBundleExportStatus =
             "No diagnostic bundle has been exported. Sensitive content is excluded by policy.";
         private Vector2 diagnosticsScrollPosition;
@@ -106,6 +108,17 @@ namespace ReachyMini.AppState
                 ? outcome.Detail + " Path: " + outcome.FullPath
                 : outcome.Detail;
             return outcome;
+        }
+
+        public void ConfigureConversationTurn(Func<Task> startTurn)
+        {
+            if (conversationTurnOperation != null)
+            {
+                throw new InvalidOperationException(
+                    "The conversation turn operation cannot be bound more than once.");
+            }
+            conversationTurnOperation = startTurn ??
+                throw new ArgumentNullException(nameof(startTurn));
         }
 
         public void Bind(
@@ -231,6 +244,17 @@ namespace ReachyMini.AppState
             store.SetInteraction(
                 ReachyInteractionState.Listening,
                 "Listening for speech.");
+            // Fire-and-forget: this is a synchronous IMGUI button-click
+            // handler (see ReachyMainScreen.Hud.cs), so the real turn --
+            // ASR -> best-effort VLM scene fold-in -> LLM -> behavior-intent
+            // validation -> gesture + TTS -- runs to completion
+            // asynchronously and drives ReachyMainScreenStateStore itself
+            // through Transcribing/Thinking/Speaking/Idle/Error. Bound only
+            // by some compositions (see ConfigureConversationTurn); only
+            // throws here, at actual invocation time, never at bind time,
+            // mirroring RequestCameraAccess()'s requestCameraAccess pattern.
+            _ = (conversationTurnOperation ?? throw new InvalidOperationException(
+                "The conversation turn operation is not bound."))();
         }
 
         public void RequestCameraSelection()
@@ -424,6 +448,7 @@ namespace ReachyMini.AppState
             requestCameraAccess = null;
             diagnosticsProvider = null;
             resetSimulation = null;
+            conversationTurnOperation = null;
             ReleaseCameraPreview();
         }
 

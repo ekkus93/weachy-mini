@@ -244,6 +244,7 @@ namespace ReachyMini.AppState
         private readonly ReachyAndroidCameraDiscovery cameraDiscovery;
         private readonly ReachyDiagnosticsScreenSource diagnosticsSource;
         private readonly ReachyDiagnosticBundleExportCoordinator diagnosticBundleExporter;
+        private readonly ReachyConversationTurnOrchestrator conversationTurnOrchestrator;
         private readonly ReachyMainScreenStateStore stateStore =
             new ReachyMainScreenStateStore();
 
@@ -290,6 +291,12 @@ namespace ReachyMini.AppState
                 Path.Combine(
                     Application.persistentDataPath,
                     "diagnostics"));
+            conversationTurnOrchestrator = new ReachyConversationTurnOrchestrator(
+                stateStore,
+                this.persistence,
+                provider,
+                perception,
+                behavior);
         }
 
         protected override void OnInitialize()
@@ -316,6 +323,7 @@ namespace ReachyMini.AppState
                 cameraDiscovery.RequestAccessOrRefresh);
             screen.ConfigureDiagnosticBundleExport(
                 diagnosticBundleExporter.ExportRedactedBundle);
+            screen.ConfigureConversationTurn(conversationTurnOrchestrator.StartTurnAsync);
             SetReady("Main screen and durable settings are bound to application state.");
         }
 
@@ -328,6 +336,10 @@ namespace ReachyMini.AppState
             {
                 dependencies[index].HealthChanged -= OnDependencyHealthChanged;
             }
+            // Cancels and disposes any in-flight conversation turn (fire-
+            // and-forget from RequestMicrophone) so a stale async completion
+            // can never touch already-disposed application-service state.
+            conversationTurnOrchestrator.Dispose();
         }
 
         public void PauseForApplicationInterruption()
