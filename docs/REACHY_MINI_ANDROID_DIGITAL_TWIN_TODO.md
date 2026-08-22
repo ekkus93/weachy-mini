@@ -42,7 +42,19 @@ A task is done only when:
 
 ## RMA-001 — Establish repository structure
 
-- [ ] Create the initial directory layout:
+**Status:** Complete. **Completion evidence (2026-08-22):** every listed
+directory exists (`Assets/ReachyMini/{Runtime,Editor}`,
+`Assets/Plugins/Android`, `Packages/`, `ProjectSettings/`,
+`android-plugin/src/main/java`, `native/reachy_sim/{include,src,tests}`,
+`native/llama_runtime`, `native/cmake`, `models/manifests`,
+`calibration/schemas`, `docs/`, `scripts/`, `third_party/`). Root
+`README.md` states the project goal/maturity/platform/build entry
+points and links both `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md`
+and this TODO file. `.gitignore`/`.gitattributes` exist.
+`docs/ASSET_POLICY.md` documents which large assets are committed,
+fetched, or imported.
+
+- [x] Create the initial directory layout:
 
 ```text
 Assets/
@@ -72,45 +84,71 @@ scripts/
 third_party/
 ```
 
-- [ ] Add a root `README.md` explaining the project goal, current maturity, supported platform, and build entry points.
-- [ ] Add `.gitignore` rules for Unity, Gradle, Android Studio, NDK/CMake output, model binaries, downloaded assets, local credentials, and generated calibration datasets.
-- [ ] Add `.gitattributes` appropriate for text normalization and any Git LFS-managed binary assets.
-- [ ] Decide which large assets are committed, fetched, or imported by the developer.
+- [x] Add a root `README.md` explaining the project goal, current maturity, supported platform, and build entry points.
+- [x] Add `.gitignore` rules for Unity, Gradle, Android Studio, NDK/CMake output, model binaries, downloaded assets, local credentials, and generated calibration datasets.
+- [x] Add `.gitattributes` appropriate for text normalization and any Git LFS-managed binary assets.
+- [x] Decide which large assets are committed, fetched, or imported by the developer.
 
 **Acceptance criteria**
 
-- [ ] A clean checkout has an understandable layout.
-- [ ] No local model, API key, generated Unity library directory, or machine-specific SDK path is tracked.
-- [ ] README links to both spec and TODO files.
+- [x] A clean checkout has an understandable layout.
+- [x] No local model, API key, generated Unity library directory, or machine-specific SDK path is tracked.
+- [x] README links to both spec and TODO files.
 
 ## RMA-002 — Pin the build toolchain
 
-- [ ] Select and record a Unity 6 LTS editor version.
-- [ ] Pin Android Gradle Plugin, Gradle wrapper, JDK, Android SDK compile/target level, NDK, and CMake versions.
-- [ ] Configure Android release builds for IL2CPP and ARM64.
-- [ ] Configure development APK and release AAB build commands.
-- [ ] Add a machine-readable toolchain manifest, for example `toolchain.lock.json`.
-- [ ] Add a script that verifies installed tool versions and fails with actionable messages.
+**Status:** Items complete; one acceptance criterion still open (see
+below). **Completion evidence (2026-08-22):** `toolchain.lock.json`
+pins Unity `6000.5.2f1`, AGP `9.3.1`, Gradle `9.5.0`, JDK 17, NDK
+`28.2.13676358`, CMake `3.31.6`, compile/target SDK 37, IL2CPP + ARM64.
+`scripts/build_unity_android.sh` provides
+`development`/`release`/`device-feasibility` build commands.
+`scripts/verify_toolchain.py` verifies installed versions and raises
+actionable errors.
+
+- [x] Select and record a Unity 6 LTS editor version.
+- [x] Pin Android Gradle Plugin, Gradle wrapper, JDK, Android SDK compile/target level, NDK, and CMake versions.
+- [x] Configure Android release builds for IL2CPP and ARM64.
+- [x] Configure development APK and release AAB build commands.
+- [x] Add a machine-readable toolchain manifest, for example `toolchain.lock.json`.
+- [x] Add a script that verifies installed tool versions and fails with actionable messages.
 
 **Acceptance criteria**
 
 - [ ] Two clean developer environments can build the same minimal Android application.
-- [ ] Build output identifies all pinned tool versions.
-- [ ] Unsupported NDK/CMake versions fail early rather than producing linker errors later.
+      Still open per `docs/IMPLEMENTATION_STATUS.md`'s "Open hard
+      gates" list (two-machine reproducible Unity/Android build
+      evidence).
+- [x] Build output identifies all pinned tool versions.
+- [x] Unsupported NDK/CMake versions fail early rather than producing linker errors later.
 
 ## RMA-003 — Add baseline quality gates
 
-- [ ] Configure C# formatting and analyzer rules.
-- [ ] Configure C/C++ formatting, warnings, sanitizer-capable desktop test builds, and static analysis where practical.
-- [ ] Add unit-test commands for native and Unity code.
-- [ ] Add CI for documentation link checks, native desktop tests, managed tests, and asset/license manifest validation.
-- [ ] Ensure CI does not require proprietary model downloads or secrets for default jobs.
+**Status:** Complete. **Completion evidence (2026-08-22):**
+`.editorconfig` configures C# analyzer/formatting rules
+(`dotnet_analyzer_diagnostic.severity = warning`, `IDE0005 = error`,
+block-scoped namespaces required); `native/cmake/CompilerWarnings.cmake`
+plus `REACHY_ENABLE_SANITIZERS=ON ./scripts/build_native.sh` cover
+C/C++ warnings-as-errors and sanitizer builds. Native (ctest) and
+managed (dotnet) test commands run in CI (`.github/workflows/ci.yml`:
+`static`, `reachy-model`, `native`, `managed`, `android` jobs); `static`
+covers doc-link checks (`check_docs_links.py`) and asset/license
+manifest validation. Default push-triggered jobs need no proprietary
+model downloads or secrets -- physical-device/signing work runs in
+separate self-hosted/manual workflows. `docs/WARNING_POLICY.md`
+documents the warning policy.
+
+- [x] Configure C# formatting and analyzer rules.
+- [x] Configure C/C++ formatting, warnings, sanitizer-capable desktop test builds, and static analysis where practical.
+- [x] Add unit-test commands for native and Unity code.
+- [x] Add CI for documentation link checks, native desktop tests, managed tests, and asset/license manifest validation.
+- [x] Ensure CI does not require proprietary model downloads or secrets for default jobs.
 
 **Acceptance criteria**
 
-- [ ] CI runs on the initial scaffold.
-- [ ] Warning policy is documented.
-- [ ] A deliberately failing native and managed test is detected in a local dry run before being reverted.
+- [x] CI runs on the initial scaffold.
+- [x] Warning policy is documented.
+- [x] A deliberately failing native and managed test is detected in a local dry run before being reverted.
 
 ---
 
@@ -118,32 +156,61 @@ third_party/
 
 ## RMA-010 — Create third-party inventory
 
-- [ ] Add `third_party/THIRD_PARTY_NOTICES.md`.
-- [ ] Record MuJoCo, Unity packages, Reachy-derived assets/code, llama.cpp, candidate local models, Android libraries, and any CV packages.
-- [ ] Record license, source URL, source revision, modification status, redistribution status, and required notice for each entry.
-- [ ] Add a machine-readable inventory used by the in-app license screen.
+**Status:** Complete. **Completion evidence (2026-08-22):**
+`third_party/THIRD_PARTY_NOTICES.md` and a machine-readable
+`third_party/inventory.json` (10 entries) exist, covering Unity,
+MuJoCo, Reachy software/hardware assets, llama.cpp, the candidate
+local model, AndroidX CameraX, and Google ML Kit, each recording
+license/source/revision/modification/redistribution status.
+
+- [x] Add `third_party/THIRD_PARTY_NOTICES.md`.
+- [x] Record MuJoCo, Unity packages, Reachy-derived assets/code, llama.cpp, candidate local models, Android libraries, and any CV packages.
+- [x] Record license, source URL, source revision, modification status, redistribution status, and required notice for each entry.
+- [x] Add a machine-readable inventory used by the in-app license screen.
 
 **Acceptance criteria**
 
-- [ ] Every dependency and imported asset has an owner, license, source, and revision.
-- [ ] The inventory distinguishes Apache-licensed software from CC BY-NC-SA Reachy hardware/model assets.
-- [ ] No asset with unclear redistribution permission is packaged in the APK.
+- [x] Every dependency and imported asset has an owner, license, source, and revision.
+- [x] The inventory distinguishes Apache-licensed software from CC BY-NC-SA Reachy hardware/model assets.
+- [x] No asset with unclear redistribution permission is packaged in the APK.
 
 ## RMA-011 — Implement Reachy asset import pipeline
 
-- [ ] Pin the upstream Reachy Mini source commit used for the baseline MJCF and meshes.
-- [ ] Create an import script that retrieves or accepts local source assets, verifies hashes, converts formats if required, and writes generated Unity assets to a deterministic location.
-- [ ] Preserve upstream notices and record modifications.
-- [ ] Do not manually edit generated files without updating the source transformation.
-- [ ] Generate a model provenance report listing every imported source file and output.
+**Status:** Complete. **Completion evidence (2026-08-22):**
+`third_party/reachy-mini-source.lock.json` pins the upstream commit.
+`scripts/import_reachy_assets.py` verifies SHA-256 hashes, raises a
+`ProvenanceError` on mismatch/dirty input, preserves notices, and
+generates a deterministic provenance report (`provenance_files`:
+`path`/`sha256` per imported source file and generated output).
+`docs/IMPLEMENTATION_STATUS.md:30-36` confirms: "The importer verifies
+hashes, rejects dirty or mismatched inputs, preserves notices, imports
+all referenced assets, and generates deterministic model/render maps,"
+listing only RMA-012 (not RMA-011) as remaining open.
+
+- [x] Pin the upstream Reachy Mini source commit used for the baseline MJCF and meshes.
+- [x] Create an import script that retrieves or accepts local source assets, verifies hashes, converts formats if required, and writes generated Unity assets to a deterministic location.
+- [x] Preserve upstream notices and record modifications.
+- [x] Do not manually edit generated files without updating the source transformation.
+- [x] Generate a model provenance report listing every imported source file and output.
 
 **Acceptance criteria**
 
-- [ ] A clean import produces deterministic hashes except for explicitly documented nondeterministic Unity metadata.
-- [ ] Missing or changed upstream files fail visibly.
-- [ ] Generated assets carry attribution metadata.
+- [x] A clean import produces deterministic hashes except for explicitly documented nondeterministic Unity metadata.
+- [x] Missing or changed upstream files fail visibly.
+- [x] Generated assets carry attribution metadata.
 
 ## RMA-012 — Add in-app licenses and unofficial-project notice
+
+**Status (2026-08-22):** Genuinely open, not stale -- partially built
+(`Assets/ReachyMini/Runtime/Core/Application/ReachyLicenseNotice.cs`,
+`ReachySettingsStateStore.GetLicenseNotices()`, and
+`ReachyMainScreen.SettingsSections.cs`'s `DrawLicenseSettings` render an
+in-app licenses list including MuJoCo Apache-2.0 and Pollen
+Robotics/Reachy attribution), but no "unofficial project, not endorsed
+by..." or "free and noncommercial" statement exists anywhere in the
+code. `docs/IMPLEMENTATION_STATUS.md:35,619` lists "RMA-012 in-app
+licenses and the complete release-notice reconciliation" as a current
+open hard gate.
 
 - [ ] Add a Licenses and Attribution screen.
 - [ ] Include the MuJoCo Apache 2.0 notice and all required third-party notices.
@@ -162,48 +229,73 @@ third_party/
 
 ## RMA-020 — Pin and build MuJoCo for Android ARM64
 
-- [ ] Select and pin a MuJoCo release and source commit.
-- [ ] Create an Android NDK CMake toolchain build for `arm64-v8a`.
-- [ ] Disable desktop viewer/rendering dependencies not needed by the embedded solver.
-- [ ] Produce a shared library suitable for Unity Android loading.
-- [ ] Record compiler flags and exported symbol list.
-- [ ] Add a reproducible script such as `scripts/build_mujoco_android.sh`.
+**Status:** Complete. **Completion evidence (2026-08-22):** MuJoCo
+3.9.0 is pinned at `237c17e48539b6c90bf90d3161547cbdcbfaa1e0`
+(`third_party/*-source.lock.json`). The project builds API-26 ARM64
+`libmujoco.so`, production `libreachy_sim.so`, model compilers, and
+probes without modifying upstream MuJoCo source
+(`docs/IMPLEMENTATION_STATUS.md:38-42`). Note:
+`docs/blockers/RMA-020_ANDROID_TOOLCHAIN_BLOCKER.md` (dated
+2026-07-29) is now stale relative to this and should be revisited in a
+follow-up pass, not corrected here.
+
+- [x] Select and pin a MuJoCo release and source commit.
+- [x] Create an Android NDK CMake toolchain build for `arm64-v8a`.
+- [x] Disable desktop viewer/rendering dependencies not needed by the embedded solver.
+- [x] Produce a shared library suitable for Unity Android loading.
+- [x] Record compiler flags and exported symbol list.
+- [x] Add a reproducible script such as `scripts/build_mujoco_android.sh`.
 
 **Acceptance criteria**
 
-- [ ] `libmujoco.so` or the wrapped equivalent builds from a clean checkout/toolchain.
-- [ ] The library loads on at least one physical ARM64 Android phone.
-- [ ] License notices are included.
-- [ ] No desktop-only dynamic library dependency remains.
+- [x] `libmujoco.so` or the wrapped equivalent builds from a clean checkout/toolchain.
+- [x] The library loads on at least one physical ARM64 Android phone.
+- [x] License notices are included.
+- [x] No desktop-only dynamic library dependency remains.
 
 ## RMA-021 — Build a minimal constrained-mechanism native test
 
-- [ ] Create a small MJCF with at least one closed-loop/equality constraint.
-- [ ] Load and step it through a minimal C wrapper.
-- [ ] Run at a 0.002-second timestep for at least 30 simulated minutes.
-- [ ] Detect NaN/Inf, constraint divergence, and step failures.
-- [ ] Record median, p95, and maximum step time on the test phone.
+**Status:** Complete. **Completion evidence (2026-08-22):** the LG G6
+constrained-mechanism gate completed 900,000 steps / 30 simulated
+minutes with finite state, bounded equality residuals, zero MuJoCo
+warnings, and a structured malformed-model failure
+(`docs/IMPLEMENTATION_STATUS.md:44-46`).
+
+- [x] Create a small MJCF with at least one closed-loop/equality constraint.
+- [x] Load and step it through a minimal C wrapper.
+- [x] Run at a 0.002-second timestep for at least 30 simulated minutes.
+- [x] Detect NaN/Inf, constraint divergence, and step failures.
+- [x] Record median, p95, and maximum step time on the test phone.
 
 **Acceptance criteria**
 
-- [ ] The model remains stable for the full run.
-- [ ] Average execution leaves sufficient headroom for 500 Hz stepping.
-- [ ] A deliberately malformed model returns a structured error instead of crashing.
+- [x] The model remains stable for the full run.
+- [x] Average execution leaves sufficient headroom for 500 Hz stepping.
+- [x] A deliberately malformed model returns a structured error instead of crashing.
 
 ## RMA-022 — Prove Unity IL2CPP native loading
 
-- [ ] Create a minimal Unity scene that calls a version function from the native wrapper.
-- [ ] Verify symbol resolution in Editor-compatible test mode and Android release mode as applicable.
-- [ ] Verify repeated app pause/resume.
-- [ ] Verify controlled native initialization failure.
-- [ ] Verify library unload/destruction during application shutdown.
+**Status:** Complete. **Completion evidence (2026-08-22):** "RMA-022 is
+physically accepted. The installed IL2CPP application resolves the
+native ABI/version, visibly reports a controlled malformed-MJB
+failure, creates, steps, closes, and rejects reuse of a valid native
+handle, survives two real HOME/resume cycles without suspended-wall-time
+catch-up, destroys the production runtime, disables the renderer, and
+shuts down the process deterministically." --
+`docs/IMPLEMENTATION_STATUS.md:48-53`.
+
+- [x] Create a minimal Unity scene that calls a version function from the native wrapper.
+- [x] Verify symbol resolution in Editor-compatible test mode and Android release mode as applicable.
+- [x] Verify repeated app pause/resume.
+- [x] Verify controlled native initialization failure.
+- [x] Verify library unload/destruction during application shutdown.
 
 **Acceptance criteria — Android native feasibility gate**
 
-- [ ] A physical Android phone loads the wrapper and steps the constrained model.
-- [ ] Pause/resume does not leak handles or advance simulation by suspended wall time.
-- [ ] Native failure appears in the UI and logs without an app crash.
-- [ ] The measured result and tested phone model are documented.
+- [x] A physical Android phone loads the wrapper and steps the constrained model.
+- [x] Pause/resume does not leak handles or advance simulation by suspended wall time.
+- [x] Native failure appears in the UI and logs without an app crash.
+- [x] The measured result and tested phone model are documented.
 
 ---
 
