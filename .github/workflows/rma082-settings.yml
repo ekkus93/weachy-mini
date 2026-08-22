@@ -127,6 +127,8 @@ jobs:
           main_screen_files = [
               'ReachyMainScreen.cs',
               'ReachyMainScreen.CameraPreview.cs',
+              'ReachyMainScreen.CloudLlmCredentials.cs',
+              'ReachyMainScreen.CloudVlmCredentials.cs',
               'ReachyMainScreen.Hud.cs',
               'ReachyMainScreen.SettingsPanel.cs',
               'ReachyMainScreen.SettingsSections.cs',
@@ -147,7 +149,7 @@ jobs:
           actual_sections = re.findall(r'^\s*([A-Za-z]+)\s*=\s*\d+', section_match.group(1), re.M)
           expected_sections = [
               'Providers', 'Camera', 'Speech', 'LocalModel',
-              'Simulation', 'Privacy', 'Licenses',
+              'Simulation', 'Privacy', 'Licenses', 'CloudLlm', 'CloudVlm',
           ]
           if actual_sections != expected_sections:
               raise SystemExit(f'Unexpected settings sections: {actual_sections}')
