@@ -73,6 +73,18 @@ intermittent flake. Decision (user, 2026-08-22): keep RMA-135's local-LLM accept
 criterion open as a known device limitation; do not widen retry budgets or relax
 governor thresholds to close it. The open question below remains unexplored.
 
+## Related finding: cloud-offloaded LLM generation stays cool (2026-08-22)
+
+`docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md` records a same-day
+follow-up experiment on this same device: physics running normally plus 45 seconds of
+**cloud-offloaded** (network) LLM generation via the new RMA-195 Phase D cloud LLM path,
+instead of on-device generation. The device never left `mStatus=0` (SKIN 36.4 C / AP
+41.3 C after 45s, vs. this finding's 40.5 C / 47.2 C after only ~16s on-device). This is
+real evidence that offloading inference off the phone's own SoC avoids this specific
+thermal limitation -- but it does not close or supersede this finding: RMA-135's
+acceptance criterion is specifically about the on-device local-LLM path, which remains
+genuinely thermally limited on this device exactly as described above.
+
 ## Open question
 
 Whether a longer inter-run cooldown, a lighter acceptance workload, or active cooling

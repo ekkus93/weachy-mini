@@ -2361,7 +2361,12 @@ generation retries keep hitting real, sustained deadline misses. See
 `docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md` for the full evidence.
 The governor-cadence bug that was masking this (hysteresis recovery starved of samples
 between retries) was found and fixed the same day; the retry mechanism now converges
-reliably and the remaining failure is thermal, not code.
+reliably and the remaining failure is thermal, not code. Kept open as a known device
+limitation by explicit user decision (2026-08-22); a same-day related experiment
+(`docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md`) found that
+offloading LLM generation to a cloud/network endpoint instead of running it on-device
+keeps this same device at `mStatus=0` for 45s where the on-device path reached light
+throttling in ~16s -- informative context, not a fix to this on-device acceptance gap.
 
 ---
 
@@ -3161,6 +3166,22 @@ provider-driven intents) needs perception and provider both Ready.
       LLM path's own test shape. **Still not done**: the live
       conversational-turn trigger for either LLM or VLM, and the
       frame-capture path a live VLM trigger would need to supply.
+      **Follow-up (2026-08-22, same day):** both credential coordinators were
+      extended to accept `http://` base URLs for trusted local-development
+      hosts (loopback/private/`.local`, matching
+      `ReachyProviderProfile`'s existing `IsTrustedLocalDevelopmentHost`
+      check -- a public `http://` URL is still rejected fail-closed), so a
+      local-network test/dev server (not just a real `https://` cloud
+      endpoint) can be configured through the same settings UI. This was
+      needed for, and verified by, a real physical-device experiment
+      exercising the cloud LLM path end-to-end against a real server for the
+      first time -- see
+      `docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md`
+      and the RMA-135 finding doc's own cross-reference to it. That
+      experiment's new `ReachyRma195CloudLlmThermalProbe.cs` +
+      `scripts/run_rma195_cloud_llm_thermal_probe_android.sh` are exploratory
+      tooling (not a permanent CI gate) kept in the repo since the
+      device-thermal-comparison pattern is reusable.
 - [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
       (never referenced by `ReachyMainScreenBootstrap`, which always
       constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,

@@ -108,6 +108,18 @@ namespace ReachyMini.AppState
 
             try
             {
+                // Local-network/loopback http:// endpoints (dev/test servers such as a
+                // local Ollama instance reached via `adb reverse`) are deliberately
+                // permitted here, not just https:// -- see
+                // ReachyCloudLlmCredentialCoordinator.SaveProfile for the identical
+                // reasoning. ReachyProviderProfile's own ValidateBaseUri still enforces
+                // the real security boundary.
+                ReachyProviderTlsMode tlsMode = string.Equals(
+                        baseUri.Scheme,
+                        Uri.UriSchemeHttp,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? ReachyProviderTlsMode.LocalDevelopmentCleartext
+                    : ReachyProviderTlsMode.RequireHttps;
                 ReachyProviderProfile profile = new ReachyProviderProfile(
                     ProviderId,
                     ProfileDisplayName,
@@ -122,10 +134,13 @@ namespace ReachyMini.AppState
                     Array.Empty<ReachyProviderHeaderBinding>(),
                     TimeoutMilliseconds,
                     streamingEnabled: false,
-                    ReachyProviderTlsMode.RequireHttps,
+                    tlsMode,
                     CredentialReference);
                 profileStore.Upsert(profile);
-                return "Cloud VLM provider profile saved. Add an API key below to enable it.";
+                return profile.UsesCleartextLocalDevelopmentTransport
+                    ? "Cloud VLM provider profile saved (local-development cleartext). " +
+                        profile.SecurityWarning
+                    : "Cloud VLM provider profile saved. Add an API key below to enable it.";
             }
             catch (Exception exception) when (
                 exception is ArgumentException || exception is ArgumentOutOfRangeException)

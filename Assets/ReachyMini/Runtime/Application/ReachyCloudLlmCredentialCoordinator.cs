@@ -124,6 +124,20 @@ namespace ReachyMini.AppState
 
             try
             {
+                // Local-network/loopback http:// endpoints (dev/test servers such as a
+                // local Ollama instance reached via `adb reverse`) are deliberately
+                // permitted here, not just https://. ReachyProviderProfile's own
+                // ValidateBaseUri still enforces the real security boundary --
+                // LocalDevelopmentCleartext only validates if
+                // ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(baseUri)
+                // is true (loopback/private/`.local` hosts only), so a plain public
+                // http:// URL is still rejected fail-closed exactly as before.
+                ReachyProviderTlsMode tlsMode = string.Equals(
+                        baseUri.Scheme,
+                        Uri.UriSchemeHttp,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? ReachyProviderTlsMode.LocalDevelopmentCleartext
+                    : ReachyProviderTlsMode.RequireHttps;
                 ReachyProviderProfile profile = new ReachyProviderProfile(
                     ProviderId,
                     ProfileDisplayName,
@@ -138,10 +152,13 @@ namespace ReachyMini.AppState
                     Array.Empty<ReachyProviderHeaderBinding>(),
                     TimeoutMilliseconds,
                     streamingEnabled: false,
-                    ReachyProviderTlsMode.RequireHttps,
+                    tlsMode,
                     CredentialReference);
                 profileStore.Upsert(profile);
-                return "Cloud LLM provider profile saved. Add an API key below to enable it.";
+                return profile.UsesCleartextLocalDevelopmentTransport
+                    ? "Cloud LLM provider profile saved (local-development cleartext). " +
+                        profile.SecurityWarning
+                    : "Cloud LLM provider profile saved. Add an API key below to enable it.";
             }
             catch (Exception exception) when (
                 exception is ArgumentException || exception is ArgumentOutOfRangeException)

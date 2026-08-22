@@ -48,6 +48,38 @@ namespace ReachyMini.Tests
         }
 
         [Test]
+        public void SaveProfileAcceptsALoopbackHttpUrlAsLocalDevelopmentCleartext()
+        {
+            WithCoordinator(coordinator =>
+            {
+                string result = coordinator.SaveProfile(
+                    "http://127.0.0.1:11434",
+                    ReachyProviderEndpointStyle.ChatCompletions,
+                    "qwen3-vl:8b-instruct");
+
+                Assert.That(result, Does.Contain("local-development cleartext"));
+                ReachyProviderProfile? profile = coordinator.CurrentProfile;
+                Assert.That(profile, Is.Not.Null);
+                Assert.That(profile!.UsesCleartextLocalDevelopmentTransport, Is.True);
+            });
+        }
+
+        [Test]
+        public void SaveProfileRejectsAPublicHttpUrl()
+        {
+            WithCoordinator(coordinator =>
+            {
+                string result = coordinator.SaveProfile(
+                    "http://example.com",
+                    ReachyProviderEndpointStyle.ChatCompletions,
+                    "gpt-4o-mini");
+
+                Assert.That(result, Does.Contain("Cloud VLM provider profile is invalid"));
+                Assert.That(coordinator.CurrentProfile, Is.Null);
+            });
+        }
+
+        [Test]
         public void SaveProfileRejectsAnInvalidBaseUrl()
         {
             WithCoordinator(coordinator =>
