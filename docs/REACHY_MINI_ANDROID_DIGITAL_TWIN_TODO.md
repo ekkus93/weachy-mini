@@ -2808,14 +2808,60 @@ provider-driven intents) needs perception and provider both Ready.
       artifact directly) and by 7 new EditMode tests covering every
       off-Android/no-model-installed fail-closed path, not yet by an
       end-to-end on-device run through the live composition.
-- [ ] **Phase C -- perception, tracking-only.** Depends on Phase A's camera
-      acquisition. `ReachyBoundedWorldModel` +
-      `ReachyOnDeviceLightweightTracker` + `ReachyAndroidMlKitTrackingBackend`
-      are real and proven by RMA-111's acceptance harness, but against a
-      decoded static fixture, not a live frame -- needs a new
-      `IReachyVisionFrameSource` bridge from `ReachyAndroidCameraTextureBridge`
-      output, plus real `IReachyPerceptionService` interface design
-      (snapshot accessor, changed event, tracked-object query surface).
+- [x] **Phase C -- perception, tracking-only.** Complete (2026-08-22). The
+      original framing above understated the real scope: the tracker only
+      accepts fully Level-1-reprojected "Reachy-eye" frames, which meant
+      camera calibration and rotation-source wiring had to land too --
+      both were, like the tracker bridge itself, completely unwired in
+      production before this pass.
+      `ReachyAndroidPerceptionDriver`
+      (`Assets/ReachyMini/Runtime/Application/ReachyAndroidPerceptionDriver.cs`)
+      is the real per-frame pipeline: camera texture bridge ->
+      `ReachyCameraRelativeRotationCalculator.Calculate()` (against a
+      captured `ReachySimAuthoritativeStateFrame`, mirroring
+      `ReachyRma154VisualServoAcceptance.Feedback.cs`'s own
+      `FindCameraPose` pattern -- the closest existing real, non-fixture
+      consumer of this exact chain) -> `ReachyCameraHomographyWarpPipeline.Execute()`
+      -> `ReachyOnDeviceLightweightTracker` via `VisionProviderExecutor.TrackAsync`
+      -> `BoundedWorldModel.ApplyTracking()`. It is a MonoBehaviour driven
+      from `Update()`, not a background loop like phase A's behavior
+      service, because the GPU homography warp and texture readback are
+      Unity-main-thread-only. `ReachyAndroidPerceptionApplicationService`
+      is the `IReachyPerceptionService` facade the composition graph
+      resolves, gated behind `Application.platform == Android` before
+      creating the driver (mirroring phase B's local-LLM service).
+      `IReachyPerceptionService` gained real members
+      (`PerceptionSnapshot`/`PerceptionSnapshotChanged`, carrying a
+      `WorldModelSnapshot?` verbatim -- the exact type the planner already
+      accepts, so no translation layer needed), and
+      `ReachyBaselineBehaviorApplicationService` now consumes the real
+      snapshot instead of phase A's hardcoded `null`.
+      **Deliberately excludes:** `workspaceClear` stays hardcoded `true`
+      -- it gates whether the planner allows motion at all, and nothing
+      in `WorldModelSnapshot`/`WorldEntitySnapshot` defines what "an
+      obstacle is present" means; inventing that mapping would be
+      guessing at safety-relevant behavior with no specification to
+      verify it against. Also excludes any UI for triggering camera
+      calibration capture -- RMA-100's calibration workflow exists but is
+      opt-in and not itself composition-wired, so this pipeline correctly
+      reports `NoCalibration` and does nothing on an uncalibrated device.
+      **Completion evidence:** commit `04eac13` (the service/driver/contract
+      changes) plus `c3d8d35` (fixed a missing `using System;` compile
+      error in the new test file, caught by CI). Self-hosted run
+      `32544283870` (commit `c3d8d35`) passed Unity edit-mode tests and
+      every physical-device acceptance stage (RMA-090/091/092/111/154/022,
+      authoritative rendering), all with the phone pinned; the general
+      `CI` workflow (`32544283882`) passed too. Caveat: no physical
+      acceptance harness yet exercises the *live* pipeline end to end --
+      RMA-111's harness still only covers the ML Kit backend against a
+      decoded fixture, per this phase's own scoping investigation: the
+      new EditMode tests (`ReachyAndroidPerceptionApplicationServiceTests.cs`)
+      only cover the off-Android fail-closed path, and the live
+      calibration -> rotation -> homography -> tracker -> world-model
+      chain running on real camera frames is unverified by any automated
+      harness. A follow-up physical acceptance harness (mirroring
+      RMA-111's launch-intent-extra/result-file convention) is the
+      concrete next step to close that gap.
 - [ ] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
       full closed loop.** No cloud LLM provider class exists at all today
       (unlike ASR/TTS/VLM cloud, which do) -- this is new code, not wiring,
