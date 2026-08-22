@@ -4,7 +4,9 @@
 **Device:** Samsung SM-A546E (Galaxy A54 5G), Exynos 1380, serial R5CW31AX4FL
 **Status of this finding:** governor-cadence bug fixed and confirmed working; this is a
 separate, genuine hardware characteristic of the device under this specific combined
-workload, not a governor or acceptance-harness defect
+workload, not a governor or acceptance-harness defect. Reproduced again on 2026-08-22
+(see "Recurrence" below); kept open as a known device limitation by explicit user
+decision -- not fixed by widening retry budgets or relaxing governor thresholds.
 **Related roadmap items:** RMA-135 (resource/thermal governor, local LLM acceptance
 criterion), RMA-184 (representative-device matrix, mid class, `supported_with_limitations`)
 
@@ -55,6 +57,21 @@ to fix by widening retry budgets or relaxing thresholds.
   SoC, not a general device-support blocker -- RMA-184's separate device probe (see
   `RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md`) found the device otherwise
   functional (camera, TTS) with no reboot or crash under lighter load.
+
+## Recurrence (2026-08-22)
+
+Two further physical runs on the same device (commits `16c70b7`, `14b808f`, runs
+`32590147928` and `32592929989`) reproduced the identical signature: 8/8 post-recovery
+attempts refused with `ResourceCancelledDuringGeneration`, `governor_reasons` including
+`ThermalLight`/`DeviceProfileLimit`/`PhysicsBudgetExceeded` throughout, exhausting the
+same `PostRecoveryGenerationAttemptBudget = 8` retry budget. Neither commit touched
+RMA-135's governor, acceptance harness, or retry/pacing constants -- both changes were
+unrelated feature work (an RMA-195 Phase D cloud-LLM settings-UI slice and the new
+cloud-VLM provider stack). This confirms the finding is a durable, repeated hardware
+characteristic of this specific device under the combined workload, not an
+intermittent flake. Decision (user, 2026-08-22): keep RMA-135's local-LLM acceptance
+criterion open as a known device limitation; do not widen retry budgets or relax
+governor thresholds to close it. The open question below remains unexplored.
 
 ## Open question
 
