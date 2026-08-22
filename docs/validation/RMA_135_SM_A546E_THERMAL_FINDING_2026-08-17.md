@@ -92,3 +92,36 @@ during the physical run would let RMA-135's local-LLM acceptance criterion close
 this specific device is not yet determined. Not investigated further this session at
 the user's direction; recorded here as an open finding rather than continuing to
 retry against real thermal pressure.
+
+## Escalated recurrence, admission-time failure (2026-08-22, later same day)
+
+Run `32599450986` (commit `60a3a6c`, the live conversational-turn trigger work) failed
+with a **new, worse variant** of this finding: `Suspended` at the admission gate itself
+(`RMA-135 admission refused local inference once the mandatory prompt was measured
+(488 tokens)`, after only ~4.5s -- before generation even started), with
+`reasons=DeviceProfileLimit, ThermalModerate, MemoryPressure, PhysicsBudgetExceeded`.
+`ThermalModerate` and `MemoryPressure` had not appeared in this finding before (prior
+runs only ever showed `ThermalLight`), and the failure point moved earlier -- admission
+refusal instead of exhausting the 8-attempt post-recovery retry budget during
+generation. Queried the physical device directly, immediately after the run
+(`adb shell dumpsys thermalservice`/`dumpsys battery`): SKIN was at `mValue=40.2,
+mStatus=2` (Moderate) and battery temperature had climbed steadily across the
+afternoon (35.5 C to 36.8 C, `remain` capacity draining, level 38% to 35%) --
+independent, live confirmation that the device really was in the reported
+`ThermalModerate` state at the time of failure, not a harness or governor bug.
+
+This is judged **not a regression from the same-commit work** (on-demand VLM frame
+capture + the new `ReachyConversationTurnOrchestrator`, neither of which touches the
+governor, admission logic, or this acceptance harness) for three reasons: (1) the live
+device telemetry above independently corroborates the governor's own reported reason;
+(2) RMA-134 (same device, same commit, same new composition-wiring code path since
+both acceptance harnesses boot the full app) passed cleanly on this same commit,
+immediately before this run; (3) this session ran an unusually long, repeated sequence
+of physical-device work today -- the RMA-195 cloud-LLM thermal comparison experiment
+(45s of sustained generation), plus several consecutive Local Unity Android Validation
++ RMA-134/135 physical-acceptance cycles in the preceding hour -- with no deliberate
+cooldown between runs, which is a plausible, sufficient explanation for the device
+running measurably hotter than any prior run in this finding. Recorded as a further
+data point strengthening (not superseding) the existing finding; the governor was not
+touched, consistent with the user's standing decision to keep RMA-135 open as a known
+device limitation.
