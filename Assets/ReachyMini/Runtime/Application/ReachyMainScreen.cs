@@ -19,6 +19,7 @@ namespace ReachyMini.AppState
         {
             ReachySettingsSection.Providers,
             ReachySettingsSection.CloudLlm,
+            ReachySettingsSection.CloudVlm,
             ReachySettingsSection.Camera,
             ReachySettingsSection.Speech,
             ReachySettingsSection.LocalModel,

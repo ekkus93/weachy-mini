@@ -12,6 +12,7 @@ namespace ReachyMini.AppState
         Privacy = 5,
         Licenses = 6,
         CloudLlm = 7,
+        CloudVlm = 8,
     }
 
     public enum ReachyProviderKind

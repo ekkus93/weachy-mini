@@ -98,6 +98,9 @@ namespace ReachyMini.AppState
                 case ReachySettingsSection.CloudLlm:
                     DrawCloudLlmSettings(body);
                     break;
+                case ReachySettingsSection.CloudVlm:
+                    DrawCloudVlmSettings(body);
+                    break;
                 case ReachySettingsSection.Camera:
                     DrawCameraSettings(body, current);
                     break;

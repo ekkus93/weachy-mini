@@ -38,4 +38,21 @@ namespace ReachyMini.Perception
             VisionLanguageRequest request,
             CancellationToken cancellationToken);
     }
+
+    // RMA-195 phase D (VLM half): mirrors ReachyMini.Providers.ICloudLlmProviderCapability
+    // -- an optional, as-castable capability on the perception composition service,
+    // reachable only from tests and settings actions today, exactly like the local/cloud
+    // LLM path's own still-open "no live call site yet" gap (see
+    // ReachyLocalLlmProviderApplicationService's header comment). The caller supplies the
+    // frame explicitly rather than this capability sourcing one internally -- there is no
+    // established "capture a frame on demand" call path yet, so this stays honest about
+    // what is and is not wired rather than inventing one.
+    public interface ICloudVlmProviderCapability
+    {
+        ValueTask<VisionLanguageResult> AnalyzeSceneAsync(
+            ReachyVisionFrame frame,
+            string prompt,
+            string requestId,
+            CancellationToken cancellationToken);
+    }
 }

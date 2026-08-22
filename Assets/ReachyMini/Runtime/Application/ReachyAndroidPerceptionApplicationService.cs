@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Perception;
 using ReachyMini.Rendering;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -22,9 +23,17 @@ namespace ReachyMini.AppState
     // must run from Unity's Update() loop, not a background Task.Run loop
     // like phase A's behavior service uses -- see the driver's own header
     // comment for the full threading rationale.
-    public sealed class ReachyAndroidPerceptionApplicationService :
+    //
+    // RMA-195 phase D (VLM half, 2026-08-22): also implements
+    // ICloudVlmProviderCapability as an optional as-castable facet (mirroring
+    // ILocalLlmProviderCapability/ICloudLlmProviderCapability on the provider-
+    // selection service) -- the cloud-VLM loading/analysis logic itself lives in
+    // the sibling ReachyAndroidPerceptionApplicationService.CloudVlm.cs partial
+    // file to keep this file's original scope readable.
+    public sealed partial class ReachyAndroidPerceptionApplicationService :
         ReachyApplicationServiceBase,
         IReachyPerceptionService,
+        ICloudVlmProviderCapability,
         IReachyApplicationInterruptionParticipant
     {
         private readonly ReachyProductionAuthoritativeRuntime runtime;
@@ -91,6 +100,7 @@ namespace ReachyMini.AppState
                 Object.Destroy(driverObject);
                 driverObject = null;
             }
+            DisposeCloudVlm();
         }
 
         public void PauseForApplicationInterruption()

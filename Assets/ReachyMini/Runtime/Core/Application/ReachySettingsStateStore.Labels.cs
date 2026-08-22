@@ -18,6 +18,7 @@ namespace ReachyMini.AppState
                 ReachySettingsSection.Privacy => "Privacy",
                 ReachySettingsSection.Licenses => "Licenses",
                 ReachySettingsSection.CloudLlm => "Cloud LLM",
+                ReachySettingsSection.CloudVlm => "Cloud VLM",
                 _ => throw new ArgumentOutOfRangeException(
                     nameof(section),
                     section,

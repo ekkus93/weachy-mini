@@ -1,8 +1,11 @@
 #nullable enable
 
 using System.Diagnostics;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using ReachyMini.AppState;
+using ReachyMini.Perception;
 using ReachyMini.Rendering;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -133,6 +136,110 @@ namespace ReachyMini.Tests
                     stopwatch.ElapsedMilliseconds,
                     Is.LessThan(2000),
                     "Dispose must not hang when no driver was created (off-Android).");
+            }
+        }
+
+        // RMA-195 phase D (VLM half): mirrors
+        // ReachyLocalLlmProviderApplicationServiceTests'
+        // GenerateAsyncFailsClosedOffAndroidWithoutThrowing / cloud-generation
+        // tests -- off-Android is the only reachable path from an EditMode
+        // test, since Application.platform is never Android in the Editor.
+        [Test]
+        public void AnalyzeSceneAsyncFailsClosedOffAndroidWithoutThrowing()
+        {
+            var service = new ReachyAndroidPerceptionApplicationService(
+                runtime!,
+                calibrations!);
+            ReachyVisionFrame frame = BuildOffAndroidTestFrame();
+            try
+            {
+                service.Initialize();
+
+                Task<VisionLanguageResult> task = service.AnalyzeSceneAsync(
+                        frame,
+                        "what is in this scene?",
+                        "req-1",
+                        CancellationToken.None)
+                    .AsTask();
+                Assert.That(
+                    task.Wait(5000),
+                    Is.True,
+                    "AnalyzeSceneAsync must not hang off-Android.");
+
+                VisionLanguageResult result = task.Result;
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(
+                    result.Status,
+                    Is.EqualTo(VisionOperationStatus.Unavailable));
+                Assert.That(
+                    result.Diagnostic,
+                    Does.Contain("requires an Android device"));
+            }
+            finally
+            {
+                frame.DisposeAsync().AsTask().Wait(1000);
+                service.Dispose();
+            }
+        }
+
+        private static ReachyVisionFrame BuildOffAndroidTestFrame()
+        {
+            ReachyVisionFrameIdentity identity = new ReachyVisionFrameIdentity(
+                "test-camera",
+                sourceSessionId: 1UL,
+                sourceSequence: 1UL,
+                sourceTimestampNanoseconds: 1L,
+                authoritativeSequence: 1UL,
+                continuityId: 1U);
+            ReachyVisionCoverage coverage = new ReachyVisionCoverage(
+                VisionCoverageState.Unavailable,
+                validPixelCount: 0L,
+                totalPixelCount: 0L,
+                hasValidityMask: false,
+                shouldStopVisionDrivenTurning: true,
+                "off-android test frame carries no real coverage measurement.");
+            return new ReachyVisionFrame(
+                VisionFrameOrigin.RawPhoneDebug,
+                identity,
+                coverage,
+                new FakeVisionFrameResources());
+        }
+
+        private sealed class FakeVisionFrameResources : IReachyVisionFrameResources
+        {
+            public string OwnerId => "test";
+
+            public ulong Generation => 1UL;
+
+            public int Width => 4;
+
+            public int Height => 4;
+
+            public bool IsDisposed { get; private set; }
+
+            public bool HasResource(VisionResourceKind kind)
+            {
+                return kind == VisionResourceKind.Color;
+            }
+
+            public VisionPixelEncoding GetEncoding(VisionResourceKind kind)
+            {
+                return VisionPixelEncoding.Rgba8;
+            }
+
+            public bool TryGetResource<TResource>(
+                VisionResourceKind kind,
+                out TResource? resource)
+                where TResource : class
+            {
+                resource = null;
+                return false;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                IsDisposed = true;
+                return default;
             }
         }
     }

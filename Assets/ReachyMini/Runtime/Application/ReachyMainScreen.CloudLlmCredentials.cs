@@ -54,11 +54,12 @@ namespace ReachyMini.AppState
                     : ReachyProviderEndpointStyle.ChatCompletions;
         }
 
-        // Only ChatCompletions/Responses are reachable through
-        // CycleCloudLlmEndpointStyle; the other ReachyProviderEndpointStyle
-        // members (AudioTranscriptions/AudioSpeech) belong to ASR/TTS
-        // profiles, not this LLM settings section.
-        private static string GetCloudLlmEndpointStyleLabel(
+        // Shared with the Cloud VLM settings section (ReachyMainScreen.
+        // SettingsSections.cs's DrawCloudVlmSettings) -- only ChatCompletions/
+        // Responses are reachable through either cycle button; the other
+        // ReachyProviderEndpointStyle members (AudioTranscriptions/AudioSpeech)
+        // belong to ASR/TTS profiles, not these LLM/VLM sections.
+        private static string GetCloudEndpointStyleLabel(
             ReachyProviderEndpointStyle style)
         {
             return style switch

@@ -215,7 +215,7 @@ namespace ReachyMini.AppState
             if (GUI.Button(
                     new Rect(area.x, y, area.width, 44f),
                     "ENDPOINT STYLE  " +
-                        GetCloudLlmEndpointStyleLabel(cloudLlmEndpointStyleDraft),
+                        GetCloudEndpointStyleLabel(cloudLlmEndpointStyleDraft),
                     smallButtonStyle!))
             {
                 CycleCloudLlmEndpointStyle();
@@ -245,7 +245,7 @@ namespace ReachyMini.AppState
                 profile == null
                     ? "CURRENT PROFILE  none saved"
                     : $"CURRENT PROFILE  {profile.BaseUri} · " +
-                        $"{GetCloudLlmEndpointStyleLabel(profile.EndpointStyle)} · " +
+                        $"{GetCloudEndpointStyleLabel(profile.EndpointStyle)} · " +
                         $"{profile.GetModelId(ReachyProviderModelRole.Text)}",
                 warningStyle!);
             y += 48f;
@@ -305,6 +305,124 @@ namespace ReachyMini.AppState
             GUI.Label(
                 new Rect(area.x, y, area.width, 62f),
                 cloudLlmStatus,
+                warningStyle!);
+        }
+
+        private void DrawCloudVlmSettings(Rect area)
+        {
+            ReachyCloudVlmCredentialCoordinator coordinator = RequireCloudVlmCredentials();
+            ReachyProviderProfile? profile = coordinator.CurrentProfile;
+
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 54f),
+                "Configure an OpenAI-compatible cloud VLM endpoint for scene " +
+                "description and visual questions. This is off by default and " +
+                "requires explicit authorization below before any camera frame " +
+                "leaves the device.",
+                panelBodyStyle!);
+            float y = area.y + 68f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "BASE URL", detailStyle!);
+            y += 26f;
+            cloudVlmBaseUrlDraft = GUI.TextField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudVlmBaseUrlDraft,
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "ENDPOINT STYLE  " +
+                        GetCloudEndpointStyleLabel(cloudVlmEndpointStyleDraft),
+                    smallButtonStyle!))
+            {
+                CycleCloudVlmEndpointStyle();
+            }
+            y += 52f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "MODEL ID", detailStyle!);
+            y += 26f;
+            cloudVlmModelIdDraft = GUI.TextField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudVlmModelIdDraft,
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "SAVE PROFILE",
+                    smallButtonStyle!))
+            {
+                SaveCloudVlmProfile();
+                profile = coordinator.CurrentProfile;
+            }
+            y += 52f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 42f),
+                profile == null
+                    ? "CURRENT PROFILE  none saved"
+                    : $"CURRENT PROFILE  {profile.BaseUri} · " +
+                        $"{GetCloudEndpointStyleLabel(profile.EndpointStyle)} · " +
+                        $"{profile.GetModelId(ReachyProviderModelRole.Vision)}",
+                warningStyle!);
+            y += 48f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "API KEY", detailStyle!);
+            y += 26f;
+            cloudVlmApiKeyDraft = GUI.PasswordField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudVlmApiKeyDraft,
+                '*',
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "SAVE API KEY",
+                    smallButtonStyle!))
+            {
+                SaveCloudVlmApiKey();
+            }
+            y += 52f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 24f),
+                coordinator.SecretStoreAvailable
+                    ? $"API KEY  {(coordinator.HasApiKey ? "configured" : "not configured")} · Android Keystore"
+                    : "API KEY  storage requires an Android device",
+                warningStyle!);
+            y += 42f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 54f),
+                "Enabling cloud VLM sends camera frames to the base URL above. " +
+                "Nothing is sent off-device until you explicitly authorize it.",
+                warningStyle!);
+            y += 62f;
+
+            bool authorized = coordinator.IsAuthorized;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 48f),
+                    authorized
+                        ? "REVOKE CLOUD VLM AUTHORIZATION"
+                        : "AUTHORIZE CLOUD VLM",
+                    smallButtonStyle!))
+            {
+                if (authorized)
+                {
+                    RevokeCloudVlmAuthorization();
+                }
+                else
+                {
+                    AuthorizeCloudVlm();
+                }
+            }
+            y += 56f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 62f),
+                cloudVlmStatus,
                 warningStyle!);
         }
 
