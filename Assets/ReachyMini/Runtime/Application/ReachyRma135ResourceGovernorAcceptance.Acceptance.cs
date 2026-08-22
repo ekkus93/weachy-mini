@@ -369,9 +369,16 @@ namespace ReachyMini.Validation
                 using (var injectedTimeout = new CancellationTokenSource(GenerationTimeout))
                 {
                     injected = await coordinator.GenerateAsync(
-                        CreateRequest(
-                            "rma135-physics-fault",
-                            "Please give a friendly short acknowledgment."),
+                        // Deliberately the shortest non-empty message
+                        // possible (not a longer, friendlier prompt): every
+                        // token this costs beyond the mandatory system
+                        // prompt eats into the already-thin headroom a
+                        // heavily governor-throttled context leaves for
+                        // real content, and this specific generation exists
+                        // only to be a vehicle for the physics-fault
+                        // injection below, not to exercise conversational
+                        // quality.
+                        CreateRequest("rma135-physics-fault", "Hi."),
                         cancellationSink,
                         injectedTimeout.Token).ConfigureAwait(true);
                 }
@@ -382,6 +389,33 @@ namespace ReachyMini.Validation
                     " injected_count=" + faultPhysics.InjectedCount.ToString(CultureInfo.InvariantCulture));
                 if (injected.Status != LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration)
                 {
+                    if (injected.ProviderResult?.Status == LocalLlmGenerationStatus.ContextLimit)
+                    {
+                        // Distinguish this from an actual physics-fault-injection
+                        // failure: the token preflight inside LocalLlmProvider.GenerateAsync
+                        // runs synchronously before any monitoring tick can ever
+                        // observe the armed fault, so a ContextLimit rejection here
+                        // means the governor-admitted profile left no headroom for
+                        // even a minimal message on this device right now -- a
+                        // resource-throttling condition, not a broken fault
+                        // injection. The prior, generic message here made every past
+                        // occurrence of this race look identical to a real
+                        // cancellation-path bug.
+                        throw new InvalidOperationException(
+                            "RMA-135 physics-fault injection could not be exercised: the " +
+                            "governor-admitted execution profile (context=" +
+                            effectiveProfile.ContextTokens.ToString(CultureInfo.InvariantCulture) +
+                            ", max_generated_tokens=" +
+                            effectiveProfile.MaximumGeneratedTokens.ToString(
+                                CultureInfo.InvariantCulture) +
+                            ", mandatory_prompt_tokens=" +
+                            provider.MandatoryPromptTokens.ToString(CultureInfo.InvariantCulture) +
+                            ") left no headroom for even a minimal test message, so the token " +
+                            "preflight rejected the request before the armed physics fault's " +
+                            "next monitor tick could ever be observed. This is a device " +
+                            "resource-throttling condition on this run, not a physics-fault-injection " +
+                            "failure: detail=" + injected.Detail);
+                    }
                     throw new InvalidOperationException(
                         "Controlled physics-budget violation did not cancel local inference: status=" +
                         injected.Status + " detail=" + injected.Detail);
