@@ -84,7 +84,7 @@ def main() -> None:
         "initial download must stay bound to manifest provenance origin",
     )
     require(
-        "Uri.UriSchemeHttps" in manager and "Uri.UriSchemeHttps" in http,
+        "RequirePublicHttpsUri" in manager and "RequirePublicHttpsUri" in http,
         "download and redirect URI HTTPS checks missing",
     )
     require(
