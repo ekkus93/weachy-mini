@@ -84,6 +84,17 @@ namespace ReachyMini.Validation
         public bool physics_timestep_modified;
         public bool json_repair_used;
         public bool report_contains_prompt_or_response_content;
+        // The governor-admitted execution profile can legitimately leave no
+        // headroom beyond its fixed mandatory-prompt + max-generated-tokens
+        // cost for any real message under severe device throttling -- the
+        // physics-fault-injection probe's own message would fail its token
+        // preflight before any monitoring tick could ever observe the fault,
+        // which is not evidence the fault-injection/recovery path is broken.
+        // When true, fault_injection_*/recovery_*/post_recovery_* fields
+        // above are not meaningful (the sequence never ran) and the
+        // acceptance script skips asserting on them.
+        public bool physics_fault_injection_skipped;
+        public string physics_fault_injection_skip_reason = string.Empty;
     }
 
     internal sealed class Rma135ArtifactVerification

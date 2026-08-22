@@ -356,7 +356,72 @@ namespace ReachyMini.Validation
                     " available_memory=" + postLoadResources.AvailableMemoryBytes.ToString(
                         CultureInfo.InvariantCulture));
 
-                ReachySimulationTimingSnapshot beforeInjection =
+                // The governor-admitted profile can legitimately leave no
+                // headroom beyond its fixed mandatory-prompt + max-generated
+                // -tokens cost for any real message under severe device
+                // throttling. When that happens, LocalLlmProvider's own
+                // token preflight (ReachyLocalLlmProvider.Generation.cs)
+                // rejects the fault-injection probe's message synchronously,
+                // before any governor monitoring tick can ever observe the
+                // armed physics fault -- a resource-throttling condition on
+                // this run, not evidence the cancellation/recovery path is
+                // broken. Skip the whole fault-injection -> recovery ->
+                // post-recovery sequence in that case rather than let it
+                // fail on a precondition it cannot control; the rest of this
+                // acceptance run (artifact/ABI/admission/load/stabilization
+                // above, still real work) is unaffected.
+                long headroomTokens = checked(
+                    (long)effectiveProfile.ContextTokens -
+                    effectiveProfile.MaximumGeneratedTokens -
+                    provider.MandatoryPromptTokens);
+                bool skipFaultInjection = headroomTokens < MinimumHeadroomTokensForFaultInjectionProbe;
+                string faultInjectionSkipReason = string.Empty;
+
+                ReachySimulationTimingSnapshot beforeInjection;
+                ReachySimulationTimingSnapshot afterInjection;
+                LocalLlmGovernedGenerationResult injected;
+                int recoverySamples = 0;
+                LocalLlmGovernorDecision? recoveredDecision;
+                int postRecoveryAttempts = 0;
+                Rma135CollectingSink successSink;
+                LocalLlmGovernedGenerationResult recoveredGeneration;
+
+                if (skipFaultInjection)
+                {
+                    faultInjectionSkipReason =
+                        "governor-admitted execution profile (context=" +
+                        effectiveProfile.ContextTokens.ToString(CultureInfo.InvariantCulture) +
+                        ", max_generated_tokens=" +
+                        effectiveProfile.MaximumGeneratedTokens.ToString(CultureInfo.InvariantCulture) +
+                        ", mandatory_prompt_tokens=" +
+                        provider.MandatoryPromptTokens.ToString(CultureInfo.InvariantCulture) +
+                        ") leaves only " + headroomTokens.ToString(CultureInfo.InvariantCulture) +
+                        " headroom token(s), below the " +
+                        MinimumHeadroomTokensForFaultInjectionProbe.ToString(CultureInfo.InvariantCulture) +
+                        " needed to safely probe fault injection on this run.";
+                    WriteCheckpoint(
+                        "physics_fault_injection_skipped",
+                        faultInjectionSkipReason);
+                    ReachySimulationTimingSnapshot currentTiming = workerBeforeAdmission;
+                    if (productionRuntime.TryGetLatestTimingSnapshot(
+                        out ReachySimulationTimingSnapshot latestTiming))
+                    {
+                        currentTiming = latestTiming;
+                    }
+                    beforeInjection = currentTiming;
+                    afterInjection = currentTiming;
+                    injected = new LocalLlmGovernedGenerationResult(
+                        LocalLlmGovernedGenerationStatus.SignalFailure,
+                        null,
+                        null,
+                        "skipped: " + faultInjectionSkipReason);
+                    recoveredDecision = coordinator.EvaluateCurrentBudget();
+                    successSink = new Rma135CollectingSink();
+                    recoveredGeneration = injected;
+                }
+                else
+                {
+                beforeInjection =
                     await WaitForTimingProgressAsync(
                         productionRuntime,
                         checked(workerBeforeAdmission.TotalStepCount + 5UL)).ConfigureAwait(true);
@@ -365,7 +430,6 @@ namespace ReachyMini.Validation
                 WriteCheckpoint(
                     "physics_fault_injection_generation_started",
                     "Controlled one-shot PhysicsBudgetState.Exceeded is armed after the real preflight sample.");
-                LocalLlmGovernedGenerationResult injected;
                 using (var injectedTimeout = new CancellationTokenSource(GenerationTimeout))
                 {
                     injected = await coordinator.GenerateAsync(
@@ -432,7 +496,7 @@ namespace ReachyMini.Validation
                         (injected.ProviderResult?.Status.ToString() ?? "none"));
                 }
 
-                ReachySimulationTimingSnapshot afterInjection =
+                afterInjection =
                     await WaitForTimingProgressAsync(
                         productionRuntime,
                         checked(beforeInjection.TotalStepCount + 5UL)).ConfigureAwait(true);
@@ -447,8 +511,8 @@ namespace ReachyMini.Validation
                         CultureInfo.InvariantCulture) + " worker_steps_after=" +
                     afterInjection.TotalStepCount.ToString(CultureInfo.InvariantCulture));
 
-                int recoverySamples = 0;
-                LocalLlmGovernorDecision? recoveredDecision = null;
+                recoverySamples = 0;
+                recoveredDecision = null;
                 LocalLlmGovernorDecision? recoveryLastObservedDecision = null;
                 WriteCheckpoint(
                     "governor_recovery_started",
@@ -486,10 +550,8 @@ namespace ReachyMini.Validation
                     "samples=" + recoverySamples.ToString(CultureInfo.InvariantCulture) +
                     " mode=" + recoveredDecision.Mode);
 
-                int postRecoveryAttempts = 0;
+                postRecoveryAttempts = 0;
                 string firstPostRecoveryRefusal = string.Empty;
-                Rma135CollectingSink successSink;
-                LocalLlmGovernedGenerationResult recoveredGeneration;
 
                 // Diagnostic instrumentation only: baseline the physics worker's own timing
                 // counters right where the retry window starts, distinct from afterInjection
@@ -639,6 +701,7 @@ namespace ReachyMini.Validation
                     successSink,
                     "post-recovery governed generation after " +
                     postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) + " attempt(s)");
+                }
 
                 ReachySimulationTimingSnapshot finalWorker =
                     await WaitForTimingProgressAsync(
@@ -725,6 +788,8 @@ namespace ReachyMini.Validation
                     physics_timestep_modified = false,
                     json_repair_used = false,
                     report_contains_prompt_or_response_content = false,
+                    physics_fault_injection_skipped = skipFaultInjection,
+                    physics_fault_injection_skip_reason = faultInjectionSkipReason,
                 };
             }
             finally

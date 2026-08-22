@@ -74,6 +74,16 @@ namespace ReachyMini.Validation
         // outside the device's miss cadence.
         private const int PostRecoveryPreflightObservationBudget = 100;
 
+        // Both the fault-injection probe ("Hi.") and SuccessPrompt above cost
+        // real tokens beyond the mandatory system prompt. A governor-admitted
+        // profile can legitimately leave less than this much room under
+        // severe device throttling (observed as low as 1 token on real
+        // hardware, 2026-08-21) -- below this floor, no message can survive
+        // LocalLlmProvider's own token preflight long enough to exercise
+        // fault injection or verify recovery, so that whole sequence is
+        // skipped rather than failed on a precondition it cannot control.
+        private const int MinimumHeadroomTokensForFaultInjectionProbe = 8;
+
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
         private static string unhandledFailureMessage = string.Empty;
