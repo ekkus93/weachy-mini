@@ -18,6 +18,7 @@ namespace ReachyMini.AppState
         private static readonly ReachySettingsSection[] SettingsSections =
         {
             ReachySettingsSection.Providers,
+            ReachySettingsSection.CloudLlm,
             ReachySettingsSection.Camera,
             ReachySettingsSection.Speech,
             ReachySettingsSection.LocalModel,

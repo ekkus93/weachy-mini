@@ -3048,6 +3048,51 @@ provider-driven intents) needs perception and provider both Ready.
       settings system, and recommended these exclusions as requiring a
       product/UX decision rather than a pure engineering call; the user
       confirmed "composition wiring only" when asked.
+      **Follow-up (2026-08-22, same day): the settings UI excluded above is
+      now built**, once the user explicitly chose that as the next slice.
+      `ReachyCloudLlmCredentialCoordinator`
+      (`Assets/ReachyMini/Runtime/Application/ReachyCloudLlmCredentialCoordinator.cs`)
+      is the settings-facing counterpart: it writes a `ReachyProviderProfile`
+      keyed by the same well-known provider id
+      (`ReachyLocalLlmProviderApplicationService.CloudLlmProfileProviderId`,
+      promoted from `private` to `public const` so both sides share one
+      source of truth), stores the API key via
+      `ReachyProviderCredentialLifecycle`/`ReachyAndroidProviderSecretStore`,
+      and grants/revokes the `Llm` workload's fallback-policy authorization
+      via `ReachyFallbackPolicyPersistenceStore` -- a durable store that
+      existed since before this session but was previously wired nowhere in
+      the app (confirmed dead code by the same investigation). A new
+      "Cloud LLM" settings section
+      (`ReachyMainScreen.CloudLlmCredentials.cs` + the `DrawCloudLlmSettings`
+      draw method in `ReachyMainScreen.SettingsSections.cs`, new
+      `ReachySettingsSection.CloudLlm` enum member) exposes base-URL/model-ID
+      text fields and a masked API-key field -- `GUI.TextField`/
+      `GUI.PasswordField`, the first text-input widgets anywhere in this
+      codebase's `OnGUI` settings system -- plus SAVE PROFILE, SAVE API KEY,
+      and an AUTHORIZE/REVOKE CLOUD LLM toggle button with an explicit
+      on-screen disclosure that enabling it sends conversation text to the
+      configured endpoint. **A real, previously-latent wiring gap was fixed
+      alongside this**: `ReachyLocalLlmProviderApplicationService.EnsureFallbackPolicyEngine()`
+      used to hand back a bare in-memory `ReachyProviderFallbackPolicyEngine`
+      that always started at `NoFallback()` and never read
+      `ReachyFallbackPolicyPersistenceStore` at all -- so even after this
+      settings UI grants authorization, the generation-side engine would
+      never have seen it. It now loads through
+      `ReachyFallbackPolicyPersistenceStore` on first use, same default
+      `Application.persistentDataPath` file the coordinator writes to.
+      Caveat documented in code: the two sides hold independent in-memory
+      engine instances after their own first load, so a grant made after
+      cloud generation has already been attempted once this process isn't
+      picked up until restart -- acceptable today since there is still no
+      live call site to race with. 9 new EditMode tests
+      (`ReachyCloudLlmCredentialCoordinatorTests.cs`) cover profile
+      save/validation and the off-Android fail-closed paths for the API-key
+      and authorization actions (the real Android-Keystore success path
+      remains physical-acceptance-only, matching the established coverage
+      ceiling elsewhere in this file). **Still not done**: the live
+      conversational-turn trigger and the VLM half of Phase D remain
+      exactly as unstarted as noted above -- this follow-up only closes the
+      settings-UI/authorization-wiring gap, not the whole Phase D checkbox.
 - [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
       (never referenced by `ReachyMainScreenBootstrap`, which always
       constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,

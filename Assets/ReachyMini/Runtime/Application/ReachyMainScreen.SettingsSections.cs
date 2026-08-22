@@ -1,5 +1,6 @@
 #nullable enable
 
+using ReachyMini.Providers;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -188,6 +189,123 @@ namespace ReachyMini.AppState
                     "Private-media export",
                     ReachyPrivateMediaRetentionPolicy.PersistentMediaRetentionUnavailableReason);
             }
+        }
+
+        private void DrawCloudLlmSettings(Rect area)
+        {
+            ReachyCloudLlmCredentialCoordinator coordinator = RequireCloudLlmCredentials();
+            ReachyProviderProfile? profile = coordinator.CurrentProfile;
+
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 54f),
+                "Configure an OpenAI-compatible cloud LLM endpoint. This is off by " +
+                "default and requires explicit authorization below before any " +
+                "request leaves the device.",
+                panelBodyStyle!);
+            float y = area.y + 62f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "BASE URL", detailStyle!);
+            y += 26f;
+            cloudLlmBaseUrlDraft = GUI.TextField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudLlmBaseUrlDraft,
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "ENDPOINT STYLE  " +
+                        GetCloudLlmEndpointStyleLabel(cloudLlmEndpointStyleDraft),
+                    smallButtonStyle!))
+            {
+                CycleCloudLlmEndpointStyle();
+            }
+            y += 52f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "MODEL ID", detailStyle!);
+            y += 26f;
+            cloudLlmModelIdDraft = GUI.TextField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudLlmModelIdDraft,
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "SAVE PROFILE",
+                    smallButtonStyle!))
+            {
+                SaveCloudLlmProfile();
+                profile = coordinator.CurrentProfile;
+            }
+            y += 52f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 42f),
+                profile == null
+                    ? "CURRENT PROFILE  none saved"
+                    : $"CURRENT PROFILE  {profile.BaseUri} · " +
+                        $"{GetCloudLlmEndpointStyleLabel(profile.EndpointStyle)} · " +
+                        $"{profile.GetModelId(ReachyProviderModelRole.Text)}",
+                warningStyle!);
+            y += 48f;
+
+            GUI.Label(new Rect(area.x, y, area.width, 24f), "API KEY", detailStyle!);
+            y += 26f;
+            cloudLlmApiKeyDraft = GUI.PasswordField(
+                new Rect(area.x, y, area.width, 40f),
+                cloudLlmApiKeyDraft,
+                '*',
+                textFieldStyle!);
+            y += 48f;
+
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 44f),
+                    "SAVE API KEY",
+                    smallButtonStyle!))
+            {
+                SaveCloudLlmApiKey();
+            }
+            y += 52f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 24f),
+                coordinator.SecretStoreAvailable
+                    ? $"API KEY  {(coordinator.HasApiKey ? "configured" : "not configured")} · Android Keystore"
+                    : "API KEY  storage requires an Android device",
+                warningStyle!);
+            y += 42f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 54f),
+                "Enabling cloud LLM sends your conversation text to the base URL " +
+                "above. Nothing is sent off-device until you explicitly authorize it.",
+                warningStyle!);
+            y += 62f;
+
+            bool authorized = coordinator.IsAuthorized;
+            if (GUI.Button(
+                    new Rect(area.x, y, area.width, 48f),
+                    authorized
+                        ? "REVOKE CLOUD LLM AUTHORIZATION"
+                        : "AUTHORIZE CLOUD LLM",
+                    smallButtonStyle!))
+            {
+                if (authorized)
+                {
+                    RevokeCloudLlmAuthorization();
+                }
+                else
+                {
+                    AuthorizeCloudLlm();
+                }
+            }
+            y += 56f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 62f),
+                cloudLlmStatus,
+                warningStyle!);
         }
 
         private void DrawLicenseSettings(Rect area)

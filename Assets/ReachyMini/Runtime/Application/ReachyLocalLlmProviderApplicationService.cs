@@ -57,14 +57,18 @@ namespace ReachyMini.AppState
     // IReachyProviderSecretStore, and requires
     // ReachyProviderFallbackPolicyEngine to authorize the OnDevice->Cloud
     // privacy-boundary switch before constructing the RMA-142/143 adapter.
-    // Deliberately excluded from this slice: any settings UI to actually
-    // create a cloud provider profile/credential or grant the fallback
-    // policy authorization, and any live call site that invokes this
-    // capability -- exactly like the local path, ICloudLlmProviderCapability
-    // is reachable only from tests today. On a real, unconfigured device this
-    // always reports "no cloud LLM provider profile is configured", honestly,
-    // the same way the local path reports "no compatible local model is
-    // installed" before its own install UI exists.
+    // Update (2026-08-22): ReachyCloudLlmCredentialCoordinator plus a new
+    // "Cloud LLM" settings section now let a user actually create a cloud
+    // provider profile/credential and grant the fallback-policy
+    // authorization from the app itself (see that class and
+    // ReachyMainScreen.CloudLlmCredentials.cs). Still deliberately excluded:
+    // any live call site that invokes this capability -- exactly like the
+    // local path, ICloudLlmProviderCapability is reachable only from tests
+    // and the new settings actions today, never from a real conversational
+    // turn. On a real device with nothing configured yet this still reports
+    // "no cloud LLM provider profile is configured", honestly, the same way
+    // the local path reports "no compatible local model is installed"
+    // before its own install UI exists.
     public sealed class ReachyLocalLlmProviderApplicationService :
         ReachyApplicationServiceBase,
         IReachyProviderService,
@@ -88,10 +92,11 @@ namespace ReachyMini.AppState
         private const string LocalModelStoreDirectoryName = "local-models";
 
         // Well-known lookup key into ReachyProviderProfilePersistenceStore for a
-        // cloud LLM profile. Nothing can write one under this id yet (no settings
-        // UI); this is a forward-looking convention for whichever future phase
-        // adds that UI to adopt, not evidence a profile exists today.
-        private const string CloudLlmProfileProviderId = "reachy-cloud-llm";
+        // cloud LLM profile. Public because ReachyCloudLlmCredentialCoordinator
+        // (the settings-UI side that actually writes a profile under this id)
+        // needs the exact same identifier -- a single source of truth avoids
+        // the two sides silently drifting apart.
+        public const string CloudLlmProfileProviderId = "reachy-cloud-llm";
         // Stable placeholder "source" identity for the OnDevice->Cloud privacy-
         // boundary switch request -- there is no real "currently active" LLM
         // provider identity to reference (provider selection is a user
@@ -708,11 +713,26 @@ namespace ReachyMini.AppState
             }
         }
 
+        // Loads from ReachyFallbackPolicyPersistenceStore rather than handing
+        // back a bare in-memory engine that always starts at NoFallback() --
+        // otherwise a grant made through ReachyCloudLlmCredentialCoordinator's
+        // settings UI (which persists to the same default file) would never
+        // become visible here. Note this is still only read once and cached
+        // for this service instance's lifetime: a grant/revoke made after the
+        // first cloud generation attempt this process is not picked up until
+        // the service is re-created. There is no live call site yet, so in
+        // practice configuration always happens before any attempt exists.
         private ReachyProviderFallbackPolicyEngine EnsureFallbackPolicyEngine()
         {
             lock (sync)
             {
-                fallbackPolicyEngine ??= new ReachyProviderFallbackPolicyEngine();
+                if (fallbackPolicyEngine == null)
+                {
+                    fallbackPolicyEngine = new ReachyProviderFallbackPolicyEngine();
+                    ReachyFallbackPolicyPersistenceStore fallbackPolicyStore =
+                        new ReachyFallbackPolicyPersistenceStore(fallbackPolicyEngine);
+                    fallbackPolicyStore.Initialize();
+                }
                 return fallbackPolicyEngine;
             }
         }

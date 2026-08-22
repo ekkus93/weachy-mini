@@ -17,6 +17,7 @@ namespace ReachyMini.AppState
         private GUIStyle? panelBodyStyle;
         private GUIStyle? sectionStyle;
         private GUIStyle? warningStyle;
+        private GUIStyle? textFieldStyle;
 
         private void EnsureStyles()
         {
@@ -96,6 +97,13 @@ namespace ReachyMini.AppState
             {
                 fontSize = 14,
                 normal = { textColor = new Color(1f, 0.8f, 0.48f, 1f) },
+            };
+            textFieldStyle = new GUIStyle(GUI.skin.textField)
+            {
+                fontSize = 14,
+                padding = new RectOffset(10, 10, 6, 6),
+                normal = { textColor = Color.white },
+                focused = { textColor = Color.white },
             };
         }
 
