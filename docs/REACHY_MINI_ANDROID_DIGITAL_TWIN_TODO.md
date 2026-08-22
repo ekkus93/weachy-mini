@@ -2369,19 +2369,23 @@ reliably and the remaining failure is thermal, not code.
 
 ## RMA-140 — Implement secure provider configuration
 
-- [ ] Define provider profiles containing base URL, endpoint style, model IDs, headers, timeout, streaming, TLS mode, and secret reference.
-- [ ] Store secrets using Android Keystore-backed storage.
-- [ ] Redact secrets from logs and exports.
-- [ ] Reject cleartext HTTP by default.
-- [ ] Add an explicit local-development override with a persistent warning.
+- [x] Define provider profiles containing base URL, endpoint style, model IDs, headers, timeout, streaming, TLS mode, and secret reference.
+- [x] Store secrets using Android Keystore-backed storage.
+- [x] Redact secrets from logs and exports.
+- [x] Reject cleartext HTTP by default.
+- [x] Add an explicit local-development override with a persistent warning.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs`'s `ReachyProviderProfile` (base URI/endpoint style/model bindings/headers/timeout/streaming/TLS mode/credential reference), `ValidateBaseUri` rejects non-HTTPS unless `ReachyProviderTlsMode.LocalDevelopmentCleartext` and `ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost`, `SecurityWarning`/`CreateRedactedDiagnostic()`. Android Keystore-backed via `ReachyAndroidProviderSecretStore.cs` → `ReachyProviderSecretBridge.java` (`AndroidKeyStore`). Exercised indirectly by `ReachyProviderCredentialLifecycleTests.cs`; no dedicated RMA-140 test file exists (residual coverage gap, not a correctness gap).
 
 ## RMA-141 — Implement shared HTTP/streaming transport
 
-- [ ] Add cancellation, connection/read timeout, bounded response size, retry classification, and backoff.
-- [ ] Do not retry non-idempotent requests blindly.
-- [ ] Parse streaming responses incrementally.
-- [ ] Categorize authentication, permission, quota/rate limit, timeout, TLS, malformed response, and server errors.
-- [ ] Include request IDs in diagnostics where provided.
+- [x] Add cancellation, connection/read timeout, bounded response size, retry classification, and backoff.
+- [x] Do not retry non-idempotent requests blindly.
+- [x] Parse streaming responses incrementally.
+- [x] Categorize authentication, permission, quota/rate limit, timeout, TLS, malformed response, and server errors.
+- [x] Include request IDs in diagnostics where provided.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachySharedHttpTransport.{Core,Helpers,Lifecycle,Read}.cs` (linked cancellation, `CancelAfter` timeout, `MaximumResponseBytes` bound, `ComputeBackoff`), `ReachyHttpTransportRequest.IsRetryEligibleMethod`/`ExplicitlyAuthorizeNonIdempotentRetry` (both real callers pass `false` for POST), `ReachyServerSentEventParser.cs` (incremental SSE), `ReachyHttpErrorCategory` enum (Authentication/Permission/QuotaOrRateLimited/Timeout/Tls/MalformedResponse/Server), `ReadProviderRequestId`. Consumed by the working ASR/TTS adapters below; no dedicated RMA-141 test file exists (residual coverage gap, not a correctness gap).
 
 ## RMA-142 — Implement OpenAI LLM adapter
 
@@ -2401,26 +2405,32 @@ reliably and the remaining failure is thermal, not code.
 
 ## RMA-144 — Implement OpenAI ASR and compatible ASR
 
-- [ ] Implement `/v1/audio/transcriptions` multipart requests.
-- [ ] Buffer only the intended utterance.
-- [ ] Apply format, size, duration, cancellation, and timeout limits.
-- [ ] Delete temporary audio promptly.
-- [ ] Implement configurable compatible endpoint/model.
+- [x] Implement `/v1/audio/transcriptions` multipart requests.
+- [x] Buffer only the intended utterance.
+- [x] Apply format, size, duration, cancellation, and timeout limits.
+- [x] Delete temporary audio promptly.
+- [x] Implement configurable compatible endpoint/model.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleAsrProvider.{Core,Helpers}.cs` (self-tagged `"rma-144-v1"`) builds `/v1/audio/transcriptions` multipart via the RMA-141 shared transport, scopes buffering per-request through `IUtteranceSource.CaptureUtteranceAsync` with explicit size/duration bounds, `finally`-block `Array.Clear`/`Dispose` cleanup, model/endpoint resolved from the RMA-140 provider profile. No dedicated RMA-144 test file exists (residual coverage gap, not a correctness gap).
 
 ## RMA-145 — Implement OpenAI TTS and compatible TTS
 
-- [ ] Implement `/v1/audio/speech` with configurable model, voice, format, and supported instructions.
-- [ ] Stream or buffer audio without blocking the Unity thread.
-- [ ] Validate content type and size.
-- [ ] Implement cancellation and cleanup.
-- [ ] Implement configurable compatible endpoint/model.
+- [x] Implement `/v1/audio/speech` with configurable model, voice, format, and supported instructions.
+- [x] Stream or buffer audio without blocking the Unity thread.
+- [x] Validate content type and size.
+- [x] Implement cancellation and cleanup.
+- [x] Implement configurable compatible endpoint/model.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleTtsProvider.{Core,Helpers}.cs` (self-tagged `"rma-145-v1"`), fully async/`ValueTask` via `IBufferedTtsAudioSink` (no blocking calls), `AcceptsContentType`/`MaximumResponseBytes` validation, linked cancellation producing `TtsEventKind.Cancelled` plus `Dispose()` cleanup, profile-driven configurable endpoint/model. No dedicated RMA-145 test file exists (residual coverage gap, not a correctness gap).
 
 ## RMA-146 — Add explicit no-fallback policy engine
 
-- [ ] Represent authorized fallback policies as named user settings.
-- [ ] Default all cross-provider fallback to disabled.
-- [ ] Require confirmation before a privacy boundary changes.
-- [ ] Record provider switch reason in diagnostics.
+- [x] Represent authorized fallback policies as named user settings.
+- [x] Default all cross-provider fallback to disabled.
+- [x] Require confirmation before a privacy boundary changes.
+- [x] Record provider switch reason in diagnostics.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `ReachyProviderFallbackPolicyEngine.cs`/`ReachyProviderFallbackPolicyContracts.cs` — `ReachyFallbackPolicy.NoFallback()` is the default for every `ReachyProviderWorkloadKind`, `ConfirmPrivacyBoundaryChange`, `ReachyFallbackDiagnostic`. Dedicated test `managed/ReachyMini.Core.Tests/Rma146ProviderFallbackPolicyContractTests.cs` (incl. `MockFailureCannotActivateUnauthorizedProvider`), run locally via `dotnet run` — passes.
 
 Example policy model:
 
@@ -2434,9 +2444,11 @@ public sealed record FallbackPolicy(
 
 **Acceptance criteria — provider gate**
 
-- [ ] ASR, TTS, LLM, and VLM providers can be selected independently.
-- [ ] BYOK secrets are absent from logs and exported settings.
-- [ ] Mock failures never activate an unauthorized provider.
+- [x] ASR, TTS, LLM, and VLM providers can be selected independently.
+- [x] BYOK secrets are absent from logs and exported settings.
+- [x] Mock failures never activate an unauthorized provider.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `ReachyProviderWorkloadKind` enum (`Asr`/`Tts`/`Llm`/`Vlm`) each with an independent policy slot in `ReachyProviderFallbackPolicyEngine`; BYOK redaction per RMA-140 evidence above; `MockFailureCannotActivateUnauthorizedProvider()` test directly covers the third item.
 
 ---
 
@@ -2444,19 +2456,23 @@ public sealed record FallbackPolicy(
 
 ## RMA-150 — Implement conversation state machine
 
-- [ ] Implement Idle, Listening, Transcribing, Thinking, PreparingSpeech, Speaking, Interrupted, Unavailable, and Error states.
-- [ ] Define every transition and cancellation path.
-- [ ] Reject stale asynchronous completions using turn/session IDs.
-- [ ] Prevent simultaneous conflicting ASR/TTS sessions.
-- [ ] Add interruption/barge-in policy.
+- [x] Implement Idle, Listening, Transcribing, Thinking, PreparingSpeech, Speaking, Interrupted, Unavailable, and Error states.
+- [x] Define every transition and cancellation path.
+- [x] Reject stale asynchronous completions using turn/session IDs.
+- [x] Prevent simultaneous conflicting ASR/TTS sessions.
+- [x] Add interruption/barge-in policy.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationStateMachine.cs`/`.Lifecycle.cs`, `ReachyConversationStateContracts.cs` (9-value `ReachyConversationState` enum matching exactly; `ReachyBargeInPolicy`). Dedicated test `managed/ReachyMini.Core.Tests/Rma150ConversationStateMachineContractTests.cs` (`HappyPathIsDeterministic`, `StaleCompletionAfterInterruptIsRejected`, `ConflictingSessionStartIsRejected`, `SpeakingBargeInCancelsPlaybackBeforeNextTurn`), run locally via `dotnet run` — passes.
 
 ## RMA-151 — Define structured behavior intent schema
 
-- [ ] Add a versioned JSON schema.
-- [ ] Include optional speech, gaze target, expression, gesture, urgency, and timing constraints.
-- [ ] Reject unknown unsafe actions.
-- [ ] Bound string lengths, numeric ranges, and collection sizes.
-- [ ] Add repair/retry policy that does not fabricate successful execution.
+- [x] Add a versioned JSON schema.
+- [x] Include optional speech, gaze target, expression, gesture, urgency, and timing constraints.
+- [x] Reject unknown unsafe actions.
+- [x] Bound string lengths, numeric ranges, and collection sizes.
+- [x] Add repair/retry policy that does not fabricate successful execution.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Behavior/ReachyBehaviorIntentContracts.cs`/`ReachyBehaviorIntentJsonParser.cs`/`ReachyBehaviorIntentJsonReader.cs` — `CurrentSchemaVersion`, unknown-property rejection, `MaximumSpeechCharacters`/`MaximumEntityIdCharacters`/`MaximumGazeTargetProperties` bounds. Dedicated test `managed/ReachyMini.Core.Tests/Rma151BehaviorIntentContractTests.cs`, incl. `InvalidOutputIsNeverRepairedIntoSuccess()` asserting no fabricated intent — passes.
 
 Example:
 
@@ -2476,44 +2492,50 @@ Example:
 
 ## RMA-152 — Implement deterministic behavior planner
 
-- [ ] Resolve gaze target against current world-model snapshot.
-- [ ] Reject expired or low-confidence targets.
-- [ ] Convert expressions and gestures into parameterized trajectories.
-- [ ] Enforce workspace, joint, velocity, acceleration, load, collision, and image-coverage constraints.
-- [ ] Coordinate body yaw, Stewart mechanism, and antennas.
-- [ ] Route all motion through normal controller/servo/MuJoCo paths.
-- [ ] Support cancellation and safe rest.
+- [x] Resolve gaze target against current world-model snapshot.
+- [x] Reject expired or low-confidence targets.
+- [x] Convert expressions and gestures into parameterized trajectories.
+- [x] Enforce workspace, joint, velocity, acceleration, load, collision, and image-coverage constraints.
+- [x] Coordinate body yaw, Stewart mechanism, and antennas.
+- [x] Route all motion through normal controller/servo/MuJoCo paths.
+- [x] Support cancellation and safe rest.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Behavior/ReachyDeterministicBehaviorPlanner.{Baseline,BaselineGaze,BaselinePoses,GazeAndPoses,Planning,TrajectorySafety}.cs`, `ReachyBehaviorTrajectoryExecutor.cs` → `IReachyBehaviorControllerTargetSink`, implemented in production by `Assets/ReachyMini/Runtime/Rendering/ReachyProductionBehaviorControllerTargetSink.cs` calling `ReachyProductionAuthoritativeRuntime.SubmitPositionTargets` (the same RMA-032 authoritative MuJoCo worker path). Dedicated test suite `managed/ReachyMini.Core.Tests/Rma152DeterministicBehaviorPlannerContractTests.{cs,Fixtures,Planning,Safety,Slew}.cs` — passes.
 
 ## RMA-153 — Implement baseline behavior library
 
-- [ ] neutral idle micro-motion;
-- [ ] listening posture;
-- [ ] speaking motion;
-- [ ] acknowledgment/nod;
-- [ ] curiosity/head tilt;
-- [ ] surprise/recoil;
-- [ ] gaze acquisition and visual centering;
-- [ ] gaze loss/search within valid coverage;
-- [ ] unavailable/error expression;
-- [ ] sleep/rest and wake.
+- [x] neutral idle micro-motion;
+- [x] listening posture;
+- [x] speaking motion;
+- [x] acknowledgment/nod;
+- [x] curiosity/head tilt;
+- [x] surprise/recoil;
+- [x] gaze acquisition and visual centering;
+- [x] gaze loss/search within valid coverage;
+- [x] unavailable/error expression;
+- [x] sleep/rest and wake.
 
-- [ ] Give every behavior deterministic parameters, limits, and tests.
-- [ ] Ensure “expressive” motion cannot bypass mechanical constraints.
+- [x] Give every behavior deterministic parameters, limits, and tests.
+- [x] Ensure “expressive” motion cannot bypass mechanical constraints.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Behavior/ReachyBaselineBehaviorContracts.cs` (`ReachyBaselineBehaviorKind` enum covers all 10 behaviors), `ReachyBaselineBehaviorLibrary.cs`, `ReachyBaselineBehaviorPolicy.cs`, `ReachyBaselineLifecycleResetMapping.cs`. Dedicated test suite `managed/ReachyMini.Core.Tests/Rma153BaselineBehaviorLibraryContractTests.{cs,Fixtures,GazeLifecycle,Planning}.cs`, incl. `SafetyInterlocksAndCancellationProduceNoHiddenMotion()` — passes.
 
 ## RMA-154 — Implement visual-servo gaze loop
 
-- [ ] Use transformed-image tracking coordinates.
-- [ ] Command a bounded head/body adjustment.
-- [ ] Wait for actual MuJoCo motion to change the next transformed frame.
-- [ ] Re-evaluate tracking error.
-- [ ] Stop on tolerance, target loss, invalid coverage, timeout, load limit, or cancellation.
-- [ ] Do not use requested head target as proof that gaze moved.
+- [x] Use transformed-image tracking coordinates.
+- [x] Command a bounded head/body adjustment.
+- [x] Wait for actual MuJoCo motion to change the next transformed frame.
+- [x] Re-evaluate tracking error.
+- [x] Stop on tolerance, target loss, invalid coverage, timeout, load limit, or cancellation.
+- [x] Do not use requested head target as proof that gaze moved.
 
 **Acceptance criteria — behavior gate**
 
-- [ ] A face at an image edge causes actual simulated motion and recenters through feedback.
-- [ ] Invalid LLM output cannot command raw joints or torque.
-- [ ] Replaying the same intent and observation stream produces repeatable trajectories.
+- [x] A face at an image edge causes actual simulated motion and recenters through feedback.
+- [x] Invalid LLM output cannot command raw joints or torque.
+- [x] Replaying the same intent and observation stream produces repeatable trajectories.
+
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Behavior/ReachyVisualServoGazeLoop.cs`/`ReachyVisualServoFeedback.cs`/`ReachyVisualServoPolicy.cs`/`ReachyVisualServoResult.cs` (routes through RMA-152's bounded/safety-constrained planner+executor; no raw-joint pass-through exists). Dedicated test suite `managed/ReachyMini.Core.Tests/Rma154VisualServoGazeLoopContractTests.{cs,Feedback,Fixtures}.cs`, incl. `EdgeTargetRecentersOnlyAfterAuthoritativeMotionAndNewFrame()`, `RequestedTargetsDoNotCountAsMotionFeedback()`, `StopConditionsAreFailClosed()`, `ObservationReplayProducesRepeatableTrajectories()` — passes.
 
 ---
 
