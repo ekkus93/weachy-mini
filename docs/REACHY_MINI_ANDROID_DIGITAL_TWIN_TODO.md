@@ -2389,19 +2389,23 @@ reliably and the remaining failure is thermal, not code.
 
 ## RMA-142 — Implement OpenAI LLM adapter
 
-- [ ] Implement Responses API requests with configurable model ID.
+- [x] Implement Responses API requests with configurable model ID.
 - [ ] Support text and transformed-image input where enabled.
-- [ ] Support structured high-level behavior output.
-- [ ] Keep model IDs configurable.
-- [ ] Add mock-server contract tests.
+- [x] Support structured high-level behavior output.
+- [x] Keep model IDs configurable.
+- [x] Add mock-server contract tests.
+
+**Status:** Partially complete (2026-08-22). No cloud LLM provider class existed at all before this pass -- new code, not wiring, following the RMA-144/145 OpenAI-compatible ASR/TTS pattern per this ticket's own scoping note in RMA-195 Phase D. `OpenAiResponsesLlmProvider`/`OpenAiChatCompletionsLlmProvider` (`Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleLlmProvider.{Core,Helpers}.cs`) send bounded, non-streaming `v1/responses`/`v1/chat/completions` requests through the RMA-141 shared transport, with the model id resolved from `ReachyProviderProfile.GetModelId(ReachyProviderModelRole.Text)`. The assistant's raw text response is parsed by a bounded hand-rolled scanner (`ReachyLlmResponseProtocolParser.cs`, mirroring `ReachyAsrTranscriptionProtocolParser`'s style) and fed directly into RMA-151's `ReachyBehaviorIntentJsonParser.Validate` -- `ReachyLlmGenerationResult` wraps the resulting `ReachyBehaviorIntentValidationResult` verbatim, so "structured high-level behavior output" is the RMA-151 schema itself, not a second parallel one. Verified by 8 mock-server contract tests (`managed/ReachyMini.Core.Tests/Rma142Rma143OpenAiLlmAdapterContractTests.cs`) exercising a fake `HttpMessageHandler` through the real transport/auth/parsing pipeline via a newly-authorized internal `transportOverride` seam (`Assets/ReachyMini/Runtime/Core/ReachyMiniCoreAssemblyInfo.cs`'s `InternalsVisibleTo` -- this seam already existed on the RMA-144/145 ASR/TTS providers but was previously unreachable from any test project). **Text and transformed-image input deliberately NOT implemented**: RMA-115's VLM providers already cover image-grounded scene description/questions as a separate pipeline, and RMA-195 Phase D's own framing gates conversational behavior intents on text landing first -- `ReachyLlmCapabilities.SupportsImages` is hardcoded `false` on every instance this file produces so a caller can detect the gap rather than have it silently ignored. Wiring first cloud-provider enablement through `ReachyProviderFallbackPolicyEngine`'s privacy-boundary confirmation (per this ticket's parent note) is an RMA-195 Phase D composition concern, not implemented here, matching how the RMA-144/145 ASR/TTS adapters don't call the fallback engine either.
 
 ## RMA-143 — Implement OpenAI-compatible text adapters
 
-- [ ] Implement Responses-style compatibility adapter.
-- [ ] Implement Chat Completions-style adapter.
-- [ ] Allow custom headers and base URL.
-- [ ] Expose capability mismatches clearly.
-- [ ] Do not assume all “OpenAI-compatible” servers support images, tools, JSON schema, or streaming.
+- [x] Implement Responses-style compatibility adapter.
+- [x] Implement Chat Completions-style adapter.
+- [x] Allow custom headers and base URL.
+- [x] Expose capability mismatches clearly.
+- [x] Do not assume all “OpenAI-compatible” servers support images, tools, JSON schema, or streaming.
+
+**Status:** Complete (2026-08-22). Same files as RMA-142 above. `OpenAiResponsesLlmProvider` and `OpenAiChatCompletionsLlmProvider` are the two adapters (mirroring RMA-115's VLM base-class/two-thin-subclasses shape); custom headers/base URL are inherited unchanged from `ReachyProviderProfile.Headers`/`BaseUri` (RMA-140); `ReachyLlmCapabilities` (`SupportsImages`/`SupportsToolCalls`/`SupportsJsonSchema`/`SupportsStreaming`) is a required constructor argument with an explicit `TextOnly()` all-false factory -- no flag defaults to true, and the provider never attempts streaming (`ReachyHttpResponseMode.Buffered` only), tool calls, or image content on its own.
 
 ## RMA-144 — Implement OpenAI ASR and compatible ASR
 
