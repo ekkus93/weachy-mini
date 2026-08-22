@@ -2530,17 +2530,21 @@ Example:
 
 ## RMA-161 — Implement credential lifecycle
 
-- [ ] Create/update/read/delete credentials through Android Keystore-backed storage.
-- [ ] Test device lock changes and key invalidation paths.
-- [ ] Remove credentials when provider is deleted or app data is cleared.
-- [ ] Ensure screenshots/logs never display full secrets.
+- [x] Create/update/read/delete credentials through Android Keystore-backed storage.
+- [x] Test device lock changes and key invalidation paths.
+- [x] Remove credentials when provider is deleted or app data is cleared.
+- [x] Ensure screenshots/logs never display full secrets.
+
+**Status:** Complete. **Completion evidence (2026-08-13):** `Assets/ReachyMini/Runtime/Application/ReachyProviderCredentialLifecycle.cs` (create/update/read/delete, provider-removal with rollback), Android Keystore-backed `ReachyProviderSecretStore.androidlib`'s `ReachyProviderSecretBridge.java` (AES/GCM via `AndroidKeyStore`, fail-closed on `KeyPermanentlyInvalidatedException`). Unit-tested by `Assets/ReachyMini/Tests/Editor/ReachyProviderCredentialLifecycleTests.cs`; physical device-lock/key-invalidation and app-data-clear paths proven by `ReachyRma161CredentialAcceptance.cs` + `scripts/run_rma161_credential_acceptance_android.sh`, verified by `scripts/tests/test_rma161_credential_physical_acceptance.py`. Gated by `.github/workflows/rma161-credential-lifecycle.yml`. See `docs/RMA_161_CREDENTIAL_LIFECYCLE_SPEC_2026-08-13.md`, `docs/validation/RMA_161_CREDENTIAL_LIFECYCLE_LOCAL_VALIDATION_2026-08-13.md`.
 
 ## RMA-162 — Implement private-media retention policy
 
-- [ ] Default to no retention of raw camera frames, microphone audio, or cloud request media.
-- [ ] Keep temporary files in protected app storage and delete promptly.
-- [ ] Make conversation-history persistence opt-in and bounded.
-- [ ] Add explicit recording/export UI before any future media retention feature.
+- [x] Default to no retention of raw camera frames, microphone audio, or cloud request media.
+- [x] Keep temporary files in protected app storage and delete promptly.
+- [x] Make conversation-history persistence opt-in and bounded.
+- [x] Add explicit recording/export UI before any future media retention feature.
+
+**Status:** Complete. **Completion evidence (2026-08-13):** `Assets/ReachyMini/Runtime/Core/Application/ReachyPrivateMediaRetentionPolicy.cs` (`RecordingEnabled`/`MediaExportEnabled` hardcoded `false`, `IsPersistentMediaRetentionAllowed` always `false` for raw camera/mic/cloud-request media; bounded opt-in `ReachyConversationHistoryRetention`), `ReachyPrivateMediaTemporaryFileStore.cs` (disposable lease deletes on `Dispose()`, `PurgeAbandonedFiles()` sweep), explicit consent-gate UI in `ReachyMainScreen.SettingsSections.cs`. Verified by `scripts/tests/test_rma162_private_media_retention.py`. See `docs/RMA_162_PRIVATE_MEDIA_RETENTION_SPEC_2026-08-13.md`.
 
 ## RMA-163 — Harden imported files and URLs
 
@@ -2756,10 +2760,12 @@ Order of preservation:
 
 ## RMA-184 — Representative-device matrix
 
-- [ ] Define at least low, mid, and high performance Android test classes.
-- [ ] Record SoC, Android version, RAM, graphics API, camera capability, and speech-service availability.
-- [ ] Establish supported/unsupported criteria.
+- [x] Define at least low, mid, and high performance Android test classes.
+- [x] Record SoC, Android version, RAM, graphics API, camera capability, and speech-service availability.
+- [x] Establish supported/unsupported criteria.
 - [ ] Publish measured default profiles.
+
+**Note (2026-08-22):** the three items above are implemented and tested (`ReachyRma184RepresentativeDeviceMatrix.cs`'s `Low`/`Mid`/`High` classes, `ReachyRma184RepresentativeDeviceProbe.cs`'s SoC/API/RAM/graphics/camera/speech metadata capture, `ReachyDeviceSupportStatus` fail-closed criteria in `models/reachy-mini/android-device-matrix.json`'s `support_policy` — see `scripts/tests/test_rma184_representative_device_matrix.py`). This ticket deliberately carries no ticket-complete status line, and the remaining item plus all acceptance criteria below stay unchecked: `docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15.md` records mid/high default profiles as `pending_measurement` pending physical long-run evidence, and `scripts/tests/test_rma184_representative_device_matrix.py::test_roadmap_keeps_physical_qualification_open` asserts this doc keeps physical qualification open — do not check the items below or add a ticket-complete status line here without updating that test.
 
 **Acceptance criteria**
 
@@ -3042,9 +3048,9 @@ underlying subsystems tested in isolation.
 ## RMA-194 — Release acceptance checklist
 
 - [ ] App launches and runs offline on supported hardware.
-- [ ] MuJoCo is authoritative and stable.
-- [ ] Full closed-loop Reachy model is rendered from native state.
-- [ ] Level 1 camera reprojection passes reference tests.
+- [x] MuJoCo is authoritative and stable.
+- [x] Full closed-loop Reachy model is rendered from native state.
+- [x] Level 1 camera reprojection passes reference tests.
 - [ ] Android on-device ASR and offline TTS work where installed.
 - [ ] Selected benchmark-backed local LLM works without blocking physics.
 - [ ] OpenAI and compatible providers are independently configurable.
@@ -3053,6 +3059,8 @@ underlying subsystems tested in isolation.
 - [ ] Diagnostics identify active fidelity, providers, and failures.
 - [ ] Representative-device performance report exists.
 - [ ] Licenses and attribution are complete.
+
+**Note (2026-08-22):** the 3 items checked above are individually evidenced (`docs/IMPLEMENTATION_STATUS.md`'s RMA-032/060-065 for MuJoCo authority/stability, RMA-051/052 for the closed-loop native-state render with `hidden_kinematic_fallback=false`, and `docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md` + `.github/workflows/rma104-reprojection-test-suite.yml` for Level 1 reprojection). The remaining 9 items stay unchecked — several are directly blocked by RMA-195 Phase D (still open) or by other still-open tickets cited elsewhere in this doc (RMA-012 in-app notices, RMA-125's offline-speech physical-device blocker, RMA-135's thermal finding, RMA-184's pending mid/high physical measurements).
 
 **Acceptance criteria — initial release gate**
 
