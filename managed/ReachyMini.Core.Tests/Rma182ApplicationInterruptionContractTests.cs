@@ -271,6 +271,20 @@ namespace ReachyMini.Core.Tests
                 remove { }
             }
 
+            public ReachyPerceptionServiceSnapshot PerceptionSnapshot { get; } =
+                new ReachyPerceptionServiceSnapshot(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    null,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
+                PerceptionSnapshotChanged
+            {
+                add { }
+                remove { }
+            }
+
             protected override void OnInitialize()
             {
                 SetReady("ready");

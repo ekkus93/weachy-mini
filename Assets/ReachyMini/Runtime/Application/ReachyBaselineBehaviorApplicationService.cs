@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Behavior;
 using ReachyMini.Interop;
+using ReachyMini.Perception;
 using ReachyMini.Rendering;
 
 namespace ReachyMini.AppState
@@ -21,11 +22,19 @@ namespace ReachyMini.AppState
     // authoritative runtime no longer allows it, and integrating with
     // app-pause/resume via IReachyApplicationInterruptionParticipant.
     //
-    // Deliberately zero perception/provider dependency (phase A scope):
-    // worldSnapshot is always null and workspaceClear is hardcoded true below
-    // -- there is no obstacle-avoidance/perception signal yet. Phase C is
-    // expected to replace that hardcoded true with a real
-    // IReachyPerceptionService-sourced value once camera-fed tracking lands.
+    // RMA-195 phase C update: worldSnapshot now comes from the real
+    // IReachyPerceptionService (Tracking state's WorldModelSnapshot, or null
+    // while perception hasn't produced one yet) instead of being hardcoded
+    // null, so gaze-target resolution can see real tracked entities.
+    // workspaceClear stays hardcoded true deliberately: WorkspaceClear gates
+    // whether the planner allows motion at all
+    // (ReachyDeterministicBehaviorPlanner.cs), and nothing in
+    // WorldModelSnapshot/WorldEntitySnapshot today defines what "an obstacle
+    // is present" means -- inventing that mapping here would be guessing at
+    // safety-relevant behavior with no domain specification to verify it
+    // against, unlike worldSnapshot's already-fixed gaze-target consumption
+    // contract. A future obstacle-avoidance pass should own that decision
+    // explicitly.
     public sealed class ReachyBaselineBehaviorApplicationService :
         ReachyApplicationServiceBase,
         IReachyBehaviorService,
@@ -38,6 +47,7 @@ namespace ReachyMini.AppState
         private const int NotReadyRetryMilliseconds = 200;
 
         private readonly ReachyProductionAuthoritativeRuntime runtime;
+        private readonly IReachyPerceptionService perception;
         private readonly ReachyBaselineBehaviorLibrary library;
         private readonly ReachyBehaviorTrajectoryExecutor executor;
         private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -66,13 +76,16 @@ namespace ReachyMini.AppState
         private ReachyBehaviorServiceSnapshot snapshot;
 
         public ReachyBaselineBehaviorApplicationService(
-            ReachyProductionAuthoritativeRuntime runtime)
+            ReachyProductionAuthoritativeRuntime runtime,
+            IReachyPerceptionService perception)
             : base(
                 "baseline-behavior",
                 ReachyServiceKind.Behavior,
                 ReachyServiceCriticality.Optional)
         {
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+            this.perception = perception ??
+                throw new ArgumentNullException(nameof(perception));
             ReachyDeterministicBehaviorPlanner planner =
                 new ReachyDeterministicBehaviorPlanner(
                     ReachyBehaviorPlannerPolicy.CreateMobileDefault());
@@ -237,9 +250,16 @@ namespace ReachyMini.AppState
                         continue;
                     }
 
+                    ReachyPerceptionServiceSnapshot perceptionSnapshot =
+                        perception.PerceptionSnapshot;
+                    WorldModelSnapshot? worldSnapshot =
+                        perceptionSnapshot.ExecutionState ==
+                            ReachyPerceptionServiceExecutionState.Tracking
+                            ? perceptionSnapshot.WorldSnapshot
+                            : null;
                     ReachyBaselineBehaviorPlanResult planResult = library.Plan(
                         currentTarget,
-                        worldSnapshot: null,
+                        worldSnapshot,
                         motion,
                         safety,
                         NowNanoseconds(),

@@ -312,6 +312,20 @@ namespace ReachyMini.AppState
             SetUnavailable(
                 "Perception is unavailable until camera and provider capabilities are configured.");
         }
+
+        public ReachyPerceptionServiceSnapshot PerceptionSnapshot { get; } =
+            new ReachyPerceptionServiceSnapshot(
+                ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                null,
+                "perception unavailable",
+                0UL);
+
+        public event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
+            PerceptionSnapshotChanged
+        {
+            add { }
+            remove { }
+        }
     }
 
     internal sealed class ReachyUnavailableBehaviorApplicationService :

@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using ReachyMini.Behavior;
+using ReachyMini.Perception;
 
 namespace ReachyMini.AppState
 {
@@ -249,8 +250,73 @@ namespace ReachyMini.AppState
             ProviderSnapshotChanged;
     }
 
+    // RMA-195 phase C: the execution state a perception service is currently
+    // in, surfaced to the HUD/diagnostics the same way
+    // ReachyBehaviorServiceExecutionState/ReachyProviderServiceExecutionState
+    // already answer "why isn't behavior/the provider doing anything" for
+    // their own services.
+    public enum ReachyPerceptionServiceExecutionState
+    {
+        NoCameraFrame = 0,
+        NoCalibration = 1,
+        Tracking = 2,
+        Suspended = 3,
+        Faulted = 4,
+    }
+
+    public sealed class ReachyPerceptionServiceSnapshot
+    {
+        public ReachyPerceptionServiceSnapshot(
+            ReachyPerceptionServiceExecutionState executionState,
+            WorldModelSnapshot? worldSnapshot,
+            string statusMessage,
+            ulong revision)
+        {
+            ExecutionState = executionState;
+            WorldSnapshot = worldSnapshot;
+            StatusMessage = statusMessage ??
+                throw new ArgumentNullException(nameof(statusMessage));
+            Revision = revision;
+        }
+
+        public ReachyPerceptionServiceExecutionState ExecutionState { get; }
+
+        // Null unless ExecutionState is Tracking. Handed out verbatim (not a
+        // simplified projection) because ReachyDeterministicBehaviorPlanner /
+        // ReachyBaselineBehaviorLibrary already accept a raw WorldModelSnapshot?
+        // directly as their worldSnapshot parameter -- that consumption
+        // contract is already fixed to this exact type.
+        public WorldModelSnapshot? WorldSnapshot { get; }
+
+        public string StatusMessage { get; }
+
+        public ulong Revision { get; }
+    }
+
+    public sealed class ReachyPerceptionServiceSnapshotChangedEventArgs : EventArgs
+    {
+        public ReachyPerceptionServiceSnapshotChangedEventArgs(
+            ReachyPerceptionServiceSnapshot snapshot)
+        {
+            Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+        }
+
+        public ReachyPerceptionServiceSnapshot Snapshot { get; }
+    }
+
+    // Named "PerceptionSnapshot", not the bare "Snapshot" IReachyBehaviorService
+    // uses, for the same reason IReachyProviderService's members are named
+    // "ProviderSnapshot" (see that interface's comment above): several test
+    // doubles in this codebase implement every IReachy*Service marker on one
+    // class, and a same-named "Snapshot" member on two of those interfaces
+    // (different return types) would force explicit interface implementation
+    // everywhere such a double exists.
     public interface IReachyPerceptionService : IReachyApplicationService
     {
+        ReachyPerceptionServiceSnapshot PerceptionSnapshot { get; }
+
+        event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
+            PerceptionSnapshotChanged;
     }
 
     // RMA-195 phase A: the execution state a behavior service is currently in,

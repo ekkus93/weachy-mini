@@ -130,14 +130,32 @@ namespace ReachyMini.AppState
                         {
                             ReachyServiceKind.Camera,
                             ReachyServiceKind.Provider,
+                            ReachyServiceKind.Persistence,
                         },
                         resolver =>
                         {
+                            // RMA-195 phase C: perception only needs the
+                            // authoritative runtime (captured via `runtime`
+                            // below) and the durable camera-calibration
+                            // store. Camera/Provider stay declared
+                            // dependencies for composition ordering -- the
+                            // real service discovers the camera texture
+                            // bridge itself (ReachyMainScreen.CameraPreview.cs's
+                            // FindAnyObjectByType pattern), not through the
+                            // Camera service boundary -- but are not
+                            // otherwise consumed yet.
                             resolver.GetRequired<IReachyCameraService>(
                                 ReachyServiceKind.Camera);
                             resolver.GetRequired<IReachyProviderService>(
                                 ReachyServiceKind.Provider);
-                            return new ReachyUnavailablePerceptionApplicationService();
+                            ReachyCameraCalibrationPersistenceStore calibrations =
+                                resolver
+                                    .GetRequired<ReachySettingsPersistenceApplicationService>(
+                                        ReachyServiceKind.Persistence)
+                                    .CameraCalibrations;
+                            return new ReachyAndroidPerceptionApplicationService(
+                                runtime,
+                                calibrations);
                         }),
                     new ReachyServiceRegistration(
                         "baseline-behavior",
@@ -151,21 +169,24 @@ namespace ReachyMini.AppState
                         },
                         resolver =>
                         {
-                            // RMA-195 phase A: baseline behavior only needs the
+                            // RMA-195 phase A/C: baseline behavior needs the
                             // authoritative runtime (captured via `runtime`
                             // below, not through the Simulation service
-                            // boundary). Provider/Perception stay declared
-                            // dependencies for composition ordering and future
-                            // phases (B/C), but the real service does not
-                            // consume them yet -- they are both still
-                            // permanently-Unavailable stubs today.
+                            // boundary) and, as of phase C, the real
+                            // perception service for gaze-target world
+                            // snapshots. Provider stays a declared dependency
+                            // for composition ordering only -- still not
+                            // consumed (phase D).
                             resolver.GetRequired<IReachySimulationService>(
                                 ReachyServiceKind.Simulation);
                             resolver.GetRequired<IReachyProviderService>(
                                 ReachyServiceKind.Provider);
-                            resolver.GetRequired<IReachyPerceptionService>(
-                                ReachyServiceKind.Perception);
-                            return new ReachyBaselineBehaviorApplicationService(runtime);
+                            IReachyPerceptionService perceptionService =
+                                resolver.GetRequired<IReachyPerceptionService>(
+                                    ReachyServiceKind.Perception);
+                            return new ReachyBaselineBehaviorApplicationService(
+                                runtime,
+                                perceptionService);
                         }),
                     new ReachyServiceRegistration(
                         "durable-settings",

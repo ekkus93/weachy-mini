@@ -43,7 +43,9 @@ namespace ReachyMini.Tests
         [Test]
         public void ServiceIdentifiesAsOptionalBehaviorService()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 Assert.That(service.ServiceId, Is.EqualTo("baseline-behavior"));
@@ -61,7 +63,9 @@ namespace ReachyMini.Tests
         [Test]
         public void InitializeReachesReadyAndStartsTheContinuousLoop()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 service.Initialize();
@@ -78,7 +82,9 @@ namespace ReachyMini.Tests
         [Test]
         public void SnapshotDefaultsToNeutralIdleBeforeInitialize()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 ReachyBehaviorServiceSnapshot snapshot = service.Snapshot;
@@ -98,7 +104,9 @@ namespace ReachyMini.Tests
         [Test]
         public void TryTriggerGestureFailsClosedBeforeInitialize()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 Assert.That(
@@ -119,7 +127,9 @@ namespace ReachyMini.Tests
         [Test]
         public void TryTriggerGestureAcceptsBaselineKindsAndRejectsPerceptionOnlyKinds()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 service.Initialize();
@@ -160,7 +170,9 @@ namespace ReachyMini.Tests
         [Test]
         public void PauseTransitionsToPausedAndResumeAndDisposeDoNotThrowOrHang()
         {
-            var service = new ReachyBaselineBehaviorApplicationService(runtime!);
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
             try
             {
                 service.Initialize();
@@ -183,6 +195,42 @@ namespace ReachyMini.Tests
                     stopwatch.ElapsedMilliseconds,
                     Is.LessThan(2000),
                     "Dispose must cancel the background loop promptly, not block.");
+            }
+        }
+
+        // RMA-195 phase C: the real perception service is Android/live-camera
+        // -gated (see ReachyAndroidPerceptionApplicationServiceTests.cs), so
+        // these behavior-service tests -- which only exercise lifecycle, not
+        // perception content -- use a trivial always-NoCameraFrame double.
+        private sealed class StubPerceptionService :
+            ReachyApplicationServiceBase,
+            IReachyPerceptionService
+        {
+            public StubPerceptionService()
+                : base(
+                    "stub-perception",
+                    ReachyServiceKind.Perception,
+                    ReachyServiceCriticality.Optional)
+            {
+            }
+
+            protected override void OnInitialize()
+            {
+                SetReady("stub");
+            }
+
+            public ReachyPerceptionServiceSnapshot PerceptionSnapshot { get; } =
+                new ReachyPerceptionServiceSnapshot(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    null,
+                    "stub",
+                    0UL);
+
+            public event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
+                PerceptionSnapshotChanged
+            {
+                add { }
+                remove { }
             }
         }
     }

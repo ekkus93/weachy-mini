@@ -610,6 +610,20 @@ namespace ReachyMini.Application.Tests
                     failDisposal: failDisposal)
             {
             }
+
+            public ReachyPerceptionServiceSnapshot PerceptionSnapshot { get; } =
+                new ReachyPerceptionServiceSnapshot(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    null,
+                    "test double",
+                    0UL);
+
+            public event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
+                PerceptionSnapshotChanged
+            {
+                add { }
+                remove { }
+            }
         }
 
         private sealed class BehaviorService :
