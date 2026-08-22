@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.LocalModels;
+using ReachyMini.Providers;
 using ReachyMini.Rendering;
 using UnityEngine;
 
@@ -40,10 +41,35 @@ namespace ReachyMini.AppState
     // is fully lazy: the first GenerateAsync call loads the model (admission
     // -> resolve installed artifact -> create -> generate), and every
     // subsequent call reuses the same coordinator until Dispose.
+    // RMA-195 phase D (composition-wiring-only slice, 2026-08-22): also carries
+    // the cloud LLM path now, added alongside the existing local path above
+    // rather than as a second "provider-selection" registration -- the
+    // composition host allows exactly one registration per ReachyServiceKind
+    // (ReachyApplicationComposition.CreateComplete rejects a duplicate kind at
+    // construction time), so a second capability on the SAME registered
+    // service is the only way to expose it, mirroring how
+    // ILocalLlmProviderCapability/IReachyProviderGovernorDiagnosticsSource
+    // already coexist as optional as-castable facets of one IReachyProviderService.
+    // Cloud loading mirrors the local path's laziness (OnInitialize() never
+    // triggers it) but is otherwise much simpler: no model file, no resource
+    // governor -- it resolves a ReachyProviderProfile from
+    // ReachyProviderProfilePersistenceStore, an Android-Keystore-backed
+    // IReachyProviderSecretStore, and requires
+    // ReachyProviderFallbackPolicyEngine to authorize the OnDevice->Cloud
+    // privacy-boundary switch before constructing the RMA-142/143 adapter.
+    // Deliberately excluded from this slice: any settings UI to actually
+    // create a cloud provider profile/credential or grant the fallback
+    // policy authorization, and any live call site that invokes this
+    // capability -- exactly like the local path, ICloudLlmProviderCapability
+    // is reachable only from tests today. On a real, unconfigured device this
+    // always reports "no cloud LLM provider profile is configured", honestly,
+    // the same way the local path reports "no compatible local model is
+    // installed" before its own install UI exists.
     public sealed class ReachyLocalLlmProviderApplicationService :
         ReachyApplicationServiceBase,
         IReachyProviderService,
         ILocalLlmProviderCapability,
+        ICloudLlmProviderCapability,
         IReachyProviderGovernorDiagnosticsSource,
         IReachyApplicationInterruptionParticipant
     {
@@ -61,9 +87,22 @@ namespace ReachyMini.AppState
             TimeSpan.FromMilliseconds(200.0);
         private const string LocalModelStoreDirectoryName = "local-models";
 
+        // Well-known lookup key into ReachyProviderProfilePersistenceStore for a
+        // cloud LLM profile. Nothing can write one under this id yet (no settings
+        // UI); this is a forward-looking convention for whichever future phase
+        // adds that UI to adopt, not evidence a profile exists today.
+        private const string CloudLlmProfileProviderId = "reachy-cloud-llm";
+        // Stable placeholder "source" identity for the OnDevice->Cloud privacy-
+        // boundary switch request -- there is no real "currently active" LLM
+        // provider identity to reference (provider selection is a user
+        // preference, not a live handoff), so this names the switch's origin
+        // boundary without claiming a specific prior provider was active.
+        private const string CloudLlmSwitchSourceProviderId = "reachy-llm-unselected";
+
         private readonly ReachySettingsStateStore settings;
         private readonly ReachyProductionAuthoritativeRuntime runtime;
         private readonly SemaphoreSlim loadGate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim cloudLoadGate = new SemaphoreSlim(1, 1);
         private readonly object sync = new object();
 
         private LocalModelPackageManager? packageManager;
@@ -72,6 +111,10 @@ namespace ReachyMini.AppState
         private ReachySimulationLocalLlmPhysicsBudgetSource? physicsBudget;
         private LocalLlmProvider? loadedProvider;
         private LocalLlmGovernedGenerationCoordinator? coordinator;
+        private ReachyProviderProfilePersistenceStore? cloudProfileStore;
+        private ReachyProviderFallbackPolicyEngine? fallbackPolicyEngine;
+        private IReachyProviderSecretStore? cloudSecretStore;
+        private ReachyOpenAiCompatibleLlmProviderBase? cloudProvider;
         private bool interruptionPaused;
         private ReachyProviderServiceSnapshot snapshot;
 
@@ -106,6 +149,8 @@ namespace ReachyMini.AppState
         public event EventHandler<ReachyProviderServiceSnapshotChangedEventArgs>?
             ProviderSnapshotChanged;
 
+        public ReachyLlmCapabilities Capabilities => ReachyLlmCapabilities.TextOnly();
+
         public LocalLlmGovernorDiagnosticsSnapshot GovernorDiagnostics =>
             LocalLlmGovernorDiagnosticsSnapshot.Create(coordinator?.CurrentDecision);
 
@@ -120,11 +165,14 @@ namespace ReachyMini.AppState
             settings.Changed -= OnSettingsChanged;
 
             LocalLlmProvider? providerToDispose;
+            ReachyOpenAiCompatibleLlmProviderBase? cloudProviderToDispose;
             lock (sync)
             {
                 providerToDispose = loadedProvider;
                 loadedProvider = null;
                 coordinator = null;
+                cloudProviderToDispose = cloudProvider;
+                cloudProvider = null;
             }
             if (providerToDispose != null)
             {
@@ -133,6 +181,13 @@ namespace ReachyMini.AppState
                 // in-flight generation (CancellationDrainTimeout) and is self-contained,
                 // so a fire-and-forget dispose here does not leak an unbounded wait.
                 _ = providerToDispose.DisposeAsync().AsTask();
+            }
+            if (cloudProviderToDispose != null)
+            {
+                // ReachyOpenAiCompatibleLlmProviderBase.DisposeAsync only disposes its
+                // owned ReachySharedHttpTransport (a synchronous, bounded call
+                // wrapped in a completed ValueTask) -- also safe to fire-and-forget.
+                _ = cloudProviderToDispose.DisposeAsync().AsTask();
             }
             resourceSignals?.Dispose();
             packageManager?.Dispose();
@@ -198,6 +253,30 @@ namespace ReachyMini.AppState
             return result;
         }
 
+        public async Task<ReachyLlmGenerationResult> GenerateAsync(
+            ReachyLlmGenerationRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            (ReachyOpenAiCompatibleLlmProviderBase? activeCloudProvider, string failureDetail) =
+                await EnsureCloudLoadedAsync(cancellationToken).ConfigureAwait(false);
+            if (activeCloudProvider == null)
+            {
+                return new ReachyLlmGenerationResult(
+                    ReachyLlmGenerationStatus.HttpFailure,
+                    null,
+                    string.Empty,
+                    failureDetail);
+            }
+
+            return await activeCloudProvider.GenerateAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         private void OnSettingsChanged(
             object? sender,
             ReachySettingsChangedEventArgs eventArgs)
@@ -210,6 +289,7 @@ namespace ReachyMini.AppState
             int configured = 0;
             int networkRequired = 0;
             bool llmOnDeviceSelected = false;
+            bool llmCloudSelected = false;
             foreach (ReachyProviderSelection provider in
                      settings.Current.ProviderSelections)
             {
@@ -227,6 +307,11 @@ namespace ReachyMini.AppState
                 {
                     llmOnDeviceSelected = true;
                 }
+                if (provider.Kind == ReachyProviderKind.Llm &&
+                    provider.Execution == ReachyProviderExecution.Cloud)
+                {
+                    llmCloudSelected = true;
+                }
             }
 
             if (llmOnDeviceSelected)
@@ -236,6 +321,18 @@ namespace ReachyMini.AppState
                     $"{networkRequired} network-required selection(s). The on-device " +
                     "local LLM preference is wired and loads lazily on first use; " +
                     "other provider kinds are not yet integrated.");
+                return;
+            }
+
+            if (llmCloudSelected)
+            {
+                SetDegraded(
+                    $"{configured} provider preference(s) are stored, including " +
+                    $"{networkRequired} network-required selection(s). The cloud " +
+                    "LLM preference is wired and loads lazily on first use, gated " +
+                    "on a configured provider profile and fallback-policy " +
+                    "authorization that no settings surface can grant yet; other " +
+                    "provider kinds are not yet integrated.");
                 return;
             }
 
@@ -430,6 +527,201 @@ namespace ReachyMini.AppState
                 provider.ModelId,
                 "Local LLM loaded and ready.");
             return (built, provider.ModelId, string.Empty);
+        }
+
+        private async Task<(ReachyOpenAiCompatibleLlmProviderBase?, string)> EnsureCloudLoadedAsync(
+            CancellationToken cancellationToken)
+        {
+            lock (sync)
+            {
+                if (cloudProvider != null)
+                {
+                    return (cloudProvider, string.Empty);
+                }
+            }
+
+            await cloudLoadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                lock (sync)
+                {
+                    if (cloudProvider != null)
+                    {
+                        return (cloudProvider, string.Empty);
+                    }
+                }
+                return await LoadCloudAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                cloudLoadGate.Release();
+            }
+        }
+
+        private async Task<(ReachyOpenAiCompatibleLlmProviderBase?, string)> LoadCloudAsync(
+            CancellationToken cancellationToken)
+        {
+            if (Application.platform != RuntimePlatform.Android)
+            {
+                const string detail = "Cloud LLM generation requires an Android device.";
+                PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
+                return (null, detail);
+            }
+
+            PublishSnapshot(
+                ReachyProviderServiceExecutionState.Loading,
+                string.Empty,
+                "Resolving the configured cloud LLM provider profile.");
+
+            ReachyProviderProfilePersistenceStore profileStore = EnsureCloudProfileStore();
+            if (!profileStore.TryGet(CloudLlmProfileProviderId, out ReachyProviderProfile? profile) ||
+                profile == null)
+            {
+                const string detail = "No cloud LLM provider profile is configured.";
+                PublishSnapshot(ReachyProviderServiceExecutionState.NotLoaded, string.Empty, detail);
+                return (null, detail);
+            }
+
+            IReachyProviderSecretStore? secretStore = EnsureCloudSecretStore();
+            if (secretStore == null)
+            {
+                const string detail = "Cloud LLM credential storage is unavailable on this platform.";
+                PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
+                return (null, detail);
+            }
+
+            ReachyAuthorizedProviderSwitch? authorization;
+            string authorizationFailureDetail;
+            (authorization, authorizationFailureDetail) = EvaluateCloudSwitchAuthorization(profile);
+            if (authorization == null)
+            {
+                PublishSnapshot(
+                    ReachyProviderServiceExecutionState.Suspended,
+                    string.Empty,
+                    authorizationFailureDetail);
+                return (null, authorizationFailureDetail);
+            }
+            authorization.Consume(
+                ReachyProviderWorkloadKind.Llm,
+                CloudLlmSwitchSourceProviderId,
+                profile.ProviderId);
+
+            ReachyOpenAiCompatibleLlmProviderBase built;
+            try
+            {
+                ReachyLlmCapabilities capabilities = ReachyLlmCapabilities.TextOnly();
+                built = profile.EndpointStyle == ReachyProviderEndpointStyle.Responses
+                    ? new OpenAiResponsesLlmProvider(
+                        profile,
+                        secretStore,
+                        ReachyOpenAiCompatibleLlmOptions.OpenAiResponsesDefault(),
+                        capabilities)
+                    : new OpenAiChatCompletionsLlmProvider(
+                        profile,
+                        secretStore,
+                        ReachyOpenAiCompatibleLlmOptions.OpenAiChatCompletionsDefault(),
+                        capabilities);
+            }
+            catch (Exception exception) when (
+                exception is ArgumentException ||
+                exception is ArgumentOutOfRangeException)
+            {
+                string detail = "Cloud LLM provider profile is invalid for this adapter: " +
+                    exception.Message;
+                PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
+                return (null, detail);
+            }
+
+            lock (sync)
+            {
+                cloudProvider = built;
+            }
+            PublishSnapshot(
+                ReachyProviderServiceExecutionState.Ready,
+                profile.ProviderId,
+                "Cloud LLM provider loaded and ready.");
+            return (built, string.Empty);
+        }
+
+        private (ReachyAuthorizedProviderSwitch?, string) EvaluateCloudSwitchAuthorization(
+            ReachyProviderProfile profile)
+        {
+            ReachyProviderFallbackPolicyEngine engine = EnsureFallbackPolicyEngine();
+            var switchRequest = new ReachyProviderSwitchRequest(
+                new ReachyProviderEndpointIdentity(
+                    ReachyProviderWorkloadKind.Llm,
+                    CloudLlmSwitchSourceProviderId,
+                    ReachyProviderPrivacyBoundary.OnDevice),
+                new ReachyProviderEndpointIdentity(
+                    ReachyProviderWorkloadKind.Llm,
+                    profile.ProviderId,
+                    ReachyProviderPrivacyBoundary.Cloud),
+                "cloud-llm-provider-selected");
+
+            ReachyFallbackDecision initial = engine.EvaluateProviderSwitch(switchRequest);
+            if (initial.Status == ReachyFallbackDecisionStatus.Authorized)
+            {
+                return (initial.Authorization, string.Empty);
+            }
+            if (initial.Status != ReachyFallbackDecisionStatus.RequiresPrivacyConfirmation)
+            {
+                return (
+                    null,
+                    "Cloud LLM access is not authorized by the fallback policy (" +
+                        initial.DiagnosticCode +
+                        "). No settings surface exists yet to grant this authorization.");
+            }
+
+            ReachyPrivacyBoundaryConfirmation confirmation =
+                engine.ConfirmPrivacyBoundaryChange(switchRequest);
+            ReachyFallbackDecision confirmed = engine.EvaluateProviderSwitch(
+                switchRequest,
+                confirmation);
+            if (confirmed.Status != ReachyFallbackDecisionStatus.Authorized ||
+                confirmed.Authorization == null)
+            {
+                return (
+                    null,
+                    "Cloud LLM privacy-boundary confirmation did not authorize the switch (" +
+                        confirmed.DiagnosticCode +
+                        ").");
+            }
+            return (confirmed.Authorization, string.Empty);
+        }
+
+        private ReachyProviderProfilePersistenceStore EnsureCloudProfileStore()
+        {
+            lock (sync)
+            {
+                if (cloudProfileStore == null)
+                {
+                    cloudProfileStore = new ReachyProviderProfilePersistenceStore();
+                    cloudProfileStore.Initialize();
+                }
+                return cloudProfileStore;
+            }
+        }
+
+        private ReachyProviderFallbackPolicyEngine EnsureFallbackPolicyEngine()
+        {
+            lock (sync)
+            {
+                fallbackPolicyEngine ??= new ReachyProviderFallbackPolicyEngine();
+                return fallbackPolicyEngine;
+            }
+        }
+
+        private IReachyProviderSecretStore? EnsureCloudSecretStore()
+        {
+            lock (sync)
+            {
+                if (cloudSecretStore == null &&
+                    Application.platform == RuntimePlatform.Android)
+                {
+                    cloudSecretStore = new ReachyAndroidProviderSecretStore();
+                }
+                return cloudSecretStore;
+            }
         }
 
         private LocalModelPackageManager EnsurePackageManager()

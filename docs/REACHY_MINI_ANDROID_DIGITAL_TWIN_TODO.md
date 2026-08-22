@@ -3001,15 +3001,53 @@ provider-driven intents) needs perception and provider both Ready.
       RMA-111's launch-intent-extra/result-file convention) is the
       concrete next step to close that gap.
 - [ ] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
-      full closed loop.** No cloud LLM provider class exists at all today
-      (unlike ASR/TTS/VLM cloud, which do) -- this is new code, not wiring,
-      following the OpenAI-compatible ASR/TTS providers as the pattern. VLM
-      scene description (`ReachyVlmScheduler`,
-      `ReachyOpenAiVisionLanguageProviders`) and provider-driven behavior
-      intents (`ReachyBehaviorIntentContracts`) both gate on this landing
-      first. First cloud-provider enablement must route through
-      `ReachyProviderFallbackPolicyEngine`'s privacy-boundary confirmation,
-      matching the existing local/cloud disclosure contract.
+      full closed loop.** VLM scene description (`ReachyVlmScheduler`,
+      `ReachyOpenAiVisionLanguageProviders`) and any live conversational-turn
+      trigger both remain unstarted -- see below.
+      **Cloud LLM composition wiring: partially complete (2026-08-22),
+      scoped deliberately narrow by explicit user decision** ("composition
+      wiring only", no settings UI): `ReachyLocalLlmProviderApplicationService.cs`
+      (the same `"provider-selection"` registration Phase B wired) now also
+      implements `ICloudLlmProviderCapability` alongside the existing
+      `ILocalLlmProviderCapability` -- a second `ReachyServiceKind.Provider`
+      registration is not possible (`ReachyApplicationComposition.CreateComplete`
+      rejects a duplicate kind at construction time; confirmed by reading the
+      resolver before implementing), so this follows the same
+      optional-as-castable-capability pattern already used for
+      `ILocalLlmProviderCapability`/`IReachyProviderGovernorDiagnosticsSource`.
+      Lazily (first `GenerateAsync` call, same laziness discipline as the local
+      path) resolves a `ReachyProviderProfile` from
+      `ReachyProviderProfilePersistenceStore` under a well-known lookup key,
+      an Android-Keystore-backed `IReachyProviderSecretStore`
+      (`ReachyAndroidProviderSecretStore`), and -- per this item's own
+      "must route through `ReachyProviderFallbackPolicyEngine`'s
+      privacy-boundary confirmation" requirement -- actually calls
+      `EvaluateProviderSwitch`/`ConfirmPrivacyBoundaryChange` (OnDevice-\>Cloud,
+      workload `Llm`) before constructing `OpenAiResponsesLlmProvider`/
+      `OpenAiChatCompletionsLlmProvider` (RMA-142/143), consuming the
+      one-time `ReachyAuthorizedProviderSwitch` token. `PublishCurrentHealth()`
+      now also recognizes the `Cloud` LLM selection. Verified by 3 new EditMode
+      tests (`ReachyLocalLlmProviderApplicationServiceTests.cs`) covering the
+      off-Android fail-closed path, `Capabilities` defaults, and the
+      cloud-selected health message -- the same off-Android-only coverage
+      ceiling the local path's own Phase B tests have, since EditMode can't
+      reach `RuntimePlatform.Android`.
+      **Deliberately excluded, by explicit user decision**: any settings UI
+      to create a cloud provider profile/credential or to grant the fallback
+      policy authorization (`ReachyFallbackPolicy.NoFallback()` is every
+      workload's default, so on a real device today `EvaluateProviderSwitch`
+      always returns `Denied` and the honest reported reason is
+      "no settings surface exists yet to grant this authorization" -- not a
+      bug, the correct fail-closed state given no UI exists), and any live
+      call site -- `ICloudLlmProviderCapability.GenerateAsync` is reachable
+      only from the new tests today, exactly matching the local path's own
+      still-open gap (confirmed during scoping: `ILocalLlmProviderCapability.GenerateAsync`
+      is likewise never called outside RMA-134/135's acceptance harnesses).
+      A dedicated scoping investigation (2026-08-22) confirmed no text-input
+      UI widget of any kind exists anywhere in this app's `OnGUI`-based
+      settings system, and recommended these exclusions as requiring a
+      product/UX decision rather than a pure engineering call; the user
+      confirmed "composition wiring only" when asked.
 - [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
       (never referenced by `ReachyMainScreenBootstrap`, which always
       constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,

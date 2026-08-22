@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using ReachyMini.AppState;
 using ReachyMini.LocalModels;
+using ReachyMini.Providers;
 using ReachyMini.Rendering;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -212,6 +213,89 @@ namespace ReachyMini.Tests
                     stopwatch.ElapsedMilliseconds,
                     Is.LessThan(2000),
                     "Dispose must not block on a load that never started.");
+            }
+        }
+
+        // RMA-195 phase D (composition-wiring-only slice): the cloud path added
+        // alongside the local path above. Off-Android is the only reachable path
+        // from an EditMode test, same rationale as GenerateAsyncFailsClosedOffAndroidWithoutThrowing.
+        [Test]
+        public void CloudCapabilitiesAreTextOnly()
+        {
+            var service =
+                new ReachyLocalLlmProviderApplicationService(settings!, runtime!);
+            try
+            {
+                ReachyLlmCapabilities capabilities = service.Capabilities;
+                Assert.That(capabilities.SupportsImages, Is.False);
+                Assert.That(capabilities.SupportsToolCalls, Is.False);
+                Assert.That(capabilities.SupportsJsonSchema, Is.False);
+                Assert.That(capabilities.SupportsStreaming, Is.False);
+            }
+            finally
+            {
+                service.Dispose();
+            }
+        }
+
+        [Test]
+        public void InitializeReportsDegradedWhenCloudLlmIsSelected()
+        {
+            settings!.CycleProvider(ReachyProviderKind.Llm);
+            settings.CycleProvider(ReachyProviderKind.Llm);
+            var service =
+                new ReachyLocalLlmProviderApplicationService(settings, runtime!);
+            try
+            {
+                service.Initialize();
+                Assert.That(
+                    service.Health.State,
+                    Is.EqualTo(ReachyServiceState.Degraded));
+                Assert.That(
+                    service.Health.Message,
+                    Does.Contain("cloud LLM preference is wired"));
+            }
+            finally
+            {
+                service.Dispose();
+            }
+        }
+
+        [Test]
+        public void CloudGenerateAsyncFailsClosedOffAndroidWithoutThrowing()
+        {
+            var service =
+                new ReachyLocalLlmProviderApplicationService(settings!, runtime!);
+            try
+            {
+                service.Initialize();
+                var request = new ReachyLlmGenerationRequest(
+                    "req-1",
+                    new[]
+                    {
+                        new ReachyLlmChatMessage(ReachyLlmChatRole.User, "hello"),
+                    });
+
+                Task<ReachyLlmGenerationResult> task = service.GenerateAsync(
+                    request,
+                    CancellationToken.None);
+                Assert.That(task.Wait(5000), Is.True, "GenerateAsync must not hang off-Android.");
+
+                ReachyLlmGenerationResult result = task.Result;
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(
+                    result.Status,
+                    Is.EqualTo(ReachyLlmGenerationStatus.HttpFailure));
+                Assert.That(
+                    result.Detail,
+                    Does.Contain("requires an Android device"));
+                Assert.That(
+                    service.ProviderSnapshot.ExecutionState,
+                    Is.EqualTo(ReachyProviderServiceExecutionState.Faulted));
+            }
+            finally
+            {
+                service.Dispose();
             }
         }
 
