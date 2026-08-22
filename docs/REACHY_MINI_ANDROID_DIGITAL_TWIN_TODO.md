@@ -3001,9 +3001,8 @@ provider-driven intents) needs perception and provider both Ready.
       RMA-111's launch-intent-extra/result-file convention) is the
       concrete next step to close that gap.
 - [ ] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
-      full closed loop.** VLM scene description (`ReachyVlmScheduler`,
-      `ReachyOpenAiVisionLanguageProviders`) and any live conversational-turn
-      trigger both remain unstarted -- see below.
+      full closed loop.** Any live conversational-turn trigger for either the
+      LLM or VLM path remains unstarted -- see below.
       **Cloud LLM composition wiring: partially complete (2026-08-22),
       scoped deliberately narrow by explicit user decision** ("composition
       wiring only", no settings UI): `ReachyLocalLlmProviderApplicationService.cs`
@@ -3089,10 +3088,79 @@ provider-driven intents) needs perception and provider both Ready.
       save/validation and the off-Android fail-closed paths for the API-key
       and authorization actions (the real Android-Keystore success path
       remains physical-acceptance-only, matching the established coverage
-      ceiling elsewhere in this file). **Still not done**: the live
-      conversational-turn trigger and the VLM half of Phase D remain
-      exactly as unstarted as noted above -- this follow-up only closes the
-      settings-UI/authorization-wiring gap, not the whole Phase D checkbox.
+      ceiling elsewhere in this file). **Still not done at that point**: the
+      live conversational-turn trigger and the VLM half of Phase D -- this
+      follow-up only closed the LLM settings-UI/authorization-wiring gap,
+      not the whole Phase D checkbox.
+      **VLM half (2026-08-22, same day): built as a full new provider stack,
+      by explicit user decision** ("build the full VLM provider stack") after
+      a dedicated investigation found this was NOT a composition-wiring-only
+      slice like the LLM half -- `IOpenAiVisionTransport` and
+      `IRemoteVlmImageEncoder` (RMA-115's VLM scheduler/provider
+      orchestration classes) had zero production implementations anywhere in
+      the repo, only test fakes (`managed/ReachyMini.RemoteVlm.Tests/Fakes.cs`),
+      confirmed by exhaustive grep before writing any code. Three real
+      pieces were built and each verified before the next was started:
+      (1) `ReachyOpenAiVisionHttpTransport.cs`
+      (`Assets/ReachyMini/Runtime/Core/Perception/`) -- the first real
+      `IOpenAiVisionTransport`, reusing `ReachySharedHttpTransport`/
+      `ReachyBearerCredentialTransportBinding` (the same RMA-141 transport
+      machinery RMA-142/143 uses) and, since the OpenAI Chat
+      Completions/Responses response *shape* for "where is the assistant
+      text" is identical whether or not the request included image content,
+      reusing `ReachyLlmResponseProtocolParser` rather than writing a second
+      parser. Verified by 7 new mock-server contract tests
+      (`managed/ReachyMini.Core.Tests/Rma195VlmTransportContractTests.cs`)
+      covering both endpoint styles, the base64 image data-URI + prompt in
+      the real request body, the bearer Authorization header, HTTP failure
+      mapping, and malformed-JSON handling -- all passing against the real
+      transport/auth pipeline (`dotnet run`, exit 0). (2)
+      `ReachyUnityRemoteVlmImageEncoder.cs`
+      (`Assets/ReachyMini/Runtime/Application/`) -- the first real
+      `IRemoteVlmImageEncoder`, deliberately reusing RMA-111's
+      `IReachyTrackingPixelSource`/`ReachyTrackingFramePixels` (already an
+      engine-agnostic RGBA+validity-mask byte-buffer abstraction) for pixel
+      retrieval rather than inventing a second one, so only the final
+      "compress bytes to JPEG" step is Unity-specific: composites invalid
+      pixels to opaque black per the frame's validity mask, then encodes via
+      a temporary `Texture2D`/`EncodeToJPG`. **Known unverified risk,
+      documented in code**: `ReachyTrackingFramePixels.RgbaTopLeft` is
+      explicitly top-row-first, while Unity's raw texture row order is
+      bottom-row-first, so the encoder flips rows before
+      `LoadRawTextureData` -- correct per Unity's documented `GetPixels`/
+      `SetPixels` convention, but this specific flip has not been visually
+      confirmed against a real captured frame on physical hardware (no
+      compile check can catch an inverted image; only a device test with a
+      known scene can). (3) `ReachyCloudVlmCredentialCoordinator.cs` +
+      a new "Cloud VLM" settings section (`ReachyMainScreen.
+      CloudVlmCredentials.cs` + `DrawCloudVlmSettings` in `ReachyMainScreen.
+      SettingsSections.cs`, new `ReachySettingsSection.CloudVlm` member) --
+      structurally identical to the Cloud LLM coordinator/section, using
+      `ReachyProviderModelRole.Vision` and `ReachyProviderWorkloadKind.Vlm`.
+      Composition wiring: `ReachyAndroidPerceptionApplicationService` (the
+      Phase C "perception" registration) now also implements a new
+      `ICloudVlmProviderCapability` (`Assets/ReachyMini/Runtime/Core/
+      Perception/ReachyVisionProviderInterfaces.cs`), split into a
+      `ReachyAndroidPerceptionApplicationService.CloudVlm.cs` partial file
+      that mirrors the LLM path's lazy-load/profile/secret/fallback-policy
+      structure exactly (including loading its own
+      `ReachyFallbackPolicyPersistenceStore`-backed engine rather than a
+      bare in-memory one, for the same reason the LLM path's
+      `EnsureFallbackPolicyEngine` was fixed). `AnalyzeSceneAsync(frame,
+      prompt, requestId, cancellationToken)` takes the camera frame as an
+      explicit caller-supplied parameter rather than sourcing one
+      internally -- there is no established "capture a frame on demand"
+      path yet (the tracking driver's frames are consumed in-place by
+      `ReachyOnDeviceLightweightTracker`, not exposed for reuse), so this
+      stays honest about what is and is not wired rather than inventing a
+      frame-capture path under time pressure. Verified by 1 new EditMode
+      test on the off-Android fail-closed path
+      (`ReachyAndroidPerceptionApplicationServiceTests.cs`) and 9 new
+      EditMode tests on the coordinator
+      (`ReachyCloudVlmCredentialCoordinatorTests.cs`), both mirroring the
+      LLM path's own test shape. **Still not done**: the live
+      conversational-turn trigger for either LLM or VLM, and the
+      frame-capture path a live VLM trigger would need to supply.
 - [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
       (never referenced by `ReachyMainScreenBootstrap`, which always
       constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,
