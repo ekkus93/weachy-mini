@@ -117,6 +117,67 @@ namespace ReachyMini.AppState
             paused = false;
         }
 
+        // RMA-195 phase D (voice+visual grounding, 2026-08-22): an on-demand
+        // capture entry point for a caller (the conversation orchestrator's
+        // VLM fold-in) that needs one TransformedReachyEye frame right now,
+        // outside the per-tick tracking loop. Reuses the exact same
+        // calibration/warp construction as RunOneFrameAsync via
+        // TryBuildFrame -- there is one code path for "produce a frame,"
+        // not two independent copies of that logic -- but returns the frame
+        // to the caller instead of feeding it to the tracker. The caller
+        // owns the returned frame's lifetime and must await
+        // frame.DisposeAsync() when done with it: ReachyUnityTrackingFrameResources
+        // clones its own GPU textures at construction (see
+        // ReachyUnityVisionFrameFactory.CreateOwnedTrackingFrame), so it does
+        // not alias the warp pipeline's per-tick render targets and is safe
+        // to hold beyond this call.
+        //
+        // Fails closed (returns null) rather than starting the camera
+        // acquisition session itself: this deliberately requires the
+        // camera-preview toggle already be on (see
+        // ReachyMainScreen.RequestCameraPreview), matching the existing
+        // fail-closed philosophy throughout this pipeline rather than
+        // reaching into ReachyAndroidCameraAcquisition's start/stop state
+        // machine, which assumes a single logical owner (the settings-panel
+        // toggle) driving it.
+        public Task<ReachyVisionFrame?> CaptureFrameForAnalysisAsync(
+            CancellationToken cancellationToken)
+        {
+            if (!configured || paused || analysisInFlight ||
+                tracker == null || warpPipeline == null ||
+                worldModel == null || runtime == null || calibrations == null ||
+                selection == null)
+            {
+                return Task.FromResult<ReachyVisionFrame?>(null);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+
+            ReachyAndroidCameraTextureBridge? bridge = LocateTextureBridge();
+            if (bridge == null)
+            {
+                PublishSnapshot(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    null,
+                    "No camera texture bridge is installed.");
+                return Task.FromResult<ReachyVisionFrame?>(null);
+            }
+
+            analysisInFlight = true;
+            try
+            {
+                FrameBuildResult built = TryBuildFrame(bridge);
+                if (!built.Succeeded)
+                {
+                    PublishSnapshot(built.FailureState, null, built.FailureMessage);
+                }
+                return Task.FromResult(built.Frame);
+            }
+            finally
+            {
+                analysisInFlight = false;
+            }
+        }
+
         private void OnDestroy()
         {
             warpPipeline?.Dispose();
@@ -168,133 +229,162 @@ namespace ReachyMini.AppState
             return textureBridge;
         }
 
+        private readonly struct FrameBuildResult
+        {
+            private FrameBuildResult(
+                ReachyVisionFrame? frame,
+                ReachyPerceptionServiceExecutionState failureState,
+                string failureMessage)
+            {
+                Frame = frame;
+                FailureState = failureState;
+                FailureMessage = failureMessage;
+            }
+
+            public static FrameBuildResult Success(ReachyVisionFrame frame) =>
+                new FrameBuildResult(frame, default, string.Empty);
+
+            public static FrameBuildResult Failure(
+                ReachyPerceptionServiceExecutionState state, string message) =>
+                new FrameBuildResult(null, state, message);
+
+            public ReachyVisionFrame? Frame { get; }
+            public ReachyPerceptionServiceExecutionState FailureState { get; }
+            public string FailureMessage { get; }
+            public bool Succeeded => Frame != null;
+        }
+
+        // The shared, synchronous "calibrate + reproject a TransformedReachyEye
+        // frame right now" sequence used both by the continuous per-tick
+        // tracking loop (RunOneFrameAsync) and by the on-demand
+        // CaptureFrameForAnalysisAsync entry point -- one code path for
+        // frame construction, not two independent copies of the
+        // calibration/warp logic. Callers are responsible for disposing the
+        // returned frame.
+        private FrameBuildResult TryBuildFrame(ReachyAndroidCameraTextureBridge bridge)
+        {
+            ReachyCameraTextureBridgeSnapshot bridgeSnapshot = bridge.Current;
+            ReachyCameraTextureFrameDescriptor? descriptor = bridgeSnapshot.Frame;
+            if (!bridgeSnapshot.HasTexture || descriptor == null)
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    "The camera texture bridge is not yet producing frames.");
+            }
+
+            ReachyCameraCalibrationSelectionResult calibrationSelection =
+                calibrations!.State.SelectExact(
+                    descriptor.CameraId,
+                    descriptor.LensFacing,
+                    descriptor.OutputWidth,
+                    descriptor.OutputHeight,
+                    // No production calibration-capture flow exists yet
+                    // to say what "the Reachy-side image" was captured
+                    // at; using the same live phone-side output
+                    // dimensions (the same ones
+                    // ReachyCameraHomographyWarpPipeline.Execute() itself
+                    // builds its plan from) is the least speculative
+                    // choice available. A real mismatch here fails
+                    // closed as ImageSizeMismatch, not silently wrong --
+                    // see ReachyCameraCalibrationStateStore.SelectExact.
+                    descriptor.OutputWidth,
+                    descriptor.OutputHeight,
+                    ReachyCameraMujocoOpticalBinding.OfficialModelCompatibility);
+            ReachyCameraCalibrationProfile? calibrationProfile =
+                calibrationSelection.Profile;
+            if (calibrationProfile == null)
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.NoCalibration,
+                    "No exact camera calibration is available (" +
+                        calibrationSelection.Status + "): " +
+                        calibrationSelection.Message);
+            }
+
+            if (capturedStateFrame == null)
+            {
+                if (!runtime!.TryCreateAuthoritativeStateFrame(
+                    out ReachySimAuthoritativeStateFrame created))
+                {
+                    return FrameBuildResult.Failure(
+                        ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                        "Waiting for the authoritative simulation to start.");
+                }
+                capturedStateFrame = created;
+            }
+            if (!runtime!.TryCaptureLatestAuthoritativeState(capturedStateFrame))
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    "Waiting for the authoritative simulation to publish a state frame.");
+            }
+
+            ReachySimBodyPoseSnapshot? cameraPose = FindCameraPose(capturedStateFrame);
+            if (cameraPose == null)
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.Faulted,
+                    "The authoritative canonical camera body is missing.");
+            }
+
+            var cameraQuaternion = new ReachyQuaternionD(
+                cameraPose.Value.QuaternionX,
+                cameraPose.Value.QuaternionY,
+                cameraPose.Value.QuaternionZ,
+                cameraPose.Value.QuaternionW);
+            ReachyPhoneOpticalOrientationSample phoneOrientation =
+                ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds());
+            ReachyCameraRelativeRotationSample rotation =
+                ReachyCameraRelativeRotationCalculator.Calculate(
+                    ReachyCameraMujocoOpticalBinding.PinnedReachyMini,
+                    calibrationProfile,
+                    capturedStateFrame.Layout.ModelHash,
+                    capturedStateFrame.Sequence,
+                    capturedStateFrame.SimulationTime,
+                    capturedStateFrame.ContinuityId,
+                    cameraQuaternion,
+                    phoneOrientation);
+
+            ReachyCameraHomographyWarpResult warp = warpPipeline!.Execute(
+                bridge,
+                calibrationProfile,
+                rotation);
+            if (!warp.Succeeded || warp.Frame == null)
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    "Homography reprojection did not produce a frame: " + warp.Message);
+            }
+
+            ulong generation = checked(++frameGeneration);
+            try
+            {
+                ReachyVisionFrame frame = ReachyUnityVisionFrameFactory.CreateOwnedTrackingFrame(
+                    warp.Frame,
+                    ProviderInstanceId,
+                    generation);
+                return FrameBuildResult.Success(frame);
+            }
+            catch (ArgumentException exception)
+            {
+                return FrameBuildResult.Failure(
+                    ReachyPerceptionServiceExecutionState.NoCameraFrame,
+                    "The reprojected frame's coverage is not observation-eligible: " +
+                        exception.Message);
+            }
+        }
+
         private async Task RunOneFrameAsync(ReachyAndroidCameraTextureBridge bridge)
         {
             try
             {
-                ReachyCameraTextureBridgeSnapshot bridgeSnapshot = bridge.Current;
-                ReachyCameraTextureFrameDescriptor? descriptor = bridgeSnapshot.Frame;
-                if (!bridgeSnapshot.HasTexture || descriptor == null)
+                FrameBuildResult built = TryBuildFrame(bridge);
+                if (!built.Succeeded)
                 {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.NoCameraFrame,
-                        null,
-                        "The camera texture bridge is not yet producing frames.");
+                    PublishSnapshot(built.FailureState, null, built.FailureMessage);
                     return;
                 }
-
-                ReachyCameraCalibrationSelectionResult calibrationSelection =
-                    calibrations!.State.SelectExact(
-                        descriptor.CameraId,
-                        descriptor.LensFacing,
-                        descriptor.OutputWidth,
-                        descriptor.OutputHeight,
-                        // No production calibration-capture flow exists yet
-                        // to say what "the Reachy-side image" was captured
-                        // at; using the same live phone-side output
-                        // dimensions (the same ones
-                        // ReachyCameraHomographyWarpPipeline.Execute() itself
-                        // builds its plan from) is the least speculative
-                        // choice available. A real mismatch here fails
-                        // closed as ImageSizeMismatch, not silently wrong --
-                        // see ReachyCameraCalibrationStateStore.SelectExact.
-                        descriptor.OutputWidth,
-                        descriptor.OutputHeight,
-                        ReachyCameraMujocoOpticalBinding.OfficialModelCompatibility);
-                ReachyCameraCalibrationProfile? calibrationProfile =
-                    calibrationSelection.Profile;
-                if (calibrationProfile == null)
-                {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.NoCalibration,
-                        null,
-                        "No exact camera calibration is available (" +
-                            calibrationSelection.Status + "): " +
-                            calibrationSelection.Message);
-                    return;
-                }
-
-                if (capturedStateFrame == null)
-                {
-                    if (!runtime!.TryCreateAuthoritativeStateFrame(
-                        out ReachySimAuthoritativeStateFrame created))
-                    {
-                        PublishSnapshot(
-                            ReachyPerceptionServiceExecutionState.NoCameraFrame,
-                            null,
-                            "Waiting for the authoritative simulation to start.");
-                        return;
-                    }
-                    capturedStateFrame = created;
-                }
-                if (!runtime!.TryCaptureLatestAuthoritativeState(capturedStateFrame))
-                {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.NoCameraFrame,
-                        null,
-                        "Waiting for the authoritative simulation to publish a state frame.");
-                    return;
-                }
-
-                ReachySimBodyPoseSnapshot? cameraPose = FindCameraPose(capturedStateFrame);
-                if (cameraPose == null)
-                {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.Faulted,
-                        null,
-                        "The authoritative canonical camera body is missing.");
-                    return;
-                }
-
-                var cameraQuaternion = new ReachyQuaternionD(
-                    cameraPose.Value.QuaternionX,
-                    cameraPose.Value.QuaternionY,
-                    cameraPose.Value.QuaternionZ,
-                    cameraPose.Value.QuaternionW);
-                ReachyPhoneOpticalOrientationSample phoneOrientation =
-                    ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds());
-                ReachyCameraRelativeRotationSample rotation =
-                    ReachyCameraRelativeRotationCalculator.Calculate(
-                        ReachyCameraMujocoOpticalBinding.PinnedReachyMini,
-                        calibrationProfile,
-                        capturedStateFrame.Layout.ModelHash,
-                        capturedStateFrame.Sequence,
-                        capturedStateFrame.SimulationTime,
-                        capturedStateFrame.ContinuityId,
-                        cameraQuaternion,
-                        phoneOrientation);
-
-                ReachyCameraHomographyWarpResult warp = warpPipeline!.Execute(
-                    bridge,
-                    calibrationProfile,
-                    rotation);
-                if (!warp.Succeeded || warp.Frame == null)
-                {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.NoCameraFrame,
-                        null,
-                        "Homography reprojection did not produce a frame: " + warp.Message);
-                    return;
-                }
-
-                ulong generation = checked(++frameGeneration);
-                ReachyVisionFrame frame;
-                try
-                {
-                    frame = ReachyUnityVisionFrameFactory.CreateOwnedTrackingFrame(
-                        warp.Frame,
-                        ProviderInstanceId,
-                        generation);
-                }
-                catch (ArgumentException exception)
-                {
-                    PublishSnapshot(
-                        ReachyPerceptionServiceExecutionState.NoCameraFrame,
-                        null,
-                        "The reprojected frame's coverage is not observation-eligible: " +
-                            exception.Message);
-                    return;
-                }
+                ReachyVisionFrame frame = built.Frame!;
 
                 try
                 {

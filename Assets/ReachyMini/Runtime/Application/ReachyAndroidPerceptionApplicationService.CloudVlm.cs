@@ -22,6 +22,35 @@ namespace ReachyMini.AppState
     // in-place by ReachyOnDeviceLightweightTracker, not exposed for reuse
     // here) -- exactly the same still-open gap the LLM path documents for
     // itself.
+    // Outcome of AnalyzeCurrentSceneAsync: distinguishes "no camera frame
+    // could be captured at all" (FrameCaptured == false, e.g. camera preview
+    // toggle is off) from "a frame was captured and a real VLM call was
+    // attempted" (FrameCaptured == true, Result holds whatever
+    // AnalyzeSceneAsync returned, including its own possible failure
+    // statuses). Callers that only want a best-effort scene description to
+    // fold into an LLM prompt should treat both FrameCaptured == false and a
+    // non-succeeded Result as "no scene description available" and proceed
+    // voice-only rather than failing the whole conversational turn.
+    public readonly struct SceneCaptureAnalysisOutcome
+    {
+        private SceneCaptureAnalysisOutcome(bool frameCaptured, VisionLanguageResult? result, string detail)
+        {
+            FrameCaptured = frameCaptured;
+            Result = result;
+            Detail = detail;
+        }
+
+        public static SceneCaptureAnalysisOutcome NoFrame(string detail) =>
+            new SceneCaptureAnalysisOutcome(frameCaptured: false, result: null, detail);
+
+        public static SceneCaptureAnalysisOutcome Analyzed(VisionLanguageResult result) =>
+            new SceneCaptureAnalysisOutcome(frameCaptured: true, result, string.Empty);
+
+        public bool FrameCaptured { get; }
+        public VisionLanguageResult? Result { get; }
+        public string Detail { get; }
+    }
+
     public sealed partial class ReachyAndroidPerceptionApplicationService
     {
         // Public because ReachyCloudVlmCredentialCoordinator (the settings-UI
@@ -45,6 +74,56 @@ namespace ReachyMini.AppState
         private IReachyProviderSecretStore? cloudVlmSecretStore;
         private ReachyOpenAiVisionHttpTransport? cloudVlmTransport;
         private IVisionLanguageProvider? cloudVlmProvider;
+
+        // RMA-195 (voice+visual grounding, 2026-08-22): a caller (the
+        // conversation orchestrator's VLM fold-in) that wants "describe
+        // whatever the camera currently sees" cannot supply a
+        // ReachyVisionFrame itself -- there is no production way to build
+        // one outside the real camera/warp pipeline, and
+        // VisionLanguageResult.Failure/VisionLanguageRequest both require a
+        // real, fully-valid frame (no placeholder/null path exists in either
+        // constructor). So "no frame could be captured" (perception not
+        // running, camera preview toggle off, simulation not yet publishing
+        // state) is modeled as its own outcome here rather than forced into
+        // VisionLanguageResult's frame-requiring shape -- the caller needs
+        // to distinguish "proceed voice-only, no scene description" from a
+        // real VLM failure anyway. Owns the captured frame's disposal
+        // itself, so the caller never has to touch a ReachyVisionFrame
+        // directly. Never starts camera acquisition itself -- matches
+        // ReachyAndroidPerceptionDriver.CaptureFrameForAnalysisAsync's own
+        // fail-closed contract.
+        public async ValueTask<SceneCaptureAnalysisOutcome> AnalyzeCurrentSceneAsync(
+            string prompt,
+            string requestId,
+            CancellationToken cancellationToken)
+        {
+            if (driver == null)
+            {
+                return SceneCaptureAnalysisOutcome.NoFrame(
+                    "Perception is not running on this platform.");
+            }
+
+            ReachyVisionFrame? frame = await driver.CaptureFrameForAnalysisAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (frame == null)
+            {
+                return SceneCaptureAnalysisOutcome.NoFrame(
+                    "No camera frame is available. Turn on camera preview in Settings " +
+                        "and make sure the authoritative simulation has started.");
+            }
+
+            try
+            {
+                VisionLanguageResult result =
+                    await AnalyzeSceneAsync(frame, prompt, requestId, cancellationToken)
+                        .ConfigureAwait(false);
+                return SceneCaptureAnalysisOutcome.Analyzed(result);
+            }
+            finally
+            {
+                await frame.DisposeAsync().ConfigureAwait(false);
+            }
+        }
 
         public async ValueTask<VisionLanguageResult> AnalyzeSceneAsync(
             ReachyVisionFrame frame,
