@@ -558,14 +558,18 @@ namespace ReachyMini.AppState
             }
         }
 
-        private async Task<(ReachyOpenAiCompatibleLlmProviderBase?, string)> LoadCloudAsync(
+        // Not async: every path below is synchronous today (profile/secret lookups and
+        // fallback-policy evaluation are all in-memory). The cancellationToken parameter is
+        // kept for signature symmetry with EnsureCloudLoadedAsync and for when a real network
+        // preflight is added here.
+        private Task<(ReachyOpenAiCompatibleLlmProviderBase?, string)> LoadCloudAsync(
             CancellationToken cancellationToken)
         {
             if (Application.platform != RuntimePlatform.Android)
             {
                 const string detail = "Cloud LLM generation requires an Android device.";
                 PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
-                return (null, detail);
+                return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>((null, detail));
             }
 
             PublishSnapshot(
@@ -579,7 +583,7 @@ namespace ReachyMini.AppState
             {
                 const string detail = "No cloud LLM provider profile is configured.";
                 PublishSnapshot(ReachyProviderServiceExecutionState.NotLoaded, string.Empty, detail);
-                return (null, detail);
+                return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>((null, detail));
             }
 
             IReachyProviderSecretStore? secretStore = EnsureCloudSecretStore();
@@ -587,7 +591,7 @@ namespace ReachyMini.AppState
             {
                 const string detail = "Cloud LLM credential storage is unavailable on this platform.";
                 PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
-                return (null, detail);
+                return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>((null, detail));
             }
 
             ReachyAuthorizedProviderSwitch? authorization;
@@ -599,7 +603,8 @@ namespace ReachyMini.AppState
                     ReachyProviderServiceExecutionState.Suspended,
                     string.Empty,
                     authorizationFailureDetail);
-                return (null, authorizationFailureDetail);
+                return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>(
+                    (null, authorizationFailureDetail));
             }
             authorization.Consume(
                 ReachyProviderWorkloadKind.Llm,
@@ -629,7 +634,7 @@ namespace ReachyMini.AppState
                 string detail = "Cloud LLM provider profile is invalid for this adapter: " +
                     exception.Message;
                 PublishSnapshot(ReachyProviderServiceExecutionState.Faulted, string.Empty, detail);
-                return (null, detail);
+                return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>((null, detail));
             }
 
             lock (sync)
@@ -640,7 +645,8 @@ namespace ReachyMini.AppState
                 ReachyProviderServiceExecutionState.Ready,
                 profile.ProviderId,
                 "Cloud LLM provider loaded and ready.");
-            return (built, string.Empty);
+            return Task.FromResult<(ReachyOpenAiCompatibleLlmProviderBase?, string)>(
+                (built, string.Empty));
         }
 
         private (ReachyAuthorizedProviderSwitch?, string) EvaluateCloudSwitchAuthorization(
