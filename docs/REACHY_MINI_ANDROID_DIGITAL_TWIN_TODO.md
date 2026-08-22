@@ -3182,6 +3182,87 @@ provider-driven intents) needs perception and provider both Ready.
       `scripts/run_rma195_cloud_llm_thermal_probe_android.sh` are exploratory
       tooling (not a permanent CI gate) kept in the repo since the
       device-thermal-comparison pattern is reusable.
+      **Live conversational-turn trigger + on-demand VLM frame capture
+      (2026-08-22, same day), by explicit user decision ("wire the live
+      conversational-turn trigger next" / "Voice + visual grounding"
+      scope): both previously-open gaps above are now closed.** (1)
+      On-demand camera-frame capture:
+      `ReachyAndroidPerceptionDriver.RunOneFrameAsync`'s synchronous
+      calibration/warp frame-construction steps (bridge snapshot ->
+      calibration -> authoritative state -> homography warp -> frame
+      construction) were extracted into a shared `TryBuildFrame` helper, now
+      also called by a new `CaptureFrameForAnalysisAsync` entry point that
+      returns one `TransformedReachyEye` frame to a caller instead of
+      feeding it to the continuous tracker -- one code path for "produce a
+      frame," not two copies of the calibration/warp logic. Fails closed
+      (returns `null`) rather than starting camera acquisition itself if the
+      camera-preview toggle isn't already on, matching this pipeline's
+      existing fail-closed philosophy.
+      `ReachyAndroidPerceptionApplicationService.CloudVlm.cs` gains
+      `AnalyzeCurrentSceneAsync`, which captures a frame this way and folds
+      it into the existing `AnalyzeSceneAsync` cloud-VLM call, owning the
+      captured frame's disposal. Its result is a new
+      `SceneCaptureAnalysisOutcome` struct rather than `VisionLanguageResult`
+      directly: `VisionLanguageResult.Failure`/`VisionLanguageRequest` both
+      require a real, fully-valid frame with no placeholder path (confirmed
+      by reading their constructors before writing this, after an earlier
+      draft tried to invent a placeholder-frame factory and would not have
+      compiled), and a caller genuinely needs to distinguish "no frame could
+      be captured" from a real VLM failure either way.
+      (2) `ReachyConversationTurnOrchestrator` (new,
+      `Assets/ReachyMini/Runtime/Application/`, split into
+      `.Asr.cs`/`.Llm.cs`/`.Tts.cs` partials to stay under the ~800-line
+      convention) is the first real conversation-turn coordinator: real ASR
+      (on-device, falling back to system ASR, mirroring
+      `ReachyAndroidSpeechCapabilityApplicationService`'s probe pattern but
+      performing a real recognition) -> the best-effort VLM scene
+      description above folded into the LLM prompt (bounded independently
+      of either provider's own per-message character bound, so a long
+      description plus a long transcript can never together exceed it) ->
+      LLM behavior-intent generation, routed to the cloud or local governed
+      overload purely from the durable `ReachyProviderKind.Llm` execution
+      setting, with exactly one regeneration attempt on an invalid intent
+      (the cloud path uses `ReachyBehaviorIntentRecoveryPolicy.Evaluate`
+      directly; the local governed path hand-mirrors the same policy since
+      `LocalLlmGovernedGenerationResult` only surfaces a bounded diagnostic
+      string, not a `ReachyBehaviorIntentValidationResult`, on failure) ->
+      the resulting `ReachyBehaviorGesture` mapped onto the RMA-152/153
+      baseline vocabulary via a new, pure Core-layer
+      `ReachyBehaviorIntentGestureMapper` (None/Nod/SmallHeadTilt/Recoil ->
+      no-op/Acknowledgment/Curiosity/Surprise; Expression/GazeTarget/
+      Urgency/Timing explicitly deferred, not silently dropped) and
+      triggered via the already-public, already-thread-safe
+      `IReachyBehaviorService.TryTriggerGesture` (required no changes to the
+      baseline-behavior service itself) -> real offline TTS playback of
+      `ReachyBehaviorIntent.Speech` -> back to `Idle`. A response with no
+      speech (schema-valid, gesture-only) walks the state machine through
+      without invoking a TTS provider rather than fabricating text to speak.
+      Fails closed at every stage with no fabricated apology speech.
+      Turn/session/operation bookkeeping is delegated to the already-built
+      but previously fully-unwired `ReachyConversationStateMachine`
+      (RMA-150) -- exactly the guard it was designed for: a second mic press
+      while a turn is in flight is ignored rather than corrupting state.
+      `ReachyMainScreen.RequestMicrophone()` now starts a real turn via a
+      new `ConfigureConversationTurn` binding (fire-and-forget, since it's a
+      synchronous IMGUI click handler; mirrors the existing
+      `requestCameraAccess` bind-once/throw-only-at-invocation pattern)
+      instead of only flipping cosmetic UI state. Wired into
+      `ReachySettingsApplicationCompositionProvider.cs` -- confirmed to be
+      the real production composition path (via `ReachyMainScreenBootstrap`,
+      which always constructs it, never
+      `ReachyProductionApplicationCompositionProvider`) before touching it,
+      not assumed. Verified with a real local Unity Editor (6000.5.2f1)
+      Android development build after fixing one real compile error the
+      first draft missed (`Interlocked.Increment` has no `ulong` overload),
+      plus the managed Core test suite including a new module-initializer
+      test covering all 4 gesture-mapping values. **Still open**:
+      Expression/GazeTarget/Urgency/Timing intent fields, TTS voice
+      selection beyond "first voice matching the language tag, else the
+      first available," and any physical-device verification of a real
+      end-to-end voice turn (this was verified by compilation + the managed
+      unit test only, not by pressing the mic button on the physical test
+      phone and speaking to it) -- ASR/TTS/microphone-permission behavior
+      specifically can only be confirmed on-device.
 - [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
       (never referenced by `ReachyMainScreenBootstrap`, which always
       constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,
