@@ -125,3 +125,43 @@ running measurably hotter than any prior run in this finding. Recorded as a furt
 data point strengthening (not superseding) the existing finding; the governor was not
 touched, consistent with the user's standing decision to keep RMA-135 open as a known
 device limitation.
+
+## Reboot does not clear it; the accumulated-heat hypothesis is wrong (2026-08-22, later still)
+
+Commit `970eeb1`'s own CI run of the same acceptance harness (unrelated code -- an
+RMA-163 test-name fix and a `CA2263` analyzer fix, neither touching the governor)
+reproduced the identical escalated signature above:
+`reasons=DeviceProfileLimit, PhysicsBudgetExceeded` at admission time. Live device
+query beforehand: SKIN `mValue=40.3`, `mStatus=1` (Light); total RAM reported
+`status low`, only ~191 MB truly free; `uptime` showed **6 days, 6 hours** with no
+reboot and a load average of 23.7/21.2/18.7 -- unusually high for a phone. This
+looked like a plausible explanation at the time: days of accumulated background
+cruft (leaked processes, repeated app installs/launches) on top of the day's real
+thermal load.
+
+At the user's request, the device was rebooted (`adb reboot`, confirmed
+`sys.boot_completed=1`, ~60s settle time) and RMA-135 was re-run immediately
+against the existing local `weachy-mini-device-arm64-api26.apk` (built 2026-08-16;
+predates today's changes, but nothing built today touches the governor, admission
+logic, or this harness, so this is a valid same-question re-test). **This
+hypothesis was wrong.** Even 2 minutes after a cold boot, SKIN was already at
+`mValue=43.4`, `mStatus=2` (Moderate) -- higher than the pre-reboot reading -- and
+climbed to `44.2` by the time the run finished 4 minutes into uptime. Free-RAM
+status did genuinely improve after reboot (`status moderate` vs. `status low`,
+more free RAM), so the reboot was not useless -- but the run failed with the exact
+same signature anyway: `Suspended` at admission,
+`reasons=DeviceProfileLimit, ThermalModerate, MemoryPressure, PhysicsBudgetExceeded`.
+
+A device that reaches Moderate thermal throttling within two minutes of powering on
+is not carrying software-accumulated heat -- multi-day uptime is ruled out as the
+driver. Two more plausible explanations, neither yet tested: (1) genuinely elevated
+ambient temperature wherever the device physically sits, which several hours of
+testing today would not have helped; (2) the device has been on USB power the
+entire session for `adb` access, and battery-charging current is itself a real,
+independent heat source unrelated to anything the app or physics does. Testing (2)
+would mean running RMA-135 on battery power, disconnected from USB, after a genuine
+cool-down period -- losing the live adb connection mid-run means the harness would
+need to be re-triggered without a tether, which is a larger change to how this
+acceptance runs than attempted so far. Not investigated further this session;
+recorded as the corrected working hypothesis, superseding the accumulated-heat
+theory above. The governor was not touched.
