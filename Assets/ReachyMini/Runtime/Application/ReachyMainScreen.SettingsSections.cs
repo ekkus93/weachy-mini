@@ -250,6 +250,12 @@ namespace ReachyMini.AppState
                 warningStyle!);
             y += 48f;
 
+            GUI.Label(
+                new Rect(area.x, y, area.width, 42f),
+                GetCloudPrivacyBoundaryLabel(profile),
+                warningStyle!);
+            y += 48f;
+
             GUI.Label(new Rect(area.x, y, area.width, 24f), "API KEY", detailStyle!);
             y += 26f;
             cloudLlmApiKeyDraft = GUI.PasswordField(
@@ -365,6 +371,12 @@ namespace ReachyMini.AppState
                     : $"CURRENT PROFILE  {profile.BaseUri} · " +
                         $"{GetCloudEndpointStyleLabel(profile.EndpointStyle)} · " +
                         $"{profile.GetModelId(ReachyProviderModelRole.Vision)}",
+                warningStyle!);
+            y += 48f;
+
+            GUI.Label(
+                new Rect(area.x, y, area.width, 42f),
+                GetCloudPrivacyBoundaryLabel(profile),
                 warningStyle!);
             y += 48f;
 

@@ -188,7 +188,17 @@ namespace ReachyMini.Security
             }
         }
 
-        public static bool IsTrustedLocalDevelopmentHost(Uri uri)
+        // True for hosts that are unambiguously on the device itself or on the
+        // user's own network: loopback, RFC1918/link-local literals, and the
+        // local-only DNS suffixes. Renamed from IsTrustedLocalDevelopmentHost
+        // (RMA-195, 2026-08-22) because a LAN-hosted inference server is a
+        // supported deployment, not only a development convenience -- the old
+        // name understated what it actually gates.
+        //
+        // Only literal IPs are accepted: a public DNS name that resolves to a
+        // private address is deliberately NOT trusted here, so DNS rebinding
+        // cannot talk its way past a caller that uses this as a gate.
+        public static bool IsTrustedLocalNetworkHost(Uri uri)
         {
             RequireValidHost(uri, nameof(uri));
             string host = TrimIpv6Brackets(uri.Host);

@@ -17,7 +17,7 @@ namespace ReachyMini.Providers
     public enum ReachyProviderTlsMode
     {
         RequireHttps = 0,
-        LocalDevelopmentCleartext = 1,
+        TrustedLocalNetworkCleartext = 1,
     }
 
     public enum ReachyProviderModelRole
@@ -213,7 +213,7 @@ namespace ReachyMini.Providers
             StreamingEnabled = streamingEnabled;
             TlsMode = tlsMode;
             CredentialReference = credentialReference;
-            SecurityWarning = tlsMode == ReachyProviderTlsMode.LocalDevelopmentCleartext
+            SecurityWarning = tlsMode == ReachyProviderTlsMode.TrustedLocalNetworkCleartext
                 ? "LOCAL DEVELOPMENT ONLY: provider traffic uses cleartext HTTP and may expose request data or credentials on the local network."
                 : string.Empty;
         }
@@ -243,7 +243,7 @@ namespace ReachyMini.Providers
         public bool HasCredentialReference => CredentialReference != null;
 
         public bool UsesCleartextLocalDevelopmentTransport =>
-            TlsMode == ReachyProviderTlsMode.LocalDevelopmentCleartext;
+            TlsMode == ReachyProviderTlsMode.TrustedLocalNetworkCleartext;
 
         public string SecurityWarning { get; }
 
@@ -312,20 +312,20 @@ namespace ReachyMini.Providers
                         StringComparison.OrdinalIgnoreCase))
                 {
                     throw new ArgumentException(
-                        "Provider profiles require HTTPS unless the explicit local-development cleartext mode is selected.",
+                        "Provider profiles require HTTPS unless the explicit trusted-local-network cleartext mode is selected.",
                         nameof(baseUri));
                 }
             }
-            else if (tlsMode == ReachyProviderTlsMode.LocalDevelopmentCleartext)
+            else if (tlsMode == ReachyProviderTlsMode.TrustedLocalNetworkCleartext)
             {
                 if (!string.Equals(
                         baseUri.Scheme,
                         Uri.UriSchemeHttp,
                         StringComparison.OrdinalIgnoreCase) ||
-                    !ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(baseUri))
+                    !ReachyNetworkEndpointSecurity.IsTrustedLocalNetworkHost(baseUri))
                 {
                     throw new ArgumentException(
-                        "Cleartext provider profiles are restricted to explicit local-development hosts.",
+                        "Cleartext provider profiles are restricted to trusted local-network hosts.",
                         nameof(baseUri));
                 }
             }

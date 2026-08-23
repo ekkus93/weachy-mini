@@ -48,7 +48,7 @@ namespace ReachyMini.Tests
         }
 
         [Test]
-        public void SaveProfileAcceptsALoopbackHttpUrlAsLocalDevelopmentCleartext()
+        public void SaveProfileAcceptsALoopbackHttpUrlAsTrustedLocalNetworkCleartext()
         {
             WithCoordinator(coordinator =>
             {

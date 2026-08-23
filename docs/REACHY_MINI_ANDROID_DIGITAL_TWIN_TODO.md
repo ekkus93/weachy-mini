@@ -2380,7 +2380,7 @@ throttling in ~16s -- informative context, not a fix to this on-device acceptanc
 - [x] Reject cleartext HTTP by default.
 - [x] Add an explicit local-development override with a persistent warning.
 
-**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs`'s `ReachyProviderProfile` (base URI/endpoint style/model bindings/headers/timeout/streaming/TLS mode/credential reference), `ValidateBaseUri` rejects non-HTTPS unless `ReachyProviderTlsMode.LocalDevelopmentCleartext` and `ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost`, `SecurityWarning`/`CreateRedactedDiagnostic()`. Android Keystore-backed via `ReachyAndroidProviderSecretStore.cs` → `ReachyProviderSecretBridge.java` (`AndroidKeyStore`). Exercised indirectly by `ReachyProviderCredentialLifecycleTests.cs`; no dedicated RMA-140 test file exists (residual coverage gap, not a correctness gap).
+**Status:** Complete. **Completion evidence (2026-08-22):** `Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs`'s `ReachyProviderProfile` (base URI/endpoint style/model bindings/headers/timeout/streaming/TLS mode/credential reference), `ValidateBaseUri` rejects non-HTTPS unless `ReachyProviderTlsMode.TrustedLocalNetworkCleartext` and `ReachyNetworkEndpointSecurity.IsTrustedLocalNetworkHost`, `SecurityWarning`/`CreateRedactedDiagnostic()`. Android Keystore-backed via `ReachyAndroidProviderSecretStore.cs` → `ReachyProviderSecretBridge.java` (`AndroidKeyStore`). Exercised indirectly by `ReachyProviderCredentialLifecycleTests.cs`; no dedicated RMA-140 test file exists (residual coverage gap, not a correctness gap).
 
 ## RMA-141 — Implement shared HTTP/streaming transport
 
@@ -3169,7 +3169,7 @@ provider-driven intents) needs perception and provider both Ready.
       **Follow-up (2026-08-22, same day):** both credential coordinators were
       extended to accept `http://` base URLs for trusted local-development
       hosts (loopback/private/`.local`, matching
-      `ReachyProviderProfile`'s existing `IsTrustedLocalDevelopmentHost`
+      `ReachyProviderProfile`'s existing `IsTrustedLocalNetworkHost`
       check -- a public `http://` URL is still rejected fail-closed), so a
       local-network test/dev server (not just a real `https://` cloud
       endpoint) can be configured through the same settings UI. This was

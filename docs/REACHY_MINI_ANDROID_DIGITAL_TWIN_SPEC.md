@@ -596,7 +596,7 @@ Provider configuration may include:
 - TLS policy;
 - feature capabilities.
 
-Arbitrary base URLs MUST be treated as security-sensitive. Plain HTTP SHOULD be rejected by default except for an explicitly enabled local-development mode.
+Arbitrary base URLs MUST be treated as security-sensitive. Plain HTTP SHOULD be rejected by default except for an explicitly enabled trusted-local-network mode, which MUST be restricted to loopback, RFC1918/link-local address literals, and local-only DNS suffixes. A self-hosted OpenAI-compatible server on the user's own network is a supported deployment rather than only a development convenience, so this mode is named for what it permits (`ReachyProviderTlsMode.TrustedLocalNetworkCleartext`) rather than for a development workflow. Cleartext to a public host MUST remain rejected.
 
 ### 15.3 Credentials
 
@@ -834,6 +834,8 @@ At minimum:
 - Camera and microphone access require runtime permission and visible active state.
 - Cloud-bound audio, text, or images require explicit provider selection.
 - The app shall indicate which data type is about to leave the device.
+- The app shall distinguish **where** data goes, not only whether it leaves the device. The privacy boundaries are: **on-device**, **device service** (an Android system service that may itself be network-backed), **local network** (a host on the user's own network — loopback, RFC1918/link-local literals, or a local-only DNS suffix), and **cloud** (anything else). A remote endpoint MUST be classified from its configured address rather than assumed to be cloud, and a boundary MUST NOT be reported as less sensitive than it is: only a literal private address or local-only DNS suffix qualifies as local network, so a public hostname that resolves privately is classified as cloud.
+- Classifying an endpoint as local network is a **labelling** distinction only. It MUST NOT relax any authorization: local-network and cloud targets are both network boundaries and MUST both require the same explicit provider-switch authorization and privacy-boundary confirmation.
 - Logs shall be structured and redacted.
 - Custom endpoint URLs and certificates shall be validated.
 - Network security configuration shall reject cleartext traffic by default.

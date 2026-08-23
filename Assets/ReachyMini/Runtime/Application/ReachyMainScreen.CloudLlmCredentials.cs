@@ -70,6 +70,24 @@ namespace ReachyMini.AppState
             };
         }
 
+        // Shared with the Cloud VLM settings section. The settings-level
+        // ReachyProviderSelection only records a generic execution
+        // *preference* (its SendsDataOffDevice is a bool), so it genuinely
+        // cannot say whether a configured endpoint is on the user's own
+        // network or out on the internet. The saved profile can, and this is
+        // the one screen where the real base URL is in hand -- so the
+        // disclosure belongs here (RMA-195, 2026-08-22).
+        private static string GetCloudPrivacyBoundaryLabel(ReachyProviderProfile? profile)
+        {
+            if (profile == null)
+            {
+                return "DATA BOUNDARY  no endpoint configured";
+            }
+            return "DATA BOUNDARY  " +
+                ReachyProviderPrivacyBoundaryClassifier.DescribeBoundary(
+                    ReachyProviderPrivacyBoundaryClassifier.Classify(profile.BaseUri));
+        }
+
         public void SaveCloudLlmProfile()
         {
             ReachyCloudLlmCredentialCoordinator coordinator = RequireCloudLlmCredentials();

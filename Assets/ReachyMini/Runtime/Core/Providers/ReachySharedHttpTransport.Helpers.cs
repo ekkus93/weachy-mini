@@ -135,7 +135,7 @@ namespace ReachyMini.Providers
                     uri.Scheme,
                     Uri.UriSchemeHttp,
                     StringComparison.OrdinalIgnoreCase) &&
-                ReachyMini.Security.ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(uri);
+                ReachyMini.Security.ReachyNetworkEndpointSecurity.IsTrustedLocalNetworkHost(uri);
         }
 
         private static string? ReadProviderRequestId(HttpResponseMessage response)

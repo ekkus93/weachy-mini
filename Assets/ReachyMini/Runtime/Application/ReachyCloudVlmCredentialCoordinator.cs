@@ -118,7 +118,7 @@ namespace ReachyMini.AppState
                         baseUri.Scheme,
                         Uri.UriSchemeHttp,
                         StringComparison.OrdinalIgnoreCase)
-                    ? ReachyProviderTlsMode.LocalDevelopmentCleartext
+                    ? ReachyProviderTlsMode.TrustedLocalNetworkCleartext
                     : ReachyProviderTlsMode.RequireHttps;
                 ReachyProviderProfile profile = new ReachyProviderProfile(
                     ProviderId,

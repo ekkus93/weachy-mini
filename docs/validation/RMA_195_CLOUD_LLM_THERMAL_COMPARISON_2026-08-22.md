@@ -33,9 +33,9 @@ earlier same-day investigation, but never yet exercised on the physical device.
   every token, and all inference compute happens off the phone's own SoC.
 - **Coordinators fixed to allow this test:** `ReachyCloudLlmCredentialCoordinator` and
   `ReachyCloudVlmCredentialCoordinator` previously only accepted `https://` base URLs.
-  Both were extended to auto-select `ReachyProviderTlsMode.LocalDevelopmentCleartext`
+  Both were extended to auto-select `ReachyProviderTlsMode.TrustedLocalNetworkCleartext`
   for `http://` URLs, still gated by `ReachyProviderProfile`'s own
-  `IsTrustedLocalDevelopmentHost` check (loopback/private/`.local` hosts only) -- a
+  `IsTrustedLocalNetworkHost` check (loopback/private/`.local` hosts only) -- a
   public `http://` URL is still rejected fail-closed exactly as before. Covered by 4
   new EditMode tests (2 per coordinator: accepts loopback http, rejects public http).
 - **New exploratory probe** (`ReachyRma195CloudLlmThermalProbe.cs`, activated via the

@@ -293,7 +293,11 @@ namespace ReachyMini.AppState
                 new ReachyProviderEndpointIdentity(
                     ReachyProviderWorkloadKind.Vlm,
                     profile.ProviderId,
-                    ReachyProviderPrivacyBoundary.Cloud),
+                    // Classified from the configured endpoint rather than
+                    // assumed Cloud -- see the identical note in
+                    // ReachyLocalLlmProviderApplicationService's
+                    // EvaluateCloudSwitchAuthorization.
+                    ReachyProviderPrivacyBoundaryClassifier.Classify(profile.BaseUri)),
                 "cloud-vlm-provider-selected");
 
             ReachyFallbackDecision initial = engine.EvaluateProviderSwitch(switchRequest);

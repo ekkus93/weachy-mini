@@ -128,15 +128,15 @@ namespace ReachyMini.AppState
                 // local Ollama instance reached via `adb reverse`) are deliberately
                 // permitted here, not just https://. ReachyProviderProfile's own
                 // ValidateBaseUri still enforces the real security boundary --
-                // LocalDevelopmentCleartext only validates if
-                // ReachyNetworkEndpointSecurity.IsTrustedLocalDevelopmentHost(baseUri)
+                // TrustedLocalNetworkCleartext only validates if
+                // ReachyNetworkEndpointSecurity.IsTrustedLocalNetworkHost(baseUri)
                 // is true (loopback/private/`.local` hosts only), so a plain public
                 // http:// URL is still rejected fail-closed exactly as before.
                 ReachyProviderTlsMode tlsMode = string.Equals(
                         baseUri.Scheme,
                         Uri.UriSchemeHttp,
                         StringComparison.OrdinalIgnoreCase)
-                    ? ReachyProviderTlsMode.LocalDevelopmentCleartext
+                    ? ReachyProviderTlsMode.TrustedLocalNetworkCleartext
                     : ReachyProviderTlsMode.RequireHttps;
                 ReachyProviderProfile profile = new ReachyProviderProfile(
                     ProviderId,

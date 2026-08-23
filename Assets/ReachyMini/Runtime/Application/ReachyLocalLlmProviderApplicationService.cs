@@ -666,7 +666,13 @@ namespace ReachyMini.AppState
                 new ReachyProviderEndpointIdentity(
                     ReachyProviderWorkloadKind.Llm,
                     profile.ProviderId,
-                    ReachyProviderPrivacyBoundary.Cloud),
+                    // Classified from the configured endpoint rather than
+                    // assumed Cloud (RMA-195, 2026-08-22): a LAN-hosted
+                    // OpenAI-compatible server is LocalNetwork, and reporting
+                    // it as Cloud misstated where data actually goes. Both
+                    // boundaries gate identically -- see
+                    // ReachyProviderPrivacyBoundaryClassifier.
+                    ReachyProviderPrivacyBoundaryClassifier.Classify(profile.BaseUri)),
                 "cloud-llm-provider-selected");
 
             ReachyFallbackDecision initial = engine.EvaluateProviderSwitch(switchRequest);
