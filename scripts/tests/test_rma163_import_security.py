@@ -90,7 +90,7 @@ class Rma163ImportedContentSecurityTests(unittest.TestCase):
         vlm = (CORE / "Perception/ReachyLocalVlmManifestContracts.cs").read_text(encoding="utf-8")
         for token in (
             "RequirePublicHttpsUri",
-            "IsTrustedLocalDevelopmentHost",
+            "IsTrustedLocalNetworkHost",
             'host.EndsWith(".local"',
             "IPAddress.IsLoopback",
             "bytes[0] == 169 && bytes[1] == 254",
@@ -99,7 +99,7 @@ class Rma163ImportedContentSecurityTests(unittest.TestCase):
         ):
             self.assertIn(token, security)
         self.assertIn("RequireValidHost(baseUri", provider)
-        self.assertIn("IsTrustedLocalDevelopmentHost(baseUri)", provider)
+        self.assertIn("IsTrustedLocalNetworkHost(baseUri)", provider)
         self.assertIn("RequirePublicHttpsUri", manifest)
         self.assertIn("RequirePublicHttpsUri", download)
         self.assertIn("RequirePublicHttpsUri", transport)

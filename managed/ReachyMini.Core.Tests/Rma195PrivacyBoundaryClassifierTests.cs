@@ -117,10 +117,11 @@ namespace ReachyMini.Core.Tests
 
         private static void EveryBoundaryHasADescription()
         {
-            foreach (object value in Enum.GetValues(typeof(ReachyProviderPrivacyBoundary)))
+            foreach (ReachyProviderPrivacyBoundary value in
+                Enum.GetValues<ReachyProviderPrivacyBoundary>())
             {
-                string description = ReachyProviderPrivacyBoundaryClassifier.DescribeBoundary(
-                    (ReachyProviderPrivacyBoundary)value);
+                string description =
+                    ReachyProviderPrivacyBoundaryClassifier.DescribeBoundary(value);
                 if (string.IsNullOrWhiteSpace(description))
                 {
                     throw new InvalidOperationException(
