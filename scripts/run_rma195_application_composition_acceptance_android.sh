@@ -52,19 +52,29 @@ ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 rm -rf -- "${REPORT_DIR}"
 mkdir -p "${REPORT_DIR}"
 
-capture()
+read_report_run_as()
 {
-  set +e
-  "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt"
-  "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt"
-  "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt"
-  "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt"
-  "${ADB[@]}" shell dumpsys audio > "${REPORT_DIR}/audio.txt"
-  "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" \
-    cat "${REMOTE_RESULT_PATH}" > "${REPORT_DIR}/device-report-run-as.json" 2>/dev/null || true
+  "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" sh -c \
+    "test -f '${REMOTE_RESULT_PATH}' && cat '${REMOTE_RESULT_PATH}'" \
+    2>/dev/null | tr -d '\r' || true
+}
+
+read_report_shell()
+{
   "${ADB[@]}" shell \
     "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
-    > "${REPORT_DIR}/device-report-shell.json" 2>/dev/null || true
+    2>/dev/null | tr -d '\r' || true
+}
+
+capture()
+{
+  "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" || true
+  "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" || true
+  "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" || true
+  "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt" || true
+  "${ADB[@]}" shell dumpsys audio > "${REPORT_DIR}/audio.txt" || true
+  read_report_run_as > "${REPORT_DIR}/device-report-run-as.json" || true
+  read_report_shell > "${REPORT_DIR}/device-report-shell.json" || true
 }
 
 cleanup()
@@ -119,20 +129,14 @@ cat "${REPORT_DIR}/launch.txt"
 start="$(date +%s)"
 report_json=""
 while true; do
-  report_json="$(
-    "${ADB[@]}" exec-out run-as "${PACKAGE_NAME}" \
-      cat "${REMOTE_RESULT_PATH}" 2>/dev/null | tr -d '\r' || true
-  )"
+  report_json="$(read_report_run_as)"
   if [[ -z "${report_json}" ]]; then
-    report_json="$(
-      "${ADB[@]}" shell \
-        "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
-        2>/dev/null | tr -d '\r' || true
-    )"
+    report_json="$(read_report_shell)"
   fi
-  if [[ -n "${report_json}" ]]; then
+  if [[ "${report_json}" == \{* ]]; then
     break
   fi
+  report_json=""
   "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null || {
     printf '%s\n' 'Unity exited before the RMA-195 report was produced.' >&2
     exit 1
@@ -148,7 +152,7 @@ printf '%s\n' "${report_json}" > \
   "${REPORT_DIR}/rma195-application-composition-acceptance.json"
 capture
 
-python3 - "${REPORT_DIR}/rma195-application-composition-acceptance.json" <<'PY'
+if ! python3 - "${REPORT_DIR}/rma195-application-composition-acceptance.json" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -196,6 +200,10 @@ assert r["cloud_credentials_injected"] is False, r
 assert r["local_model_injected"] is False, r
 print(json.dumps(r, indent=2, sort_keys=True))
 PY
+then
+  printf '%s\n' 'RMA-195 report JSON validation failed.' >&2
+  exit 1
+fi
 
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 trap - EXIT
