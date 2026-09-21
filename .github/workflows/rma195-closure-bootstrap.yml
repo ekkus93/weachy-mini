@@ -18,11 +18,7 @@ concurrency:
 jobs:
   publish-candidate:
     name: Verify and publish exact RMA-195 candidate
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - weachy-mini-android-device
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Check out bootstrap commit
