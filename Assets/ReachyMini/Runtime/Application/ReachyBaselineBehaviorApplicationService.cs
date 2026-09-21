@@ -38,6 +38,7 @@ namespace ReachyMini.AppState
     public sealed class ReachyBaselineBehaviorApplicationService :
         ReachyApplicationServiceBase,
         IReachyBehaviorService,
+        IReachyBehaviorIntentCapability,
         IReachyApplicationInterruptionParticipant
     {
         // Kinds that represent an ongoing state rather than a one-shot
@@ -48,6 +49,7 @@ namespace ReachyMini.AppState
 
         private readonly ReachyProductionAuthoritativeRuntime runtime;
         private readonly IReachyPerceptionService perception;
+        private readonly ReachyDeterministicBehaviorPlanner intentPlanner;
         private readonly ReachyBaselineBehaviorLibrary library;
         private readonly ReachyBehaviorTrajectoryExecutor executor;
         private readonly Stopwatch clock = Stopwatch.StartNew();
@@ -57,6 +59,7 @@ namespace ReachyMini.AppState
         private CancellationTokenSource? loopCancellation;
         private ReachyBaselineBehaviorRequest currentTarget =
             ReachyBaselineBehaviorRequest.NeutralIdle();
+        private ReachyBehaviorIntent? currentIntent;
 
         // Guards snapshot publishes against a race where a background loop
         // iteration is already past its cancellation check (and therefore
@@ -67,12 +70,12 @@ namespace ReachyMini.AppState
         // snapshot published right after StopLoop() returns.
         private int generation;
 
-        // Written by TryTriggerGesture (any caller thread) and consumed by
-        // RunLoopAsync (the background loop thread) -- both sides go through
-        // Interlocked.Exchange so the field is not also declared `volatile`
-        // (mixing volatile with `ref` in Interlocked calls is a compiler
-        // warning, which this project's warnings-as-errors policy forbids).
-        private ReachyBaselineBehaviorRequest? pendingTarget;
+        // Written by TryTriggerGesture/TryExecuteIntent (any caller thread)
+        // and consumed by RunLoopAsync (the background loop thread). A single
+        // pending-command slot makes the latest caller authoritative and
+        // prevents the baseline and provider-intent paths from racing each
+        // other through separate queues.
+        private PendingBehaviorCommand? pendingCommand;
         private ReachyBehaviorServiceSnapshot snapshot;
 
         public ReachyBaselineBehaviorApplicationService(
@@ -86,10 +89,10 @@ namespace ReachyMini.AppState
             this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             this.perception = perception ??
                 throw new ArgumentNullException(nameof(perception));
-            ReachyDeterministicBehaviorPlanner planner =
+            intentPlanner =
                 new ReachyDeterministicBehaviorPlanner(
                     ReachyBehaviorPlannerPolicy.CreateMobileDefault());
-            library = ReachyBaselineBehaviorLibrary.CreateMobileDefault(planner);
+            library = ReachyBaselineBehaviorLibrary.CreateMobileDefault(intentPlanner);
             executor = new ReachyBehaviorTrajectoryExecutor(
                 new ReachyProductionBehaviorControllerTargetSink(runtime),
                 new ReachyBehaviorSystemTrajectoryDelay());
@@ -134,7 +137,33 @@ namespace ReachyMini.AppState
                 return false;
             }
 
-            Interlocked.Exchange(ref pendingTarget, request);
+            Interlocked.Exchange(
+                ref pendingCommand,
+                PendingBehaviorCommand.ForBaseline(request));
+            diagnosticCode = string.Empty;
+            return true;
+        }
+
+        public bool TryExecuteIntent(
+            ReachyBehaviorIntent intent,
+            out string diagnosticCode)
+        {
+            if (intent == null)
+            {
+                throw new ArgumentNullException(nameof(intent));
+            }
+
+            ReachyServiceState state = Health.State;
+            if (state != ReachyServiceState.Ready &&
+                state != ReachyServiceState.Degraded)
+            {
+                diagnosticCode = "behavior-intent-service-not-ready";
+                return false;
+            }
+
+            Interlocked.Exchange(
+                ref pendingCommand,
+                PendingBehaviorCommand.ForIntent(intent));
             diagnosticCode = string.Empty;
             return true;
         }
@@ -155,7 +184,8 @@ namespace ReachyMini.AppState
                 return;
             }
             currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
-            pendingTarget = null;
+            currentIntent = null;
+            pendingCommand = null;
             StartLoop();
         }
 
@@ -217,11 +247,20 @@ namespace ReachyMini.AppState
             {
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    ReachyBaselineBehaviorRequest? requested =
-                        Interlocked.Exchange(ref pendingTarget, null);
-                    if (requested != null)
+                    PendingBehaviorCommand? command =
+                        Interlocked.Exchange(ref pendingCommand, null);
+                    if (command != null)
                     {
-                        currentTarget = requested;
+                        if (command.Intent != null)
+                        {
+                            currentIntent = command.Intent;
+                            currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
+                        }
+                        else if (command.BaselineRequest != null)
+                        {
+                            currentIntent = null;
+                            currentTarget = command.BaselineRequest;
+                        }
                     }
 
                     if (!TryCaptureMotionAndSafety(
@@ -257,21 +296,42 @@ namespace ReachyMini.AppState
                             ReachyPerceptionServiceExecutionState.Tracking
                             ? perceptionSnapshot.WorldSnapshot
                             : null;
-                    ReachyBaselineBehaviorPlanResult planResult = library.Plan(
-                        currentTarget,
-                        worldSnapshot,
-                        motion,
-                        safety,
-                        NowNanoseconds(),
-                        cancellationToken);
-                    if (!planResult.Succeeded || planResult.PlannerResult.Plan == null)
+                    ReachyBehaviorTrajectoryPlan? plan;
+                    string planDiagnostic;
+                    if (currentIntent != null)
+                    {
+                        ReachyBehaviorPlanResult intentPlan = intentPlanner.Plan(
+                            currentIntent,
+                            worldSnapshot,
+                            motion,
+                            safety,
+                            NowNanoseconds(),
+                            cancellationToken);
+                        plan = intentPlan.Plan;
+                        planDiagnostic = intentPlan.DiagnosticCode;
+                    }
+                    else
+                    {
+                        ReachyBaselineBehaviorPlanResult baselinePlan = library.Plan(
+                            currentTarget,
+                            worldSnapshot,
+                            motion,
+                            safety,
+                            NowNanoseconds(),
+                            cancellationToken);
+                        plan = baselinePlan.PlannerResult.Plan;
+                        planDiagnostic = baselinePlan.PlannerResult.DiagnosticCode;
+                    }
+
+                    if (plan == null)
                     {
                         PublishSnapshot(
                             ReachyBehaviorServiceExecutionState.Idle,
-                            currentTarget.Kind,
-                            "Baseline plan '" + planResult.PlannerResult.DiagnosticCode +
-                                "' was not produced; retrying neutral idle.",
+                            CurrentSnapshotKind(),
+                            "Behavior plan '" + planDiagnostic +
+                                "' was not produced; reverting to neutral idle.",
                             loopGeneration);
+                        currentIntent = null;
                         currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
@@ -280,12 +340,14 @@ namespace ReachyMini.AppState
 
                     PublishSnapshot(
                         ReachyBehaviorServiceExecutionState.ExecutingGesture,
-                        currentTarget.Kind,
-                        "Executing " + currentTarget.Kind + ".",
+                        CurrentSnapshotKind(),
+                        currentIntent != null
+                            ? "Executing validated behavior intent."
+                            : "Executing " + currentTarget.Kind + ".",
                         loopGeneration);
                     ReachyBehaviorTrajectoryExecutionResult executionResult =
                         await executor.ExecuteAsync(
-                            planResult.PlannerResult.Plan,
+                            plan,
                             cancellationToken).ConfigureAwait(false);
 
                     if (executionResult.Status ==
@@ -298,18 +360,24 @@ namespace ReachyMini.AppState
                     {
                         PublishSnapshot(
                             ReachyBehaviorServiceExecutionState.Idle,
-                            currentTarget.Kind,
+                            CurrentSnapshotKind(),
                             "Trajectory submission rejected (" +
                                 executionResult.DiagnosticCode +
                                 "); reverting to neutral idle.",
                             loopGeneration);
+                        currentIntent = null;
                         currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
                         await Task.Delay(NotReadyRetryMilliseconds, cancellationToken)
                             .ConfigureAwait(false);
                         continue;
                     }
 
-                    if (!IsSustained(currentTarget.Kind))
+                    if (currentIntent != null)
+                    {
+                        currentIntent = null;
+                        currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
+                    }
+                    else if (!IsSustained(currentTarget.Kind))
                     {
                         currentTarget = ReachyBaselineBehaviorRequest.NeutralIdle();
                     }
@@ -408,6 +476,45 @@ namespace ReachyMini.AppState
             return kind == ReachyBaselineBehaviorKind.NeutralIdle ||
                 kind == ReachyBaselineBehaviorKind.Listening ||
                 kind == ReachyBaselineBehaviorKind.SleepRest;
+        }
+
+        private ReachyBaselineBehaviorKind CurrentSnapshotKind()
+        {
+            if (currentIntent == null || !currentIntent.Gesture.HasValue)
+            {
+                return currentTarget.Kind;
+            }
+
+            ReachyBaselineBehaviorKind? mapped =
+                ReachyBehaviorIntentGestureMapper.Map(currentIntent.Gesture.Value);
+            return mapped ?? ReachyBaselineBehaviorKind.NeutralIdle;
+        }
+
+        private sealed class PendingBehaviorCommand
+        {
+            private PendingBehaviorCommand(
+                ReachyBaselineBehaviorRequest? baselineRequest,
+                ReachyBehaviorIntent? intent)
+            {
+                BaselineRequest = baselineRequest;
+                Intent = intent;
+            }
+
+            internal ReachyBaselineBehaviorRequest? BaselineRequest { get; }
+
+            internal ReachyBehaviorIntent? Intent { get; }
+
+            internal static PendingBehaviorCommand ForBaseline(
+                ReachyBaselineBehaviorRequest request) =>
+                new PendingBehaviorCommand(
+                    request ?? throw new ArgumentNullException(nameof(request)),
+                    intent: null);
+
+            internal static PendingBehaviorCommand ForIntent(
+                ReachyBehaviorIntent intent) =>
+                new PendingBehaviorCommand(
+                    baselineRequest: null,
+                    intent ?? throw new ArgumentNullException(nameof(intent)));
         }
 
         private static ReachyBaselineBehaviorRequest? CreateZeroArgumentRequest(

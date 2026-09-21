@@ -168,6 +168,71 @@ namespace ReachyMini.Tests
             }
         }
 
+
+        [Test]
+        public void TryExecuteIntentFailsClosedBeforeInitialize()
+        {
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
+            try
+            {
+                ReachyBehaviorIntent intent = ParseFullIntent();
+                Assert.That(
+                    service.TryExecuteIntent(intent, out string diagnosticCode),
+                    Is.False);
+                Assert.That(
+                    diagnosticCode,
+                    Is.EqualTo("behavior-intent-service-not-ready"));
+            }
+            finally
+            {
+                service.Dispose();
+            }
+        }
+
+        [Test]
+        public void TryExecuteIntentAcceptsCompleteValidatedIntentAfterInitialize()
+        {
+            var service = new ReachyBaselineBehaviorApplicationService(
+                runtime!,
+                new StubPerceptionService());
+            try
+            {
+                service.Initialize();
+                ReachyBehaviorIntent intent = ParseFullIntent();
+
+                Assert.That(
+                    service.TryExecuteIntent(intent, out string diagnosticCode),
+                    Is.True);
+                Assert.That(diagnosticCode, Is.Empty);
+            }
+            finally
+            {
+                service.Dispose();
+            }
+        }
+
+        private static ReachyBehaviorIntent ParseFullIntent()
+        {
+            const string json =
+                "{\"schema_version\":1," +
+                "\"speech\":\"Hello.\"," +
+                "\"gaze_target\":{" +
+                    "\"kind\":\"tracked_entity\"," +
+                    "\"entity_id\":\"person-1\"}," +
+                "\"expression\":\"curious\"," +
+                "\"gesture\":\"small_head_tilt\"," +
+                "\"urgency\":\"high\"," +
+                "\"timing\":{" +
+                    "\"start_delay_ms\":25," +
+                    "\"maximum_duration_ms\":1200}}";
+            ReachyBehaviorIntentValidationResult result =
+                ReachyBehaviorIntentJsonParser.Validate(json);
+            Assert.That(result.Succeeded, Is.True, result.Detail);
+            return result.Intent!;
+        }
+
         [Test]
         public void PauseTransitionsToPausedAndResumeAndDisposeDoNotThrowOrHang()
         {

@@ -5,7 +5,7 @@ using ReachyMini.AppState;
 
 namespace ReachyMini.Tests
 {
-    // ReachyProductionApplicationCompositionProvider and
+    // the application composition and
     // ReachySettingsApplicationCompositionProvider previously stubbed the
     // "speech-audio" service permanently Unavailable with a message dating to
     // 2026-07-31, before speech (ASR/TTS) was actually built. This locks in that the

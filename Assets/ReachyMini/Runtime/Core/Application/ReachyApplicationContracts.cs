@@ -381,6 +381,22 @@ namespace ReachyMini.AppState
             out string diagnosticCode);
     }
 
+    // Optional production capability for provider-authored RMA-151 behavior
+    // intents. Keep this separate from IReachyBehaviorService so generic
+    // application-service test doubles and deliberately baseline-only
+    // implementations do not have to pretend they can execute the complete
+    // intent schema. The shipping RMA-195 behavior service implements this
+    // capability and routes the validated intent through the existing
+    // deterministic RMA-152 planner, which is already the authoritative
+    // implementation of gaze target, expression, gesture, urgency, and
+    // timing semantics.
+    public interface IReachyBehaviorIntentCapability
+    {
+        bool TryExecuteIntent(
+            ReachyBehaviorIntent intent,
+            out string diagnosticCode);
+    }
+
     public interface IReachyPersistenceService : IReachyApplicationService
     {
     }

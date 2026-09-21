@@ -51,6 +51,7 @@ namespace ReachyMini.AppState
         private readonly ReachyMainScreenStateStore stateStore;
         private readonly ReachySettingsPersistenceApplicationService persistence;
         private readonly IReachyBehaviorService behavior;
+        private readonly IReachyBehaviorIntentCapability? behaviorIntents;
         private readonly ILocalLlmProviderCapability? localLlm;
         private readonly ICloudLlmProviderCapability? cloudLlm;
         private readonly ReachyAndroidPerceptionApplicationService? perceptionScene;
@@ -74,11 +75,12 @@ namespace ReachyMini.AppState
             this.persistence = persistence ??
                 throw new ArgumentNullException(nameof(persistence));
             this.behavior = behavior ?? throw new ArgumentNullException(nameof(behavior));
+            behaviorIntents = this.behavior as IReachyBehaviorIntentCapability;
             IReachyProviderService resolvedProvider = provider ??
                 throw new ArgumentNullException(nameof(provider));
             // Mirrors the existing `resolvedProvider as
             // IReachyProviderGovernorDiagnosticsSource` pattern
-            // (ReachyProductionApplicationCompositionProvider.cs): the
+            // used elsewhere in application composition: the
             // production concrete type
             // (ReachyLocalLlmProviderApplicationService) implements both
             // capabilities directly, but the interface only promises
@@ -184,7 +186,7 @@ namespace ReachyMini.AppState
             }
 
             ReachyBehaviorIntent intent = llmResult.Intent;
-            TriggerGesture(intent.Gesture);
+            DispatchBehaviorIntent(intent);
 
             ReachyConversationOperation preparingSpeech =
                 conversation.MarkThinkingComplete(thinking);
@@ -220,23 +222,44 @@ namespace ReachyMini.AppState
             stateStore.SetInteraction(ReachyInteractionState.Idle, "Ready.");
         }
 
-        private void TriggerGesture(ReachyBehaviorGesture? gesture)
+        private void DispatchBehaviorIntent(ReachyBehaviorIntent intent)
         {
-            ReachyBaselineBehaviorKind? mapped =
-                ReachyBehaviorIntentGestureMapper.Map(gesture ?? ReachyBehaviorGesture.None);
-            if (mapped == null)
+            IReachyBehaviorIntentCapability? capability = behaviorIntents;
+            if (capability != null)
             {
+                if (!capability.TryExecuteIntent(intent, out string intentDiagnostic))
+                {
+                    Debug.LogWarning(
+                        "ReachyConversationTurnOrchestrator: validated behavior intent " +
+                        "was not accepted by the production behavior service (" +
+                        intentDiagnostic + "). Speech may still proceed.");
+                }
                 return;
             }
 
-            // Speech is the primary payload; a missed baseline gesture is
-            // degraded, not fatal -- do not abort the turn over it (RMA-195
-            // spec).
-            if (!behavior.TryTriggerGesture(mapped.Value, out string diagnosticCode))
+            // A non-capable behavior service must never silently discard the
+            // richer RMA-151 fields. The production service implements the
+            // capability above; this fallback exists only for deliberately
+            // baseline-only test/alternate compositions and accepts the
+            // legacy gesture-only subset when no richer field is present.
+            if (intent.GazeTarget != null || intent.Expression.HasValue ||
+                intent.Urgency.HasValue || intent.Timing != null)
+            {
+                Debug.LogWarning(
+                    "ReachyConversationTurnOrchestrator: behavior service does not " +
+                    "implement IReachyBehaviorIntentCapability; validated gaze/expression/" +
+                    "urgency/timing fields were rejected rather than silently ignored.");
+                return;
+            }
+
+            ReachyBaselineBehaviorKind? mapped = ReachyBehaviorIntentGestureMapper.Map(
+                intent.Gesture ?? ReachyBehaviorGesture.None);
+            if (mapped != null &&
+                !behavior.TryTriggerGesture(mapped.Value, out string diagnosticCode))
             {
                 Debug.LogWarning(
                     "ReachyConversationTurnOrchestrator: baseline gesture " + mapped.Value +
-                    " was not triggered (" + diagnosticCode + ").");
+                    " was not triggered (" + diagnosticCode + "). Speech may still proceed.");
             }
         }
 

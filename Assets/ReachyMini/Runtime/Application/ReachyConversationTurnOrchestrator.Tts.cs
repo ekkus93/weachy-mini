@@ -59,7 +59,9 @@ namespace ReachyMini.AppState
                 IReadOnlyList<TtsVoice> voices = await provider
                     .GetVoicesAsync(preparingSpeech.CancellationToken)
                     .ConfigureAwait(true);
-                TtsVoice? voice = SelectVoice(voices);
+                TtsVoice? voice = ReachyTtsVoiceSelectionPolicy.SelectExactOfflineVoice(
+                    voices,
+                    TtsLanguageTag);
                 if (voice == null)
                 {
                     return TtsTurnResult.Failure(
@@ -126,25 +128,5 @@ namespace ReachyMini.AppState
             return null;
         }
 
-        private static TtsVoice? SelectVoice(IReadOnlyList<TtsVoice> voices)
-        {
-            if (voices.Count == 0)
-            {
-                return null;
-            }
-
-            for (int index = 0; index < voices.Count; ++index)
-            {
-                if (string.Equals(
-                        voices[index].LanguageTag,
-                        TtsLanguageTag,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    return voices[index];
-                }
-            }
-
-            return voices[0];
-        }
     }
 }

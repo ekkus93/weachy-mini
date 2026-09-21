@@ -1,7 +1,11 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = (
+PROVIDER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyLocalLlmProviderApplicationService.cs"
+SETTINGS_COMPOSITION = (
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
+)
+DEAD_COMPOSITION = (
     ROOT / "Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs"
 )
 
@@ -12,29 +16,40 @@ def require(text: str, needle: str, label: str) -> None:
 
 
 def main() -> None:
-    text = SOURCE.read_text(encoding="utf-8")
+    if DEAD_COMPOSITION.exists():
+        raise AssertionError(
+            "RMA-195 closure requires the dead production composition provider to stay removed"
+        )
+
+    provider = PROVIDER.read_text(encoding="utf-8")
+    settings = SETTINGS_COMPOSITION.read_text(encoding="utf-8")
+
     require(
-        text, "IReachyProviderGovernorDiagnosticsSource?", "optional provider diagnostics source"
+        provider,
+        "IReachyProviderGovernorDiagnosticsSource",
+        "live provider governor diagnostics capability",
     )
-    require(text, "eventArgs.Health.Kind == ReachyServiceKind.Provider", "existing health path")
-    require(text, "ReachyProviderGovernorMainScreenProjection.Create", "tested UI projection")
-    require(text, "projection.OverrideInteraction", "explicit interaction ownership")
     require(
-        text, "providerGovernorDiagnostics.GovernorDiagnostics.DiagnosticLine", "diagnostics output"
+        provider,
+        "LocalLlmGovernorDiagnosticsSnapshot.Create",
+        "privacy-safe governor diagnostic snapshot",
     )
-    unavailable_start = text.index(
-        "internal sealed class ReachyUnavailableProviderApplicationService"
+    require(
+        settings,
+        "new ReachyLocalLlmProviderApplicationService",
+        "shipping provider composition",
     )
-    unavailable_end = text.index(
-        "internal sealed class ReachyUnavailablePerceptionApplicationService"
+    require(
+        settings,
+        "new ReachyDiagnosticsScreenSource",
+        "shipping diagnostics source",
     )
-    unavailable = text[unavailable_start:unavailable_end]
-    if "IReachyProviderGovernorDiagnosticsSource" in unavailable:
-        raise AssertionError("unavailable provider must not masquerade as a live governor source")
     for forbidden in ("LocalLlmGenerationRequest", "LocalLlmChatMessage", "ResponseJson"):
-        if forbidden in text:
-            raise AssertionError(f"main-screen governor diagnostics must not access {forbidden}")
-    print("RMA-135 main-screen governor wiring contracts passed.")
+        if forbidden in settings:
+            raise AssertionError(
+                f"main-screen composition diagnostics must not access {forbidden}"
+            )
+    print("RMA-135 shipping governor-wiring contracts passed.")
 
 
 if __name__ == "__main__":

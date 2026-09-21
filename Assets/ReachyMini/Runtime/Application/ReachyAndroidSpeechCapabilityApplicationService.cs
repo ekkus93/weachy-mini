@@ -14,7 +14,7 @@ namespace ReachyMini.AppState
     // Bridges the real, already-implemented ASR/TTS provider pipeline (the same
     // provider factories RMA-184's device probe uses to measure real hardware) into
     // the application-service composition layer. Both
-    // ReachyProductionApplicationCompositionProvider and
+    // application composition and
     // ReachySettingsApplicationCompositionProvider previously stubbed "speech-audio"
     // permanently Unavailable with a message dating to 2026-07-31, before speech was
     // built; this replaces that with a real, on-device probe of on-device ASR,
