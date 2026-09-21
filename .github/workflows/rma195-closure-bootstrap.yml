@@ -1,0 +1,80 @@
+name: RMA-195 closure bootstrap
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rma195-closure-bootstrap.yml
+      - tmp/rma195-closure.patch.gz.b64
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rma195-closure-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  publish-candidate:
+    name: Verify and publish exact RMA-195 candidate
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 30
+    steps:
+      - name: Check out bootstrap commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify bootstrap provenance and payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_parent="46b0c2b7abb55b9a9c230ae8ff9bad8f3afa639a"
+          expected_payload_blob="f7e86a55d1ce10571388a99efd5b5aff74c0489e"
+          actual_parent="$(git rev-parse HEAD^)"
+          [[ "${actual_parent}" == "${expected_parent}" ]] || {
+            printf 'Unexpected bootstrap parent: %s (expected %s)\n' "${actual_parent}" "${expected_parent}" >&2
+            exit 1
+          }
+          actual_payload_blob="$(git hash-object tmp/rma195-closure.patch.gz.b64)"
+          [[ "${actual_payload_blob}" == "${expected_payload_blob}" ]] || {
+            printf 'Payload blob mismatch: %s (expected %s)\n' "${actual_payload_blob}" "${expected_payload_blob}" >&2
+            exit 1
+          }
+          base64 --decode tmp/rma195-closure.patch.gz.b64 | gzip -d > "${RUNNER_TEMP}/rma195.patch"
+          echo "6cfc69da7ca46377d745dcd0e0013d7202d9597d3b94de4cb642e40bedcb922b  ${RUNNER_TEMP}/rma195.patch" | sha256sum --check -
+          git apply --check "${RUNNER_TEMP}/rma195.patch"
+          git apply "${RUNNER_TEMP}/rma195.patch"
+
+      - name: Run repository static validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests
+          python3 -m compileall -q scripts
+          bash -n scripts/run_rma195_application_composition_acceptance_android.sh
+          git diff --check
+
+      - name: Verify exact candidate tree and publish
+        shell: bash
+        env:
+          EXPECTED_TREE: ed03bb535e053a1c8fe020169a71be37bfb7e2f3
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/rma195-closure-bootstrap.yml
+          git rm tmp/rma195-closure.patch.gz.b64
+          git add -A
+          actual_tree="$(git write-tree)"
+          [[ "${actual_tree}" == "${EXPECTED_TREE}" ]] || {
+            printf 'Candidate tree mismatch: %s (expected %s)\n' "${actual_tree}" "${EXPECTED_TREE}" >&2
+            exit 1
+          }
+          git config user.name "RMA-195 closure bootstrap"
+          git config user.email "noreply@github.com"
+          git commit -m "RMA-195: close application composition gaps"
+          git push origin HEAD:master
