@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: rma195-closure-bootstrap
+  group: rma195-closure-bootstrap-hosted-v2
   cancel-in-progress: false
 
 jobs:
