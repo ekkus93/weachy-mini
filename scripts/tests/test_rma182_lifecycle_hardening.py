@@ -95,8 +95,7 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
         )
         ui = read("Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.Lifecycle.cs")
         production_simulation = read(
-            "Assets/ReachyMini/Runtime/Application/"
-            "ReachyProductionSimulationApplicationService.cs"
+            "Assets/ReachyMini/Runtime/Application/ReachyProductionSimulationApplicationService.cs"
         )
         settings = read(
             "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
@@ -107,9 +106,7 @@ class Rma182LifecycleHardeningTests(unittest.TestCase):
         self.assertIn("ReachyInteractionState.Interrupted", ui)
         self.assertIn("ReachyInteractionState.Idle", ui)
         self.assertIn("ReachyInteractionState.Error", ui)
-        self.assertIn(
-            "IReachyApplicationInterruptionParticipant", production_simulation
-        )
+        self.assertIn("IReachyApplicationInterruptionParticipant", production_simulation)
         self.assertIn("IReachyApplicationInterruptionParticipant", settings)
 
     def test_repeated_cycle_managed_contracts_are_registered(self) -> None:

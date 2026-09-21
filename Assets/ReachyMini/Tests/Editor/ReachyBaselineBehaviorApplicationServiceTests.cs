@@ -220,7 +220,7 @@ namespace ReachyMini.Tests
                 "\"speech\":\"Hello.\"," +
                 "\"gaze_target\":{" +
                     "\"kind\":\"tracked_entity\"," +
-                    "\"entity_id\":\"person-1\"}," +
+                    "\"entity_id\":\"entity-1\"}," +
                 "\"expression\":\"curious\"," +
                 "\"gesture\":\"small_head_tilt\"," +
                 "\"urgency\":\"high\"," +

@@ -48,9 +48,7 @@ def main() -> None:
     )
     for forbidden in ("LocalLlmGenerationRequest", "LocalLlmChatMessage", "ResponseJson"):
         if forbidden in settings:
-            raise AssertionError(
-                f"main-screen composition diagnostics must not access {forbidden}"
-            )
+            raise AssertionError(f"main-screen composition diagnostics must not access {forbidden}")
     print("RMA-135 shipping governor-wiring contracts passed.")
 
 
