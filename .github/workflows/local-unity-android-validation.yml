@@ -423,6 +423,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Install and run RMA-195 application-composition acceptance
+        id: rma195_composition_acceptance
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        shell: bash
+        env:
+          RMA195_COMPOSITION_REPORT_DIR: ${{ runner.temp }}/rma195-application-composition-report
+        run: bash scripts/run_rma195_application_composition_acceptance_android.sh
+
+      - name: Upload RMA-195 application-composition evidence
+        if: ${{ always() && steps.rma195_composition_acceptance.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma195-application-composition-report-${{ github.sha }}
+          path: ${{ runner.temp }}/rma195-application-composition-report
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Install and run authoritative rendering acceptance
         id: physical_acceptance
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
