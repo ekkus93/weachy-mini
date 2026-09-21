@@ -32,15 +32,19 @@ jobs:
 
       - name: Verify bootstrap provenance and payload
         shell: bash
+        env:
+          SOURCE_BASE: 46b0c2b7abb55b9a9c230ae8ff9bad8f3afa639a
         run: |
           set -euo pipefail
-          expected_parent="46b0c2b7abb55b9a9c230ae8ff9bad8f3afa639a"
-          expected_payload_blob="f7e86a55d1ce10571388a99efd5b5aff74c0489e"
-          actual_parent="$(git rev-parse HEAD^)"
-          [[ "${actual_parent}" == "${expected_parent}" ]] || {
-            printf 'Unexpected bootstrap parent: %s (expected %s)\n' "${actual_parent}" "${expected_parent}" >&2
+          git merge-base --is-ancestor "${SOURCE_BASE}" HEAD
+          unexpected="$(git diff --name-only "${SOURCE_BASE}" HEAD -- . \
+            ':(exclude).github/workflows/rma195-closure-bootstrap.yml' \
+            ':(exclude)tmp/rma195-closure.patch.gz.b64')"
+          [[ -z "${unexpected}" ]] || {
+            printf 'Unexpected bootstrap changes relative to source base:\n%s\n' "${unexpected}" >&2
             exit 1
           }
+          expected_payload_blob="f7e86a55d1ce10571388a99efd5b5aff74c0489e"
           actual_payload_blob="$(git hash-object tmp/rma195-closure.patch.gz.b64)"
           [[ "${actual_payload_blob}" == "${expected_payload_blob}" ]] || {
             printf 'Payload blob mismatch: %s (expected %s)\n' "${actual_payload_blob}" "${expected_payload_blob}" >&2
@@ -60,18 +64,22 @@ jobs:
           bash -n scripts/run_rma195_application_composition_acceptance_android.sh
           git diff --check
 
-      - name: Verify exact candidate tree and publish
+      - name: Verify exact source tree and publish
         shell: bash
         env:
-          EXPECTED_TREE: ed03bb535e053a1c8fe020169a71be37bfb7e2f3
+          SOURCE_BASE: 46b0c2b7abb55b9a9c230ae8ff9bad8f3afa639a
+          EXPECTED_STRIPPED_TREE: c0085b1e6cbaa9eb3bf959df0b68d19c953685e0
         run: |
           set -euo pipefail
-          git rm .github/workflows/rma195-closure-bootstrap.yml
+          git restore --source="${SOURCE_BASE}" -- .github/workflows/local-unity-android-validation.yml
           git rm tmp/rma195-closure.patch.gz.b64
           git add -A
-          actual_tree="$(git write-tree)"
-          [[ "${actual_tree}" == "${EXPECTED_TREE}" ]] || {
-            printf 'Candidate tree mismatch: %s (expected %s)\n' "${actual_tree}" "${EXPECTED_TREE}" >&2
+          verification_index="${RUNNER_TEMP}/rma195-verification.index"
+          cp .git/index "${verification_index}"
+          GIT_INDEX_FILE="${verification_index}" git update-index --force-remove .github/workflows/rma195-closure-bootstrap.yml
+          stripped_tree="$(GIT_INDEX_FILE="${verification_index}" git write-tree)"
+          [[ "${stripped_tree}" == "${EXPECTED_STRIPPED_TREE}" ]] || {
+            printf 'Candidate stripped source tree mismatch: %s (expected %s)\n' "${stripped_tree}" "${EXPECTED_STRIPPED_TREE}" >&2
             exit 1
           }
           git config user.name "RMA-195 closure bootstrap"
