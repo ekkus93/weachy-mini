@@ -1,7 +1,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PROVIDER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyLocalLlmProviderApplicationService.cs"
+PROVIDER = (
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyLocalLlmProviderApplicationService.cs"
+)
 SETTINGS_COMPOSITION = (
     ROOT / "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
 )

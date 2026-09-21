@@ -17,7 +17,11 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         dead = APP / "ReachyProductionApplicationCompositionProvider.cs"
         self.assertFalse(dead.exists(), "obsolete production composition must stay removed")
         self.assertIn("ReachySettingsApplicationCompositionProvider provider =", bootstrap)
-        self.assertIn("AddComponent<\n                        ReachySettingsApplicationCompositionProvider>()", bootstrap)
+        self.assertIn(
+            "AddComponent<\n"
+            "                        ReachySettingsApplicationCompositionProvider>()",
+            bootstrap,
+        )
         self.assertNotIn("ReachyProductionApplicationCompositionProvider", bootstrap)
 
     def test_shipping_behavior_routes_complete_validated_intent_to_rma152_planner(self) -> None:
@@ -29,7 +33,9 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("bool TryExecuteIntent(", service)
         self.assertIn("intentPlanner.Plan(", service)
         self.assertIn("IReachyBehaviorIntentCapability? behaviorIntents", orchestrator)
-        self.assertIn("capability.TryExecuteIntent(intent, out string intentDiagnostic)", orchestrator)
+        self.assertIn(
+            "capability.TryExecuteIntent(intent, out string intentDiagnostic)", orchestrator
+        )
 
     def test_legacy_gesture_mapper_is_only_non_capability_fallback(self) -> None:
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")

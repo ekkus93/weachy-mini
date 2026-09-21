@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using ReachyMini.Rendering;
 using ReachyMini.Simulation;
 
 namespace ReachyMini.AppState

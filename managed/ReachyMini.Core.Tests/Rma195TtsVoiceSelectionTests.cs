@@ -23,7 +23,7 @@ namespace ReachyMini.Core.Tests
             TtsVoice? selected = ReachyTtsVoiceSelectionPolicy.SelectExactOfflineVoice(
                 new[]
                 {
-                    Voice("voice-online", "en-US", SpeechNetworkRequirement.Optional, true),
+                    Voice("voice-online", "en-US", SpeechNetworkRequirement.ProviderControlled, true),
                     expected,
                 },
                 "en-US");

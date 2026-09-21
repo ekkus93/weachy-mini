@@ -24,6 +24,9 @@ android {
         checkDependencies = true
         checkReleaseBuilds = true
         warningsAsErrors = true
+        // The Android toolchain is intentionally pinned by toolchain.lock.json.
+        // Do not turn a newer-AGP availability advisory into a CI failure.
+        disable += "AndroidGradlePluginVersion"
     }
 
     buildFeatures {
