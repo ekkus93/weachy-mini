@@ -3,6 +3,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using CryptoSha256 = System.Security.Cryptography.SHA256;
 using System.Text;
 using ReachyMini.Behavior;
 using UnityEngine;
@@ -34,9 +35,11 @@ namespace ReachyMini.Validation
                 text.Append(';');
             }
             byte[] payload = Encoding.UTF8.GetBytes(text.ToString());
-            using System.Security.Cryptography.SHA256 sha256 =
-                System.Security.Cryptography.SHA256.Create();
-            byte[] digest = sha256.ComputeHash(payload);
+            using var payloadStream = new MemoryStream(
+                payload,
+                writable: false);
+            using CryptoSha256 sha256 = CryptoSha256.Create();
+            byte[] digest = sha256.ComputeHash(payloadStream);
             var hex = new StringBuilder(digest.Length * 2);
             for (int index = 0; index < digest.Length; ++index)
             {
@@ -95,3 +98,80 @@ namespace ReachyMini.Validation
             string name,
             bool defaultValue)
         {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using var unityPlayer = new AndroidJavaClass(
+                "com.unity3d.player.UnityPlayer");
+            using AndroidJavaObject activity =
+                unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+            using AndroidJavaObject intent =
+                activity.Call<AndroidJavaObject>("getIntent");
+            return intent != null && intent.Call<bool>(
+                "getBooleanExtra",
+                name,
+                defaultValue);
+#else
+            return defaultValue;
+#endif
+        }
+
+        private static int ReadApiLevel()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using var version = new AndroidJavaClass("android.os.Build$VERSION");
+            return version.GetStatic<int>("SDK_INT");
+#else
+            return 0;
+#endif
+        }
+
+        private static int TryReadApiLevel()
+        {
+            try
+            {
+                return ReadApiLevel();
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
+        private static void DeleteIfPresent(string path)
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+            string temporaryPath = path + ".tmp";
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
+
+        private static void WriteAtomically(string path, string content)
+        {
+            string directory = Path.GetDirectoryName(path) ??
+                throw new InvalidOperationException(
+                    "RMA-190 result path has no parent directory.");
+            Directory.CreateDirectory(directory);
+            string temporaryPath = path + ".tmp";
+            File.WriteAllText(temporaryPath, content);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+            File.Move(temporaryPath, path);
+        }
+
+        private static string Bound(string value, int maximumCharacters)
+        {
+            string bounded = string.IsNullOrWhiteSpace(value)
+                ? "RMA-190 acceptance failed without diagnostics."
+                : value;
+            return bounded.Length <= maximumCharacters
+                ? bounded
+                : bounded.Substring(0, maximumCharacters);
+        }
+    }
+}
