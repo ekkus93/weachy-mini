@@ -34,9 +34,12 @@ namespace ReachyMini.Validation
                 }
                 text.Append(';');
             }
+            byte[] payload = Encoding.UTF8.GetBytes(text.ToString());
+            using var payloadStream = new MemoryStream(
+                payload,
+                writable: false);
             using SHA256 sha256 = SHA256.Create();
-            byte[] digest = sha256.ComputeHash(
-                Encoding.UTF8.GetBytes(text.ToString()));
+            byte[] digest = sha256.ComputeHash(payloadStream);
             var hex = new StringBuilder(digest.Length * 2);
             for (int index = 0; index < digest.Length; ++index)
             {
