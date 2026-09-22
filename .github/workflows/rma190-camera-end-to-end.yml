@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - ralph/rma190-camera-requalify
     paths:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidPerceptionDriver.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma190CameraEndToEndAcceptance*.cs'
@@ -213,6 +214,7 @@ jobs:
 
       - name: Upload RMA-190 front-camera end-to-end evidence
         if: ${{ always() && steps.rma190_camera.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma190-camera-end-to-end-report-${{ github.sha }}
