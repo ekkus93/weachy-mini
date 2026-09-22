@@ -3,7 +3,7 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
+using CryptoSha256 = System.Security.Cryptography.SHA256;
 using System.Text;
 using ReachyMini.Behavior;
 using UnityEngine;
@@ -38,7 +38,7 @@ namespace ReachyMini.Validation
             using var payloadStream = new MemoryStream(
                 payload,
                 writable: false);
-            using SHA256 sha256 = SHA256.Create();
+            using CryptoSha256 sha256 = CryptoSha256.Create();
             byte[] digest = sha256.ComputeHash(payloadStream);
             var hex = new StringBuilder(digest.Length * 2);
             for (int index = 0; index < digest.Length; ++index)
