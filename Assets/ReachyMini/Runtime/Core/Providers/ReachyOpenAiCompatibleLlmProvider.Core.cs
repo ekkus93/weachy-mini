@@ -6,20 +6,15 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Behavior;
+using ReachyMini.Perception;
 
 namespace ReachyMini.Providers
 {
-    // RMA-142/143: no cloud LLM provider class existed at all before this file --
-    // following the RMA-144/145 OpenAI-compatible ASR/TTS adapter pattern (one real
-    // ReachySharedHttpTransport-backed class per endpoint style, mirroring the
-    // RMA-115 VLM base-class/two-thin-subclasses shape). Scope: bounded, non-streaming
-    // text-in/JSON-behavior-intent-out generation only. Image input ("transformed-image
-    // input where enabled") is deliberately NOT implemented here -- RMA-115's VLM
-    // providers already cover image-grounded scene description/questions separately,
-    // and RMA-195 Phase D's own framing gates conversational behavior intents on text
-    // landing first; ReachyLlmCapabilities.SupportsImages stays false on every
-    // provider instance produced by this file, so a caller can detect the mismatch
-    // rather than have it silently ignored.
+    // RMA-142/143: OpenAI and OpenAI-compatible cloud LLM adapters share one
+    // bounded transport path. Text is always supported; one already-encoded
+    // transformed Reachy-eye image may be attached only when SupportsImages is
+    // explicitly enabled. Arbitrary image URLs and raw camera frames are never
+    // accepted by this adapter.
     public abstract partial class ReachyOpenAiCompatibleLlmProviderBase : ICloudLlmProviderCapability, IAsyncDisposable
     {
         private const string InternalBearerSecretReference = "reachy.internal.llm.bearer";
@@ -93,11 +88,22 @@ namespace ReachyMini.Providers
             byte[]? borrowedResponseBody = null;
             try
             {
+                RemoteVlmEncodedImage? image = request.Image;
+                if (image != null && !Capabilities.SupportsImages)
+                {
+                    return new ReachyLlmGenerationResult(
+                        ReachyLlmGenerationStatus.HttpFailure,
+                        null,
+                        string.Empty,
+                        "LLM image input was requested but this configured provider does not explicitly support images.");
+                }
+
                 requestBody = BuildRequestBody(
                     EndpointStyle,
                     sourceProfile.GetModelId(ReachyProviderModelRole.Text),
                     options.SystemPrompt,
                     request.Messages,
+                    image,
                     options.MaximumOutputTokens);
 
                 using var transportRequest = new ReachyHttpTransportRequest(
