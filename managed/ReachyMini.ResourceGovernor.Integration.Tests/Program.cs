@@ -460,7 +460,7 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
             ulong misses,
             double lag,
             double lastStep) =>
-            new ReachySimulationTimingSnapshot(steps, misses, 0UL, 0UL, 0UL, lag, lastStep, lastStep);
+            new ReachySimulationTimingSnapshot(steps, misses, 0UL, 0UL, 0UL, 0UL, lag, lastStep, lastStep);
 
         private sealed class NullSink : ILocalLlmStreamSink
         {

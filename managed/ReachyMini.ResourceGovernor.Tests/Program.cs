@@ -371,7 +371,7 @@ namespace ReachyMini.ResourceGovernor.Tests
         private static ReachySimulationTimingSnapshot Timing(ulong steps, ulong misses, double lag, double lastStep)
         {
             return new ReachySimulationTimingSnapshot(
-                steps, misses, 0UL, 0UL, 0UL, lag, lastStep, lastStep);
+                steps, misses, 0UL, 0UL, 0UL, 0UL, lag, lastStep, lastStep);
         }
 
         private static LocalLlmExecutionProfile Baseline() => LocalLlmExecutionProfile.CreateRma133V6Baseline();

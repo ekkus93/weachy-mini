@@ -87,7 +87,7 @@ namespace ReachyMini.AppState
 
         private ReachyDiagnosticsSection BuildSimulation(double now)
         {
-            var metrics = new List<ReachyDiagnosticsMetric>(8)
+            var metrics = new List<ReachyDiagnosticsMetric>(9)
             {
                 new ReachyDiagnosticsMetric(
                     "Runtime",
@@ -118,6 +118,8 @@ namespace ReachyMini.AppState
                     "Missed deadlines", reason));
                 metrics.Add(ReachyDiagnosticsMetric.Unavailable(
                     "Accumulated lag", reason));
+                metrics.Add(ReachyDiagnosticsMetric.Unavailable(
+                    "Dropped state snapshots", reason));
                 metrics.Add(ReachyDiagnosticsMetric.Unavailable(
                     "Constraint health", reason));
             }
@@ -159,6 +161,12 @@ namespace ReachyMini.AppState
                         "Accumulated lag",
                         $"{timing.AccumulatedLagSeconds * 1000.0:F3} ms",
                         "The fixed-step worker reports accumulated scheduling lag."));
+                metrics.Add(timing.DroppedStateSnapshotCount == 0UL
+                    ? new ReachyDiagnosticsMetric("Dropped state snapshots", "0")
+                    : ReachyDiagnosticsMetric.Degraded(
+                        "Dropped state snapshots",
+                        timing.DroppedStateSnapshotCount.ToString(),
+                        "Authoritative state publications were superseded before any reader observed them."));
                 metrics.Add(timing.SolverWarningCount == 0UL
                     ? new ReachyDiagnosticsMetric("Constraint health", "healthy")
                     : ReachyDiagnosticsMetric.Degraded(

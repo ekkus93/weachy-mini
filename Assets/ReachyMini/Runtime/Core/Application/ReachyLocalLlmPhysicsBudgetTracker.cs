@@ -76,7 +76,8 @@ namespace ReachyMini.AppState
                 currentSnapshot.DeadlineMissCount < previousSnapshot.DeadlineMissCount ||
                 currentSnapshot.SolverWarningCount < previousSnapshot.SolverWarningCount ||
                 currentSnapshot.CommandQueueOverflowCount < previousSnapshot.CommandQueueOverflowCount ||
-                currentSnapshot.DiscardedCommandCount < previousSnapshot.DiscardedCommandCount)
+                currentSnapshot.DiscardedCommandCount < previousSnapshot.DiscardedCommandCount ||
+                currentSnapshot.DroppedStateSnapshotCount < previousSnapshot.DroppedStateSnapshotCount)
             {
                 throw new InvalidOperationException(
                     "Simulation timing counters regressed while evaluating the local LLM physics budget.");

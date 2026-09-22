@@ -14,6 +14,11 @@ namespace ReachyMini.Simulation
         };
         private int publishedIndex = -1;
         private int writerIndex = -1;
+        private long lastReadPublicationSequence;
+        private long droppedSnapshotCount;
+
+        internal ulong DroppedSnapshotCount => checked(
+            (ulong)System.Math.Max(0L, Interlocked.Read(ref droppedSnapshotCount)));
 
         internal void Publish(
             ReachyPublishedSimulationSnapshot snapshot)
@@ -58,12 +63,40 @@ namespace ReachyMini.Simulation
                 if (before == after && (after & 1L) == 0L)
                 {
                     snapshot = candidate;
+                    RecordReadSequence(candidate.PublicationSequence);
                     return true;
                 }
             }
 
             snapshot = default;
             return false;
+        }
+
+        private void RecordReadSequence(ulong publicationSequence)
+        {
+            long candidate = checked((long)publicationSequence);
+            while (true)
+            {
+                long observed = Interlocked.Read(ref lastReadPublicationSequence);
+                if (candidate <= observed)
+                {
+                    return;
+                }
+
+                long missed = checked(candidate - observed - 1L);
+                if (Interlocked.CompareExchange(
+                        ref lastReadPublicationSequence,
+                        candidate,
+                        observed) != observed)
+                {
+                    continue;
+                }
+                if (missed > 0L)
+                {
+                    Interlocked.Add(ref droppedSnapshotCount, missed);
+                }
+                return;
+            }
         }
 
         private sealed class SnapshotSlot

@@ -239,6 +239,7 @@ namespace ReachyMini.Simulation
                     checked((ulong)Math.Max(
                         0L,
                         Interlocked.Read(ref discardedCommandCount))),
+                    snapshotBuffer.DroppedSnapshotCount,
                     accumulatedLagSeconds,
                     lastStepDurationSeconds,
                     maximumStepDurationSeconds);
