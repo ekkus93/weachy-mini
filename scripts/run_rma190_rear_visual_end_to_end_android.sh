@@ -172,26 +172,25 @@ import sys
 path = pathlib.Path(sys.argv[1])
 report = json.loads(path.read_text(encoding="utf-8"))
 assert report["status"] == "passed", report
-assert report["real_front_camera"] is True, report
-assert report["real_authoritative_head_motion"] is True, report
+assert report["real_rear_camera"] is True, report
+assert report["transformed_reachy_eye_frame"] is True, report
+assert report["validity_mask_present"] is True, report
 assert report["deterministic_calibration_fixture"] is True, report
 assert report["measured_calibration_claimed"] is False, report
 assert report["calibration_provenance"] == "UncalibratedEstimate", report
 assert report["camera_id"], report
 assert report["camera_session_id"] > 0, report
-assert report["output_width"] > 0 and report["output_height"] > 0, report
-assert report["baseline_origin"] == "TransformedReachyEye", report
-assert report["rotated_origin"] == "TransformedReachyEye", report
-assert report["rotated_source_sequence"] > report["baseline_source_sequence"], report
-assert report["rotated_authoritative_sequence"] > report["baseline_authoritative_sequence"], report
+assert report["source_sequence"] > 0, report
+assert report["authoritative_sequence"] > 0, report
 assert report["continuity_id"] > 0, report
-assert math.isfinite(float(report["authoritative_head_rotation_radians"])), report
-assert report["authoritative_head_rotation_radians"] >= 0.015, report
-assert 0.0 < report["baseline_coverage_fraction"] <= 1.0, report
-assert 0.0 < report["rotated_coverage_fraction"] <= 1.0, report
-assert report["gesture_plan_frame_count"] > 0, report
-assert report["gesture_submitted_frame_count"] == report["gesture_plan_frame_count"], report
+assert 0.0 <= float(report["coverage_fraction"]) <= 1.0, report
+assert report["visual_question"], report
+assert report["vlm_status"] in ("Succeeded", "Unavailable"), report
+assert report["vlm_succeeded"] is True or report["vlm_optional_unavailable"] is True, report
+if report["vlm_succeeded"]:
+    assert report["vlm_response_characters"] > 0, report
 assert report["synthetic_camera_frame_injected"] is False, report
+assert report["cloud_credentials_injected"] is False, report
 print(json.dumps(report, indent=2, sort_keys=True))
 PY
 then
@@ -207,4 +206,4 @@ sha256sum "${REPORT_DIR}/${RESULT_FILE}" > "${REPORT_DIR}/report.sha256"
     printf 'sdk=%s\n' "$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
     printf 'abi=%s\n' "$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
 } > "${REPORT_DIR}/environment.txt"
-printf 'RMA-190 front camera -> head rotation -> transformed Reachy-eye scenario passed.\n'
+printf 'RMA-190 rear-camera transformed frame and optional VLM visual question passed.\n'
