@@ -32,8 +32,12 @@ Unity/Android machine remains required for the two-machine reproducibility gate.
 The Reachy Mini source is pinned at
 `a739a6e461eb6d722901f1cfc225265ffc85c28d`. The importer verifies hashes,
 rejects dirty or mismatched inputs, preserves notices, imports all referenced
-assets, and generates deterministic model/render maps. RMA-012 in-app licenses
-and the complete release-notice reconciliation remain open.
+assets, and generates deterministic model/render maps. RMA-012 is complete as
+of 2026-09-22: the installed Licenses section exposes the required unofficial
+and noncommercial project disclosures plus one notice for every
+`third_party/inventory.json` entry, with bounded offline pagination. Managed
+application tests and `scripts/tests/test_rma012_licenses.py` fail closed on
+missing disclosure text or inventory/UI drift.
 
 ### RMA-020 through RMA-022 — Android native feasibility and lifecycle
 
@@ -177,6 +181,7 @@ profile to the exact pinned Reachy source commit and MJCF SHA-256, classifies ev
 parameter group, joint range, actuator/default class, and equality-solver setting,
 and explicitly records which manufacturer, measured, fitted, and calibrated
 evidence is absent.
+
 
 Active `chosen_actuator` dynamics inherit the upstream `perfect_actuator` defaults
 and remain a calibration-blocking placeholder. Antenna hinges remain placeholders
@@ -358,6 +363,7 @@ not ready for torque computation.
 Run `30601191456` passed byte-exact registry regeneration, eight positive and
 failure-path schema tests, native Unity-dependency rejection, GNU 13.3 strict
 warnings, ASan/UBSan, library compilation, plug-in derivation, registry lookup,
+
 validation-ordering/fault tests, and CTest on exact commit
 `68c035ab20ec20a28c8b287914d43dcaf7ad1c67`. Detailed evidence is in
 [the RMA-061 validation record](validation/RMA_061_PLUGGABLE_SERVO_MODEL_VALIDATION_2026-07-30.md).
@@ -538,6 +544,7 @@ capture remains part of RMA-074.
   all passed on `85dd886c398088946a2cc2ae61890aa94ad0294a`.
 - Physical RMA-060 metrics: zero MuJoCo warnings and scalar joint-limit
   violation, maximum equality residual `0.00010839801784859326`, maximum
+
   penetration `0.004506368083200441` m, maximum absolute energy
   `1.2885171070884491` J, and solver real-time factor
   `6.980001027847417` at the unchanged 500 Hz timestep.
@@ -616,7 +623,6 @@ capture remains part of RMA-074.
 
 ## Open hard gates
 
-- RMA-012 offline licenses, attribution, and unofficial-project notice;
 - API-31 development APK and release AAB validation;
 - two-machine reproducible Unity/Android build evidence;
 - later servo fidelity, calibration, application shell, camera, perception,
