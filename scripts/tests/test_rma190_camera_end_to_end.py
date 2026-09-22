@@ -15,8 +15,7 @@ def read(path: Path) -> str:
 class Rma190CameraEndToEndContracts(unittest.TestCase):
     def test_acceptance_uses_real_shipping_camera_and_authoritative_motion(self) -> None:
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("ReachyApplicationHostBehaviour", source)
         self.assertIn("ReachyAndroidCameraAcquisition", source)
@@ -31,8 +30,7 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
 
     def test_acceptance_fixture_is_explicitly_uncalibrated_and_restored(self) -> None:
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("ReachyCameraCalibrationProvenance.UncalibratedEstimate", source)
         self.assertIn("deterministic_calibration_fixture = true", source)
@@ -44,8 +42,7 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
     def test_validation_capture_reuses_production_try_build_frame(self) -> None:
         driver = read(APP / "ReachyAndroidPerceptionDriver.cs")
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("CaptureFrameForAcceptanceAsync", driver)
         self.assertIn("return CaptureFrameAsync(", driver)
@@ -56,7 +53,7 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
 
     def test_runner_is_fail_closed_and_grants_only_camera_permission(self) -> None:
         runner = read(RUNNER)
-        self.assertIn("pm grant \"${PACKAGE_NAME}\" android.permission.CAMERA", runner)
+        self.assertIn('pm grant "${PACKAGE_NAME}" android.permission.CAMERA', runner)
         self.assertIn("--ez reachy_rma190_camera_e2e_acceptance true", runner)
         self.assertIn('report["status"] == "passed"', runner)
         self.assertIn('report["real_front_camera"] is True', runner)
