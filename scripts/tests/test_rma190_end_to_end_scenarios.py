@@ -33,6 +33,11 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("actuator_observation_count = neutral.ActuatorObservationCount", source)
         self.assertNotIn("ReachySimFake", source)
         self.assertNotIn("requested_target_used_as_motion_proof = true", source)
+        self.assertIn(
+            "System.Security.Cryptography.SHA256.Create()",
+            source,
+        )
+        self.assertNotIn("using SHA256 sha256 = SHA256.Create()", source)
 
     def test_offline_runner_disables_and_restores_network(self) -> None:
         runner = read(RUNNER)
