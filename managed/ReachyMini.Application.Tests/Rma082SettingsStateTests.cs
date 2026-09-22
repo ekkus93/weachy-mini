@@ -263,10 +263,54 @@ namespace ReachyMini.Application.Tests
 
             ReachyLicenseNotice[] notices =
                 ReachySettingsStateStore.GetLicenseNotices();
-            True(notices.Length >= 4, "license notice count");
-            Contains(notices[1].Attribution, "Pollen", "Reachy attribution");
-            Contains(notices[2].Attribution, "DeepMind", "MuJoCo attribution");
-            Contains(notices[3].Attribution, "Unity", "Unity attribution");
+            Equal(12, notices.Length, "license notice count");
+
+            ReachyLicenseNotice projectStatus = FindNotice(
+                notices,
+                "Weachy Mini project status");
+            Contains(projectStatus.Attribution, "Unofficial", "unofficial project notice");
+            Contains(projectStatus.Attribution, "not endorsed", "non-endorsement notice");
+            Contains(projectStatus.Attribution, "Pollen Robotics", "Pollen non-endorsement");
+            Contains(projectStatus.Attribution, "Hugging Face", "Hugging Face non-endorsement");
+            Contains(projectStatus.Attribution, "Google DeepMind", "DeepMind non-endorsement");
+            Contains(projectStatus.Attribution, "Unity", "Unity non-endorsement");
+            Contains(projectStatus.Attribution, "Google", "Google non-endorsement");
+            Contains(projectStatus.Attribution, "OpenAI", "OpenAI non-endorsement");
+            Contains(
+                projectStatus.LicenseReference,
+                "free and noncommercial",
+                "free noncommercial notice");
+
+            ReachyLicenseNotice mujoco = FindNotice(notices, "MuJoCo");
+            Contains(mujoco.Attribution, "DeepMind", "MuJoCo attribution");
+            Contains(mujoco.LicenseReference, "Apache-2.0", "MuJoCo license");
+
+            ReachyLicenseNotice reachyAssets = FindNotice(
+                notices,
+                "Reachy Mini hardware and model assets");
+            Contains(reachyAssets.Attribution, "Pollen", "Reachy attribution");
+            Contains(
+                reachyAssets.LicenseReference,
+                "CC BY-NC-SA",
+                "Reachy asset license");
+        }
+
+        private static ReachyLicenseNotice FindNotice(
+            IReadOnlyList<ReachyLicenseNotice> notices,
+            string component)
+        {
+            for (int index = 0; index < notices.Count; ++index)
+            {
+                if (string.Equals(
+                    notices[index].Component,
+                    component,
+                    StringComparison.Ordinal))
+                {
+                    return notices[index];
+                }
+            }
+            throw new InvalidOperationException(
+                $"Managed test failed: missing license notice '{component}'.");
         }
 
         private static void Equal<T>(T expected, T actual, string label)
