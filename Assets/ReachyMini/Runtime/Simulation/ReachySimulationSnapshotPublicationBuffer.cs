@@ -23,21 +23,6 @@ namespace ReachyMini.Simulation
         internal void Publish(
             ReachyPublishedSimulationSnapshot snapshot)
         {
-            int currentPublishedIndex = Volatile.Read(ref publishedIndex);
-            if (currentPublishedIndex >= 0)
-            {
-                ulong currentPublishedSequence =
-                    slots[currentPublishedIndex].Value.PublicationSequence;
-                ulong lastReadSequence = checked(
-                    (ulong)System.Math.Max(
-                        0L,
-                        Interlocked.Read(ref lastReadPublicationSequence)));
-                if (currentPublishedSequence > lastReadSequence)
-                {
-                    Interlocked.Increment(ref droppedSnapshotCount);
-                }
-            }
-
             int nextIndex = (writerIndex + 1) % slots.Length;
             SnapshotSlot slot = slots[nextIndex];
             long version = Volatile.Read(ref slot.Version);
@@ -97,13 +82,20 @@ namespace ReachyMini.Simulation
                 {
                     return;
                 }
+
+                long missed = checked(candidate - observed - 1L);
                 if (Interlocked.CompareExchange(
                         ref lastReadPublicationSequence,
                         candidate,
-                        observed) == observed)
+                        observed) != observed)
                 {
-                    return;
+                    continue;
                 }
+                if (missed > 0L)
+                {
+                    Interlocked.Add(ref droppedSnapshotCount, missed);
+                }
+                return;
             }
         }
 
