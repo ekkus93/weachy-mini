@@ -384,6 +384,19 @@ namespace ReachyMini.Speech
             InstallVoiceDataAction +
             "), then retry. RMA-123 will not select a network-required voice automatically.";
 
+        private static string DescribeException(Exception exception)
+        {
+            if (exception == null)
+            {
+                throw new ArgumentNullException(nameof(exception));
+            }
+
+            string typeName = exception.GetType().Name;
+            return string.IsNullOrWhiteSpace(exception.Message)
+                ? typeName + "."
+                : typeName + ": " + exception.Message;
+        }
+
         private static string Bound(string value, int maximumCharacters)
         {
             string result = string.IsNullOrWhiteSpace(value)
