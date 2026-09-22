@@ -20,6 +20,7 @@ internal static partial class AndroidOfflineTtsTests
             ("Network-only locale does not satisfy offline availability", NetworkOnlyVoiceIsRejected),
             ("Unsupported locale remains unavailable", UnsupportedLocaleIsUnavailable),
             ("Probe failure remains visible", ProbeFailureIsVisible),
+            ("Voice-catalog failure retains diagnostic detail", VoiceCatalogFailureRetainsDetail),
             ("Voice enumeration filters network and other locales", VoiceEnumerationFiltersNetworkAndLocale),
             ("Voice enumeration preserves missing-data state", VoiceEnumerationPreservesInstallState),
             ("Default voice selection is deterministic", DefaultVoiceSelectionIsDeterministic),
@@ -173,6 +174,29 @@ internal static partial class AndroidOfflineTtsTests
             CancellationToken.None).ConfigureAwait(false);
         Require(availability.State == SpeechAvailabilityState.Faulted,
             "Probe exception must become a faulted availability state.");
+        Require(
+            availability.Diagnostic.Contains("probe failed", StringComparison.Ordinal),
+            "Probe failure diagnostic must retain the platform exception message.");
+    }
+
+    private static async Task VoiceCatalogFailureRetainsDetail()
+    {
+        await using var platform = new FakeAndroidOfflineTtsPlatform
+        {
+            VoicesException = new InvalidOperationException("voice catalog failed"),
+        };
+        await using var provider = CreateProvider(platform);
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
+            CreateRequest(provider, "voice-catalog-failure"),
+            CancellationToken.None)).ConfigureAwait(false);
+        RequireSingleFailure(events, SpeechErrorCategory.ServiceFailure);
+        Require(
+            events[0].Error?.Diagnostic.Contains(
+                "voice catalog failed",
+                StringComparison.Ordinal) == true,
+            "Voice-catalog failure diagnostic must retain the platform exception message.");
+        Require(platform.SpeakCalls == 0,
+            "Voice-catalog failure must fail before synthesis begins.");
     }
 
     private static async Task VoiceEnumerationFiltersNetworkAndLocale()
