@@ -24,9 +24,10 @@ class Rma012LicenseAttributionContracts(unittest.TestCase):
         inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
         inventory_names = {entry["name"] for entry in inventory["entries"]}
         self.assertEqual(10, len(inventory_names))
+        missing = sorted(inventory_names - components)
         self.assertTrue(
             inventory_names.issubset(components),
-            f"Runtime license UI is missing inventory notices: {sorted(inventory_names - components)}",
+            f"Runtime license UI is missing inventory notices: {missing}",
         )
 
     def test_project_status_is_explicit_and_offline(self) -> None:
