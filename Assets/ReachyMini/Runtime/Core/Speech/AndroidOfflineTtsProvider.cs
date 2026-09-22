@@ -68,7 +68,7 @@ namespace ReachyMini.Speech
             try
             {
                 Readiness readiness = await EvaluateReadinessAsync(
-                    operationCancellation.Token).ConfigureAwait(false);
+                    operationCancellation.Token).ConfigureAwait(true);
                 return readiness.Availability;
             }
             catch (OperationCanceledException)
@@ -81,7 +81,7 @@ namespace ReachyMini.Speech
                     SpeechAvailabilityState.Faulted,
                     Bound(
                         "Android offline TTS availability probing failed with " +
-                        exception.GetType().Name + ".",
+                        DescribeException(exception),
                         SpeechProviderError.MaximumDiagnosticCharacters));
             }
             finally
@@ -108,7 +108,7 @@ namespace ReachyMini.Speech
                 IReadOnlyList<AndroidOfflineTtsPlatformVoice> platformVoices =
                     await platform.GetVoicesAsync(
                         configuredLanguageTag,
-                        operationCancellation.Token).ConfigureAwait(false);
+                        operationCancellation.Token).ConfigureAwait(true);
                 return BuildOfflineVoiceList(platformVoices);
             }
             finally
@@ -150,8 +150,11 @@ namespace ReachyMini.Speech
             try
             {
                 ReadinessEvaluation readinessEvaluation =
+                    // The next operation enters AndroidJavaObject synchronously.
+                    // Preserve Unity's SynchronizationContext across readiness
+                    // so voice enumeration starts on Unity's attached thread.
                     await EvaluateReadinessSafelyAsync(operationCancellation.Token)
-                        .ConfigureAwait(false);
+                        .ConfigureAwait(true);
                 if (readinessEvaluation.Cancelled)
                 {
                     yield return CancellationOrTimeout(
@@ -169,7 +172,7 @@ namespace ReachyMini.Speech
                         SpeechErrorCategory.ServiceFailure,
                         "android_offline_tts_probe_failed",
                         "Android offline TTS capability probing failed with " +
-                            readinessEvaluation.Exception.GetType().Name + ".",
+                            DescribeException(readinessEvaluation.Exception),
                         isRetryable: true);
                     yield break;
                 }
@@ -206,8 +209,11 @@ namespace ReachyMini.Speech
                 }
 
                 VoiceCatalogEvaluation catalogEvaluation =
+                    // Keep the Unity context through voice enumeration so the
+                    // subsequent platform speech iterator starts on an attached
+                    // Android/Unity thread as well.
                     await LoadVoiceCatalogSafelyAsync(operationCancellation.Token)
-                        .ConfigureAwait(false);
+                        .ConfigureAwait(true);
                 if (catalogEvaluation.Cancelled)
                 {
                     yield return CancellationOrTimeout(
@@ -225,7 +231,7 @@ namespace ReachyMini.Speech
                         SpeechErrorCategory.ServiceFailure,
                         "android_offline_tts_voice_catalog_failed",
                         "Android offline TTS voice enumeration failed with " +
-                            catalogEvaluation.Exception.GetType().Name + ".",
+                            DescribeException(catalogEvaluation.Exception),
                         isRetryable: true);
                     yield break;
                 }
