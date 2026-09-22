@@ -367,9 +367,11 @@ namespace ReachyMini.AppState
                     if (acquisition.State.Current.IsActive)
                     {
                         acquisition.StopAcquisition();
+                        using var cleanupTimeout =
+                            new CancellationTokenSource(5_000);
                         await WaitForCameraStoppedAsync(
                             acquisition,
-                            CancellationToken.None);
+                            cleanupTimeout.Token);
                     }
                     if (cameraWasActive)
                     {
