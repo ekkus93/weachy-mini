@@ -20,6 +20,7 @@ internal static partial class AndroidOnDeviceAsrTests
             ("Unsupported language is unavailable", UnsupportedLanguage),
             ("Recognizer support preflight inability stays visible", PreflightUnavailableStillAvailable),
             ("Support discovery fault is faulted", SupportFaulted),
+            ("Support exception diagnostics preserve actionable detail", SupportExceptionDiagnosticVisible),
             ("Configured language is enforced", ConfiguredLanguageEnforced),
             ("Partial and final results preserve order", PartialAndFinalResults),
             ("No-match remains explicit", NoMatch),
@@ -42,5 +43,6 @@ internal static partial class AndroidOnDeviceAsrTests
             ("Java bridge uses only explicit on-device recognizer", Rma121SourceContracts.JavaBridgeUsesOnlyExplicitOnDeviceRecognizer),
             ("ASR Android manifest declares audio and service visibility", Rma121SourceContracts.ManifestDeclaresAudioAndRecognitionServiceVisibility),
             ("Unity bridge marshals callbacks without fallback", Rma121SourceContracts.UnityBridgeMarshalsCallbacksWithoutFallback),
+            ("Provider preserves Unity context for Android Java calls", Rma121SourceContracts.ProviderPreservesUnityContextForAndroidJavaCalls),
         };
 }
