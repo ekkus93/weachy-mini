@@ -14,10 +14,30 @@ namespace ReachyMini.Simulation
         };
         private int publishedIndex = -1;
         private int writerIndex = -1;
+        private long lastReadPublicationSequence;
+        private long droppedSnapshotCount;
+
+        internal ulong DroppedSnapshotCount => checked(
+            (ulong)System.Math.Max(0L, Interlocked.Read(ref droppedSnapshotCount)));
 
         internal void Publish(
             ReachyPublishedSimulationSnapshot snapshot)
         {
+            int currentPublishedIndex = Volatile.Read(ref publishedIndex);
+            if (currentPublishedIndex >= 0)
+            {
+                ulong currentPublishedSequence =
+                    slots[currentPublishedIndex].Value.PublicationSequence;
+                ulong lastReadSequence = checked(
+                    (ulong)System.Math.Max(
+                        0L,
+                        Interlocked.Read(ref lastReadPublicationSequence)));
+                if (currentPublishedSequence > lastReadSequence)
+                {
+                    Interlocked.Increment(ref droppedSnapshotCount);
+                }
+            }
+
             int nextIndex = (writerIndex + 1) % slots.Length;
             SnapshotSlot slot = slots[nextIndex];
             long version = Volatile.Read(ref slot.Version);
@@ -58,12 +78,33 @@ namespace ReachyMini.Simulation
                 if (before == after && (after & 1L) == 0L)
                 {
                     snapshot = candidate;
+                    RecordReadSequence(candidate.PublicationSequence);
                     return true;
                 }
             }
 
             snapshot = default;
             return false;
+        }
+
+        private void RecordReadSequence(ulong publicationSequence)
+        {
+            long candidate = checked((long)publicationSequence);
+            while (true)
+            {
+                long observed = Interlocked.Read(ref lastReadPublicationSequence);
+                if (candidate <= observed)
+                {
+                    return;
+                }
+                if (Interlocked.CompareExchange(
+                        ref lastReadPublicationSequence,
+                        candidate,
+                        observed) == observed)
+                {
+                    return;
+                }
+            }
         }
 
         private sealed class SnapshotSlot
