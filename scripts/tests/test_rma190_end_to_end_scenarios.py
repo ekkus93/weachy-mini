@@ -29,6 +29,9 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("[Serializable]", source)
         self.assertIn("MaximumQposDifference", source)
         self.assertIn("MaximumQvelDifference", source)
+        self.assertIn("WaitForSettledStateAsync", source)
+        self.assertNotIn("Task.Delay(250", source)
+        self.assertIn("actuator_observation_count = neutral.ActuatorObservationCount", source)
         self.assertNotIn("ReachySimFake", source)
         self.assertNotIn("requested_target_used_as_motion_proof = true", source)
 
@@ -43,6 +46,7 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("--ez reachy_rma190_core_e2e_acceptance true", runner)
         self.assertIn('report["network_offline"] is True', runner)
         self.assertIn('report["active_network_validated"] is False', runner)
+        self.assertIn('report["actuator_observation_count"] == 9', runner)
         self.assertIn('report["human_asr_transcript_injected"] is False', runner)
         self.assertIn('report["cloud_credentials_injected"] is False', runner)
         self.assertIn('report["local_model_injected"] is False', runner)
@@ -57,12 +61,15 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("rma190-core-end-to-end-report-${{ github.sha }}", workflow)
         self.assertNotIn("RMA-195 application-composition acceptance", workflow)
 
-    def test_roadmap_keeps_unimplemented_rma190_scenarios_open(self) -> None:
+    def test_roadmap_keeps_rma190_scenarios_open_pending_evidence(self) -> None:
         todo = read(TODO)
         start = todo.index("## RMA-190")
         end = todo.index("## RMA-191", start)
         section = todo[start:end]
         for item in (
+            "Offline launch with no network.",
+            "MuJoCo full model load and neutral reset.",
+            "Deterministic gesture replay.",
             "Front camera -> head rotation -> transformed Reachy-eye frame.",
             "On-device ASR -> local LLM -> behavior -> offline TTS.",
             "Rear-camera visual question with optional VLM.",
