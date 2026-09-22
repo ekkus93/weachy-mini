@@ -3005,7 +3005,7 @@ provider-driven intents) needs perception and provider both Ready.
       harness. A follow-up physical acceptance harness (mirroring
       RMA-111's launch-intent-extra/result-file convention) is the
       concrete next step to close that gap.
-- [ ] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
+- [x] **Phase D -- provider selection, cloud LLM/VLM; VLM-based perception;
       full closed loop.** Any live conversational-turn trigger for either the
       LLM or VLM path remains unstarted -- see below.
       **Cloud LLM composition wiring: partially complete (2026-08-22),
@@ -3255,32 +3255,40 @@ provider-driven intents) needs perception and provider both Ready.
       Android development build after fixing one real compile error the
       first draft missed (`Interlocked.Increment` has no `ulong` overload),
       plus the managed Core test suite including a new module-initializer
-      test covering all 4 gesture-mapping values. **Still open**:
-      Expression/GazeTarget/Urgency/Timing intent fields, TTS voice
-      selection beyond "first voice matching the language tag, else the
-      first available," and any physical-device verification of a real
-      end-to-end voice turn (this was verified by compilation + the managed
-      unit test only, not by pressing the mic button on the physical test
-      phone and speaking to it) -- ASR/TTS/microphone-permission behavior
-      specifically can only be confirmed on-device.
-- [ ] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
-      (never referenced by `ReachyMainScreenBootstrap`, which always
-      constructs `ReachySettingsApplicationCompositionProvider`) -- remove it,
-      or document why it is intentionally kept.
+      test covering all 4 gesture-mapping values.
+      **Closure reconciliation (2026-09-21):** later RMA-195 hardening routes
+      the complete validated RMA-151 intent through
+      `IReachyBehaviorIntentCapability.TryExecuteIntent`, so
+      Expression/GazeTarget/Urgency/Timing are no longer silently deferred by
+      the shipping behavior path. The live TTS path now uses
+      `ReachyTtsVoiceSelectionPolicy.SelectExactOfflineVoice`, requiring an
+      installed, language-matching, non-network voice instead of selecting an
+      arbitrary first voice. The remaining real spoken-turn proof is a
+      physical end-to-end acceptance requirement owned by RMA-125/RMA-190,
+      not missing application-composition wiring. Source-contract coverage in
+      `scripts/tests/test_rma195_application_composition.py` permanently
+      requires both the full behavior-intent capability and exact offline
+      voice policy.
+- [x] `ReachyProductionApplicationCompositionProvider` is confirmed dead code
+      and has been removed. `ReachyMainScreenBootstrap` constructs only
+      `ReachySettingsApplicationCompositionProvider`; the permanent
+      `scripts/tests/test_rma195_application_composition.py` contract fails if
+      the obsolete production-composition file reappears or the shipping
+      bootstrap references it.
 
-Blocks RMA-190's "On-device ASR -> local LLM -> behavior -> offline TTS" and
-"Front camera -> head rotation -> transformed Reachy-eye frame" scenarios, and
-RMA-194's "Selected benchmark-backed local LLM works without blocking physics"
-and "Behavior planner validates all AI output" release criteria: none of these
-can be exercised end-to-end in the live app until this composition wiring
-exists, regardless of how well each underlying subsystem tests in isolation.
+**RMA-195 composition blocker lifted (2026-09-21).** The shipping composition
+now exposes the real simulation, camera, speech, provider, perception, behavior,
+persistence, and UI services, with live conversation and on-demand transformed
+frame paths wired. RMA-190 now owns end-to-end scenario implementation and
+physical qualification; RMA-125/RMA-135/RMA-184 retain their separately
+documented device-specific acceptance gaps.
 
 ## RMA-190 — Build automated end-to-end scenarios
 
-**Blocked by RMA-195** — every scenario below needs the composition layer
-actually wired to provider selection, perception, and behavior, not just the
-underlying subsystems tested in isolation.
-
+**Status:** In progress. The former RMA-195 composition blocker is closed.
+Each scenario remains unchecked until its own end-to-end evidence passes; a
+hardware-dependent scenario may be implemented while physical evidence remains
+pending, but implementation alone does not close its checkbox.
 
 - [ ] Offline launch with no network.
 - [ ] MuJoCo full model load and neutral reset.
