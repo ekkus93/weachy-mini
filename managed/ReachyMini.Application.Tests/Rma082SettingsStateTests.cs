@@ -296,7 +296,7 @@ namespace ReachyMini.Application.Tests
         }
 
         private static ReachyLicenseNotice FindNotice(
-            IReadOnlyList<ReachyLicenseNotice> notices,
+            ReachyLicenseNotice[] notices,
             string component)
         {
             for (int index = 0; index < notices.Count; ++index)
