@@ -12,6 +12,7 @@ namespace ReachyMini.Core.Tests
             Rma170StructuredDiagnosticsContractTests.RunAll();
             Rma171DiagnosticsScreenContractTests.RunAll();
             Rma172DiagnosticBundleExportContractTests.RunAll();
+            Rma173SilentFailureRegressionTests.RunAll();
             Rma180PerformanceHarnessContractTests.RunAll();
             Rma182ApplicationInterruptionContractTests.RunAll();
             Rma183MemoryStoragePressureContractTests.RunAll();
