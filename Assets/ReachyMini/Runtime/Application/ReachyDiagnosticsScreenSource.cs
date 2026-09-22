@@ -266,3 +266,224 @@ namespace ReachyMini.AppState
         {
             cameraAcquisition ??=
                 Object.FindAnyObjectByType<ReachyAndroidCameraAcquisition>();
+            ReachyCameraAcquisitionSnapshot? acquisition =
+                cameraAcquisition?.State.Current;
+            var metrics = new List<ReachyDiagnosticsMetric>(5);
+
+            if (acquisition == null)
+            {
+                const string reason =
+                    "The live camera acquisition service is not present in this composition.";
+                metrics.Add(ReachyDiagnosticsMetric.Unavailable("Camera FPS", reason));
+                metrics.Add(ReachyDiagnosticsMetric.Unavailable("Active camera", reason));
+            }
+            else
+            {
+                double sampleSeconds = now - previousCameraSampleTime;
+                if (previousCameraSampleTime > 0.0 &&
+                    sampleSeconds >= MinimumRateSampleSeconds &&
+                    acquisition.AcceptedFrameCount >= previousCameraFrameCount)
+                {
+                    ulong deltaFrames =
+                        acquisition.AcceptedFrameCount - previousCameraFrameCount;
+                    metrics.Add(new ReachyDiagnosticsMetric(
+                        "Camera FPS",
+                        $"{deltaFrames / sampleSeconds:F1}"));
+                }
+                else
+                {
+                    metrics.Add(ReachyDiagnosticsMetric.Unavailable(
+                        "Camera FPS",
+                        "A second live camera frame-count sample is required."));
+                }
+                previousCameraSampleTime = now;
+                previousCameraFrameCount = acquisition.AcceptedFrameCount;
+                metrics.Add(acquisition.IsActive
+                    ? new ReachyDiagnosticsMetric(
+                        "Active camera",
+                        $"{acquisition.CameraId} ({acquisition.RequestedFacing})")
+                    : ReachyDiagnosticsMetric.Unavailable(
+                        "Active camera",
+                        acquisition.Message));
+            }
+
+            metrics.Add(ReachyDiagnosticsMetric.Unavailable(
+                "Reprojection time",
+                "The production camera path does not yet publish a reprojection timing snapshot."));
+            metrics.Add(ReachyDiagnosticsMetric.Unavailable(
+                "Valid coverage",
+                "No production homography-coverage snapshot is bound to the application shell."));
+            metrics.Add(new ReachyDiagnosticsMetric(
+                "Discovery",
+                cameraDiscovery.State.Current.Summary,
+                cameraDiscovery.State.Current.AvailableCameraCount > 0
+                    ? ReachyDiagnosticsAvailability.Available
+                    : ReachyDiagnosticsAvailability.Degraded,
+                cameraDiscovery.State.Current.AvailableCameraCount > 0
+                    ? string.Empty
+                    : cameraDiscovery.State.Current.Message));
+            return new ReachyDiagnosticsSection("Camera", metrics);
+        }
+
+        private static ReachyDiagnosticsSection BuildProviders(
+            ReachySettingsSnapshot currentSettings)
+        {
+            var metrics = new List<ReachyDiagnosticsMetric>(4);
+            foreach (ReachyProviderKind kind in Enum.GetValues(
+                         typeof(ReachyProviderKind)))
+            {
+                ReachyProviderSelection provider = currentSettings.GetProvider(kind);
+                string value =
+                    $"{provider.DisplayName}; {provider.Execution}; {provider.Connectivity}";
+                if (provider.Available)
+                {
+                    metrics.Add(new ReachyDiagnosticsMetric(kind.ToString(), value));
+                }
+                else if (provider.Execution == ReachyProviderExecution.Unconfigured)
+                {
+                    metrics.Add(ReachyDiagnosticsMetric.Unavailable(
+                        kind.ToString(),
+                        provider.Status));
+                }
+                else
+                {
+                    metrics.Add(ReachyDiagnosticsMetric.Degraded(
+                        kind.ToString(),
+                        value,
+                        provider.Status));
+                }
+            }
+            return new ReachyDiagnosticsSection("Providers", metrics);
+        }
+
+        private ReachyDiagnosticsSection BuildVersions(
+            ReachySettingsSnapshot currentSettings)
+        {
+            var metrics = new List<ReachyDiagnosticsMetric>(7)
+            {
+                runtime.ModelHash == 0UL
+                    ? ReachyDiagnosticsMetric.Unavailable(
+                        "Simulation model",
+                        "The authoritative runtime has not published a model hash.")
+                    : new ReachyDiagnosticsMetric(
+                        "Simulation model",
+                        $"0x{runtime.ModelHash:x16}"),
+                new ReachyDiagnosticsMetric(
+                    "Local model",
+                    currentSettings.ActiveLocalModel),
+                new ReachyDiagnosticsMetric(
+                    "Calibration",
+                    currentSettings.CameraCalibrationProfile),
+                new ReachyDiagnosticsMetric(
+                    "Native ABI",
+                    ProjectMetadata.NativeAbiVersion.ToString()),
+                new ReachyDiagnosticsMetric(
+                    "MuJoCo",
+                    ReachyProductionAuthoritativeRuntime.RequiredMujocoVersion),
+                string.IsNullOrWhiteSpace(runtime.ReachyAssetSourceHash)
+                    ? ReachyDiagnosticsMetric.Unavailable(
+                        "Reachy asset",
+                        "The presentation root has not published its source-model hash.")
+                    : new ReachyDiagnosticsMetric(
+                        "Reachy asset",
+                        runtime.ReachyAssetSourceHash),
+                new ReachyDiagnosticsMetric(
+                    "App",
+                    string.IsNullOrWhiteSpace(Application.version)
+                        ? "development"
+                        : Application.version),
+            };
+            return new ReachyDiagnosticsSection("Versions", metrics);
+        }
+
+        private static ReachyDiagnosticsSection BuildDevice(
+            LocalLlmResourceSnapshot? resources)
+        {
+            long totalMemoryBytes = GetTotalMemoryBytes(resources);
+            int processors = GetProcessorCount(resources);
+            LocalLlmDeviceProfile deviceProfile =
+                LocalLlmDeviceProfile.Select(totalMemoryBytes, processors);
+            var metrics = new List<ReachyDiagnosticsMetric>(6)
+            {
+                new ReachyDiagnosticsMetric("Model", SystemInfo.deviceModel),
+                new ReachyDiagnosticsMetric("OS", SystemInfo.operatingSystem),
+                new ReachyDiagnosticsMetric(
+                    "Graphics",
+                    $"{SystemInfo.graphicsDeviceType}; {SystemInfo.graphicsDeviceName}"),
+                new ReachyDiagnosticsMetric(
+                    "Memory",
+                    totalMemoryBytes > 0L
+                        ? $"{totalMemoryBytes / Megabyte:F0} MiB total"
+                        : "unknown",
+                    totalMemoryBytes > 0L
+                        ? ReachyDiagnosticsAvailability.Available
+                        : ReachyDiagnosticsAvailability.Degraded,
+                    totalMemoryBytes > 0L
+                        ? string.Empty
+                        : "The runtime did not expose total physical memory."),
+                new ReachyDiagnosticsMetric(
+                    "CPU",
+                    $"{processors} logical processor(s)"),
+                new ReachyDiagnosticsMetric(
+                    "Resource profile",
+                    deviceProfile.Kind.ToString()),
+            };
+            return new ReachyDiagnosticsSection("Device", metrics);
+        }
+
+        private LocalLlmResourceSnapshot? TryCaptureResources()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                androidResources ??=
+                    new ReachyAndroidLocalLlmResourceSignalSource();
+                LocalLlmResourceSnapshot snapshot = androidResources.Capture(
+                    LocalLlmPhysicsBudgetState.Unavailable);
+                resourceUnavailableReason = string.Empty;
+                return snapshot;
+            }
+            catch (Exception exception)
+            {
+                resourceUnavailableReason =
+                    "Android resource telemetry failed (" +
+                    exception.GetType().Name + ").";
+                return null;
+            }
+#else
+            resourceUnavailableReason =
+                "Android thermal telemetry is unavailable outside an Android player.";
+            return null;
+#endif
+        }
+
+        private static long GetTotalMemoryBytes(LocalLlmResourceSnapshot? resources)
+        {
+            if (resources != null && resources.TotalMemoryBytes > 0L)
+            {
+                return resources.TotalMemoryBytes;
+            }
+            return SystemInfo.systemMemorySize > 0
+                ? checked((long)SystemInfo.systemMemorySize * 1024L * 1024L)
+                : 0L;
+        }
+
+        private static int GetProcessorCount(LocalLlmResourceSnapshot? resources)
+        {
+            if (resources != null && resources.LogicalProcessorCount > 0)
+            {
+                return resources.LogicalProcessorCount;
+            }
+            return Math.Max(1, SystemInfo.processorCount);
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (disposed)
+            {
+                throw new ObjectDisposedException(
+                    nameof(ReachyDiagnosticsScreenSource));
+            }
+        }
+    }
+}
