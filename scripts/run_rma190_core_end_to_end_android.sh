@@ -214,6 +214,7 @@ assert report["model_hash"].startswith("0x") and int(report["model_hash"], 16) !
 assert report["body_count"] == 18, report
 assert report["qpos_count"] == 37, report
 assert report["qvel_count"] == 30, report
+assert report["actuator_observation_count"] == 9, report
 assert report["neutral_reset_succeeded"] is True, report
 assert report["neutral_reset_continuity_advanced"] is True, report
 assert report["gesture_kind"] == "Acknowledgment", report
