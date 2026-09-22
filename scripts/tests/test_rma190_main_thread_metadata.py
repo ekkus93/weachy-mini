@@ -3,11 +3,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application"
-    / "ReachyRma190CoreEndToEndAcceptance.cs"
-)
+SOURCE = ROOT / "Assets/ReachyMini/Runtime/Application" / "ReachyRma190CoreEndToEndAcceptance.cs"
 
 
 class Rma190MainThreadMetadataContract(unittest.TestCase):
@@ -21,9 +17,7 @@ class Rma190MainThreadMetadataContract(unittest.TestCase):
             "                        androidApiLevel,",
             source,
         )
-        run_start = source.index(
-            "private static async Task<AcceptanceReport> RunAcceptanceAsync"
-        )
+        run_start = source.index("private static async Task<AcceptanceReport> RunAcceptanceAsync")
         run_body = source[run_start:]
         self.assertNotIn("SystemInfo.deviceModel", run_body)
         self.assertNotIn("android_api_level = ReadApiLevel()", run_body)
