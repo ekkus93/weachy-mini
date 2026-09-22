@@ -37,6 +37,10 @@ internal sealed class FakeAndroidOnDeviceAsrPlatform :
 
     public bool ThrowRecognitionException { get; set; }
 
+    public Exception? ProbeException { get; set; }
+
+    public Exception? SupportException { get; set; }
+
     public TimeSpan ProbeDelay { get; set; }
 
     public int ProbeCount { get; private set; }
@@ -71,6 +75,10 @@ internal sealed class FakeAndroidOnDeviceAsrPlatform :
     {
         ThrowIfDisposed();
         ProbeCount++;
+        if (ProbeException != null)
+        {
+            throw ProbeException;
+        }
         if (ProbeDelay > TimeSpan.Zero)
         {
             await Task.Delay(ProbeDelay, cancellationToken).ConfigureAwait(false);
@@ -87,6 +95,10 @@ internal sealed class FakeAndroidOnDeviceAsrPlatform :
         ThrowIfDisposed();
         cancellationToken.ThrowIfCancellationRequested();
         SupportCheckCount++;
+        if (SupportException != null)
+        {
+            throw SupportException;
+        }
         return new ValueTask<AndroidOnDeviceAsrSupportResult>(Support);
     }
 
