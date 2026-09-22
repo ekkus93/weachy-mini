@@ -67,12 +67,16 @@ namespace ReachyMini.Validation
                 Application.persistentDataPath,
                 ResultFileName);
             DeleteIfPresent(resultPath);
+            string deviceModel = SystemInfo.deviceModel;
+            int androidApiLevel = TryReadApiLevel();
 
             try
             {
                 using var timeout = new CancellationTokenSource(
                     OverallTimeoutMilliseconds);
                 AcceptanceReport report = await RunAcceptanceAsync(
+                        deviceModel,
+                        androidApiLevel,
                         timeout.Token)
                     .ConfigureAwait(true);
                 report.status = "passed";
@@ -85,8 +89,8 @@ namespace ReachyMini.Validation
                 {
                     status = "failed",
                     error = Bound(exception.ToString(), 4096),
-                    device_model = SystemInfo.deviceModel,
-                    android_api_level = TryReadApiLevel(),
+                    device_model = deviceModel,
+                    android_api_level = androidApiLevel,
                 };
                 try
                 {
@@ -107,6 +111,8 @@ namespace ReachyMini.Validation
         }
 
         private static async Task<AcceptanceReport> RunAcceptanceAsync(
+            string deviceModel,
+            int androidApiLevel,
             CancellationToken cancellationToken)
         {
             ReachyApplicationHostBehaviour hostBehaviour =
@@ -259,8 +265,8 @@ namespace ReachyMini.Validation
                 return new AcceptanceReport
                 {
                     status = "running",
-                    device_model = SystemInfo.deviceModel,
-                    android_api_level = ReadApiLevel(),
+                    device_model = deviceModel,
+                    android_api_level = androidApiLevel,
                     application_state = health.State.ToString(),
                     network_offline = network.Offline,
                     active_network_present = network.ActiveNetworkPresent,
