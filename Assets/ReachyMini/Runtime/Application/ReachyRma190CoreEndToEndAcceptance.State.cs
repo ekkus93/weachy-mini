@@ -165,6 +165,65 @@ namespace ReachyMini.Validation
             }
         }
 
+        private static async Task<ReachySimAuthoritativeStateFrame>
+            WaitForSettledStateAsync(
+                ReachyProductionAuthoritativeRuntime runtime,
+                ulong minimumSequenceExclusive,
+                uint requiredContinuityId,
+                CancellationToken cancellationToken)
+        {
+            if (!runtime.TryCreateAuthoritativeStateFrame(
+                    out ReachySimAuthoritativeStateFrame frame))
+            {
+                throw new InvalidOperationException(
+                    "RMA-190 could not allocate a post-gesture state frame.");
+            }
+
+            ReachyBehaviorMotionSnapshot? previousMotion = null;
+            ulong lastSequence = minimumSequenceExclusive;
+            int stableSampleCount = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!runtime.TryCaptureLatestAuthoritativeState(frame) ||
+                    frame.Sequence <= lastSequence)
+                {
+                    await Task.Delay(
+                            StateAdvanceDelayMilliseconds,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    continue;
+                }
+                if (frame.ContinuityId != requiredContinuityId)
+                {
+                    throw new InvalidOperationException(
+                        "RMA-190 gesture continuity changed while waiting for replay state to settle.");
+                }
+
+                ReachyBehaviorMotionSnapshot currentMotion =
+                    ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot(frame);
+                bool settled = previousMotion != null &&
+                    MaximumActuatorMotion(previousMotion, currentMotion) <=
+                        ResetSettleMaximumMotionRadians &&
+                    MaximumActuatorVelocity(currentMotion) <=
+                        ResetSettleMaximumVelocityRadiansPerSecond;
+                stableSampleCount = settled
+                    ? checked(stableSampleCount + 1)
+                    : 0;
+                if (stableSampleCount >= ResetSettleConsecutiveSamples)
+                {
+                    return CopyFrame(frame);
+                }
+
+                previousMotion = currentMotion;
+                lastSequence = frame.Sequence;
+                await Task.Delay(
+                        ResetSettleSampleDelayMilliseconds,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
         private static ReachySimAuthoritativeStateFrame CopyFrame(
             ReachySimAuthoritativeStateFrame source)
         {
