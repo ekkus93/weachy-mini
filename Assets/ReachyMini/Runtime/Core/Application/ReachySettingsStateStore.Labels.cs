@@ -98,24 +98,64 @@ namespace ReachyMini.AppState
 
         public static ReachyLicenseNotice[] GetLicenseNotices()
         {
+            // RMA-012: keep the installed, offline notice surface aligned with
+            // third_party/inventory.json. The first two entries are first-party
+            // project disclosures; every remaining Component exactly matches an
+            // inventory entry name so scripts/tests/test_rma012_licenses.py can
+            // fail closed if the repository inventory and packaged UI drift.
             return new[]
             {
                 new ReachyLicenseNotice(
+                    "Weachy Mini project status",
+                    "Unofficial community project; not endorsed by Pollen Robotics, " +
+                        "Hugging Face, Google DeepMind, Unity, Google, or OpenAI.",
+                    "Intended to be free and noncommercial."),
+                new ReachyLicenseNotice(
                     "Weachy Mini",
                     "Project contributors",
-                    "Repository LICENSE"),
+                    "Repository LICENSE and third_party/THIRD_PARTY_NOTICES.md"),
                 new ReachyLicenseNotice(
-                    "Reachy Mini model and robot identity",
-                    "Pollen Robotics",
-                    "Upstream Reachy Mini notices and license"),
-                new ReachyLicenseNotice(
-                    "MuJoCo simulation runtime",
-                    "Google DeepMind",
-                    "MuJoCo Apache-2.0 license and notices"),
-                new ReachyLicenseNotice(
-                    "Unity runtime",
+                    "Unity 6.3 LTS Editor",
                     "Unity Technologies",
-                    "Unity software terms and third-party notices"),
+                    "Unity Software Terms; developer tool, not redistributed."),
+                new ReachyLicenseNotice(
+                    "MuJoCo",
+                    "Google DeepMind",
+                    "Apache-2.0; upstream NOTICE retained for packaged runtime."),
+                new ReachyLicenseNotice(
+                    "Reachy Mini software",
+                    "Pollen Robotics / Hugging Face",
+                    "Apache-2.0; exact imported paths retain upstream notices."),
+                new ReachyLicenseNotice(
+                    "Reachy Mini hardware and model assets",
+                    "Pollen Robotics",
+                    "CC BY-NC-SA; attribution, noncommercial, ShareAlike, and " +
+                        "modification notices apply."),
+                new ReachyLicenseNotice(
+                    "llama.cpp",
+                    "ggml-org contributors",
+                    "MIT License; pinned upstream license retained."),
+                new ReachyLicenseNotice(
+                    "Sub-1B local language model",
+                    "Not selected",
+                    "Candidate only; no model binary is packaged until selection and " +
+                        "license review complete."),
+                new ReachyLicenseNotice(
+                    "AndroidX CameraX",
+                    "Android Open Source Project / Google",
+                    "Apache-2.0; packaged CameraX module notices retained."),
+                new ReachyLicenseNotice(
+                    "Google ML Kit bundled face detection",
+                    "Google",
+                    "Google ML Kit Terms of Service and generated dependency notices."),
+                new ReachyLicenseNotice(
+                    "Google ML Kit bundled selfie segmentation",
+                    "Google",
+                    "Google ML Kit Terms of Service and generated dependency notices."),
+                new ReachyLicenseNotice(
+                    "Barack Obama United States Senate portrait thumbnail",
+                    "United States Senate",
+                    "Public domain (PD-USGov-Congress); packaged test fixture only."),
             };
         }
     }
