@@ -3,7 +3,6 @@
 using System;
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
 using ReachyMini.Behavior;
 using UnityEngine;
@@ -35,11 +34,9 @@ namespace ReachyMini.Validation
                 text.Append(';');
             }
             byte[] payload = Encoding.UTF8.GetBytes(text.ToString());
-            using var payloadStream = new MemoryStream(
-                payload,
-                writable: false);
-            using SHA256 sha256 = SHA256.Create();
-            byte[] digest = sha256.ComputeHash(payloadStream);
+            using System.Security.Cryptography.SHA256 sha256 =
+                System.Security.Cryptography.SHA256.Create();
+            byte[] digest = sha256.ComputeHash(payload);
             var hex = new StringBuilder(digest.Length * 2);
             for (int index = 0; index < digest.Length; ++index)
             {
