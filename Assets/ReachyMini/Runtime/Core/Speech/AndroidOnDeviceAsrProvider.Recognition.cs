@@ -50,10 +50,13 @@ namespace ReachyMini.Speech
 
             try
             {
+                // The platform recognizer stream enters JNI synchronously on
+                // its first MoveNextAsync. Keep the Unity main-thread context
+                // after readiness so recognition starts on an attached thread.
                 ReadinessEvaluation readinessEvaluation =
                     await EvaluateReadinessSafelyAsync(
                         request.Options,
-                        operationCancellation.Token).ConfigureAwait(false);
+                        operationCancellation.Token).ConfigureAwait(true);
                 if (readinessEvaluation.Cancelled)
                 {
                     if (timeoutCancellation.IsCancellationRequested &&
