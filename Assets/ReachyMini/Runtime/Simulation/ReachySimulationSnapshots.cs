@@ -12,6 +12,7 @@ namespace ReachyMini.Simulation
             ulong solverWarningCount,
             ulong commandQueueOverflowCount,
             ulong discardedCommandCount,
+            ulong droppedStateSnapshotCount,
             double accumulatedLagSeconds,
             double lastStepDurationSeconds,
             double maximumStepDurationSeconds)
@@ -21,6 +22,7 @@ namespace ReachyMini.Simulation
             SolverWarningCount = solverWarningCount;
             CommandQueueOverflowCount = commandQueueOverflowCount;
             DiscardedCommandCount = discardedCommandCount;
+            DroppedStateSnapshotCount = droppedStateSnapshotCount;
             AccumulatedLagSeconds = accumulatedLagSeconds;
             LastStepDurationSeconds = lastStepDurationSeconds;
             MaximumStepDurationSeconds = maximumStepDurationSeconds;
@@ -35,6 +37,8 @@ namespace ReachyMini.Simulation
         public ulong CommandQueueOverflowCount { get; }
 
         public ulong DiscardedCommandCount { get; }
+
+        public ulong DroppedStateSnapshotCount { get; }
 
         public double AccumulatedLagSeconds { get; }
 
