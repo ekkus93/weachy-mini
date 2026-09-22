@@ -1291,18 +1291,34 @@ public:
   `docs/architecture/CALIBRATION_PARAMETER_FITTING.md` and
   `docs/validation/RMA_073_PARAMETER_FITTING_VALIDATION_2026-07-31.md`.
 
-## RMA-074 — Produce first calibrated profile
+## RMA-074 — Optional physical-unit calibration extension
 
-- [ ] Acquire data from a physical Reachy Mini.
-- [ ] Fit a unit-specific profile.
-- [ ] Run held-out motions and compare position, orientation, settling, overshoot, current, decay, and contact metrics.
-- [ ] Publish a validation report in the repository without private/unredistributable data.
+**Status:** Optional and non-blocking by project decision (2026-09-22).
 
-**Acceptance criteria — calibration gate**
+Weachy Mini must provide a useful virtual Reachy Mini without requiring access
+to physical Reachy hardware. Physical-unit calibration is therefore an optional
+fidelity extension for contributors who happen to have a real robot; it is not
+a prerequisite for completing or releasing the virtual twin or Android app.
 
-- [ ] A real calibration profile and held-out report exist.
-- [ ] The UI labels uncalibrated and calibrated modes accurately.
-- [ ] No mature accuracy claim is made unless the corresponding threshold passes.
+Optional future work when hardware is voluntarily available:
+
+- Acquire measurements from a physical Reachy Mini.
+- Fit a unit-specific calibration profile.
+- Run held-out motions and compare position, orientation, settling, overshoot,
+  current, decay, and contact metrics.
+- Publish a validation report without private or unredistributable data.
+
+**Core-project truthfulness requirements**
+
+- [x] The virtual Reachy Mini operates without a physical Reachy Mini.
+- [x] Synthetic/nominal fitting evidence is not presented as physical
+      calibration evidence.
+- [x] Mature physical-accuracy claims are made only if a corresponding optional
+      physical calibration/held-out threshold passes.
+
+A future contributed physical profile may use the RMA-072/RMA-073 experiment,
+fit, signing, and compatibility machinery. Absence of such a profile must never
+block normal uncalibrated/nominal virtual operation.
 
 ---
 
