@@ -4,9 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application"
-    / "ReachyRma190CoreEndToEndAcceptance.Android.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Application" / "ReachyRma190CoreEndToEndAcceptance.Android.cs"
 )
 
 
