@@ -49,7 +49,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Tranche 2 harness implemented; physical evidence pending |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
-| Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Open |
+| Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Integration harness implemented; Unity evidence pending |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Open |
 | Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Open |
 | Model corruption/OOM | Local-model package/provider integration | Open |
@@ -116,7 +116,37 @@ a second transformed frame whose camera source sequence and authoritative state
 sequence both advance on the same camera session and continuity. The roadmap
 checkbox remains open until this harness passes on a physical Android device.
 
-## 5. Completion policy
+## 6. Independent cloud-provider combination contract
+
+`ReachyRma190IndependentCloudProviderCombinationsTests` is a deterministic
+integration fixture over the shipping settings/persistence/provider-policy
+layers. It does not claim a real remote-provider response and therefore does not
+require committed credentials.
+
+A pass must prove:
+
+1. all 16 cloud/local selection masks across ASR, TTS, LLM, and VLM preserve the
+   independently selected execution mode;
+2. cloud selections are truthfully marked as sending data off device and appear
+   in the privacy summary, while local selections do not inherit another
+   workload's cloud state;
+3. the four durable provider-profile references round-trip independently through
+   `ReachySettingsPersistenceApplicationService`;
+4. four distinct provider profiles (ASR, TTS, LLM, VLM) coexist in
+   `ReachyProviderProfilePersistenceStore` and survive reload;
+5. each workload has its own persisted fallback policy/authorized target, and
+   changing the LLM policy to no-fallback does not mutate VLM or speech policy
+   state; and
+6. the test never needs a real API key, so it cannot accidentally turn a
+   deterministic configuration test into a cloud-data disclosure.
+
+The static contract in
+`scripts/tests/test_rma190_independent_provider_combinations.py` requires the
+all 16 cloud/local selection masks and independent durable profile/policy
+coverage. The roadmap checkbox remains open until the Unity EditMode fixture
+passes on an exact commit.
+
+## 7. Completion policy
 
 The first three RMA-190 roadmap checkboxes remain open until the physical Android
 run passes on an exact commit and its artifact is recorded in the roadmap/validation
