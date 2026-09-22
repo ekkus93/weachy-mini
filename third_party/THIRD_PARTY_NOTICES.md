@@ -18,4 +18,4 @@ CameraX and the bundled ML Kit face-detection and selfie-segmentation artifacts 
 - **RMA-111 face acceptance fixture** — 250-pixel Wikimedia Commons thumbnail of `BarackObamaportrait.jpg`, official United States Senate portrait, public domain under PD-USGov-Congress. Source: `https://commons.wikimedia.org/wiki/File:BarackObamaportrait.jpg`. Exact packaged JPEG SHA-256: `bfbc798f321699c95c708476f744ba52e9faccdb0d131b8ce878f47d7704c8de`.
 - **GitHub Actions used by CI** — `actions/checkout`, `actions/setup-python`, `actions/setup-dotnet`, and `actions/setup-java`; CI-only dependencies, not packaged in the Android app.
 
-The application includes an offline licenses and attribution screen. The project is unofficial and is not endorsed by Pollen Robotics, Hugging Face, Google DeepMind, Unity, Google, or OpenAI.
+The application includes an offline licenses and attribution screen. The project is unofficial and is not endorsed by Pollen Robotics, Hugging Face, Google DeepMind, Unity, Google, or OpenAI. It is intended to be free and noncommercial.

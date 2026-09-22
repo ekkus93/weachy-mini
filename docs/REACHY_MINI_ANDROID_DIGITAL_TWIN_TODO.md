@@ -201,27 +201,43 @@ listing only RMA-012 (not RMA-011) as remaining open.
 
 ## RMA-012 — Add in-app licenses and unofficial-project notice
 
-**Status (2026-08-22):** Genuinely open, not stale -- partially built
-(`Assets/ReachyMini/Runtime/Core/Application/ReachyLicenseNotice.cs`,
-`ReachySettingsStateStore.GetLicenseNotices()`, and
-`ReachyMainScreen.SettingsSections.cs`'s `DrawLicenseSettings` render an
-in-app licenses list including MuJoCo Apache-2.0 and Pollen
-Robotics/Reachy attribution), but no "unofficial project, not endorsed
-by..." or "free and noncommercial" statement exists anywhere in the
-code. `docs/IMPLEMENTATION_STATUS.md:35,619` lists "RMA-012 in-app
-licenses and the complete release-notice reconciliation" as a current
-open hard gate.
+**Status:** Complete (2026-09-22).
 
-- [ ] Add a Licenses and Attribution screen.
-- [ ] Include the MuJoCo Apache 2.0 notice and all required third-party notices.
-- [ ] Include Reachy/Pollen Robotics attribution for derived assets.
-- [ ] State that the project is unofficial and not endorsed by Pollen Robotics, Hugging Face, Google DeepMind, Unity, Google, or OpenAI.
-- [ ] State that the app is intended to be free and noncommercial.
+- [x] Add a Licenses and Attribution screen.
+- [x] Include the MuJoCo Apache 2.0 notice and all required third-party notices.
+- [x] Include Reachy/Pollen Robotics attribution for derived assets.
+- [x] State that the project is unofficial and not endorsed by Pollen Robotics, Hugging Face, Google DeepMind, Unity, Google, or OpenAI.
+- [x] State that the app is intended to be free and noncommercial.
 
 **Acceptance criteria**
 
-- [ ] Notices are readable offline from the installed app.
-- [ ] The release artifact contains the same notice set as the repository inventory.
+- [x] Notices are readable offline from the installed app.
+- [x] The release artifact contains the same notice set as the repository inventory.
+
+**Completion evidence**
+
+- `ReachyMainScreen.SettingsSections.cs` retains the existing Licenses settings
+  section and now paginates the complete compiled notice set four entries at a
+  time, so the fixed panel exposes every notice without a network dependency.
+- `ReachySettingsStateStore.GetLicenseNotices()` exposes the explicit
+  unofficial/non-endorsement and free/noncommercial project statement plus one
+  entry for every name in `third_party/inventory.json`. It names MuJoCo
+  Apache-2.0, Reachy/Pollen Robotics CC BY-NC-SA obligations, and the remaining
+  inventoried dependencies/assets.
+- `scripts/tests/test_rma012_licenses.py` parses the runtime notice source and
+  `third_party/inventory.json` and fails if an inventory component is absent;
+  it also requires the offline UI path, disclosure text, and bounded pagination.
+- `managed/ReachyMini.Application.Tests/Rma082SettingsStateTests.cs` compiles
+  the shared runtime notice builder and asserts the complete 12-entry set plus
+  required project/MuJoCo/Reachy disclosure text.
+- Hosted CI run `35738108109` passed on exact implementation head
+  `c65e7503683242f91f0ca6212c0d584961b88f8e`, including Ruff/static checks,
+  managed warnings-as-errors/tests, inventory validation, native tests, and
+  Android/static quality gates. RMA-091 CameraX run `35738108020` and RMA-130
+  llama.cpp Android runtime run `35738107911` also passed on that head.
+- Design details are recorded in
+  `docs/RMA_012_LICENSE_ATTRIBUTION_SPEC_2026-09-22.md` and the updated
+  `docs/architecture/SETTINGS_ARCHITECTURE.md`.
 
 ---
 

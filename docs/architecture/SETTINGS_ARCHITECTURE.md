@@ -136,15 +136,24 @@ to contradict the provider configuration.
 
 ## Licenses and attribution
 
-The licenses section includes attribution references for:
+The licenses section is an offline, paginated notice surface. It includes two
+first-party disclosures and one entry for every name in
+`third_party/inventory.json`:
 
-- Weachy Mini project contributors;
-- Pollen Robotics and the Reachy Mini model/identity;
-- Google DeepMind and the MuJoCo runtime;
-- Unity Technologies and Unity runtime notices.
+- the app is an unofficial community project and is not endorsed by Pollen
+  Robotics, Hugging Face, Google DeepMind, Unity, Google, or OpenAI;
+- the app is intended to be free and noncommercial;
+- every inventoried dependency/asset is named with its owner and governing
+  license/notice reference, including MuJoCo Apache-2.0 and the Reachy
+  CC BY-NC-SA asset obligations.
 
-The screen identifies the authoritative notice locations rather than embedding
-or rewriting third-party license text.
+The fixed settings panel shows four notices per page with explicit Previous/Next
+controls. The list is compiled into the application and requires no network
+access. `scripts/tests/test_rma012_licenses.py` compares the runtime component
+names against `third_party/inventory.json`, so adding an inventory entry without
+an installed-app notice fails CI rather than silently drifting. The screen
+identifies authoritative notice/license references rather than rewriting full
+third-party legal texts.
 
 ## Durable persistence
 

@@ -52,6 +52,7 @@ namespace ReachyMini.AppState
         private string diagnosticBundleExportStatus =
             "No diagnostic bundle has been exported. Sensitive content is excluded by policy.";
         private Vector2 diagnosticsScrollPosition;
+        private int licenseNoticePage;
         private Func<ReachySettingsResetOutcome>? resetSimulation;
 
         public ReachyMainScreenSnapshot? Snapshot => snapshot;
