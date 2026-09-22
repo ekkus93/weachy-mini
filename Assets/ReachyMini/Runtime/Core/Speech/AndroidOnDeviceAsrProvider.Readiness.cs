@@ -48,8 +48,11 @@ namespace ReachyMini.Speech
             AndroidOnDeviceAsrProbe probe;
             try
             {
+                // The platform immediately crosses JNI. Preserve Unity's
+                // SynchronizationContext so the subsequent support preflight
+                // also begins on Unity's attached main thread.
                 probe = await platform.ProbeAsync(cancellationToken)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {
@@ -62,8 +65,7 @@ namespace ReachyMini.Speech
                     SpeechErrorCategory.ServiceFailure,
                     "android_on_device_asr_probe_failed",
                     "Android on-device ASR capability discovery failed with " +
-                        exception.GetType().Name +
-                        ".");
+                        DescribeException(exception));
             }
 
             if (probe.ApiLevel < 31 ||
@@ -94,9 +96,11 @@ namespace ReachyMini.Speech
             AndroidOnDeviceAsrSupportResult support;
             try
             {
+                // Do not switch to a pool thread here: CheckSupportAsync
+                // enters AndroidJavaObject before its first await.
                 support = await platform.CheckSupportAsync(
                     options,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {
@@ -109,8 +113,7 @@ namespace ReachyMini.Speech
                     SpeechErrorCategory.ServiceFailure,
                     "android_on_device_asr_support_check_failed",
                     "Android on-device ASR language support discovery failed with " +
-                        exception.GetType().Name +
-                        ".");
+                        DescribeException(exception));
             }
 
             return support.State switch
@@ -147,6 +150,14 @@ namespace ReachyMini.Speech
                 _ => throw new InvalidOperationException(
                     "Android on-device ASR returned an unsupported support state."),
             };
+        }
+
+        private static string DescribeException(Exception exception)
+        {
+            string typeName = exception.GetType().Name;
+            return string.IsNullOrWhiteSpace(exception.Message)
+                ? typeName + "."
+                : typeName + ": " + exception.Message;
         }
 
         // MapFailure is called from MapPlatformEvent in
