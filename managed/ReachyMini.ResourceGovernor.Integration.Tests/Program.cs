@@ -518,3 +518,76 @@ namespace ReachyMini.ResourceGovernor.Integration.Tests
         {
             private readonly Queue<LocalLlmResourceSnapshot> values;
             internal QueueResourceSignals(IEnumerable<LocalLlmResourceSnapshot> values) =>
+                this.values = new Queue<LocalLlmResourceSnapshot>(values);
+            public LocalLlmResourceSnapshot Capture(LocalLlmPhysicsBudgetState physicsBudgetState) =>
+                WithPhysics(values.Count > 0
+                    ? values.Dequeue()
+                    : throw new InvalidOperationException("Resource test signal queue exhausted."),
+                    physicsBudgetState);
+        }
+
+        private sealed class RepeatingResourceSignals : ILocalLlmResourceSignalSource
+        {
+            private readonly LocalLlmResourceSnapshot value;
+            internal RepeatingResourceSignals(LocalLlmResourceSnapshot value) => this.value = value;
+            public LocalLlmResourceSnapshot Capture(LocalLlmPhysicsBudgetState physicsBudgetState) =>
+                WithPhysics(value, physicsBudgetState);
+        }
+
+        private sealed class ThrowingResourceSignals : ILocalLlmResourceSignalSource
+        {
+            public LocalLlmResourceSnapshot Capture(LocalLlmPhysicsBudgetState physicsBudgetState) =>
+                throw new InvalidOperationException("synthetic resource signal failure");
+        }
+
+        private sealed class FailAfterOneResourceSignal : ILocalLlmResourceSignalSource
+        {
+            private readonly LocalLlmResourceSnapshot first;
+            private int calls;
+            internal FailAfterOneResourceSignal(LocalLlmResourceSnapshot first) => this.first = first;
+            public LocalLlmResourceSnapshot Capture(LocalLlmPhysicsBudgetState physicsBudgetState)
+            {
+                if (calls++ != 0)
+                {
+                    throw new InvalidOperationException("synthetic monitor signal failure");
+                }
+                return WithPhysics(first, physicsBudgetState);
+            }
+        }
+
+        private static LocalLlmResourceSnapshot WithPhysics(
+            LocalLlmResourceSnapshot value,
+            LocalLlmPhysicsBudgetState physics) =>
+            new LocalLlmResourceSnapshot(
+                value.TotalMemoryBytes,
+                value.AvailableMemoryBytes,
+                value.LowMemoryThresholdBytes,
+                value.SystemReportsLowMemory,
+                value.LogicalProcessorCount,
+                value.ThermalStatus,
+                physics,
+                value.RecentOutOfMemory);
+
+        private static void Run(string name, Action test)
+        {
+            try
+            {
+                test();
+                Console.WriteLine("PASS: " + name);
+            }
+            catch (Exception exception)
+            {
+                ++failures;
+                Console.Error.WriteLine("FAIL: " + name + ": " + exception.Message);
+            }
+        }
+
+        private static void Equal<T>(T expected, T actual)
+        {
+            if (!object.Equals(expected, actual))
+            {
+                throw new InvalidOperationException($"Expected {expected}; actual {actual}.");
+            }
+        }
+    }
+}
