@@ -438,12 +438,26 @@ namespace ReachyMini.AppState
                 warningStyle!);
         }
 
+        private const int LicenseNoticesPerPage = 4;
+
         private void DrawLicenseSettings(Rect area)
         {
             ReachyLicenseNotice[] notices =
                 ReachySettingsStateStore.GetLicenseNotices();
-            float y = area.y;
-            for (int index = 0; index < notices.Length; ++index)
+            int pageCount = Mathf.Max(
+                1,
+                Mathf.CeilToInt(notices.Length / (float)LicenseNoticesPerPage));
+            licenseNoticePage = Mathf.Clamp(licenseNoticePage, 0, pageCount - 1);
+
+            GUI.Label(
+                new Rect(area.x, area.y, area.width, 28f),
+                $"OFFLINE NOTICES  PAGE {licenseNoticePage + 1}/{pageCount}",
+                detailStyle!);
+
+            int start = licenseNoticePage * LicenseNoticesPerPage;
+            int end = Mathf.Min(start + LicenseNoticesPerPage, notices.Length);
+            float y = area.y + 34f;
+            for (int index = start; index < end; ++index)
             {
                 ReachyLicenseNotice notice = notices[index];
                 GUI.Label(
@@ -452,7 +466,30 @@ namespace ReachyMini.AppState
                     $"{notice.Attribution}\n" +
                     $"{notice.LicenseReference}",
                     panelBodyStyle!);
-                y += 80f;
+                y += 78f;
+            }
+
+            float halfWidth = (area.width - 12f) * 0.5f;
+            float buttonY = area.yMax - 48f;
+            if (GUI.Button(
+                    new Rect(area.x, buttonY, halfWidth, 44f),
+                    "PREVIOUS",
+                    smallButtonStyle!) &&
+                licenseNoticePage > 0)
+            {
+                --licenseNoticePage;
+            }
+            if (GUI.Button(
+                    new Rect(
+                        area.x + halfWidth + 12f,
+                        buttonY,
+                        halfWidth,
+                        44f),
+                    "NEXT",
+                    smallButtonStyle!) &&
+                licenseNoticePage + 1 < pageCount)
+            {
+                ++licenseNoticePage;
             }
         }
     }
