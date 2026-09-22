@@ -20,22 +20,36 @@ namespace ReachyMini.Core.Tests
             Equal(0UL, buffer.DroppedSnapshotCount, "first publish drop count");
 
             buffer.Publish(Snapshot(2UL));
-            Equal(1UL, buffer.DroppedSnapshotCount, "unread overwrite drop count");
+            Equal(
+                0UL,
+                buffer.DroppedSnapshotCount,
+                "drop count updates on observation");
             True(
                 buffer.TryRead(out ReachyPublishedSimulationSnapshot latest),
                 "latest snapshot readable");
             Equal(2UL, latest.PublicationSequence, "latest publication sequence");
+            Equal(1UL, buffer.DroppedSnapshotCount, "unread sequence gap count");
 
             buffer.Publish(Snapshot(3UL));
+            True(
+                buffer.TryRead(out ReachyPublishedSimulationSnapshot third),
+                "third snapshot readable");
+            Equal(3UL, third.PublicationSequence, "third publication sequence");
             Equal(
                 1UL,
                 buffer.DroppedSnapshotCount,
-                "read snapshot is not counted as dropped");
+                "contiguous read adds no drop");
+
             buffer.Publish(Snapshot(4UL));
+            buffer.Publish(Snapshot(5UL));
+            True(
+                buffer.TryRead(out ReachyPublishedSimulationSnapshot fifth),
+                "fifth snapshot readable");
+            Equal(5UL, fifth.PublicationSequence, "fifth publication sequence");
             Equal(
                 2UL,
                 buffer.DroppedSnapshotCount,
-                "second unread overwrite drop count");
+                "second unread sequence gap count");
         }
 
         private static ReachyPublishedSimulationSnapshot Snapshot(ulong sequence)
