@@ -16,8 +16,7 @@ def read(path: Path) -> str:
 class Rma190EndToEndScenarioContracts(unittest.TestCase):
     def test_core_physical_acceptance_uses_shipping_runtime_and_behavior(self) -> None:
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CoreEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CoreEndToEndAcceptance*.cs"))
         )
         self.assertIn("FindAnyObjectByType<ReachyApplicationHostBehaviour>", source)
         self.assertIn("ReachyProductionSimulationApplicationService", source)
