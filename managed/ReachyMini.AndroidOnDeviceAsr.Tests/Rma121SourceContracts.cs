@@ -14,6 +14,10 @@ internal static class Rma121SourceContracts
         "Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/AndroidManifest.xml";
     private const string UnityBridgePath =
         "Assets/ReachyMini/Runtime/Application/ReachyAndroidOnDeviceAsrPlatform.cs";
+    private const string ProviderReadinessPath =
+        "Assets/ReachyMini/Runtime/Core/Speech/AndroidOnDeviceAsrProvider.Readiness.cs";
+    private const string ProviderRecognitionPath =
+        "Assets/ReachyMini/Runtime/Core/Speech/AndroidOnDeviceAsrProvider.Recognition.cs";
 
     public static Task JavaBridgeUsesOnlyExplicitOnDeviceRecognizer()
     {
@@ -110,6 +114,29 @@ internal static class Rma121SourceContracts
             source,
             "OpenAI",
             "cloud ASR fallback in Unity bridge");
+        return Task.CompletedTask;
+    }
+
+    public static Task ProviderPreservesUnityContextForAndroidJavaCalls()
+    {
+        string readiness = Read(ProviderReadinessPath);
+        string recognition = Read(ProviderRecognitionPath);
+        Require(
+            readiness,
+            "probe = await platform.ProbeAsync(cancellationToken)\n                    .ConfigureAwait(true);",
+            "Unity-context preservation after the Android ASR capability probe");
+        Require(
+            readiness,
+            "cancellationToken).ConfigureAwait(true);",
+            "Unity-context preservation after the Android ASR support preflight");
+        Require(
+            recognition,
+            "operationCancellation.Token).ConfigureAwait(true);",
+            "Unity-context preservation before the Android recognizer stream starts");
+        Require(
+            readiness,
+            "DescribeException(exception)",
+            "actionable Android ASR preflight exception diagnostics");
         return Task.CompletedTask;
     }
 
