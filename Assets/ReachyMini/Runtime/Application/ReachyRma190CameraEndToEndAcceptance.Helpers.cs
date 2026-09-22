@@ -14,7 +14,7 @@ namespace ReachyMini.AppState
 {
     public sealed partial class ReachyRma190CameraEndToEndAcceptance
     {
-        private static async Task<ReachyApplicationHostBehaviour>
+        internal static async Task<ReachyApplicationHostBehaviour>
             WaitForShippingHostAsync(CancellationToken cancellationToken)
         {
             while (true)
@@ -32,7 +32,7 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task<ReachyProductionAuthoritativeRuntime>
+        internal static async Task<ReachyProductionAuthoritativeRuntime>
             WaitForRuntimeAsync(CancellationToken cancellationToken)
         {
             while (true)
@@ -54,7 +54,7 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task<T> WaitForObjectAsync<T>(
+        internal static async Task<T> WaitForObjectAsync<T>(
             CancellationToken cancellationToken,
             string label)
             where T : Object
@@ -71,7 +71,7 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task WaitForCameraStoppedAsync(
+        internal static async Task WaitForCameraStoppedAsync(
             ReachyAndroidCameraAcquisition acquisition,
             CancellationToken cancellationToken)
         {
@@ -117,7 +117,7 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task<ReachyVisionFrame> CaptureAcceptanceFrameAsync(
+        internal static async Task<ReachyVisionFrame> CaptureAcceptanceFrameAsync(
             ReachyAndroidPerceptionDriver driver,
             CancellationToken cancellationToken)
         {
@@ -134,7 +134,7 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task<ReachySimAuthoritativeStateFrame>
+        internal static async Task<ReachySimAuthoritativeStateFrame>
             WaitForAuthoritativeStateAsync(
                 ReachyProductionAuthoritativeRuntime runtime,
                 ulong minimumSequenceExclusive,
@@ -174,7 +174,7 @@ namespace ReachyMini.AppState
             return false;
         }
 
-        private static ReachyCameraCalibrationProfile[] CopyProfiles(
+        internal static ReachyCameraCalibrationProfile[] CopyProfiles(
             ReachyCameraCalibrationSnapshot snapshot)
         {
             var copy = new ReachyCameraCalibrationProfile[
@@ -189,6 +189,23 @@ namespace ReachyMini.AppState
         private static ReachyCameraCalibrationProfile CreateDeterministicFixture(
             ReachyCameraTextureFrameDescriptor descriptor,
             ReachySimBodyPoseSnapshot baselineCameraPose)
+        {
+            return CreateDeterministicFixture(
+                descriptor,
+                baselineCameraPose,
+                ReachyDeviceCameraFacing.Front,
+                FixtureProfileId,
+                mirrorHorizontally: true,
+                "Deterministic RMA-190 front-camera reprojection fixture; not a measured device calibration.");
+        }
+
+        internal static ReachyCameraCalibrationProfile CreateDeterministicFixture(
+            ReachyCameraTextureFrameDescriptor descriptor,
+            ReachySimBodyPoseSnapshot baselineCameraPose,
+            ReachyDeviceCameraFacing facing,
+            string profileId,
+            bool mirrorHorizontally,
+            string note)
         {
             int width = descriptor.OutputWidth;
             int height = descriptor.OutputHeight;
@@ -208,7 +225,7 @@ namespace ReachyMini.AppState
                 width,
                 height,
                 0,
-                mirrorHorizontally: true);
+                mirrorHorizontally);
 
             var cameraQuaternion = new ReachyQuaternionD(
                 baselineCameraPose.QuaternionX,
@@ -226,11 +243,11 @@ namespace ReachyMini.AppState
 
             return new ReachyCameraCalibrationProfile(
                 ReachyCameraCalibrationProfile.CurrentProfileSchemaVersion,
-                FixtureProfileId,
+                profileId,
                 descriptor.CameraId,
-                ReachyDeviceCameraFacing.Front,
+                facing,
                 ReachyCameraCalibrationProvenance.UncalibratedEstimate,
-                "Deterministic RMA-190 front-camera reprojection fixture; not a measured device calibration.",
+                note,
                 "docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md",
                 ReachyCameraMujocoOpticalBinding.OfficialModelCompatibility,
                 DateTimeOffset.UnixEpoch,
@@ -271,7 +288,7 @@ namespace ReachyMini.AppState
             return plan;
         }
 
-        private static ReachySimBodyPoseSnapshot FindCameraPose(
+        internal static ReachySimBodyPoseSnapshot FindCameraPose(
             ReachySimAuthoritativeStateFrame state)
         {
             int match = -1;
