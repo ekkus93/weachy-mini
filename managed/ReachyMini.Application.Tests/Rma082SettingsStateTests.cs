@@ -299,7 +299,7 @@ namespace ReachyMini.Application.Tests
             ReachyLicenseNotice[] notices,
             string component)
         {
-            for (int index = 0; index < notices.Count; ++index)
+            for (int index = 0; index < notices.Length; ++index)
             {
                 if (string.Equals(
                     notices[index].Component,
