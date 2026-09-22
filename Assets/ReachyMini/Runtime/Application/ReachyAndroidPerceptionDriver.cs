@@ -143,7 +143,33 @@ namespace ReachyMini.AppState
         public Task<ReachyVisionFrame?> CaptureFrameForAnalysisAsync(
             CancellationToken cancellationToken)
         {
-            if (!configured || paused || analysisInFlight ||
+            return CaptureFrameAsync(
+                cancellationToken,
+                allowWhilePaused: false);
+        }
+
+        // RMA-190 physical acceptance needs a deterministic single-frame
+        // capture while the continuous tracker is suspended so it cannot race
+        // the acceptance harness for the same production warp pipeline. This
+        // internal entry point still uses TryBuildFrame -- exactly the shipping
+        // calibration/authoritative-rotation/homography path -- and differs
+        // only in allowing a capture while this driver is intentionally paused.
+        // It remains unavailable whenever another analysis operation is in
+        // flight, so a caller must pause first and retry until the prior frame
+        // finishes rather than running the GPU pipeline concurrently.
+        internal Task<ReachyVisionFrame?> CaptureFrameForAcceptanceAsync(
+            CancellationToken cancellationToken)
+        {
+            return CaptureFrameAsync(
+                cancellationToken,
+                allowWhilePaused: true);
+        }
+
+        private Task<ReachyVisionFrame?> CaptureFrameAsync(
+            CancellationToken cancellationToken,
+            bool allowWhilePaused)
+        {
+            if (!configured || (!allowWhilePaused && paused) || analysisInFlight ||
                 tracker == null || warpPipeline == null ||
                 worldModel == null || runtime == null || calibrations == null ||
                 selection == null)

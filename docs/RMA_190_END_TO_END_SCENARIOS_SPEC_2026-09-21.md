@@ -46,7 +46,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Offline launch with no network | Physical Android / shipping host | Tranche 1 harness implemented; physical evidence pending |
 | MuJoCo full model load and neutral reset | Physical Android / production runtime | Tranche 1 harness implemented; physical evidence pending |
 | Deterministic gesture replay | Physical Android / production target sink + authoritative state | Tranche 1 harness implemented; physical evidence pending |
-| Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Open |
+| Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Tranche 2 harness implemented; physical evidence pending |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Open |
@@ -88,6 +88,33 @@ The harness runs in the dedicated `rma190-core-end-to-end.yml` physical workflow
 It is intentionally independent of RMA-195 physical composition acceptance, so a
 separate speech-service failure cannot prevent collection of these three core
 RMA-190 scenario results.
+
+## 5. Tranche 2 front-camera contract
+
+`ReachyRma190CameraEndToEndAcceptance` runs only when launched with
+`reachy_rma190_camera_e2e_acceptance`. The runner grants only Android camera
+permission, starts the shipping front-camera acquisition path, and validates a
+machine-readable report fail-closed.
+
+The player-side harness uses the real CameraX front-camera stream, the production
+authoritative MuJoCo runtime, the production behavior controller target sink, and
+`ReachyAndroidPerceptionDriver`'s existing `TryBuildFrame` path. It pauses the
+continuous behavior/perception loops only to avoid competing controller and GPU
+pipeline work while the deterministic scenario is measured.
+
+Because RMA-190 is validating integration rather than performing a new physical
+calibration experiment, this tranche temporarily installs an explicitly labeled
+`UncalibratedEstimate` calibration fixture derived from the live front-camera
+dimensions and the authoritative baseline camera-body pose. The report records
+that the fixture is deterministic and **not** a measured calibration, and the
+original durable calibration set is restored in cleanup. No synthetic camera
+frame or requested controller target is accepted as proof.
+
+A pass requires a baseline observation-eligible `TransformedReachyEye` frame,
+real authoritative head rotation from a deterministic Curiosity trajectory, and
+a second transformed frame whose camera source sequence and authoritative state
+sequence both advance on the same camera session and continuity. The roadmap
+checkbox remains open until this harness passes on a physical Android device.
 
 ## 5. Completion policy
 
