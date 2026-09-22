@@ -11,6 +11,8 @@ internal static class Rma123SourceContracts
         "src/main/java/com/ekkus93/weachy/speech/ReachyOfflineTtsBridge.java";
     private const string UnityBridgePath =
         "Assets/ReachyMini/Runtime/Application/ReachyAndroidOfflineTtsPlatform.cs";
+    private const string ProviderPath =
+        "Assets/ReachyMini/Runtime/Core/Speech/AndroidOfflineTtsProvider.cs";
     private const string UnityManifestPath =
         "Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/AndroidManifest.xml";
     private const string HostedManifestPath =
@@ -55,6 +57,27 @@ internal static class Rma123SourceContracts
         Reject(source, "ReachyAndroidSystemAsrProviderFactory", "ASR provider substitution");
         Reject(source, "OpenAI", "cloud TTS fallback");
         Reject(source, "HttpClient", "network transport");
+
+        string provider = Read(ProviderPath);
+        Require(
+            provider,
+            "EvaluateReadinessSafelyAsync(operationCancellation.Token)\n" +
+                "                        .ConfigureAwait(true);",
+            "Unity-context preservation after TTS readiness");
+        Require(
+            provider,
+            "LoadVoiceCatalogSafelyAsync(operationCancellation.Token)\n" +
+                "                        .ConfigureAwait(true);",
+            "Unity-context preservation after TTS voice enumeration");
+        Require(
+            provider,
+            "DescribeException(catalogEvaluation.Exception)",
+            "voice-catalog exception detail");
+        Reject(
+            provider,
+            "LoadVoiceCatalogSafelyAsync(operationCancellation.Token)\n" +
+                "                        .ConfigureAwait(false);",
+            "thread-pool continuation before Android TTS synthesis");
         return Task.CompletedTask;
     }
 
