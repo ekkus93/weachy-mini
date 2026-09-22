@@ -53,9 +53,12 @@ The existing `managed/ReachyMini.Application.Tests` suite additionally compiles
 and exercises `GetLicenseNotices()`, checking the project-status text, MuJoCo
 Apache-2.0 notice, and Reachy/Pollen attribution.
 
-`.github/workflows/rma082-settings.yml` runs both the managed settings suite and
-the RMA-012 inventory-parity test whenever the settings notice source,
-repository inventory/notices, or RMA-012 test changes.
+Normal CI runs `scripts/ci.sh --static-only`, whose unittest discovery
+executes the RMA-012 inventory-parity test. The existing
+`.github/workflows/rma082-settings.yml` is also triggered by the modified
+settings source and managed RMA-082 test, so it independently compiles and runs
+the managed settings contract without requiring any new credential-bearing
+workflow edits.
 
 ## Completion rule
 
