@@ -84,9 +84,12 @@ The player-side harness must prove all of the following in one run:
 7. The report explicitly records that no human ASR transcript, cloud credential,
    or local model was injected in this tranche.
 
-The harness deliberately runs before RMA-195 physical composition acceptance in
-`local-unity-android-validation.yml`. A separate speech-service failure therefore
-cannot prevent collection of the three independent RMA-190 core-scenario results.
+The dedicated `.github/workflows/rma190-core-end-to-end.yml` keeps RMA-190
+qualification independent from the legacy local-validation workflow. Pull requests
+run source contracts on a hosted runner. Pushes to `master` (and manual dispatches
+after the workflow exists on the default branch) additionally build the shipping
+APK and run the physical tranche on the trusted Android self-hosted runner. An
+unrelated RMA-195 ASR preflight failure therefore cannot mask RMA-190 evidence.
 
 ## 5. Completion policy
 

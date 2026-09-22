@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "Assets/ReachyMini/Runtime/Application"
 RUNNER = ROOT / "scripts/run_rma190_core_end_to_end_android.sh"
-WORKFLOW = ROOT / ".github/workflows/local-unity-android-validation.yml"
+WORKFLOW = ROOT / ".github/workflows/rma190-core-end-to-end.yml"
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
@@ -47,13 +47,15 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn('report["cloud_credentials_injected"] is False', runner)
         self.assertIn('report["local_model_injected"] is False', runner)
 
-    def test_workflow_runs_core_rma190_before_asr_blocked_rma195(self) -> None:
+    def test_dedicated_workflow_separates_contract_and_physical_gates(self) -> None:
         workflow = read(WORKFLOW)
-        rma190 = workflow.index("Install and run RMA-190 core end-to-end acceptance")
-        rma195 = workflow.index("Install and run RMA-195 application-composition acceptance")
-        self.assertLess(rma190, rma195)
+        self.assertIn("Validate RMA-190 source contracts", workflow)
+        self.assertIn("python3 scripts/tests/test_rma190_end_to_end_scenarios.py", workflow)
+        self.assertIn("Run RMA-190 core scenarios on Android", workflow)
+        self.assertIn("github.event_name != 'pull_request'", workflow)
         self.assertIn("run_rma190_core_end_to_end_android.sh", workflow)
         self.assertIn("rma190-core-end-to-end-report-${{ github.sha }}", workflow)
+        self.assertNotIn("RMA-195 application-composition acceptance", workflow)
 
     def test_roadmap_keeps_unimplemented_rma190_scenarios_open(self) -> None:
         todo = read(TODO)
