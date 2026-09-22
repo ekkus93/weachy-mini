@@ -219,6 +219,7 @@ namespace ReachyMini.Validation
                             first.FinalState.ContinuityId,
                             cancellationToken)
                         .ConfigureAwait(false);
+                ValidateAuthoritativeLayout(replayNeutral);
 
                 GesturePass second = await ExecuteGesturePassAsync(
                         runtime,
@@ -274,6 +275,7 @@ namespace ReachyMini.Validation
                     body_count = runtime.BodyCount,
                     qpos_count = neutral.QposCount,
                     qvel_count = neutral.QvelCount,
+                    actuator_observation_count = neutral.ActuatorObservationCount,
                     neutral_reset_succeeded = true,
                     neutral_reset_continuity_advanced =
                         neutral.ContinuityId != initialContinuity,
@@ -400,18 +402,16 @@ namespace ReachyMini.Validation
                     execution.Status + " / " + execution.DiagnosticCode + ".");
             }
 
-            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+            // Compare replays only after the authoritative mechanism has
+            // settled, rather than after an arbitrary wall-clock delay. This
+            // keeps device scheduling jitter from becoming false replay drift.
             ReachySimAuthoritativeStateFrame finalState =
-                await WaitForAuthoritativeStateAsync(
+                await WaitForSettledStateAsync(
                         runtime,
                         lastSequence,
+                        neutralContinuityId,
                         cancellationToken)
                     .ConfigureAwait(false);
-            if (finalState.ContinuityId != neutralContinuityId)
-            {
-                throw new InvalidOperationException(
-                    "RMA-190 gesture continuity changed unexpectedly during replay.");
-            }
 
             ReachyBehaviorMotionSnapshot finalMotion =
                 ReachyBehaviorAuthoritativeSafety.CreateMotionSnapshot(finalState);
