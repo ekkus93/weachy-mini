@@ -245,6 +245,31 @@ internal static partial class AndroidOnDeviceAsrTests
             "support fault");
     }
 
+    private static async Task SupportExceptionDiagnosticVisible()
+    {
+        await using var platform = new FakeAndroidOnDeviceAsrPlatform
+        {
+            SupportException = new InvalidOperationException(
+                "synthetic support JNI failure"),
+        };
+        await using var provider = CreateProvider(platform);
+
+        SpeechProviderAvailability availability =
+            await provider.CheckAvailabilityAsync(
+                Options(),
+                CancellationToken.None).ConfigureAwait(false);
+
+        AssertEqual(
+            SpeechAvailabilityState.Faulted,
+            availability.State,
+            "support exception state");
+        Assert(
+            availability.Diagnostic.Contains(
+                "InvalidOperationException: synthetic support JNI failure",
+                StringComparison.Ordinal),
+            "support exception diagnostic must preserve bounded exception detail");
+    }
+
     private static async Task ConfiguredLanguageEnforced()
     {
         await using var platform = new FakeAndroidOnDeviceAsrPlatform();
