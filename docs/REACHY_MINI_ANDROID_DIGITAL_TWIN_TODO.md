@@ -3322,10 +3322,21 @@ Each scenario remains unchecked until its own end-to-end evidence passes; a
 hardware-dependent scenario may be implemented while physical evidence remains
 pending, but implementation alone does not close its checkbox.
 
-- [ ] Offline launch with no network.
-- [ ] MuJoCo full model load and neutral reset.
-- [ ] Deterministic gesture replay.
+- [x] Offline launch with no network.
+- [x] MuJoCo full model load and neutral reset.
+- [x] Deterministic gesture replay.
 - [ ] Front camera -> head rotation -> transformed Reachy-eye frame.
+
+**Core end-to-end physical evidence (2026-09-22):** dedicated A54 run
+`35768977213` passed on exact master SHA
+`b188ce3b18635d24da79cb762e245c52e361ab5e`. The shipping Android app was
+cold-launched with Wi-Fi/mobile data disabled, validated the production MuJoCo
+full-model layout and two neutral resets, and replayed the same production
+acknowledgment trajectory twice against authoritative state. The fail-closed
+report required all 9 actuator observations, continuity advancement, actual
+authoritative motion, and replay qpos/qvel error within the committed tolerance;
+no ASR transcript, cloud credential, or local-model fixture was injected.
+
 - [ ] On-device ASR -> local LLM -> behavior -> offline TTS.
 - [ ] Rear-camera visual question with optional VLM.
 - [ ] Independent cloud provider combinations.
