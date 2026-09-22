@@ -27,6 +27,7 @@ namespace ReachyMini.Validation
             public int body_count;
             public int qpos_count;
             public int qvel_count;
+            public int actuator_observation_count;
             public bool neutral_reset_succeeded;
             public bool neutral_reset_continuity_advanced;
             public string gesture_kind = string.Empty;
