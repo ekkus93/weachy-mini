@@ -11,6 +11,8 @@ namespace ReachyMini.AppState
     {
         public const string AcceptanceLaunchExtra =
             "reachy_rma091_acceptance";
+        public const string Rma190PermissionAcceptanceLaunchExtra =
+            "reachy_rma190_permission_e2e_acceptance";
         public const string ResultFileName =
             "rma091-camera-acquisition-state.json";
         public const string CommandFileName =
@@ -83,15 +85,20 @@ namespace ReachyMini.AppState
                         "currentActivity");
                 using AndroidJavaObject intent =
                     activity.Call<AndroidJavaObject>("getIntent");
-                return intent != null && intent.Call<bool>(
-                    "getBooleanExtra",
-                    AcceptanceLaunchExtra,
-                    false);
+                return intent != null &&
+                    (intent.Call<bool>(
+                        "getBooleanExtra",
+                        AcceptanceLaunchExtra,
+                        false) ||
+                    intent.Call<bool>(
+                        "getBooleanExtra",
+                        Rma190PermissionAcceptanceLaunchExtra,
+                        false));
             }
             catch (Exception exception)
             {
                 Debug.LogError(
-                    "Could not inspect the RMA-091 acceptance launch extra: " +
+                    "Could not inspect the camera acceptance launch extras: " +
                     exception.Message);
                 return false;
             }
@@ -380,6 +387,11 @@ namespace ReachyMini.AppState
                     case "refresh":
                         service.RefreshNow();
                         break;
+                    case "request_permission":
+                        (discovery ?? throw new InvalidOperationException(
+                            "Camera discovery evidence is not configured."))
+                            .RequestAccessOrRefresh();
+                        break;
                     default:
                         throw new InvalidOperationException(
                             "Unsupported RMA-091 command action: " +
@@ -429,6 +441,10 @@ namespace ReachyMini.AppState
                     acceptance_enabled = true,
                     evidence_fault = evidenceFault,
                     permission = permission,
+                    permission_message =
+                        discovery?.State.Current.Message ?? string.Empty,
+                    permission_request_count =
+                        discovery?.State.Current.PermissionRequestCount ?? 0,
                     current_state = snapshot.State.ToString(),
                     message = snapshot.Message,
                     desired_active = acquisition?.DesiredActive ?? false,
@@ -562,6 +578,8 @@ namespace ReachyMini.AppState
             public bool acceptance_enabled;
             public string evidence_fault = string.Empty;
             public string permission = string.Empty;
+            public string permission_message = string.Empty;
+            public int permission_request_count;
             public string current_state = string.Empty;
             public string message = string.Empty;
             public bool desired_active;

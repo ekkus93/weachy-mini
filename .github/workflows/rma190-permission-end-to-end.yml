@@ -1,0 +1,171 @@
+name: RMA-190 Permission Denial and Revocation Android Acceptance
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionEvidence.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
+      - 'scripts/run_rma190_permission_end_to_end_android.sh'
+      - 'scripts/android_device_acceptance_foreground.sh'
+      - 'scripts/build_unity_android.sh'
+      - 'scripts/prepare_reachy_unity_presentation.sh'
+      - 'scripts/stage_reachy_unity_android_runtime.sh'
+      - 'scripts/tests/test_rma190_permission_end_to_end.py'
+      - 'docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma190-permission-end-to-end.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma190-permission-end-to-end-android
+  cancel-in-progress: true
+
+jobs:
+  physical:
+    name: RMA-190 permission E2E on Android
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate RMA-190 permission source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma190_permission_end_to_end.py
+          bash -n scripts/run_rma190_permission_end_to_end_android.sh
+          python3 scripts/check_docs_links.py
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+          if [[ -z "${project_version}" ]]; then
+            printf '%s\n' 'Could not read the pinned Unity version.' >&2
+            exit 1
+          fi
+          unity_editor="${UNITY_EDITOR:-}"
+          if [[ -n "${unity_editor}" && ! -x "${unity_editor}" ]]; then
+            printf 'Configured UNITY_EDITOR is not executable: %s\n' "${unity_editor}" >&2
+            exit 1
+          fi
+          if [[ -z "${unity_editor}" ]]; then
+            for candidate in \
+              "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "/opt/unity/editors/${project_version}/Editor/Unity"; do
+              if [[ -x "${candidate}" ]]; then unity_editor="${candidate}"; break; fi
+            done
+          fi
+          if [[ -z "${unity_editor}" ]]; then
+            printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+            exit 1
+          fi
+          android_player_dir="$(dirname "${unity_editor}")/Data/PlaybackEngines/AndroidPlayer"
+          if [[ ! -d "${android_player_dir}" ]]; then
+            printf 'Unity Android Build Support is missing: %s\n' "${android_player_dir}" >&2
+            exit 1
+          fi
+          android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          if [[ ! -x "${android_sdk_root}/platform-tools/adb" ]]; then
+            printf 'Android SDK platform-tools were not found under %s.\n' "${android_sdk_root}" >&2
+            exit 1
+          fi
+          {
+            printf 'UNITY_EDITOR=%s\n' "${unity_editor}"
+            printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}"
+            printf 'ANDROID_HOME=%s\n' "${android_sdk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Verify ARM64 API-26 device APK
+        shell: bash
+        run: test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+
+      - name: Pin one physical Android device
+        shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          mapfile -t physical_serials < <(
+            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${physical_serials[@]}"; do
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
+              accepted+=("${serial}")
+            fi
+          done
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            found=0
+            for serial in "${accepted[@]}"; do
+              if [[ "${serial}" == "${serial_override}" ]]; then found=1; break; fi
+            done
+            if (( found != 1 )); then
+              printf 'Pinned physical device %s is unavailable or unsupported.\n' "${serial_override}" >&2
+              adb devices -l >&2
+              exit 1
+            fi
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' "${#accepted[@]}" >&2
+            adb devices -l >&2
+            exit 1
+          fi
+          adb -s "${serial}" wait-for-device
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+
+      - name: Run RMA-190 permission denial/revocation acceptance
+        shell: bash
+        env:
+          RMA190_PERMISSION_REPORT_DIR: ${{ runner.temp }}/rma190-permission-end-to-end-report
+        run: bash scripts/run_rma190_permission_end_to_end_android.sh
