@@ -256,6 +256,62 @@ namespace ReachyMini.Rendering
                 ControlTimeout);
         }
 
+        public ReachySimulationControlResult RecoverFaultedAndResetNeutral()
+        {
+            if (Status != ReachyProductionRuntimeStatus.Faulted)
+            {
+                return ReachySimulationControlResult.Failure(
+                    worker?.State ?? ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidArgument,
+                        ReachySimRecoverability.Retry,
+                        "Controlled runtime recovery is only valid after an authoritative runtime fault."));
+            }
+            if (presentationRoot == null || renderer == null)
+            {
+                return ReachySimulationControlResult.Failure(
+                    ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.ManagedInteropFailure,
+                        ReachySimRecoverability.FatalConfiguration,
+                        "The production runtime cannot recover because its Unity dependencies are unavailable."));
+            }
+
+            Fault = string.Empty;
+            nextCommandSequence = 1UL;
+            StartProductionRuntime();
+            ReachySimulationWorker? recoveredWorker = worker;
+            if (Status != ReachyProductionRuntimeStatus.Running ||
+                recoveredWorker == null)
+            {
+                string diagnostic = string.IsNullOrWhiteSpace(Fault)
+                    ? "The production runtime could not recreate its native simulation handle."
+                    : Fault;
+                return ReachySimulationControlResult.Failure(
+                    ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.ManagedInteropFailure,
+                        ReachySimRecoverability.RecreateHandle,
+                        diagnostic));
+            }
+
+            ReachySimulationControlResult reset = recoveredWorker.Reset(
+                (uint)ReachySimResetPose.NeutralAwake,
+                ControlTimeout);
+            if (!reset.IsSuccess)
+            {
+                EnterFault(
+                    "Controlled recovery neutral reset failed: " +
+                    reset.Error.Code + ": " + reset.Error.Message);
+                return reset;
+            }
+
+            nextCommandSequence = 1UL;
+            Fault = string.Empty;
+            renderer.enabled = true;
+            return reset;
+        }
+
         public bool TryGetLatestAuthoritativePair(
             out ReachyAuthoritativePoseSnapshot older,
             out ReachyAuthoritativePoseSnapshot newer)
