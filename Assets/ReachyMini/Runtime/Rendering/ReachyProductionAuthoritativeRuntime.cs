@@ -256,6 +256,47 @@ namespace ReachyMini.Rendering
                 ControlTimeout);
         }
 
+        public ReachySimulationControlResult RecoverFromFault()
+        {
+            if (Status != ReachyProductionRuntimeStatus.Faulted)
+            {
+                return ReachySimulationControlResult.Failure(
+                    SimulationState,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidArgument,
+                        ReachySimRecoverability.Retry,
+                        $"Cannot recover the production runtime while it is {Status}."));
+            }
+            if (presentationRoot == null || renderer == null)
+            {
+                return ReachySimulationControlResult.Failure(
+                    ReachySimulationRunState.Stopped,
+                    new ReachySimError(
+                        ReachySimErrorCode.InvalidHandle,
+                        ReachySimRecoverability.RecreateHandle,
+                        "The production runtime dependencies are unavailable for recovery."));
+            }
+
+            nextCommandSequence = 1UL;
+            Fault = string.Empty;
+            StartProductionRuntime();
+            if (Status == ReachyProductionRuntimeStatus.Running)
+            {
+                return ReachySimulationControlResult.Success(
+                    ReachySimulationRunState.Running);
+            }
+
+            string message = string.IsNullOrWhiteSpace(Fault)
+                ? "The production runtime did not return to Running during controlled recovery."
+                : Fault;
+            return ReachySimulationControlResult.Failure(
+                SimulationState,
+                new ReachySimError(
+                    ReachySimErrorCode.ManagedInteropFailure,
+                    ReachySimRecoverability.RecreateHandle,
+                    message));
+        }
+
         public bool TryGetLatestAuthoritativePair(
             out ReachyAuthoritativePoseSnapshot older,
             out ReachyAuthoritativePoseSnapshot newer)
