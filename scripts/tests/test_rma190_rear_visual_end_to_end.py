@@ -24,6 +24,10 @@ class Rma190RearVisualEndToEndContracts(unittest.TestCase):
         self.assertIn("VisionFrameOrigin.TransformedReachyEye", source)
         self.assertIn("VisionResourceKind.ValidityMask", source)
         self.assertIn("synthetic_camera_frame_injected = false", source)
+        self.assertIn("string deviceModel = SystemInfo.deviceModel;", source)
+        self.assertIn("int androidApiLevel = ReadApiLevel();", source)
+        self.assertIn("device_model = deviceModel", source)
+        self.assertNotIn("device_model = SystemInfo.deviceModel", source)
 
     def test_visual_question_uses_optional_shipping_vlm_capability(self) -> None:
         source = read(APP / "ReachyRma190RearVisualEndToEndAcceptance.cs")
