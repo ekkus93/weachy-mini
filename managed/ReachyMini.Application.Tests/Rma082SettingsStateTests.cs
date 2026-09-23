@@ -293,6 +293,22 @@ namespace ReachyMini.Application.Tests
                 reachyAssets.LicenseReference,
                 "CC BY-NC-SA",
                 "Reachy asset license");
+
+            ReachyLicenseNotice selectedModel = FindNotice(
+                notices,
+                "Qwen3 0.6B Q4_K_M");
+            Contains(
+                selectedModel.Attribution,
+                "Qwen",
+                "selected model attribution");
+            Contains(
+                selectedModel.LicenseReference,
+                "Apache-2.0",
+                "selected model license");
+            Contains(
+                selectedModel.LicenseReference,
+                "not bundled",
+                "selected model redistribution");
         }
 
         private static ReachyLicenseNotice FindNotice(
