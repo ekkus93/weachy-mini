@@ -3354,15 +3354,17 @@ pending, but implementation alone does not close its checkbox.
 
 ## RMA-193 — Complete documentation
 
-- [ ] Build instructions.
-- [ ] Android device requirements.
-- [ ] Model installation/import.
-- [ ] Provider configuration and BYOK warning.
-- [ ] Calibration workflow.
-- [ ] Fidelity-level explanation.
-- [ ] Camera Level 1 approximation and missing-pixel behavior.
-- [ ] Troubleshooting and diagnostic bundle instructions.
-- [ ] Privacy and data-flow explanation.
+- [x] Build instructions.
+- [x] Android device requirements.
+- [x] Model installation/import.
+- [x] Provider configuration and BYOK warning.
+- [x] Calibration workflow.
+- [x] Fidelity-level explanation.
+- [x] Camera Level 1 approximation and missing-pixel behavior.
+- [x] Troubleshooting and diagnostic bundle instructions.
+- [x] Privacy and data-flow explanation.
+
+**RMA-193 documentation closure (2026-09-23):** `docs/ANDROID_RELEASE_GUIDE.md` is now the release-facing entry point for all nine documentation requirements and links back to the detailed subsystem specifications. The guide explicitly preserves current product limitations (local-model install/import UI unavailable, in-app camera-calibration capture unavailable), fail-closed privacy/provider behavior, fidelity-claim boundaries, Level 1 missing-pixel semantics, and redacted diagnostic-bundle handling. `scripts/tests/test_rma193_documentation.py` prevents those required sections/references from drifting.
 
 ## RMA-194 — Release acceptance checklist
 
