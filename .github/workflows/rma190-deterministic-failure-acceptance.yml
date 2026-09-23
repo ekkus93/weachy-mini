@@ -1,0 +1,108 @@
+name: RMA-190 deterministic failure acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'managed/ReachyMini.Core.Tests/Program.Rma190DeterministicFailureAcceptance*.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/**'
+      - 'Assets/ReachyMini/Runtime/Core/Providers/**'
+      - 'Assets/ReachyMini/Runtime/Simulation/**'
+      - 'Assets/ReachyMini/Runtime/Interop/**'
+      - 'native/reachy_sim/**'
+      - 'scripts/tests/test_rma190_deterministic_failure_acceptance.py'
+      - '.github/workflows/rma190-deterministic-failure-acceptance.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'managed/ReachyMini.Core.Tests/Program.Rma190DeterministicFailureAcceptance*.cs'
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/**'
+      - 'Assets/ReachyMini/Runtime/Core/Providers/**'
+      - 'Assets/ReachyMini/Runtime/Simulation/**'
+      - 'Assets/ReachyMini/Runtime/Interop/**'
+      - 'native/reachy_sim/**'
+      - 'scripts/tests/test_rma190_deterministic_failure_acceptance.py'
+      - '.github/workflows/rma190-deterministic-failure-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deterministic-failures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      REACHY_RMA190_DETERMINISTIC_FAILURE_ACCEPTANCE: '1'
+      REACHY_RMA190_FAILURE_REPORT: ${{ github.workspace }}/build/rma190-deterministic-failure-acceptance.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build test-only native interop library
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/rma190-managed-native \
+            -G Ninja \
+            -DBUILD_TESTING=ON
+          cmake \
+            --build build/rma190-managed-native \
+            --target reachy_sim_managed_contract \
+            --parallel
+          native_library="$(find build/rma190-managed-native -type f -name 'libreachy_sim.so' -print -quit)"
+          if [[ -z "${native_library}" ]]; then
+            printf '%s\n' 'RMA-190 managed contract build did not produce libreachy_sim.so.' >&2
+            exit 1
+          fi
+          printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n' \
+            "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
+      - name: Run deterministic production-boundary failure acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${REACHY_MANAGED_NATIVE_LIBRARY_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          export REACHY_MANAGED_NATIVE_TESTS=1
+          dotnet restore managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+          dotnet run \
+            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release \
+            --no-restore
+      - name: Validate machine-readable RMA-190 report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["REACHY_RMA190_FAILURE_REPORT"])
+          report = json.loads(path.read_text(encoding="utf-8"))
+          assert report["schema_version"] == 1
+          for key in (
+              "network_loss",
+              "rate_limit",
+              "malformed_response",
+              "cancellation",
+              "model_corruption",
+              "model_oom_recovery",
+              "solver_fault",
+              "controlled_reset",
+          ):
+              assert report[key] == "Passed", (key, report.get(key))
+          for key in (
+              "production_http_transport",
+              "production_model_package_manager",
+              "production_local_llm_provider",
+              "native_backed_simulation_worker",
+          ):
+              assert report[key] is True, (key, report.get(key))
+          assert report["hidden_fallback_used"] is False
+          print(json.dumps(report, sort_keys=True))
+          PY
+      - name: Run RMA-190 source contract
+        run: python3 scripts/tests/test_rma190_deterministic_failure_acceptance.py
