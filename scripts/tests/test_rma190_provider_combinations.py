@@ -6,10 +6,10 @@ ROOT = Path(__file__).resolve().parents[2]
 TEST = (
     ROOT
     / "managed"
-    / "ReachyMini.Application.Tests"
+    / "ReachyMini.Core.Tests"
     / "Rma190IndependentProviderCombinationTests.cs"
 )
-PROGRAM = ROOT / "managed" / "ReachyMini.Application.Tests" / "Program.cs"
+PROGRAM = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.cs"
 
 
 def read(path: Path) -> str:
@@ -46,7 +46,7 @@ class Rma190ProviderCombinationContracts(unittest.TestCase):
         self.assertIn("IsTargetAuthorized", source)
         self.assertIn("CyclingOneProviderNeverMutatesAnotherWorkload", source)
 
-    def test_application_test_entrypoint_runs_acceptance(self) -> None:
+    def test_core_test_entrypoint_runs_acceptance(self) -> None:
         program = read(PROGRAM)
         self.assertIn("Rma190IndependentProviderCombinationTests.RunAll();", program)
 
