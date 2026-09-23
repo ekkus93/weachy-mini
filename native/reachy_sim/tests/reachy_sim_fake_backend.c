@@ -23,6 +23,7 @@ ReachySimStatus reachy_sim_backend_create_uncontrolled(
 #undef reachy_sim_backend_create
 
 static atomic_bool g_test_step_blocked;
+static atomic_bool g_test_step_failure;
 static atomic_bool g_test_step_entered;
 
 void reachy_sim_blocking_backend_reset_controls(void)
@@ -35,6 +36,10 @@ void reachy_sim_blocking_backend_reset_controls(void)
         &g_test_step_blocked,
         false,
         memory_order_release);
+    atomic_store_explicit(
+        &g_test_step_failure,
+        false,
+        memory_order_release);
 }
 
 void reachy_sim_blocking_backend_set_step_blocked(bool blocked)
@@ -42,6 +47,14 @@ void reachy_sim_blocking_backend_set_step_blocked(bool blocked)
     atomic_store_explicit(
         &g_test_step_blocked,
         blocked,
+        memory_order_release);
+}
+
+void reachy_sim_blocking_backend_set_step_failure(bool fail_step)
+{
+    atomic_store_explicit(
+        &g_test_step_failure,
+        fail_step,
         memory_order_release);
 }
 
@@ -67,6 +80,13 @@ static ReachySimStatus fake_step(
         memory_order_acquire))
     {
         atomic_signal_fence(memory_order_seq_cst);
+    }
+    if(atomic_load_explicit(
+        &g_test_step_failure,
+        memory_order_acquire))
+    {
+        write_message(error, error_size, "simulated numeric solver failure");
+        return REACHY_SIM_STATUS_NUMERIC_FAILURE;
     }
     return fake_step_uncontrolled(
         context,
