@@ -16,6 +16,10 @@ The project is at the **foundation/scaffold stage**. It is not yet a working rob
 
 The minimum Android version is provisional until the device compatibility spike is complete.
 
+## Android release guide
+
+For build, device, model, provider/BYOK, calibration, fidelity, camera-validity, troubleshooting, and privacy/data-flow guidance, see `docs/ANDROID_RELEASE_GUIDE.md`.
+
 ## Authoritative project documents
 
 - [Implementation specification](docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md)
