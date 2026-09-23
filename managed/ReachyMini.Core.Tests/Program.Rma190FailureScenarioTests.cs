@@ -158,94 +158,92 @@ namespace ReachyMini.Core.Tests
 
         private static void TestRma190SolverFaultControlledReset()
         {
-            byte[] modelBytes = System.Text.Encoding.UTF8.GetBytes(
-                "rma190-solver-fault-reset-model");
-            ReachySimCreateResult firstCreate = ReachySimSession.Create(modelBytes);
-            ReachySimSession firstSession = firstCreate.Session ??
-                throw new InvalidOperationException(
-                    $"RMA-190 fault worker native create failed: {firstCreate.Error.Code}: {firstCreate.Error.Message}");
-
-            using (var faultedWorker = new ReachySimulationWorker(
-                firstSession,
-                commandQueueCapacity: 2,
-                maximumCommandBytes: 64))
+            ReachySimulationWorker? faultedWorker = null;
+            ReachySimSession? faultedSession = null;
+            Rma032NativeTestControls.ResetControls();
+            try
             {
+                Rma032NativeTestControls.SetStepFailure(failStep: true);
+
+                byte[] modelBytes = System.Text.Encoding.UTF8.GetBytes(
+                    "rma190-solver-fault-reset-model");
+                ReachySimCreateResult firstCreate =
+                    ReachySimSession.Create(modelBytes);
+                faultedSession = firstCreate.Session ??
+                    throw new InvalidOperationException(
+                        $"RMA-190 fault worker native create failed: {firstCreate.Error.Code}: {firstCreate.Error.Message}");
+
+                faultedWorker = new ReachySimulationWorker(faultedSession);
+                faultedSession = null;
                 AssertControlSuccess(
                     faultedWorker.Start(TimeSpan.FromSeconds(5.0)),
-                    "RMA-190 fault worker start");
-                AssertControlSuccess(
-                    faultedWorker.Pause(TimeSpan.FromSeconds(5.0)),
-                    "RMA-190 fault worker pause");
-                AssertEqual(
-                    ReachySimulationCommandEnqueueResult.Accepted,
-                    faultedWorker.EnqueueCommandBatch(CreateCommandBatch(1UL)),
-                    "RMA-190 first command enqueue");
-                AssertControlSuccess(
-                    faultedWorker.Resume(TimeSpan.FromSeconds(5.0)),
-                    "RMA-190 fault worker resume");
-                _ = WaitForSnapshot(
-                    faultedWorker,
-                    snapshot => snapshot.State.Sequence >= 1UL,
-                    TimeSpan.FromSeconds(5.0),
-                    "RMA-190 first command application");
-
-                AssertControlSuccess(
-                    faultedWorker.Pause(TimeSpan.FromSeconds(5.0)),
-                    "RMA-190 fault worker second pause");
-                AssertEqual(
-                    ReachySimulationCommandEnqueueResult.Accepted,
-                    faultedWorker.EnqueueCommandBatch(CreateCommandBatch(1UL)),
-                    "RMA-190 stale command enqueue");
-                AssertControlSuccess(
-                    faultedWorker.Resume(TimeSpan.FromSeconds(5.0)),
-                    "RMA-190 stale command resume");
+                    "RMA-190 solver-fault worker start");
 
                 ReachySimulationFault fault = WaitForWorkerFault(
                     faultedWorker,
                     TimeSpan.FromSeconds(5.0),
-                    "RMA-190 solver/command fault");
+                    "RMA-190 numeric solver-step fault");
                 AssertEqual(
                     ReachySimulationRunState.Faulted,
                     faultedWorker.State,
-                    "RMA-190 faulted worker state");
+                    "RMA-190 solver-faulted worker state");
                 AssertEqual(
-                    ReachySimErrorCode.CommandFormatError,
+                    "step",
+                    fault.Operation,
+                    "RMA-190 solver fault operation");
+                AssertEqual(
+                    ReachySimErrorCode.NumericFailure,
                     fault.Error.Code,
-                    "RMA-190 retained worker fault code");
+                    "RMA-190 solver fault code");
+                AssertEqual(
+                    ReachySimRecoverability.RecreateHandle,
+                    fault.Error.Recoverability,
+                    "RMA-190 solver fault recoverability");
                 AssertControlSuccess(
                     faultedWorker.Shutdown(TimeSpan.FromSeconds(5.0)),
                     "RMA-190 faulted worker shutdown");
-            }
+                faultedWorker.Dispose();
+                faultedWorker = null;
 
-            ReachySimCreateResult recoveryCreate =
-                ReachySimSession.Create(modelBytes);
-            ReachySimSession recoverySession = recoveryCreate.Session ??
-                throw new InvalidOperationException(
-                    $"RMA-190 recovery worker native create failed: {recoveryCreate.Error.Code}: {recoveryCreate.Error.Message}");
-            using var recoveryWorker = new ReachySimulationWorker(recoverySession);
-            AssertControlSuccess(
-                recoveryWorker.Start(TimeSpan.FromSeconds(5.0)),
-                "RMA-190 recovery worker start");
-            AssertControlSuccess(
-                recoveryWorker.Pause(TimeSpan.FromSeconds(5.0)),
-                "RMA-190 recovery worker pause");
-            ReachySimulationControlResult reset = recoveryWorker.Reset(
-                (uint)ReachySimResetPose.NeutralAwake,
-                TimeSpan.FromSeconds(5.0));
-            AssertControlSuccess(reset, "RMA-190 controlled neutral reset");
-            ReachyPublishedSimulationSnapshot recovered = WaitForSnapshot(
-                recoveryWorker,
-                snapshot => snapshot.State.Sequence == 0UL &&
-                    snapshot.State.SimulationTime == 0.0,
-                TimeSpan.FromSeconds(5.0),
-                "RMA-190 controlled reset snapshot");
-            AssertEqual(
-                0UL,
-                recovered.State.Sequence,
-                "RMA-190 controlled reset sequence");
-            AssertControlSuccess(
-                recoveryWorker.Shutdown(TimeSpan.FromSeconds(5.0)),
-                "RMA-190 recovery worker shutdown");
+                Rma032NativeTestControls.SetStepFailure(failStep: false);
+                ReachySimCreateResult recoveryCreate =
+                    ReachySimSession.Create(modelBytes);
+                ReachySimSession recoverySession = recoveryCreate.Session ??
+                    throw new InvalidOperationException(
+                        $"RMA-190 recovery worker native create failed: {recoveryCreate.Error.Code}: {recoveryCreate.Error.Message}");
+                using var recoveryWorker =
+                    new ReachySimulationWorker(recoverySession);
+                AssertControlSuccess(
+                    recoveryWorker.Start(TimeSpan.FromSeconds(5.0)),
+                    "RMA-190 recovery worker start");
+                AssertControlSuccess(
+                    recoveryWorker.Pause(TimeSpan.FromSeconds(5.0)),
+                    "RMA-190 recovery worker pause");
+                ReachySimulationControlResult reset = recoveryWorker.Reset(
+                    (uint)ReachySimResetPose.NeutralAwake,
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(reset, "RMA-190 controlled neutral reset");
+                ReachyPublishedSimulationSnapshot recovered = WaitForSnapshot(
+                    recoveryWorker,
+                    snapshot => snapshot.State.Sequence == 0UL &&
+                        snapshot.State.SimulationTime == 0.0,
+                    TimeSpan.FromSeconds(5.0),
+                    "RMA-190 controlled reset snapshot");
+                AssertEqual(
+                    0UL,
+                    recovered.State.Sequence,
+                    "RMA-190 controlled reset sequence");
+                AssertControlSuccess(
+                    recoveryWorker.Shutdown(TimeSpan.FromSeconds(5.0)),
+                    "RMA-190 recovery worker shutdown");
+            }
+            finally
+            {
+                Rma032NativeTestControls.SetStepFailure(failStep: false);
+                Rma032NativeTestControls.ResetControls();
+                faultedWorker?.Dispose();
+                faultedSession?.Dispose();
+            }
         }
 
         private static ReachyHttpTransportPolicy RetryPolicy(
