@@ -12,6 +12,9 @@ MODEL_TESTS = ROOT / "managed/ReachyMini.LocalModelPackages.Tests/Program.cs"
 GOVERNOR_TESTS = ROOT / "managed/ReachyMini.ResourceGovernor.Tests/Program.cs"
 LLM_TESTS = ROOT / "managed/ReachyMini.Core.Tests/Rma142Rma143OpenAiLlmAdapterContractTests.cs"
 VLM_TESTS = ROOT / "managed/ReachyMini.Core.Tests/Rma195VlmTransportContractTests.cs"
+PRODUCTION_RUNTIME = ROOT / "Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs"
+SETTINGS_COMPOSITION = ROOT / "Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs"
+NATIVE_CONTROLS = ROOT / "native/reachy_sim/tests/reachy_sim_fake_backend.c"
 WORKFLOW = ROOT / ".github/workflows/rma190-failure-scenarios.yml"
 
 
@@ -59,15 +62,32 @@ class Rma190FailureScenarioContracts(unittest.TestCase):
 
     def test_solver_fault_requires_recreation_then_neutral_reset(self) -> None:
         source = read(CORE_SCENARIOS)
+        native_controls = read(NATIVE_CONTROLS)
+        runtime = read(PRODUCTION_RUNTIME)
+        composition = read(SETTINGS_COMPOSITION)
+        self.assertIn("SetStepFailure(failStep: true)", source)
         self.assertIn("WaitForWorkerFault", source)
         self.assertIn("ReachySimulationRunState.Faulted", source)
-        self.assertIn("ReachySimErrorCode.CommandFormatError", source)
+        self.assertIn('"step"', source)
+        self.assertIn("ReachySimErrorCode.NumericFailure", source)
+        self.assertIn("ReachySimRecoverability.RecreateHandle", source)
         self.assertGreaterEqual(
             source.count("ReachySimSession.Create(modelBytes)"),
             2,
         )
+        self.assertIn("REACHY_SIM_STATUS_NUMERIC_FAILURE", native_controls)
+        self.assertIn("simulated numeric solver failure", native_controls)
         self.assertIn("ReachySimResetPose.NeutralAwake", source)
         self.assertIn("RMA-190 controlled neutral reset", source)
+        self.assertIn("RecoverFaultedAndResetNeutral", runtime)
+        self.assertIn("StartProductionRuntime();", runtime)
+        self.assertIn("nextCommandSequence = 1UL;", runtime)
+        self.assertIn("renderer.enabled = true;", runtime)
+        self.assertIn("runtime.RecoverFaultedAndResetNeutral()", composition)
+        self.assertIn(
+            "runtime.Status == ReachyProductionRuntimeStatus.Faulted",
+            composition,
+        )
 
     def test_permission_corruption_and_oom_supporting_contracts_are_present(self) -> None:
         camera = read(CAMERA_TESTS)
