@@ -28,6 +28,8 @@ TTS_TURN = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyConversationTurnO
 RMA170 = ROOT / "managed/ReachyMini.Core.Tests/Rma170StructuredDiagnosticsContractTests.cs"
 RMA172 = ROOT / "managed/ReachyMini.Core.Tests/Rma172DiagnosticBundleExportContractTests.cs"
 RMA162 = ROOT / "managed/ReachyMini.Application.Tests/Rma162PrivateMediaRetentionTests.cs"
+NATIVE_CONTRACT = ROOT / "native/reachy_sim/tests/reachy_sim_contract_test_base.inc"
+NATIVE_CONCURRENCY = ROOT / "native/reachy_sim/tests/reachy_sim_concurrency_test.inc"
 
 
 def read(path: Path) -> str:
@@ -168,6 +170,8 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         safe_handle = read(SAFE_HANDLE)
         session = read(SESSION)
         lifecycle = read(LIFECYCLE)
+        native_contract = read(NATIVE_CONTRACT)
+        native_concurrency = read(NATIVE_CONCURRENCY)
         self.assertIn("SafeHandleZeroOrMinusOneIsInvalid", safe_handle)
         self.assertIn("NativeReachySim.Destroy(Token)", safe_handle)
         self.assertIn("SetHandleAsInvalid();", safe_handle)
@@ -177,6 +181,11 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         self.assertIn("for (int iteration = 0; iteration < 1000; ++iteration)", lifecycle)
         self.assertIn("AssertThrows<ObjectDisposedException>", lifecycle)
         self.assertIn("session.Dispose();", lifecycle)
+        self.assertIn("stale handle after destroy", native_contract)
+        self.assertIn("double destroy is stale", native_contract)
+        self.assertIn("invalid state copy leaves required size unchanged", native_concurrency)
+        self.assertIn("busy state copy leaves output unchanged", native_concurrency)
+        self.assertIn("busy snapshot copy leaves output unchanged", native_concurrency)
 
 
 if __name__ == "__main__":
