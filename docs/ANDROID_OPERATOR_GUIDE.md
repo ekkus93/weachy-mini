@@ -226,10 +226,9 @@ default.
 
 Diagnostics use a default-deny/redacted data boundary. The normal diagnostic
 bundle excludes credentials, private media, transcripts, and conversation
-text. See
-[RMA_191_PRIVACY_SECURITY_REVIEW_2026-09-23.md](RMA_191_PRIVACY_SECURITY_REVIEW_2026-09-23.md)
-once that review is merged; until then, the normative runtime contracts remain
-the source of truth.
+text. The pending RMA-191 review is tracked as
+`docs/RMA_191_PRIVACY_SECURITY_REVIEW_2026-09-23.md`; until that review is
+merged, the normative runtime contracts remain the source of truth.
 
 ## Known release-facing limitations
 
