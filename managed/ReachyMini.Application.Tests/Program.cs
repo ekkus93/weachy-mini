@@ -11,6 +11,7 @@ namespace ReachyMini.Application.Tests
     {
         private static int Main()
         {
+            Rma190IndependentProviderCombinationTests.RunAll();
             CompleteCompositionUsesDependencyOrder();
             InvalidGraphsFailBeforeConstruction();
             UndeclaredDependencyFaultsAndRollsBack();
