@@ -30,6 +30,8 @@ namespace ReachyMini.Core.Tests
             MalformedAssistantJsonSurfacesAsInvalidNotThrown().GetAwaiter().GetResult();
             AuthorizationHeaderCarriesBearerCredential().GetAwaiter().GetResult();
             HttpAuthenticationFailureSurfacesAsHttpFailure().GetAwaiter().GetResult();
+            NetworkLossSurfacesAsHttpFailure().GetAwaiter().GetResult();
+            RateLimitSurfacesAsHttpFailure().GetAwaiter().GetResult();
             CancellationBeforeSendSurfacesAsCancelled().GetAwaiter().GetResult();
             CapabilitiesDefaultToTextOnly();
         }
@@ -147,6 +149,50 @@ namespace ReachyMini.Core.Tests
 
             Equal(ReachyLlmGenerationStatus.HttpFailure, result.Status, "auth failure status");
             False(result.Succeeded, "auth failure not succeeded");
+        }
+
+        private static async Task NetworkLossSurfacesAsHttpFailure()
+        {
+            using var handler = new FakeHandler((_, _) =>
+                throw new HttpRequestException("synthetic network loss"));
+            await using ProviderHandle<OpenAiChatCompletionsLlmProvider> handle =
+                CreateChatCompletionsProvider(handler);
+
+            ReachyLlmGenerationResult result = await handle.Provider.GenerateAsync(
+                SingleUserMessageRequest("hi"),
+                CancellationToken.None);
+
+            Equal(
+                ReachyLlmGenerationStatus.HttpFailure,
+                result.Status,
+                "network loss status");
+            False(result.Succeeded, "network loss not succeeded");
+            True(handler.CallCount >= 1, "network loss attempted request");
+        }
+
+        private static async Task RateLimitSurfacesAsHttpFailure()
+        {
+            using var handler = new FakeHandler((_, _) =>
+                new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+                {
+                    Content = new StringContent(
+                        "rate limited",
+                        Encoding.UTF8,
+                        "text/plain"),
+                });
+            await using ProviderHandle<OpenAiChatCompletionsLlmProvider> handle =
+                CreateChatCompletionsProvider(handler);
+
+            ReachyLlmGenerationResult result = await handle.Provider.GenerateAsync(
+                SingleUserMessageRequest("hi"),
+                CancellationToken.None);
+
+            Equal(
+                ReachyLlmGenerationStatus.HttpFailure,
+                result.Status,
+                "rate-limit status");
+            False(result.Succeeded, "rate-limit not succeeded");
+            True(handler.CallCount >= 1, "rate-limit attempted request");
         }
 
         private static async Task CancellationBeforeSendSurfacesAsCancelled()
