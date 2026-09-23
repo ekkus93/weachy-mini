@@ -55,6 +55,17 @@ class Rma193DocumentationContracts(unittest.TestCase):
             self.assertIn(relative, guide)
             self.assertTrue((GUIDE.parent / relative).exists(), relative)
 
+    def test_device_requirements_distinguish_core_and_offline_speech_floors(self) -> None:
+        guide = read(GUIDE)
+        readme = read(README)
+        self.assertIn("deployment floor is ARM64 Android API 26 or newer", guide)
+        self.assertIn("full offline speech feature set additionally needs Android API 31 or newer", guide)
+        self.assertIn("SupportedWithLimitations", guide)
+        self.assertIn("Android API 26 or newer for the core ARM64 deployment floor", readme)
+        self.assertIn("Android API 31 or newer for explicit on-device ASR", readme)
+        self.assertNotIn("minimum Android version is provisional", readme.lower())
+        self.assertNotIn("initial Android target is Android 12 / API 31 or newer", guide)
+
     def test_readme_points_to_release_guide(self) -> None:
         self.assertIn("docs/ANDROID_RELEASE_GUIDE.md", read(README))
 
