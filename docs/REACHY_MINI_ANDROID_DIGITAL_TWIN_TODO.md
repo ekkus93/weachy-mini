@@ -3336,13 +3336,15 @@ pending, but implementation alone does not close its checkbox.
 
 ## RMA-191 — Complete privacy and security review
 
-- [ ] Verify no embedded keys.
-- [ ] Verify Keystore usage.
+- [x] Verify no embedded keys.
+- [x] Verify Keystore usage.
 - [ ] Verify network security configuration.
-- [ ] Verify provider disclosure before cloud-bound audio/image/text.
-- [ ] Verify logs and diagnostics redaction.
-- [ ] Verify temporary media cleanup.
-- [ ] Review native buffer and lifetime safety.
+- [x] Verify provider disclosure before cloud-bound audio/image/text.
+- [x] Verify logs and diagnostics redaction.
+- [x] Verify temporary media cleanup.
+- [x] Review native buffer and lifetime safety.
+
+**RMA-191 review reconciliation (2026-09-23):** six controls are evidenced by `docs/RMA_191_PRIVACY_SECURITY_REVIEW_2026-09-23.md` and locked by `scripts/tests/test_rma191_privacy_security_review.py`: no embedded production credentials, Android Keystore-backed credential storage, explicit provider privacy-boundary disclosure/authorization, redacted logs/diagnostic bundles, temporary private-media cleanup, and native buffer/lifetime safety. The Android platform network-security configuration checkbox remains open because the product intentionally supports explicitly authorized trusted-LAN cleartext endpoints and a blanket manifest allow/deny would either weaken defense-in-depth or break that supported deployment. The application-layer endpoint policy remains default-deny and restricted to trusted LAN hosts, but platform policy still requires an explicit design reconciliation.
 
 ## RMA-192 — Complete license and attribution review
 
