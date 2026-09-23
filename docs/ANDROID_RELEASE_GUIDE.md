@@ -10,12 +10,12 @@ The normal Android product target is ARM64 (`arm64-v8a`) with IL2CPP. Before pub
 
 ## Android device requirements
 
-The initial Android target is Android 12 / API 31 or newer on ARM64 hardware. A usable device for the full feature set also needs:
+The application-wide Android deployment floor is ARM64 Android API 26 or newer. The representative-device policy classifies a device that meets the core floor but lacks the front camera, explicit API-31 on-device ASR, or offline TTS as `SupportedWithLimitations`; those optional capability gaps do not raise the global deployment floor.
+
+A device for the full offline speech feature set additionally needs Android API 31 or newer, `SpeechRecognizer.isOnDeviceRecognitionAvailable(Context)`, the target recognition language installed for that explicit on-device recognizer, and an installed language-matching TTS voice that does not require a network connection. A usable device for the broader feature set also needs:
 
 - enough free storage for the app, native MuJoCo assets, diagnostics, and any selected local model;
-- a camera exposed through the app's CameraX discovery path for camera/perception features;
-- microphone permission plus Android on-device/system speech recognition support for spoken input;
-- an installed language-matching offline TTS voice for network-free speech output; and
+- a camera exposed through the app's CameraX discovery path for camera/perception features; and
 - hardware resources that satisfy the selected local-model memory/thermal policy if local LLM inference is enabled.
 
 Feature availability is fail-closed. Missing camera, speech, model, calibration, provider, storage, or permission prerequisites are reported as unavailable/degraded rather than silently replaced with another provider or fidelity mode. Representative-device qualification remains tracked separately in RMA-184; the presence of instructions here is not a claim that every device class has passed that gate.
