@@ -121,6 +121,8 @@ namespace ReachyMini.AppState
             using var timeout =
                 new CancellationTokenSource(OverallTimeoutMilliseconds);
             CancellationToken cancellationToken = timeout.Token;
+            string deviceModel = SystemInfo.deviceModel;
+            int androidApiLevel = ReadApiLevel();
 
             ReachyApplicationHostBehaviour hostBehaviour =
                 await ReachyRma190CameraEndToEndAcceptance
@@ -277,7 +279,9 @@ namespace ReachyMini.AppState
                         descriptor,
                         frame,
                         fixture,
-                        vlm);
+                        vlm,
+                        deviceModel,
+                        androidApiLevel);
                 }
                 finally
                 {
@@ -438,13 +442,15 @@ namespace ReachyMini.AppState
                 ReachyCameraTextureFrameDescriptor descriptor,
                 ReachyVisionFrame frame,
                 ReachyCameraCalibrationProfile fixture,
-                VisionLanguageResult vlm)
+                VisionLanguageResult vlm,
+                string deviceModel,
+                int androidApiLevel)
             {
                 return new Report
                 {
                     status = "passed",
-                    device_model = SystemInfo.deviceModel,
-                    android_api_level = ReadApiLevel(),
+                    device_model = deviceModel,
+                    android_api_level = androidApiLevel,
                     real_rear_camera =
                         descriptor.LensFacing == ReachyDeviceCameraFacing.Rear,
                     transformed_reachy_eye_frame =
