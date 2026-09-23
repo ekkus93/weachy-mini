@@ -59,6 +59,38 @@ class Rma012LicenseAttributionContracts(unittest.TestCase):
         self.assertIn("Mathf.CeilToInt", screen)
         self.assertIn("Mathf.Clamp", screen)
 
+    def test_selected_qwen_model_notice_matches_manifest_identity(self) -> None:
+        labels = LABELS.read_text(encoding="utf-8")
+        notices = NOTICES.read_text(encoding="utf-8")
+        inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
+        selected = next(
+            entry
+            for entry in inventory["entries"]
+            if entry["id"] == "qwen3-0.6b-q4-k-m"
+        )
+        self.assertEqual("Qwen3 0.6B Q4_K_M", selected["name"])
+        self.assertEqual("Apache-2.0", selected["license"])
+        self.assertEqual(
+            "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+            selected["source_revision"],
+        )
+        self.assertEqual(
+            "not_bundled_download_by_user",
+            selected["redistribution_status"],
+        )
+        self.assertIn("Qwen3 0.6B Q4_K_M", labels)
+        self.assertIn("Apache-2.0", labels)
+        self.assertIn("not bundled", labels)
+        self.assertIn("Qwen3 0.6B Q4_K_M", notices)
+        self.assertIn(
+            "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e",
+            notices,
+        )
+        self.assertNotIn(
+            "candidate only; no model is selected",
+            notices.lower(),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -62,16 +62,16 @@
       "required_notice": "Retain the MIT license from pinned release b10313; source is fetched unmodified and statically linked into the generated Android runtime."
     },
     {
-      "id": "local-llm-candidate",
-      "name": "Sub-1B local language model",
-      "owner": "Not selected",
-      "license": "Not selected",
-      "source_url": "about:blank",
-      "source_revision": null,
-      "status": "candidate",
-      "modification_status": "not_imported",
-      "redistribution_status": "blocked_pending_selection",
-      "required_notice": "Select through benchmark and licensing review; do not package candidate binaries."
+      "id": "qwen3-0.6b-q4-k-m",
+      "name": "Qwen3 0.6B Q4_K_M",
+      "owner": "Qwen Team / Alibaba Cloud",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+      "status": "selected_downloadable_model",
+      "modification_status": "official Q4_K_M GGUF, unmodified",
+      "redistribution_status": "not_bundled_download_by_user",
+      "required_notice": "Selected local model is Apache-2.0; the GGUF is not bundled in the app and is acquired only through the explicit model download/import flow. Preserve source revision, exact artifact identity, and license presentation."
     },
     {
       "id": "androidx-camerax",
