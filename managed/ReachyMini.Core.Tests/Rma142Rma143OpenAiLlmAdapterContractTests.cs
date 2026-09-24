@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Behavior;
+using ReachyMini.Perception;
 using ReachyMini.Providers;
 
 namespace ReachyMini.Core.Tests
@@ -31,6 +32,9 @@ namespace ReachyMini.Core.Tests
             AuthorizationHeaderCarriesBearerCredential().GetAwaiter().GetResult();
             HttpAuthenticationFailureSurfacesAsHttpFailure().GetAwaiter().GetResult();
             CancellationBeforeSendSurfacesAsCancelled().GetAwaiter().GetResult();
+            ChatCompletionsSerializesTransformedImage().GetAwaiter().GetResult();
+            ResponsesSerializesTransformedImage().GetAwaiter().GetResult();
+            TextOnlyProviderRejectsImageBeforeHttp().GetAwaiter().GetResult();
             CapabilitiesDefaultToTextOnly();
         }
 
@@ -165,6 +169,70 @@ namespace ReachyMini.Core.Tests
             Equal(0, handler.CallCount, "pre-cancelled call count");
         }
 
+        private static async Task ChatCompletionsSerializesTransformedImage()
+        {
+            using var handler = new FakeHandler((_, _) => JsonResponse(
+                HttpStatusCode.OK,
+                "{\"choices\":[{\"message\":{\"content\":\"{\\\"schema_version\\\":1}\"}}]}"));
+            await using ProviderHandle<OpenAiChatCompletionsLlmProvider> handle =
+                CreateChatCompletionsProvider(handler, supportsImages: true);
+            using RemoteVlmEncodedImage image = BuildEncodedImage();
+
+            ReachyLlmGenerationResult result = await handle.Provider.GenerateAsync(
+                SingleUserMessageRequest("describe and respond", image),
+                CancellationToken.None);
+
+            True(result.Succeeded, "chat image request succeeds");
+            string body = handler.LastRequestBody ?? string.Empty;
+            True(body.Contains("\"type\":\"text\"", StringComparison.Ordinal),
+                "chat image request text content part");
+            True(body.Contains("\"type\":\"image_url\"", StringComparison.Ordinal),
+                "chat image request image content part");
+            True(body.Contains("data:image/jpeg;base64,/9j/2Q==", StringComparison.Ordinal),
+                "chat image request transformed data URI");
+        }
+
+        private static async Task ResponsesSerializesTransformedImage()
+        {
+            using var handler = new FakeHandler((_, _) => JsonResponse(
+                HttpStatusCode.OK,
+                "{\"output_text\":\"{\\\"schema_version\\\":1}\"}"));
+            await using ProviderHandle<OpenAiResponsesLlmProvider> handle =
+                CreateResponsesProvider(handler, supportsImages: true);
+            using RemoteVlmEncodedImage image = BuildEncodedImage();
+
+            ReachyLlmGenerationResult result = await handle.Provider.GenerateAsync(
+                SingleUserMessageRequest("describe and respond", image),
+                CancellationToken.None);
+
+            True(result.Succeeded, "responses image request succeeds");
+            string body = handler.LastRequestBody ?? string.Empty;
+            True(body.Contains("\"type\":\"input_text\"", StringComparison.Ordinal),
+                "responses image request text content part");
+            True(body.Contains("\"type\":\"input_image\"", StringComparison.Ordinal),
+                "responses image request image content part");
+            True(body.Contains("data:image/jpeg;base64,/9j/2Q==", StringComparison.Ordinal),
+                "responses image request transformed data URI");
+        }
+
+        private static async Task TextOnlyProviderRejectsImageBeforeHttp()
+        {
+            using var handler = new FakeHandler((_, _) => JsonResponse(HttpStatusCode.OK, "{}"));
+            await using ProviderHandle<OpenAiChatCompletionsLlmProvider> handle =
+                CreateChatCompletionsProvider(handler);
+            using RemoteVlmEncodedImage image = BuildEncodedImage();
+
+            ReachyLlmGenerationResult result = await handle.Provider.GenerateAsync(
+                SingleUserMessageRequest("image should be rejected", image),
+                CancellationToken.None);
+
+            Equal(ReachyLlmGenerationStatus.HttpFailure, result.Status,
+                "text-only image rejection status");
+            Equal(0, handler.CallCount, "text-only image rejection call count");
+            True(result.Detail.Contains("does not explicitly support images", StringComparison.Ordinal),
+                "text-only image rejection detail");
+        }
+
         private static void CapabilitiesDefaultToTextOnly()
         {
             ReachyLlmCapabilities capabilities = ReachyLlmCapabilities.TextOnly();
@@ -175,9 +243,11 @@ namespace ReachyMini.Core.Tests
         }
 
         private static ProviderHandle<OpenAiChatCompletionsLlmProvider> CreateChatCompletionsProvider(
-            FakeHandler handler)
+            FakeHandler handler,
+            bool supportsImages = false)
         {
             var profile = BuildProfile(ReachyProviderEndpointStyle.ChatCompletions);
+
             var secretStore = new FakeSecretStore();
             secretStore.Put("llm-cred", Encoding.ASCII.GetBytes("test-secret-value"));
             // The provider's own constructor applies this bearer-credential
@@ -197,12 +267,18 @@ namespace ReachyMini.Core.Tests
                 profile,
                 secretStore,
                 ReachyOpenAiCompatibleLlmOptions.OpenAiChatCompletionsDefault(),
-                ReachyLlmCapabilities.TextOnly(),
+                new ReachyLlmCapabilities(
+                    supportsImages,
+                    supportsToolCalls: false,
+                    supportsJsonSchema: false,
+                    supportsStreaming: false),
                 transport);
             return new ProviderHandle<OpenAiChatCompletionsLlmProvider>(provider, transport);
         }
 
-        private static ProviderHandle<OpenAiResponsesLlmProvider> CreateResponsesProvider(FakeHandler handler)
+        private static ProviderHandle<OpenAiResponsesLlmProvider> CreateResponsesProvider(
+            FakeHandler handler,
+            bool supportsImages = false)
         {
             var profile = BuildProfile(ReachyProviderEndpointStyle.Responses);
             var secretStore = new FakeSecretStore();
@@ -219,7 +295,11 @@ namespace ReachyMini.Core.Tests
                 profile,
                 secretStore,
                 ReachyOpenAiCompatibleLlmOptions.OpenAiResponsesDefault(),
-                ReachyLlmCapabilities.TextOnly(),
+                new ReachyLlmCapabilities(
+                    supportsImages,
+                    supportsToolCalls: false,
+                    supportsJsonSchema: false,
+                    supportsStreaming: false),
                 transport);
             return new ProviderHandle<OpenAiResponsesLlmProvider>(provider, transport);
         }
@@ -250,11 +330,39 @@ namespace ReachyMini.Core.Tests
                 credentialReference: "llm-cred");
         }
 
-        private static ReachyLlmGenerationRequest SingleUserMessageRequest(string userText)
+        private static ReachyLlmGenerationRequest SingleUserMessageRequest(
+            string userText,
+            RemoteVlmEncodedImage? image = null)
         {
             return new ReachyLlmGenerationRequest(
                 "req-1",
-                new[] { new ReachyLlmChatMessage(ReachyLlmChatRole.User, userText) });
+                new[] { new ReachyLlmChatMessage(ReachyLlmChatRole.User, userText) },
+                image);
+        }
+
+        private static RemoteVlmEncodedImage BuildEncodedImage()
+        {
+            var identity = new ReachyVisionFrameIdentity(
+                "camera-0",
+                sourceSessionId: 1UL,
+                sourceSequence: 1UL,
+                sourceTimestampNanoseconds: 1L,
+                authoritativeSequence: 1UL,
+                continuityId: 1U);
+            byte[] fakeJpegBytes = { 0xFF, 0xD8, 0xFF, 0xD9 };
+            return new RemoteVlmEncodedImage(
+                identity,
+                VisionFrameOrigin.TransformedReachyEye,
+                sourceWidth: 64,
+                sourceHeight: 64,
+                width: 64,
+                height: 64,
+                RemoteVlmImageFormat.Jpeg,
+                RemoteVlmInvalidPixelPolicy.ReplaceWithOpaqueBlack,
+                validityMaskApplied: true,
+                containsOnlyValidPixels: true,
+                upscaled: false,
+                fakeJpegBytes);
         }
 
         private static string EncodeJsonString(string value)
@@ -346,12 +454,15 @@ namespace ReachyMini.Core.Tests
 
             public HttpRequestMessage? LastRequest { get; private set; }
 
+            public string? LastRequestBody { get; private set; }
+
             protected override Task<HttpResponseMessage> SendAsync(
                 HttpRequestMessage request,
                 CancellationToken cancellationToken)
             {
                 CallCount = checked(CallCount + 1);
                 LastRequest = request;
+                LastRequestBody = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
                 HttpResponseMessage response = respond(request, cancellationToken);
                 // The real HttpClient pipeline stamps this automatically; a raw
                 // handler standing in for the network must do it itself, or

@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Behavior;
+using ReachyMini.Perception;
 
 namespace ReachyMini.Providers
 {
@@ -19,6 +20,7 @@ namespace ReachyMini.Providers
         public const int MaximumMessageCharacters = 4096;
         public const int MaximumRequestIdCharacters = 128;
         public const int MaximumDiagnosticCharacters = 384;
+        public const int MaximumImageBytes = 4 * 1024 * 1024;
     }
 
     public enum ReachyLlmChatRole
@@ -56,6 +58,14 @@ namespace ReachyMini.Providers
         public ReachyLlmGenerationRequest(
             string requestId,
             IReadOnlyList<ReachyLlmChatMessage> messages)
+            : this(requestId, messages, image: null)
+        {
+        }
+
+        public ReachyLlmGenerationRequest(
+            string requestId,
+            IReadOnlyList<ReachyLlmChatMessage> messages,
+            RemoteVlmEncodedImage? image)
         {
             if (string.IsNullOrWhiteSpace(requestId) ||
                 requestId.Length > ReachyLlmProviderPolicy.MaximumRequestIdCharacters)
@@ -91,13 +101,39 @@ namespace ReachyMini.Providers
                     nameof(messages));
             }
 
+            if (image != null)
+            {
+                if (image.IsDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(image));
+                }
+                if (image.SourceOrigin != VisionFrameOrigin.TransformedReachyEye ||
+                    !image.ValidityMaskApplied ||
+                    !image.ContainsOnlyValidPixels ||
+                    image.Upscaled)
+                {
+                    throw new ArgumentException(
+                        "LLM image input must be a validity-masked, non-upscaled transformed Reachy-eye image.",
+                        nameof(image));
+                }
+                if (image.EncodedByteCount > ReachyLlmProviderPolicy.MaximumImageBytes)
+                {
+                    throw new ArgumentException(
+                        "LLM image input exceeds the bounded encoded byte limit.",
+                        nameof(image));
+                }
+            }
+
             RequestId = requestId;
             Messages = messages;
+            Image = image;
         }
 
         public string RequestId { get; }
 
         public IReadOnlyList<ReachyLlmChatMessage> Messages { get; }
+
+        public RemoteVlmEncodedImage? Image { get; }
     }
 
     public enum ReachyLlmGenerationStatus

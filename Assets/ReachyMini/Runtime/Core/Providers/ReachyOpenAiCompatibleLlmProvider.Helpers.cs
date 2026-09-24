@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using ReachyMini.Perception;
 
 namespace ReachyMini.Providers
 {
@@ -80,22 +81,36 @@ namespace ReachyMini.Providers
             string model,
             string systemPrompt,
             IReadOnlyList<ReachyLlmChatMessage> messages,
+            RemoteVlmEncodedImage? image,
             int maximumOutputTokens)
         {
-            var builder = new StringBuilder(512 + systemPrompt.Length);
+            string? imageDataUri = image == null
+                ? null
+                : "data:" + image.MediaType + ";base64," +
+                    Convert.ToBase64String(image.EncodedBytes.Span);
+            var builder = new StringBuilder(
+                512 + systemPrompt.Length + (imageDataUri?.Length ?? 0));
             builder.Append('{');
             AppendProperty(builder, "model", model, first: true);
             builder.Append(',');
             AppendJsonString(builder, endpointStyle == ReachyProviderEndpointStyle.Responses ? "input" : "messages");
             builder.Append(':');
             builder.Append('[');
-            AppendMessage(builder, "system", systemPrompt, first: true);
+            AppendMessage(
+                builder,
+                endpointStyle,
+                "system",
+                systemPrompt,
+                imageDataUri: null,
+                first: true);
             for (int index = 0; index < messages.Count; ++index)
             {
                 AppendMessage(
                     builder,
+                    endpointStyle,
                     RoleName(messages[index].Role),
                     messages[index].Content,
+                    index == messages.Count - 1 ? imageDataUri : null,
                     first: false);
             }
             builder.Append(']');
@@ -113,8 +128,10 @@ namespace ReachyMini.Providers
 
         private static void AppendMessage(
             StringBuilder builder,
+            ReachyProviderEndpointStyle endpointStyle,
             string role,
             string content,
+            string? imageDataUri,
             bool first)
         {
             if (!first)
@@ -124,7 +141,51 @@ namespace ReachyMini.Providers
             builder.Append('{');
             AppendProperty(builder, "role", role, first: true);
             builder.Append(',');
-            AppendProperty(builder, "content", content, first: true);
+            if (imageDataUri == null)
+            {
+                AppendProperty(builder, "content", content, first: true);
+            }
+            else
+            {
+                AppendJsonString(builder, "content");
+                builder.Append(':');
+                builder.Append('[');
+                builder.Append('{');
+                AppendProperty(
+                    builder,
+                    "type",
+                    endpointStyle == ReachyProviderEndpointStyle.Responses
+                        ? "input_text"
+                        : "text",
+                    first: true);
+                builder.Append(',');
+                AppendProperty(builder, "text", content, first: true);
+                builder.Append('}');
+                builder.Append(',');
+                builder.Append('{');
+                AppendProperty(
+                    builder,
+                    "type",
+                    endpointStyle == ReachyProviderEndpointStyle.Responses
+                        ? "input_image"
+                        : "image_url",
+                    first: true);
+                builder.Append(',');
+                if (endpointStyle == ReachyProviderEndpointStyle.Responses)
+                {
+                    AppendProperty(builder, "image_url", imageDataUri, first: true);
+                }
+                else
+                {
+                    AppendJsonString(builder, "image_url");
+                    builder.Append(':');
+                    builder.Append('{');
+                    AppendProperty(builder, "url", imageDataUri, first: true);
+                    builder.Append('}');
+                }
+                builder.Append('}');
+                builder.Append(']');
+            }
             builder.Append('}');
         }
 
