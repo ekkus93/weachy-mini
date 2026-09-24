@@ -47,7 +47,7 @@
       "status": "packaged",
       "modification_status": "converted from the pinned upstream MJCF/meshes into generated Unity presentation assets by the validated import/prepare pipeline; source cameras are excluded from the presentation",
       "redistribution_status": "requires_cc_by_nc_sa_compliance",
-      "required_notice": "Attribute Pollen Robotics and the pinned Reachy Mini source revision; preserve the CC BY-NC-SA noncommercial and ShareAlike terms; identify the Unity conversion/presentation changes."
+      "required_notice": "Attribution to Pollen Robotics and the pinned Reachy Mini source revision is required; preserve the CC BY-NC-SA noncommercial and ShareAlike terms; identify the Unity conversion/presentation modification changes."
     },
     {
       "id": "llama-cpp",
