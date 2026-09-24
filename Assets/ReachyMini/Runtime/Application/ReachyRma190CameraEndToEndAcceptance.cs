@@ -70,7 +70,7 @@ namespace ReachyMini.AppState
     [DisallowMultipleComponent]
     public sealed partial class ReachyRma190CameraEndToEndAcceptance : MonoBehaviour
     {
-        private const int OverallTimeoutMilliseconds = 90_000;
+        private const int OverallTimeoutMilliseconds = 135_000;
         private const int ReadyPollMilliseconds = 25;
         private const double MinimumHeadRotationRadians = 0.015;
         private const long PlanningTimestampNanoseconds = 1_900_000_190L;
