@@ -32,11 +32,23 @@ managed worker reaches a faulted fail-closed state, rejects a hidden in-place re
 requires explicit handle recreation followed by an explicit neutral reset before
 published authoritative progress resumes.
 
-## Remaining related lane
+## Preserved production-runtime recovery lane
 
-`ralph/rma190-solver-recovery` modifies shipping production runtime code and still needs
-a separate production-path audit before transplant. It is intentionally not merged into
-this branch by this consolidation note.
+`ralph/rma190-solver-recovery` was audited separately because it modifies shipping
+production runtime code rather than only managed/native test harnesses. Its diff is
+narrow and relevant:
+
+- `Assets/ReachyMini/Runtime/Rendering/ReachyProductionAuthoritativeRuntime.cs` adds an
+  explicit `RecoverFromFault()` method that only operates while the production runtime is
+  already `Faulted`, clears the fault, restarts the runtime, and fails closed with a
+  structured `ReachySimulationControlResult` if recovery cannot return to `Running`.
+- `scripts/tests/test_rma190_solver_recovery.py` guards that the recovery path is
+  explicit, fail-closed, and depends on the existing fault teardown and startup rebinding
+  paths.
+
+That branch remains preserved as a separate production-behavior lane. It should not be
+closed as duplicate until its runtime semantics are either merged through its own PR or
+transplanted through a deliberately reviewed production-runtime PR.
 
 ## Remaining closure requirements
 
