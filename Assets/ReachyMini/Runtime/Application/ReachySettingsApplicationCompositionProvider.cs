@@ -416,7 +416,10 @@ namespace ReachyMini.AppState
 
         private ReachySettingsResetOutcome ResetSimulation()
         {
-            ReachySimulationControlResult result = runtime.ResetNeutral();
+            ReachySimulationControlResult result =
+                runtime.Status == ReachyProductionRuntimeStatus.Faulted
+                    ? runtime.RecoverFaultedAndResetNeutral()
+                    : runtime.ResetNeutral();
             persistence.Settings.SetSimulationDiagnostics(
                 BuildSimulationDiagnostics());
             return result.IsSuccess

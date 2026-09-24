@@ -9,6 +9,7 @@ namespace ReachyMini.Core.Tests
             TestProjectMetadata();
             TestNativeLayouts();
             TestSimulationWorkerWarningAccounting();
+            TestRma190HttpFailureScenarioMatrix();
             Rma170StructuredDiagnosticsContractTests.RunAll();
             Rma171DiagnosticsScreenContractTests.RunAll();
             Rma172DiagnosticBundleExportContractTests.RunAll();
@@ -28,6 +29,7 @@ namespace ReachyMini.Core.Tests
                 TestAuthoritativeSimulationWorkerSnapshots();
                 TestAuthoritativeSimulationWorkerDeadlineMetrics();
                 TestAuthoritativeSimulationWorkerFaultRetention();
+                TestRma190SolverFaultControlledReset();
             }
 
             return 0;
