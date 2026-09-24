@@ -44,10 +44,10 @@
       "license": "CC-BY-NC-SA",
       "source_url": "https://github.com/pollen-robotics/reachy_mini",
       "source_revision": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
-      "status": "planned",
-      "modification_status": "not_imported",
-      "redistribution_status": "blocked_pending_asset_audit",
-      "required_notice": "Attribution, noncommercial restriction, ShareAlike, modification notice, and exact asset audit."
+      "status": "packaged",
+      "modification_status": "converted from the pinned upstream MJCF/meshes into generated Unity presentation assets by the validated import/prepare pipeline; source cameras are excluded from the presentation",
+      "redistribution_status": "requires_cc_by_nc_sa_compliance",
+      "required_notice": "Attribution to Pollen Robotics and the pinned Reachy Mini source revision is required; preserve the CC BY-NC-SA noncommercial and ShareAlike terms; identify the Unity conversion/presentation modification changes."
     },
     {
       "id": "llama-cpp",
@@ -62,16 +62,16 @@
       "required_notice": "Retain the MIT license from pinned release b10313; source is fetched unmodified and statically linked into the generated Android runtime."
     },
     {
-      "id": "local-llm-candidate",
-      "name": "Sub-1B local language model",
-      "owner": "Not selected",
-      "license": "Not selected",
-      "source_url": "about:blank",
-      "source_revision": null,
-      "status": "candidate",
-      "modification_status": "not_imported",
-      "redistribution_status": "blocked_pending_selection",
-      "required_notice": "Select through benchmark and licensing review; do not package candidate binaries."
+      "id": "selected-local-llm",
+      "name": "Qwen3 0.6B Q4_K_M",
+      "owner": "Qwen",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+      "status": "selected_model_metadata",
+      "modification_status": "Q4_K_M GGUF selected by the RMA-133 benchmark; the model artifact is not vendored in this repository",
+      "redistribution_status": "not_redistributed",
+      "required_notice": "Display the selected Qwen3 0.6B Q4_K_M source revision and Apache-2.0 license before import/download; the manifest is provenance metadata and does not authorize automatic download or bundle the GGUF."
     },
     {
       "id": "androidx-camerax",
