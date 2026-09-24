@@ -32,6 +32,7 @@ jobs:
           REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
+          printf 'diagnostic_dump_rerun=phase-marker-20260924\n'
           mapfile -t physical_serials < <(
             adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
           )
