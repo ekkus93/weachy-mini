@@ -51,7 +51,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Open |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Open |
-| Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Open |
+| Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Managed failure-injection harness implemented; exact-head evidence pending |
 | Model corruption/OOM | Local-model package/provider integration | Open |
 | Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Open |
 
@@ -116,7 +116,31 @@ a second transformed frame whose camera source sequence and authoritative state
 sequence both advance on the same camera session and continuity. The roadmap
 checkbox remains open until this harness passes on a physical Android device.
 
-## 5. Completion policy
+## 6. Provider failure-injection contract
+
+`Rma190ProviderFailureEndToEndTests` drives the real
+`OpenAiChatCompletionsLlmProvider` through `ReachySharedHttpTransport` using
+a deterministic HTTP handler. It does not replace the provider with a result
+fake, and it never needs a real credential or remote endpoint.
+
+The single managed fixture covers:
+
+1. connection loss via an `HttpRequestException`, which must surface as
+   `HttpFailure` after exactly one transport attempt;
+2. HTTP 429 rate limiting, which must remain a visible `HttpFailure` with no
+   hidden retry;
+3. a malformed provider payload that contains no recognizable assistant
+   response, which must never become a successful behavior intent; and
+4. in-flight caller cancellation after the HTTP send begins, which must reach
+   the transport token and surface as `Cancelled`, not success or timeout.
+
+Every case asserts `Succeeded == false` and an exact single-attempt count. The
+static contract in `scripts/tests/test_rma190_provider_failure_e2e.py` keeps the
+four required failure modes and no-hidden-retry assertions registered. The
+roadmap checkbox remains open until the managed fixture passes on an exact
+commit.
+
+## 7. Completion policy
 
 The first three RMA-190 roadmap checkboxes remain open until the physical Android
 run passes on an exact commit and its artifact is recorded in the roadmap/validation
