@@ -1,0 +1,71 @@
+name: A54 RMA-190 Camera Diagnostics Dump
+
+on:
+  push:
+    branches:
+      - ralph/a54-rma190-camera-dump-20260924
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a54-rma190-camera-dump
+  cancel-in-progress: true
+
+jobs:
+  dump:
+    name: Dump last camera acceptance diagnostics
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 10
+
+    steps:
+      - name: Dump device report and focused logcat
+        shell: bash
+        env:
+          PACKAGE_NAME: com.ekkus.weachymini
+          RESULT_FILE: rma190-camera-end-to-end-acceptance.json
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          mapfile -t physical_serials < <(
+            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${physical_serials[@]}"; do
+            state="$(adb -s "${serial}" get-state | tr -d '\r')"
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            printf 'physical_device=%s state=%s abi=%s sdk=%s\n' "${serial}" "${state}" "${abi}" "${sdk}"
+            if [[ "${state}" == "device" && "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
+              accepted+=("${serial}")
+            fi
+          done
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' "${#accepted[@]}" >&2
+            adb devices -l >&2
+            exit 1
+          fi
+          remote="/sdcard/Android/data/${PACKAGE_NAME}/files/${RESULT_FILE}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+          printf 'package=%s\n' "${PACKAGE_NAME}"
+          printf 'remote_report=%s\n' "${remote}"
+          printf '\n### run-as report\n'
+          adb -s "${serial}" exec-out run-as "${PACKAGE_NAME}" sh -c "test -f '${remote}' && cat '${remote}'" 2>/dev/null | tr -d '\r' || true
+          printf '\n### shell report\n'
+          adb -s "${serial}" shell "if test -f '${remote}'; then cat '${remote}'; else echo missing; fi" 2>/dev/null | tr -d '\r' || true
+          printf '\n### package files listing\n'
+          adb -s "${serial}" shell "ls -la /sdcard/Android/data/${PACKAGE_NAME}/files || true" | tr -d '\r' || true
+          printf '\n### pid/state\n'
+          adb -s "${serial}" shell "pidof ${PACKAGE_NAME} || true; dumpsys activity top | grep -E '${PACKAGE_NAME}|ACTIVITY|mFocused|mResumed' -A2 -B2 || true" | tr -d '\r' || true
+          printf '\n### focused logcat tail\n'
+          adb -s "${serial}" logcat -d -v threadtime | grep -E 'Reachy|RMA-190|rma190|weachy|Unity|Camera|camera|AndroidRuntime|FATAL|Exception|ERROR' | tail -n 250 || true
