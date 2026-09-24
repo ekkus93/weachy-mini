@@ -5,9 +5,9 @@ This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after 
 ## Canonical branch heads after transplant pass
 
 - Core offline/MuJoCo/gesture evidence lane: PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`.
-- Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at `f3a49a7b968d4916aeba63faf3cc9cfc4f5a301b`.
+- Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at `a0844b79089b48272e2c9d65fd0962604eb5d955`.
 - Independent provider combinations lane: PR #44, `ralph/rma190-independent-provider-combinations` at `218845dded0f758f0d1a5ec8f6cd56b9e575c768`.
-- Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `bbac14c12b8fd6acf84d84126dc2749fef68e783`.
+- Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `ef3aba85008ee0a84cd68e2af4168ec4de8f6e87`.
 - Model corruption/OOM lane: PR #68, `ralph/rma190-model-corruption-oom` at `6350208c5beaa8566c5240a8a077b5972f4a948a`.
 - Solver fault/controlled-reset lane: PR #69, `ralph/rma190-solver-fault-reset` at `80dbb42102dc0ea92c011903106e9baa77df1aa6`.
 
@@ -24,7 +24,8 @@ The canonical network/provider failure lane now preserves:
 - focused network failure-mode contracts from PR #67;
 - managed VLM transport-boundary coverage from `ralph/rma190-network-failure-e2e`;
 - managed LLM provider failure-injection coverage from `ralph/rma190-provider-failure-e2e`;
-- VLM provider no-hidden-retry coverage from `ralph/rma190-provider-failures`, renamed under distinct file/class names so it coexists with the LLM provider harness.
+- VLM provider no-hidden-retry coverage from `ralph/rma190-provider-failures`, renamed under distinct file/class names so it coexists with the LLM provider harness;
+- provider failure-matrix coverage from `ralph/rma190-provider-failure-matrix` / PR #50.
 
 The branch also preserves the provider failure-injection spec text in `docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md` and a branch-local consolidation note at `docs/validation/RMA_190_NETWORK_FAILURE_CONSOLIDATION_2026-09-24.md`.
 
@@ -43,22 +44,29 @@ The canonical solver lane now preserves the focused solver-fault source contract
 
 `ralph/rma190-solver-recovery` is intentionally **not** folded into PR #69. It modifies shipping production runtime recovery behavior and should remain a separate production-runtime decision/review lane unless a later exact-head transplant is deliberately made.
 
-## Physical A54 validation in progress
+## Physical A54 validation status
 
-A temporary branch-only validation workflow was started from exact current `master` (`b188ce3b18635d24da79cb762e245c52e361ab5e`) to use the attached A54 while it is available:
+A temporary branch-only validation workflow was started from exact current `master` (`b188ce3b18635d24da79cb762e245c52e361ab5e`) while the A54 was attached:
 
 - branch: `ralph/a54-rma190-e2e-20260924`
 - head: `924c0f169f0b05cfe5ad782985bac1370171f137`
 - workflow: `A54 RMA-190 Core And Camera E2E`
 - run id: `36058331090`
 
-This workflow changes only a branch-scoped workflow file and runs existing current-master source/scripts. It should not be used as completion evidence unless the run finishes successfully and the evidence artifacts/reports are inspected.
+That current-master workflow proved the A54 build/install/pin path and ran the core RMA-190 acceptance step successfully, but it cannot close the camera checkbox because the combined workflow used `continue-on-error` and the camera lane still failed.
+
+The canonical front-camera lane was then debugged while the A54 was still available. The key diagnostic came from PR #72 head `c6840c799148c52bd5bb7496058f01e651d5186f`, physical run `36066778327`, and compact device report dump `36068367008`:
+
+```text
+last perception state=NoCameraFrame; message=Homography reprojection did not produce a frame: The camera texture and phone orientation are not timestamp-corresponding.; revision=2709
+```
+
+PR #72 head `a0844b79089b48272e2c9d65fd0962604eb5d955` now includes a source-side fix: the production perception driver stamps the fail-closed identity phone-orientation sample with the source texture timestamp (`descriptor.TimestampNanoseconds`) instead of driver wall-clock time, with a source-contract guard in `scripts/tests/test_rma190_camera_end_to_end.py`. The A54 was disconnected before this fixed head could be physically revalidated, so the front-camera checkbox remains open and needs another exact-head A54 run.
 
 ## Remaining consolidation/audit work
 
 The following lanes still require audit before they are closed, superseded, or transplanted:
 
-- `ralph/rma190-provider-failure-matrix` / PR #50;
 - `ralph/rma190-failure-matrix` / PR #55;
 - `ralph/rma190-failure-scenarios` / PR #63;
 - `ralph/rma190-failure-modes` / PR #65;
