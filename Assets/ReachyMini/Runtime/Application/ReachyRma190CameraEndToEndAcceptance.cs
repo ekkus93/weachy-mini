@@ -387,7 +387,6 @@ namespace ReachyMini.AppState
             }
             finally
             {
-                MarkPhase("restoring camera acceptance state");
                 settingsPersistence.CameraCalibrations.State.ReplaceAll(
                     originalProfiles);
                 try
