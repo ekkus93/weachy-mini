@@ -113,6 +113,29 @@ python3 -m py_compile scripts/tests/test_rma191_security_privacy_review.py
 # exit 0
 ```
 
+Additional sandbox validation on 2026-09-24, using the uploaded `master`/branch
+checkout after confirming the branch still compared cleanly against current `master`:
+
+```text
+python3 scripts/tests/test_rma161_credential_lifecycle.py
+# exit 0
+python3 scripts/tests/test_rma162_private_media_retention.py
+# exit 0
+python3 scripts/tests/test_rma170_structured_logging.py
+# exit 0
+python3 scripts/tests/test_rma172_diagnostic_bundle_export.py
+# exit 0
+python3 scripts/tests/test_rma191_security_privacy_review.py
+# exit 0
+cmake -S . -B build/rma191-native-local -G Ninja -DBUILD_TESTING=ON
+# exit 0
+cmake --build build/rma191-native-local --target reachy_sim_managed_contract --parallel
+# exit 0
+```
+
+The sandbox did not have `dotnet`, so the managed Application/Core/RemoteVlm
+assemblies still require hosted or developer-machine qualification before merge.
+
 The dedicated hosted workflow additionally runs the RMA-161, RMA-162, RMA-170, and
 RMA-172 static contracts, managed application/privacy tests, Remote VLM redaction
 contracts, a native managed-contract build, and managed/native lifetime tests.
