@@ -25,12 +25,12 @@ infrastructure failures, not as repository source failures.
 While that infrastructure issue exists:
 
 - do not merge RMA-190 PRs merely because local source contracts pass;
-- do not mark TODO checkboxes complete;
+- do not mark TODO checkboxes complete unless the relevant safe reconciliation PR is merged;
 - keep exact branch heads ready for requalification;
 - continue only source-level repair, branch consolidation, and local/static validation;
 - avoid creating new branches for scenarios that already have a canonical branch below.
 
-## PR #39 audit result
+## PR #39 audit result and replacement
 
 PR #39 (`ralph/rma190-core-evidence-reconcile`) is **unsafe as currently written** and
 must not be merged. Its only changed file is the authoritative TODO, and the diff is
@@ -38,21 +38,25 @@ must not be merged. Its only changed file is the authoritative TODO, and the dif
 only 76 lines long. That is a truncated-file overwrite, not a valid TODO
 reconciliation.
 
-The underlying physical evidence cited by the PR is real enough to keep investigating:
-Ralph Bridge report `35768977213` shows workflow `RMA-190 Core End-to-End Android
-Acceptance` passed on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e` and
-produced a non-expired artifact named
-`rma190-core-end-to-end-report-b188ce3b18635d24da79cb762e245c52e361ab5e`. However,
-that evidence must be reconciled in a repaired/replacement branch that starts from the
-full current TODO and changes only the intended RMA-190 lines.
+The underlying physical evidence cited by PR #39 is real enough to keep: Ralph Bridge
+report `35768977213` shows workflow `RMA-190 Core End-to-End Android Acceptance` passed
+on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e` and produced a non-expired
+artifact named `rma190-core-end-to-end-report-b188ce3b18635d24da79cb762e245c52e361ab5e`.
+
+PR #71 (`ralph/rma190-core-evidence-reconcile-v2`) is the safe replacement evidence
+lane. It starts from current `master` and adds only
+`docs/validation/RMA_190_CORE_E2E_PHYSICAL_VALIDATION_2026-09-22.md`. It intentionally
+does **not** edit the authoritative TODO; a later safe TODO reconciliation must preserve
+the complete current TODO and apply only the intended RMA-190 core checkbox/evidence
+delta.
 
 ## Canonical scenario matrix
 
 | RMA-190 scenario | Canonical lane | Current evidence | Missing before closure | Duplicate/superseded lanes |
 | --- | --- | --- | --- | --- |
-| Offline launch with no network | **No mergeable canonical lane yet.** PR #39 has candidate evidence but is unsafe because it truncates the TODO. | Physical Android core E2E run `35768977213` passed on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e`; branch PR #39 is not usable as-is. | Repair or replace PR #39 by restoring the full TODO and applying only the intended checkbox/evidence delta; exact-head CI/merge gate after the CI infrastructure issue is fixed. | PR #22 `ralph/rma-190-core-e2e`; `ralph/rma190-core-e2e`; older `ralph/rma190-camera-e2e` should not be used for this core checkbox. |
-| MuJoCo full model load and neutral reset | **No mergeable canonical lane yet.** Same unsafe PR #39 issue as above. | Same passed core E2E run `35768977213` appears to cover full model load and neutral reset, but the reconciliation branch is truncated. | Same repaired/replacement TODO reconciliation; verify artifact details before closure. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
-| Deterministic gesture replay | **No mergeable canonical lane yet.** Same unsafe PR #39 issue as above. | Same passed core E2E run `35768977213` appears to cover deterministic replay, but the reconciliation branch is truncated. | Same repaired/replacement TODO reconciliation; verify replay evidence is physical Android/shipping host, not fixture-only lower-level proof. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
+| Offline launch with no network | PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`. | Physical Android core E2E run `35768977213` passed on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e`; PR #71 records the evidence without truncating the TODO. | Exact-head CI/merge gate after CI infrastructure recovers; optional later safe TODO reconciliation to mark the checkbox complete. | PR #39 is unsafe and superseded; PR #22 `ralph/rma-190-core-e2e`; `ralph/rma190-core-e2e`; older `ralph/rma190-camera-e2e` should not be used for this core checkbox. |
+| MuJoCo full model load and neutral reset | PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`. | Same passed core E2E run `35768977213`; PR #71 is the safe evidence record. | Exact-head CI/merge gate after CI infrastructure recovers; verify artifact details before any TODO checkbox closure. | PR #39 is unsafe and superseded; PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
+| Deterministic gesture replay | PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`. | Same passed core E2E run `35768977213`; PR #71 is the safe evidence record. | Exact-head CI/merge gate after CI infrastructure recovers; verify replay evidence is physical Android/shipping host, not fixture-only lower-level proof. | PR #39 is unsafe and superseded; PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
 | Front camera -> head rotation -> transformed Reachy-eye frame | No canonical open PR yet. Candidate branch: `ralph/rma190-camera-requalify` at `f3a49a7b968d4916aeba63faf3cc9cfc4f5a301b`. | Branch exists but no open PR in current branch inventory. | Diff audit, PR creation if still relevant, exact-head CI, physical Android camera/head-motion artifact, and TODO reconciliation. | `ralph/rma190-camera-e2e`, `ralph/rma190-front-camera-e2e` are older lanes; do not advance until compared with `camera-requalify`. |
 | On-device ASR -> local LLM -> behavior -> offline TTS | No canonical RMA-190 PR yet. Supporting branch: PR #40 `ralph/rma125-visible-speech-setup-guidance` at `eaa5e4d910942663f2aa361760031ce6f8c35745`. | RMA-125 setup guidance source contract passed locally; this is supporting guidance only. | A real physical spoken-turn harness/run using explicit on-device ASR, selected local LLM, behavior path, and exact offline TTS voice. Device/service/language availability must be explicit. | `ralph/rma190-asr-jni-hardening` may be a supporting branch, but it is not scenario closure. |
 | Rear-camera visual question with optional VLM | PR #43, `ralph/rma190-rear-visual-e2e` at `bdfea61e8638c45d8cf5d74bac228839b2cd20fa` | Focused Python contract passed locally after test repair. | Exact-head CI and physical Android rear-camera artifact; optional VLM must report unavailable truthfully when credentials/provider are absent. | None currently better. |
@@ -91,8 +95,7 @@ RMA-190 scenario closure lanes:
 
 ## Current next actions
 
-1. Repair or replace PR #39. The replacement must start from the complete 3418-line
-   current TODO and apply only the first-three-core-scenario evidence delta.
+1. Treat PR #71 as the safe replacement for PR #39 and leave PR #39 unmerged.
 2. Fix the GitHub Actions/self-hosted runner zero-step failure, because it blocks all
    exact-head qualification and merge gates.
 3. Decide whether `ralph/rma190-camera-requalify` should become the canonical
