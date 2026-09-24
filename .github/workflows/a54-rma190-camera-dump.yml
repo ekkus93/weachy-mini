@@ -32,7 +32,7 @@ jobs:
           REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
-          printf 'diagnostic_dump_rerun=phase-marker-20260924\n'
+          printf 'diagnostic_dump_rerun=compact-phase-marker-20260924\n'
           mapfile -t physical_serials < <(
             adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
           )
@@ -60,11 +60,13 @@ jobs:
           printf 'pinned_android_serial=%s\n' "${serial}"
           printf 'package=%s\n' "${PACKAGE_NAME}"
           printf 'remote_report=%s\n' "${remote}"
-          printf '### shell report compact\n'
-          adb -s "${serial}" shell "if test -f '${remote}'; then cat '${remote}'; else echo missing; fi" 2>/dev/null | tr -d '\r' || true
+          printf '### shell report compact one-line\n'
+          printf 'report_one_line='
+          adb -s "${serial}" shell "if test -f '${remote}'; then cat '${remote}'; else echo missing; fi" 2>/dev/null | tr -d '\r\n' || true
+          printf '\n'
           printf '\n### files listing\n'
           adb -s "${serial}" shell "ls -la /sdcard/Android/data/${PACKAGE_NAME}/files || true" | tr -d '\r' || true
           printf '\n### focused logcat tail\n'
-          adb -s "${serial}" logcat -d -v threadtime | grep -E 'RMA-190|rma190|ReachyRma190|weachy|AndroidRuntime|FATAL|Exception|ERROR|Camera' | tail -n 120 || true
-          printf '\n::error title=A54 camera diagnostic dump complete::Intentional failure so Ralph exposes the preceding diagnostics.\n'
+          adb -s "${serial}" logcat -d -v threadtime | grep -E 'RMA-190|rma190|ReachyRma190|weachy|AndroidRuntime|FATAL|Exception|ERROR|Camera' | tail -n 80 || true
+          printf '\n::error title=A54 camera diagnostic dump complete::Intentional failure so Ralph exposes the compact diagnostics.\n'
           exit 1
