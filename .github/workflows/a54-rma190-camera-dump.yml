@@ -32,7 +32,7 @@ jobs:
           REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
-          printf 'diagnostic_dump_rerun=compact-phase-marker-2-20260924\n'
+          printf 'diagnostic_dump_rerun=compact-driver-snapshot-20260924\n'
           mapfile -t physical_serials < <(
             adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
           )
