@@ -47,6 +47,8 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
         self.assertIn("CaptureFrameForAcceptanceAsync", driver)
         self.assertIn("return CaptureFrameAsync(", driver)
         self.assertIn("FrameBuildResult built = TryBuildFrame(bridge);", driver)
+        self.assertIn("descriptor.TimestampNanoseconds", driver)
+        self.assertNotIn("ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds())", driver)
         self.assertIn("CaptureFrameForAcceptanceAsync", source)
         self.assertNotIn("new ReachyCameraHomographyWarpPipeline", source)
         self.assertNotIn("ReachyCameraHomographyCalculator.Build", source)
