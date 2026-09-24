@@ -373,6 +373,14 @@ namespace ReachyMini.AppState
             if (eventArgs.Health.Kind == ReachyServiceKind.Audio)
             {
                 UpdateMainScreenCapabilities();
+                if (eventArgs.Health.State == ReachyServiceState.Unavailable ||
+                    eventArgs.Health.State == ReachyServiceState.Degraded ||
+                    eventArgs.Health.State == ReachyServiceState.Faulted)
+                {
+                    stateStore.ReportUnavailableAction(
+                        "Speech setup",
+                        eventArgs.Health.Message);
+                }
             }
 
             if (eventArgs.Health.Criticality == ReachyServiceCriticality.Required &&
