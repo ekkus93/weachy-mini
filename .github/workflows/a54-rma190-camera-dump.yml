@@ -59,13 +59,11 @@ jobs:
           printf 'pinned_android_serial=%s\n' "${serial}"
           printf 'package=%s\n' "${PACKAGE_NAME}"
           printf 'remote_report=%s\n' "${remote}"
-          printf '\n### run-as report\n'
-          adb -s "${serial}" exec-out run-as "${PACKAGE_NAME}" sh -c "test -f '${remote}' && cat '${remote}'" 2>/dev/null | tr -d '\r' || true
-          printf '\n### shell report\n'
+          printf '### shell report compact\n'
           adb -s "${serial}" shell "if test -f '${remote}'; then cat '${remote}'; else echo missing; fi" 2>/dev/null | tr -d '\r' || true
-          printf '\n### package files listing\n'
+          printf '\n### files listing\n'
           adb -s "${serial}" shell "ls -la /sdcard/Android/data/${PACKAGE_NAME}/files || true" | tr -d '\r' || true
-          printf '\n### pid/state\n'
-          adb -s "${serial}" shell "pidof ${PACKAGE_NAME} || true; dumpsys activity top | grep -E '${PACKAGE_NAME}|ACTIVITY|mFocused|mResumed' -A2 -B2 || true" | tr -d '\r' || true
           printf '\n### focused logcat tail\n'
-          adb -s "${serial}" logcat -d -v threadtime | grep -E 'Reachy|RMA-190|rma190|weachy|Unity|Camera|camera|AndroidRuntime|FATAL|Exception|ERROR' | tail -n 250 || true
+          adb -s "${serial}" logcat -d -v threadtime | grep -E 'RMA-190|rma190|ReachyRma190|weachy|AndroidRuntime|FATAL|Exception|ERROR|Camera' | tail -n 120 || true
+          printf '\n::error title=A54 camera diagnostic dump complete::Intentional failure so Ralph exposes the preceding diagnostics.\n'
+          exit 1
