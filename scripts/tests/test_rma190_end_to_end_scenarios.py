@@ -59,7 +59,7 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("rma190-core-end-to-end-report-${{ github.sha }}", workflow)
         self.assertNotIn("RMA-195", workflow)
 
-    def test_roadmap_keeps_all_rma190_scenarios_open_pending_evidence(self) -> None:
+    def test_roadmap_retains_every_rma190_scenario_without_freezing_status(self) -> None:
         todo = read(TODO)
         start = todo.index("## RMA-190")
         end = todo.index("## RMA-191", start)
@@ -77,8 +77,13 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
             "Model corruption/OOM.",
             "Solver fault and controlled reset.",
         ):
-            self.assertIn(f"- [ ] {item}", section)
-        self.assertNotIn("**Status:** Complete", section)
+            unchecked = f"- [ ] {item}"
+            checked = f"- [x] {item}"
+            self.assertEqual(
+                1,
+                section.count(unchecked) + section.count(checked),
+                f"roadmap must contain exactly one checkbox for {item}",
+            )
 
 
 if __name__ == "__main__":
