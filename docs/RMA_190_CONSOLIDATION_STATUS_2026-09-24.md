@@ -30,13 +30,29 @@ While that infrastructure issue exists:
 - continue only source-level repair, branch consolidation, and local/static validation;
 - avoid creating new branches for scenarios that already have a canonical branch below.
 
+## PR #39 audit result
+
+PR #39 (`ralph/rma190-core-evidence-reconcile`) is **unsafe as currently written** and
+must not be merged. Its only changed file is the authoritative TODO, and the diff is
+`+20 / -3362`; the branch copy of `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md` is
+only 76 lines long. That is a truncated-file overwrite, not a valid TODO
+reconciliation.
+
+The underlying physical evidence cited by the PR is real enough to keep investigating:
+Ralph Bridge report `35768977213` shows workflow `RMA-190 Core End-to-End Android
+Acceptance` passed on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e` and
+produced a non-expired artifact named
+`rma190-core-end-to-end-report-b188ce3b18635d24da79cb762e245c52e361ab5e`. However,
+that evidence must be reconciled in a repaired/replacement branch that starts from the
+full current TODO and changes only the intended RMA-190 lines.
+
 ## Canonical scenario matrix
 
 | RMA-190 scenario | Canonical lane | Current evidence | Missing before closure | Duplicate/superseded lanes |
 | --- | --- | --- | --- | --- |
-| Offline launch with no network | PR #39, `ralph/rma190-core-evidence-reconcile` at `18728a49a998170ed7da5189757b3875d7f8e3e1` | Candidate reconciliation lane for the core physical scenarios. | Exact-head CI, audit of underlying physical Android artifact/run evidence, and TODO reconciliation only if evidence is real and current. | PR #22 `ralph/rma-190-core-e2e`; `ralph/rma190-core-e2e`; older `ralph/rma190-camera-e2e` should not be used for this core checkbox. |
-| MuJoCo full model load and neutral reset | PR #39, `ralph/rma190-core-evidence-reconcile` | Same core lane as offline launch. | Same as above; verify run artifact covers full model load and neutral reset on shipping path. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
-| Deterministic gesture replay | PR #39, `ralph/rma190-core-evidence-reconcile` | Same core lane as offline launch. | Same as above; verify replay evidence is physical Android/shipping host, not a fixture-only lower-level proof. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
+| Offline launch with no network | **No mergeable canonical lane yet.** PR #39 has candidate evidence but is unsafe because it truncates the TODO. | Physical Android core E2E run `35768977213` passed on exact SHA `b188ce3b18635d24da79cb762e245c52e361ab5e`; branch PR #39 is not usable as-is. | Repair or replace PR #39 by restoring the full TODO and applying only the intended checkbox/evidence delta; exact-head CI/merge gate after the CI infrastructure issue is fixed. | PR #22 `ralph/rma-190-core-e2e`; `ralph/rma190-core-e2e`; older `ralph/rma190-camera-e2e` should not be used for this core checkbox. |
+| MuJoCo full model load and neutral reset | **No mergeable canonical lane yet.** Same unsafe PR #39 issue as above. | Same passed core E2E run `35768977213` appears to cover full model load and neutral reset, but the reconciliation branch is truncated. | Same repaired/replacement TODO reconciliation; verify artifact details before closure. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
+| Deterministic gesture replay | **No mergeable canonical lane yet.** Same unsafe PR #39 issue as above. | Same passed core E2E run `35768977213` appears to cover deterministic replay, but the reconciliation branch is truncated. | Same repaired/replacement TODO reconciliation; verify replay evidence is physical Android/shipping host, not fixture-only lower-level proof. | PR #22 and older core branches are supporting/superseded unless diff audit proves otherwise. |
 | Front camera -> head rotation -> transformed Reachy-eye frame | No canonical open PR yet. Candidate branch: `ralph/rma190-camera-requalify` at `f3a49a7b968d4916aeba63faf3cc9cfc4f5a301b`. | Branch exists but no open PR in current branch inventory. | Diff audit, PR creation if still relevant, exact-head CI, physical Android camera/head-motion artifact, and TODO reconciliation. | `ralph/rma190-camera-e2e`, `ralph/rma190-front-camera-e2e` are older lanes; do not advance until compared with `camera-requalify`. |
 | On-device ASR -> local LLM -> behavior -> offline TTS | No canonical RMA-190 PR yet. Supporting branch: PR #40 `ralph/rma125-visible-speech-setup-guidance` at `eaa5e4d910942663f2aa361760031ce6f8c35745`. | RMA-125 setup guidance source contract passed locally; this is supporting guidance only. | A real physical spoken-turn harness/run using explicit on-device ASR, selected local LLM, behavior path, and exact offline TTS voice. Device/service/language availability must be explicit. | `ralph/rma190-asr-jni-hardening` may be a supporting branch, but it is not scenario closure. |
 | Rear-camera visual question with optional VLM | PR #43, `ralph/rma190-rear-visual-e2e` at `bdfea61e8638c45d8cf5d74bac228839b2cd20fa` | Focused Python contract passed locally after test repair. | Exact-head CI and physical Android rear-camera artifact; optional VLM must report unavailable truthfully when credentials/provider are absent. | None currently better. |
@@ -75,9 +91,10 @@ RMA-190 scenario closure lanes:
 
 ## Current next actions
 
-1. Fix the GitHub Actions/self-hosted runner zero-step failure, because it blocks all
+1. Repair or replace PR #39. The replacement must start from the complete 3418-line
+   current TODO and apply only the first-three-core-scenario evidence delta.
+2. Fix the GitHub Actions/self-hosted runner zero-step failure, because it blocks all
    exact-head qualification and merge gates.
-2. Audit PR #39 carefully before treating the first three core checkboxes as closeable.
 3. Decide whether `ralph/rma190-camera-requalify` should become the canonical
    front-camera PR; if yes, open one PR and mark older camera branches superseded.
 4. Create a real spoken-turn RMA-190 lane only after the physical ASR/offline-TTS
