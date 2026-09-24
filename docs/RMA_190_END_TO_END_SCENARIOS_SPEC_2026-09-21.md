@@ -116,7 +116,7 @@ a second transformed frame whose camera source sequence and authoritative state
 sequence both advance on the same camera session and continuity. The roadmap
 checkbox remains open until this harness passes on a physical Android device.
 
-## 6. Independent cloud-provider combination contract
+## 6. Independent cloud-provider combinations contract
 
 `ReachyRma190IndependentCloudProviderCombinationsTests` is a deterministic
 integration fixture over the shipping settings/persistence/provider-policy
