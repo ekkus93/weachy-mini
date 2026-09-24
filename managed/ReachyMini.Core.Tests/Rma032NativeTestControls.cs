@@ -23,6 +23,12 @@ namespace ReachyMini.Core.Tests
 
         [LibraryImport(
             Library,
+            EntryPoint = "reachy_sim_blocking_backend_fail_next_step_numeric")]
+        [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static partial void FailNextStepNumericNative();
+
+        [LibraryImport(
+            Library,
             EntryPoint = "reachy_sim_blocking_backend_step_entered")]
         [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static partial byte StepEnteredNative();
@@ -35,6 +41,11 @@ namespace ReachyMini.Core.Tests
         internal static void SetStepBlocked(bool blocked)
         {
             SetStepBlockedNative(blocked ? (byte)1 : (byte)0);
+        }
+
+        internal static void FailNextStepNumeric()
+        {
+            FailNextStepNumericNative();
         }
 
         internal static bool StepEntered()

@@ -24,6 +24,7 @@ ReachySimStatus reachy_sim_backend_create_uncontrolled(
 
 static atomic_bool g_test_step_blocked;
 static atomic_bool g_test_step_entered;
+static atomic_bool g_test_fail_next_step_numeric;
 
 void reachy_sim_blocking_backend_reset_controls(void)
 {
@@ -35,6 +36,10 @@ void reachy_sim_blocking_backend_reset_controls(void)
         &g_test_step_blocked,
         false,
         memory_order_release);
+    atomic_store_explicit(
+        &g_test_fail_next_step_numeric,
+        false,
+        memory_order_release);
 }
 
 void reachy_sim_blocking_backend_set_step_blocked(bool blocked)
@@ -42,6 +47,14 @@ void reachy_sim_blocking_backend_set_step_blocked(bool blocked)
     atomic_store_explicit(
         &g_test_step_blocked,
         blocked,
+        memory_order_release);
+}
+
+void reachy_sim_blocking_backend_fail_next_step_numeric(void)
+{
+    atomic_store_explicit(
+        &g_test_fail_next_step_numeric,
+        true,
         memory_order_release);
 }
 
@@ -67,6 +80,17 @@ static ReachySimStatus fake_step(
         memory_order_acquire))
     {
         atomic_signal_fence(memory_order_seq_cst);
+    }
+    if(atomic_exchange_explicit(
+        &g_test_fail_next_step_numeric,
+        false,
+        memory_order_acq_rel))
+    {
+        write_message(
+            error,
+            error_size,
+            "controlled RMA-190 numeric solver failure");
+        return REACHY_SIM_STATUS_NUMERIC_FAILURE;
     }
     return fake_step_uncontrolled(
         context,
