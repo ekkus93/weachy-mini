@@ -15,7 +15,9 @@ This note is **not** a publication of measured default profile values. The workf
 - source baseline: `master` at `b188ce3b18635d24da79cb762e245c52e361ab5e`
 - workflow: `A54 RMA-184 Default Profiles`
 - run id: `36187273962`
+- job id: `108243676196`
 - job: `RMA-184 default profiles on A54`
+- job URL: `https://github.com/ekkus93/weachy-mini/actions/runs/36187273962/job/108243676196`
 - result: `success`
 
 The run passed:
