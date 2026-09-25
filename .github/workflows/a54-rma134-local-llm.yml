@@ -123,7 +123,15 @@ jobs:
         run: |
           set -euo pipefail
           : "${REACHY_ANDROID_SERIAL:?missing pinned device}"
-          adb -s "${REACHY_ANDROID_SERIAL}" install -r -d --no-stream Builds/Android/weachy-mini-device-arm64-api26.apk
+          apk="Builds/Android/weachy-mini-device-arm64-api26.apk"
+          if adb -s "${REACHY_ANDROID_SERIAL}" install -r -d "${apk}"; then
+            exit 0
+          fi
+          echo "streaming install failed; retrying via device-side package manager path" >&2
+          remote_apk="/data/local/tmp/weachy-mini-device-arm64-api26.apk"
+          adb -s "${REACHY_ANDROID_SERIAL}" push "${apk}" "${remote_apk}"
+          adb -s "${REACHY_ANDROID_SERIAL}" shell pm install -r -d "${remote_apk}"
+          adb -s "${REACHY_ANDROID_SERIAL}" shell rm -f "${remote_apk}" || true
 
       - name: Run RMA-134 local LLM acceptance
         shell: bash
