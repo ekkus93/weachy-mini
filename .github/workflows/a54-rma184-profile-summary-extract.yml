@@ -40,9 +40,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 scripts/tests/test_rma184_representative_device_matrix.py
+          python3 scripts/tests/test_rma184_representative_device_matrix.py >/tmp/rma184-contracts.log 2>&1
           bash -n scripts/run_rma180_performance_acceptance_android.sh
-          python3 scripts/check_docs_links.py
+          python3 scripts/check_docs_links.py >/tmp/rma184-docs-links.log 2>&1
+          printf '%s\n' 'RMA-184/RMA-180 source contracts passed.'
 
       - name: Resolve local Unity and Android installations
         shell: bash
@@ -92,28 +93,37 @@ jobs:
           } >> "${GITHUB_ENV}"
           printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
           unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
-          printf '%s\n' "${unity_version_output}"
           if [[ "${unity_version_output}" != *"${project_version}"* ]]; then
             printf 'Unity executable does not match pinned version %s.\n' "${project_version}" >&2
             exit 1
           fi
-          "${android_sdk_root}/platform-tools/adb" version
+          "${android_sdk_root}/platform-tools/adb" version >/tmp/rma184-adb-version.log 2>&1
+          printf 'Resolved Unity %s and Android SDK.\n' "${project_version}"
 
       - name: Prepare generated Reachy Unity presentation
         shell: bash
         env:
           REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/prepare_reachy_unity_presentation.sh
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_reachy_unity_presentation.sh >"${RUNNER_TEMP}/rma184-prepare.log" 2>&1
+          printf '%s\n' 'Generated Reachy Unity presentation prepared.'
 
       - name: Stage production MuJoCo runtime for Unity Android
         shell: bash
         env:
           REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/stage_reachy_unity_android_runtime.sh
+        run: |
+          set -euo pipefail
+          bash scripts/stage_reachy_unity_android_runtime.sh >"${RUNNER_TEMP}/rma184-stage-runtime.log" 2>&1
+          printf '%s\n' 'Production MuJoCo Android runtime staged.'
 
       - name: Build ARM64 API-26 device APK
         shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
+        run: |
+          set -euo pipefail
+          bash scripts/build_unity_android.sh device-feasibility >"${RUNNER_TEMP}/rma184-android-build.log" 2>&1
+          printf '%s\n' 'ARM64 API-26 device APK built.'
 
       - name: Verify ARM64 API-26 device APK
         shell: bash
@@ -164,7 +174,7 @@ jobs:
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
 
-      - name: Run acceptance and intentionally fail after printing summary
+      - name: Run acceptance and emit Ralph-readable summary
         id: rma184_summary_extract
         shell: bash
         env:
@@ -174,7 +184,8 @@ jobs:
           report_dir="${RUNNER_TEMP}/rma184-profile-summary-extract"
           bash scripts/run_rma180_performance_acceptance_android.sh \
             Builds/Android/weachy-mini-device-arm64-api26.apk \
-            "${report_dir}"
+            "${report_dir}" >"${RUNNER_TEMP}/rma184-acceptance.log" 2>&1
+          printf '%s\n' 'RMA-180 acceptance passed; emitting RMA-184 profile summary.'
           python3 - "${report_dir}/rma180-performance-acceptance.json" <<'PY'
           import json
           import sys
@@ -188,12 +199,12 @@ jobs:
               'device_model': report.get('device_model'),
               'android_api_level': report.get('android_api_level'),
               'profile_count': len(report.get('profiles') or []),
-              'profiles': [],
           }
+          print(f"::error title=RMA184_PROFILE_SUMMARY::{json.dumps(summary, sort_keys=True, separators=(',', ':'))}")
           for profile in report.get('profiles') or []:
               timings = {item.get('workload'): item for item in profile.get('timings') or []}
               resources = profile.get('resources') or {}
-              summary['profiles'].append({
+              profile_summary = {
                   'target_fps': profile.get('target_fps'),
                   'duration_seconds': profile.get('duration_seconds'),
                   'resource_sample_count': resources.get('sample_count'),
@@ -205,9 +216,8 @@ jobs:
                   'local_llm': timings.get('LocalLlm'),
                   'audio': timings.get('Audio'),
                   'network': timings.get('Network'),
-              })
-          print('RMA184_PROFILE_SUMMARY_BEGIN', file=sys.stderr)
-          print(json.dumps(summary, indent=2, sort_keys=True), file=sys.stderr)
-          print('RMA184_PROFILE_SUMMARY_END', file=sys.stderr)
-          raise SystemExit('RMA184_PROFILE_SUMMARY_EXTRACTED_INTENTIONAL_FAILURE')
+              }
+              print(f"::error title=RMA184_PROFILE_DETAIL::{json.dumps(profile_summary, sort_keys=True, separators=(',', ':'))}")
           PY
+          printf '%s\n' 'RMA184_PROFILE_SUMMARY_EXTRACTED_INTENTIONAL_FAILURE' >&2
+          exit 1
