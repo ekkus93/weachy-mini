@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TEST = ROOT / "managed" / "ReachyMini.Core.Tests" / "Rma190NetworkProviderFailureScenarioTests.cs"
+LLM_TEST = ROOT / "managed" / "ReachyMini.Core.Tests" / "Rma190OpenAiLlmFailureModeContractTests.cs"
 SPEC = ROOT / "docs" / "RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md"
 TODO = ROOT / "docs" / "REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
@@ -36,6 +37,21 @@ class Rma190NetworkFailureModeContracts(unittest.TestCase):
         self.assertIn("(HttpStatusCode)429", source)
         self.assertIn("ReachyHttpResponseMode.ServerSentEvents", source)
         self.assertIn("Equal(0, handler.CallCount", source)
+
+    def test_llm_provider_failures_surface_as_non_success(self) -> None:
+        source = read(LLM_TEST)
+        for token in (
+            "NetworkLossSurfacesAsHttpFailure",
+            "RateLimitSurfacesAsHttpFailure",
+            "ReachyLlmGenerationStatus.HttpFailure",
+            "OpenAiChatCompletionsLlmProvider",
+            "ReachySharedHttpTransport",
+            "synthetic RMA-190 network loss",
+            "HttpStatusCode.TooManyRequests",
+        ):
+            self.assertIn(token, source)
+        self.assertIn("False(result.Succeeded", source)
+        self.assertIn("handler.CallCount >= 1", source)
 
     def test_scenario_remains_mapped_to_authoritative_rma190_row(self) -> None:
         todo = read(TODO)
