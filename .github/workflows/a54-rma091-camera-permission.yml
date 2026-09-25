@@ -1,0 +1,116 @@
+name: A54 RMA-091 Camera Permission Acceptance
+
+on:
+  push:
+    branches:
+      - ralph/a54-rma091-camera-permission-20260925
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a54-rma091-camera-permission-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  camera-permission:
+    name: RMA-091 camera permission on A54
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+          unity_path="${UNITY_6000_5_2F1_PATH:-}"
+          if [[ -z "${unity_path}" ]]; then
+            unity_path="$(find "${HOME}/Unity/Hub/Editor" -maxdepth 3 -type f -path '*/Editor/Unity' | sort | tail -n 1 || true)"
+          fi
+          [[ -n "${unity_path}" && -x "${unity_path}" ]] || {
+            printf '%s\n' 'Unity executable is unavailable on the self-hosted Android runner.' >&2
+            exit 1
+          }
+          sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          adb_bin="${sdk_root}/platform-tools/adb"
+          [[ -x "${adb_bin}" ]] || adb_bin="$(command -v adb || true)"
+          [[ -n "${adb_bin}" && -x "${adb_bin}" ]] || {
+            printf '%s\n' 'adb is unavailable on the physical Android runner.' >&2
+            exit 1
+          }
+          printf 'UNITY_6000_5_2F1_PATH=%s\n' "${unity_path}" >> "${GITHUB_ENV}"
+          printf 'UNITY_EXECUTABLE=%s\n' "${unity_path}" >> "${GITHUB_ENV}"
+          printf 'ANDROID_SDK_ROOT=%s\n' "${sdk_root}" >> "${GITHUB_ENV}"
+          printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
+          "${adb_bin}" version
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Verify ARM64 API-26 device APK
+        shell: bash
+        run: test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+
+      - name: Pin one physical Android device
+        shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          mapfile -t physical_serials < <(
+            "${ADB_BIN}" devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${physical_serials[@]}"; do
+            state="$("${ADB_BIN}" -s "${serial}" get-state | tr -d '\r')"
+            abi="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$("${ADB_BIN}" -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            model="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s\n' "${serial}" "${state}" "${model}" "${abi}" "${sdk}"
+            if [[ "${state}" == "device" && "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
+              accepted+=("${serial}")
+            fi
+          done
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' "${#accepted[@]}" >&2
+            "${ADB_BIN}" devices -l >&2
+            exit 1
+          fi
+          "${ADB_BIN}" -s "${serial}" wait-for-device
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Run RMA-091 camera permission acceptance
+        shell: bash
+        env:
+          RMA091_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma091-camera-permission-report
+        run: |
+          set -euo pipefail
+          bash scripts/run_rma091_camera_acquisition_acceptance_android.sh
+          printf '%s\n' '--- RMA-091 summary.json ---'
+          cat "${RMA091_CAMERA_REPORT_DIR}/summary.json"
+          printf '%s\n' '--- RMA-091 revoked report ---'
+          cat "${RMA091_CAMERA_REPORT_DIR}/14-permission-revoked.json"
