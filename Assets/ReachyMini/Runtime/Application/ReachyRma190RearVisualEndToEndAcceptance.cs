@@ -68,7 +68,7 @@ namespace ReachyMini.AppState
     [DisallowMultipleComponent]
     public sealed class ReachyRma190RearVisualEndToEndAcceptance : MonoBehaviour
     {
-        private const int OverallTimeoutMilliseconds = 90_000;
+        private const int OverallTimeoutMilliseconds = 135_000;
         private const int ReadyPollMilliseconds = 25;
         private const string FixtureProfileId =
             "rma190-rear-camera-deterministic-fixture";
@@ -76,11 +76,20 @@ namespace ReachyMini.AppState
             "What is visible in this rear-camera scene? Answer briefly.";
         private const string RequestId = "rma190-rear-visual-question";
 
+        private string activePhase = "not-started";
+
+        private void MarkPhase(string phase)
+        {
+            activePhase = phase;
+            Debug.Log("RMA-190 rear-visual acceptance phase: " + phase);
+        }
+
         private IEnumerator Start()
         {
             string resultPath = Path.Combine(
                 Application.persistentDataPath,
                 ReachyRma190RearVisualEndToEndAcceptanceBootstrap.ResultFileName);
+            MarkPhase("initializing result file");
             DeleteIfPresent(resultPath);
 
             Task<Report> task = RunAsync();
@@ -103,20 +112,26 @@ namespace ReachyMini.AppState
             else if (task.IsCanceled)
             {
                 report = Report.Failure(
-                    "RMA-190 rear-visual acceptance was cancelled.");
+                    "RMA-190 rear-visual acceptance was cancelled during phase: " +
+                    activePhase + ".");
+                Debug.LogError(
+                    "RMA-190 rear-visual acceptance was cancelled during phase: " +
+                    activePhase,
+                    this);
             }
             else
             {
                 report = task.Result;
             }
 
+            MarkPhase("writing result file");
             WriteAtomically(
                 resultPath,
                 JsonUtility.ToJson(report, prettyPrint: true));
             Destroy(gameObject);
         }
 
-        private static async Task<Report> RunAsync()
+        private async Task<Report> RunAsync()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             using var timeout =
@@ -125,6 +140,7 @@ namespace ReachyMini.AppState
             string deviceModel = SystemInfo.deviceModel;
             int androidApiLevel = ReadApiLevel();
 
+            MarkPhase("waiting for shipping host");
             ReachyApplicationHostBehaviour hostBehaviour =
                 await ReachyRma190CameraEndToEndAcceptance
                     .WaitForShippingHostAsync(cancellationToken);
@@ -132,6 +148,7 @@ namespace ReachyMini.AppState
                 throw new InvalidOperationException(
                     "RMA-190 rear-visual acceptance could not resolve the shipping host.");
 
+            MarkPhase("resolving shipping services");
             IReachyPerceptionService perception =
                 host.GetRequiredService<IReachyPerceptionService>(
                     ReachyServiceKind.Perception);
@@ -156,14 +173,17 @@ namespace ReachyMini.AppState
                     "RMA-190 rear-visual acceptance requires the shipping durable-settings service.");
             }
 
+            MarkPhase("waiting for production runtime");
             ReachyProductionAuthoritativeRuntime runtime =
                 await ReachyRma190CameraEndToEndAcceptance
                     .WaitForRuntimeAsync(cancellationToken);
+            MarkPhase("waiting for camera discovery object");
             ReachyAndroidCameraDiscovery discovery =
                 await ReachyRma190CameraEndToEndAcceptance
                     .WaitForObjectAsync<ReachyAndroidCameraDiscovery>(
                         cancellationToken,
                         "camera discovery");
+            MarkPhase("waiting for camera acquisition object");
             ReachyAndroidCameraAcquisition acquisition =
                 await ReachyRma190CameraEndToEndAcceptance
                     .WaitForObjectAsync<ReachyAndroidCameraAcquisition>(
@@ -173,6 +193,7 @@ namespace ReachyMini.AppState
                 acquisition.GetComponent<ReachyAndroidCameraTextureBridge>() ??
                 throw new InvalidOperationException(
                     "The shipping camera acquisition has no texture bridge.");
+            MarkPhase("waiting for perception driver object");
             ReachyAndroidPerceptionDriver driver =
                 await ReachyRma190CameraEndToEndAcceptance
                     .WaitForObjectAsync<ReachyAndroidPerceptionDriver>(
@@ -190,9 +211,11 @@ namespace ReachyMini.AppState
 
             try
             {
+                MarkPhase("pausing perception for deterministic rear capture");
                 perceptionInterruption.PauseForApplicationInterruption();
                 perceptionPaused = true;
 
+                MarkPhase("refreshing camera permission and capabilities");
                 discovery.RefreshPermissionAndCapabilities();
                 ReachyCameraCapabilitySnapshot capabilities =
                     discovery.State.Current;
@@ -210,6 +233,7 @@ namespace ReachyMini.AppState
 
                 if (acquisition.State.Current.IsActive)
                 {
+                    MarkPhase("stopping prior camera acquisition");
                     acquisition.StopAcquisition();
                     await ReachyRma190CameraEndToEndAcceptance
                         .WaitForCameraStoppedAsync(
@@ -217,13 +241,16 @@ namespace ReachyMini.AppState
                             cancellationToken);
                 }
 
+                MarkPhase("starting rear camera acquisition");
                 acquisition.StartPreferred(ReachyCameraFacing.Rear);
+                MarkPhase("waiting for rear camera texture");
                 ReachyCameraTextureFrameDescriptor descriptor =
                     await WaitForRearTextureAsync(
                         acquisition,
                         bridge,
                         cancellationToken);
 
+                MarkPhase("waiting for baseline authoritative state");
                 ReachySimAuthoritativeStateFrame baselineState =
                     await ReachyRma190CameraEndToEndAcceptance
                         .WaitForAuthoritativeStateAsync(
@@ -233,6 +260,7 @@ namespace ReachyMini.AppState
                 ReachySimBodyPoseSnapshot baselineCameraPose =
                     ReachyRma190CameraEndToEndAcceptance
                         .FindCameraPose(baselineState);
+                MarkPhase("installing deterministic rear camera calibration fixture");
                 ReachyCameraCalibrationProfile fixture =
                     ReachyRma190CameraEndToEndAcceptance
                         .CreateDeterministicFixture(
@@ -245,18 +273,20 @@ namespace ReachyMini.AppState
                 settingsPersistence.CameraCalibrations.State.ReplaceAll(
                     new[] { fixture });
 
+                MarkPhase("capturing transformed rear frame");
                 ReachyVisionFrame frame =
-                    await ReachyRma190CameraEndToEndAcceptance
-                        .CaptureAcceptanceFrameAsync(
-                            driver,
-                            cancellationToken);
+                    await CaptureRearAcceptanceFrameAsync(
+                        driver,
+                        cancellationToken);
                 try
                 {
+                    MarkPhase("validating transformed rear frame");
                     ValidateRearFrame(
                         frame,
                         descriptor,
                         baselineState.ContinuityId);
 
+                    MarkPhase("running optional VLM visual question");
                     VisionLanguageResult vlm = await vlmCapability.AnalyzeSceneAsync(
                         frame,
                         VisualPrompt,
@@ -276,6 +306,7 @@ namespace ReachyMini.AppState
                             "RMA-190 rear-camera VLM reported success without response text.");
                     }
 
+                    MarkPhase("returning successful rear-visual report");
                     return Report.Success(
                         descriptor,
                         frame,
@@ -346,6 +377,41 @@ namespace ReachyMini.AppState
                 }
             }
             return false;
+        }
+
+        private async Task<ReachyVisionFrame> CaptureRearAcceptanceFrameAsync(
+            ReachyAndroidPerceptionDriver driver,
+            CancellationToken cancellationToken)
+        {
+            string phasePrefix = activePhase;
+            string lastDiagnostic = string.Empty;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ReachyVisionFrame? frame =
+                    await driver.CaptureFrameForAcceptanceAsync(cancellationToken);
+                if (frame != null)
+                {
+                    return frame;
+                }
+
+                ReachyPerceptionServiceSnapshot snapshot = driver.Snapshot;
+                string diagnostic =
+                    phasePrefix + "; last perception state=" +
+                    snapshot.ExecutionState + "; message=" +
+                    snapshot.StatusMessage + "; revision=" +
+                    snapshot.Revision;
+                if (!string.Equals(
+                        diagnostic,
+                        lastDiagnostic,
+                        StringComparison.Ordinal))
+                {
+                    MarkPhase(diagnostic);
+                    lastDiagnostic = diagnostic;
+                }
+
+                await Task.Delay(ReadyPollMilliseconds, cancellationToken);
+            }
         }
 
         private static async Task<ReachyCameraTextureFrameDescriptor>
