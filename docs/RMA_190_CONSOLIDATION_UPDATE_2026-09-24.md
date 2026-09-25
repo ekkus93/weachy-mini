@@ -7,7 +7,8 @@ This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after 
 - Core offline/MuJoCo/gesture evidence lane: PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `4afbc0e84c34bf1a75246ad88629ce2714c4622c`.
 - Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at docs head `3de12462923b2cae062eedd325ec372859034ea2`; physically validated source/test head `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`.
 - Independent provider combinations lane: PR #44, `ralph/rma190-independent-provider-combinations` at `218845dded0f758f0d1a5ec8f6cd56b9e575c768`.
-- Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `ef3aba85008ee0a84cd68e2af4168ec4de8f6e87`.
+- Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `79339b3ca97e68441fcda97aae167613bca1c2c4`.
+- Failure-matrix regression lane: PR #55, `ralph/rma190-failure-matrix` at `b27c4978b111d3ea20477001ff18b890a86ab3c7`.
 - Model corruption/OOM lane: PR #68, `ralph/rma190-model-corruption-oom` at `6350208c5beaa8566c5240a8a077b5972f4a948a`.
 - Solver fault/controlled-reset lane: PR #69, `ralph/rma190-solver-fault-reset` at `80dbb42102dc0ea92c011903106e9baa77df1aa6`.
 
@@ -25,9 +26,16 @@ The canonical network/provider failure lane now preserves:
 - managed VLM transport-boundary coverage from `ralph/rma190-network-failure-e2e`;
 - managed LLM provider failure-injection coverage from `ralph/rma190-provider-failure-e2e`;
 - VLM provider no-hidden-retry coverage from `ralph/rma190-provider-failures`, renamed under distinct file/class names so it coexists with the LLM provider harness;
-- provider failure-matrix coverage from `ralph/rma190-provider-failure-matrix` / PR #50.
+- provider failure-matrix coverage from `ralph/rma190-provider-failure-matrix` / PR #50;
+- unique LLM provider network-loss and HTTP 429 coverage from `ralph/rma190-failure-modes` / PR #65, preserved under `managed/ReachyMini.Core.Tests/Rma190OpenAiLlmFailureModeContractTests.cs`.
 
 The branch also preserves the provider failure-injection spec text in `docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md` and a branch-local consolidation note at `docs/validation/RMA_190_NETWORK_FAILURE_CONSOLIDATION_2026-09-24.md`.
+
+### PR #55 — failure-matrix regression lane
+
+The failure-matrix lane is now repaired and self-consistent. It adds the missing `rma190_failure_matrix` contract text to `docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md`, adds an artifact-free Ubuntu workflow, and runs the managed Android ASR, core, local-model-package, and local-LLM test projects against the managed native contract library.
+
+This lane is supporting regression evidence only. It does not close the permission, network/provider, model, or solver checkboxes by itself.
 
 ### PR #68 — model corruption/OOM
 
@@ -43,6 +51,12 @@ Its branch-local consolidation note is `docs/validation/RMA_190_MODEL_FAILURE_CO
 The canonical solver lane now preserves the focused solver-fault source contract plus controlled native numeric-failure injection and managed controlled-reset coverage from `ralph/rma190-solver-fault-reset-e2e`.
 
 `ralph/rma190-solver-recovery` is intentionally **not** folded into PR #69. It modifies shipping production runtime recovery behavior and should remain a separate production-runtime decision/review lane unless a later exact-head transplant is deliberately made.
+
+### PR #63 and PR #65 audit status
+
+`ralph/rma190-failure-scenarios` / PR #63 is not a pure duplicate: it contains production runtime recovery behavior (`ReachyProductionAuthoritativeRuntime.RecoverFaultedAndResetNeutral`) plus deterministic native solver-failure injection. It should remain a separate production-runtime failure-scenarios lane unless its production behavior is deliberately reconciled with PR #60 and PR #69.
+
+`ralph/rma190-failure-modes` / PR #65 has been partially preserved: its unique LLM provider network/rate-limit coverage is now transplanted to PR #67. Its solver-recreation assertions overlap the PR #63/PR #60/PR #69 solver-runtime work and should not be merged separately without that reconciliation.
 
 ## Physical A54 validation status
 
@@ -92,11 +106,8 @@ All required physical workflow steps passed: source-contract validation, Unity/A
 
 ## Remaining consolidation/audit work
 
-The following lanes still require audit before they are closed, superseded, or transplanted:
+The following lane still requires production-runtime reconciliation before it is closed, superseded, or transplanted:
 
-- `ralph/rma190-failure-matrix` / PR #55;
-- `ralph/rma190-failure-scenarios` / PR #63;
-- `ralph/rma190-failure-modes` / PR #65;
 - `ralph/rma190-solver-recovery` / PR #60.
 
 No authoritative TODO checkbox should be marked complete on `master` until the relevant canonical PR is merged and its required exact-head CI/physical/provider/native/model evidence exists.
