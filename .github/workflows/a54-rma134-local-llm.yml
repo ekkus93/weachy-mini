@@ -16,11 +16,7 @@ concurrency:
 jobs:
   physical:
     name: RMA-134 local LLM on A54
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - weachy-mini-android-device
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
     timeout-minutes: 45
 
     steps:
@@ -46,15 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
-          if [[ -z "${project_version}" ]]; then
-            printf '%s\n' 'Could not read the pinned Unity version.' >&2
-            exit 1
-          fi
           unity_editor="${UNITY_EDITOR:-}"
-          if [[ -n "${unity_editor}" && ! -x "${unity_editor}" ]]; then
-            printf 'Configured UNITY_EDITOR is not executable: %s\n' "${unity_editor}" >&2
-            exit 1
-          fi
           if [[ -z "${unity_editor}" ]]; then
             for candidate in \
               "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
@@ -62,26 +50,12 @@ jobs:
               "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
               "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
               "/opt/unity/editors/${project_version}/Editor/Unity"; do
-              if [[ -x "${candidate}" ]]; then
-                unity_editor="${candidate}"
-                break
-              fi
+              [[ -x "${candidate}" ]] && unity_editor="${candidate}" && break
             done
           fi
-          if [[ -z "${unity_editor}" ]]; then
-            printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
-            exit 1
-          fi
-          android_player_dir="$(dirname "${unity_editor}")/Data/PlaybackEngines/AndroidPlayer"
-          if [[ ! -d "${android_player_dir}" ]]; then
-            printf 'Unity Android Build Support is missing: %s\n' "${android_player_dir}" >&2
-            exit 1
-          fi
+          [[ -n "${unity_editor}" && -x "${unity_editor}" ]] || { echo "Pinned Unity ${project_version} was not found." >&2; exit 1; }
           android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
-          if [[ ! -x "${android_sdk_root}/platform-tools/adb" ]]; then
-            printf 'Android SDK platform-tools were not found under %s.\n' "${android_sdk_root}" >&2
-            exit 1
-          fi
+          [[ -x "${android_sdk_root}/platform-tools/adb" ]] || { echo "adb missing under ${android_sdk_root}" >&2; exit 1; }
           {
             printf 'UNITY_EDITOR=%s\n' "${unity_editor}"
             printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}"
@@ -89,12 +63,8 @@ jobs:
             printf 'ADB_BIN=%s\n' "${android_sdk_root}/platform-tools/adb"
           } >> "${GITHUB_ENV}"
           printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
-          unity_version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
-          printf '%s\n' "${unity_version_output}"
-          if [[ "${unity_version_output}" != *"${project_version}"* ]]; then
-            printf 'Unity executable does not match pinned version %s.\n' "${project_version}" >&2
-            exit 1
-          fi
+          "${unity_editor}" -version -batchmode -quit 2>&1 | tee unity-version.txt
+          grep -F "${project_version}" unity-version.txt
           "${android_sdk_root}/platform-tools/adb" version
 
       - name: Prepare generated Reachy Unity presentation
@@ -123,47 +93,37 @@ jobs:
           REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
         run: |
           set -euo pipefail
-          mapfile -t physical_serials < <(
-            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
-          )
+          mapfile -t serials < <(adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}')
           accepted=()
-          for serial in "${physical_serials[@]}"; do
+          for serial in "${serials[@]}"; do
             state="$(adb -s "${serial}" get-state | tr -d '\r')"
-            model="$(adb -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
             abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
             sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
             qemu="$(adb -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
-            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' \
-              "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
-            if [[ "${state}" == "device" && "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ && "${qemu}" != "1" ]] && (( sdk >= 26 )); then
-              accepted+=("${serial}")
-            fi
+            model="$(adb -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
+            [[ "${state}" == device && "${abi}" == arm64-v8a && "${sdk}" =~ ^[0-9]+$ && "${qemu}" != 1 ]] && (( sdk >= 26 )) && accepted+=("${serial}")
           done
-          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
-          if [[ -n "${serial_override}" ]]; then
-            override_ok=0
-            for candidate in "${accepted[@]}"; do
-              if [[ "${candidate}" == "${serial_override}" ]]; then
-                override_ok=1
-                break
-              fi
-            done
-            if (( override_ok != 1 )); then
-              printf 'Pinned REACHY_PHYSICAL_DEVICE_SERIAL=%s is not an approved connected device.\n' "${serial_override}" >&2
-              adb devices -l >&2
-              exit 1
-            fi
-            serial="${serial_override}"
-          elif (( ${#accepted[@]} != 1 )); then
-            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' "${#accepted[@]}" >&2
+          serial="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial}" ]]; then
+            printf '%s\n' "${accepted[@]}" | grep -Fx "${serial}" >/dev/null || { adb devices -l >&2; exit 1; }
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            echo "Expected exactly one physical arm64 API-26+ device; found ${#accepted[@]}." >&2
             adb devices -l >&2
             exit 1
-          else
-            serial="${accepted[0]}"
           fi
           adb -s "${serial}" wait-for-device
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Install exact APK on A54
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${REACHY_ANDROID_SERIAL:?missing pinned device}"
+          adb -s "${REACHY_ANDROID_SERIAL}" install -r -d --no-stream Builds/Android/weachy-mini-device-arm64-api26.apk
 
       - name: Run RMA-134 local LLM acceptance
         shell: bash
@@ -172,19 +132,15 @@ jobs:
         run: |
           set -euo pipefail
           report_dir="${RUNNER_TEMP}/rma134-local-llm-android"
+          mkdir -p "${report_dir}"
+          set +e
           bash scripts/run_rma134_local_llm_acceptance_android.sh \
             Builds/Android/weachy-mini-device-arm64-api26.apk \
-            "${report_dir}"
-
-      - name: Print RMA-134 local LLM diagnostics
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          report_dir="${RUNNER_TEMP}/rma134-local-llm-android"
-          printf '\n### RMA-134 local LLM report files\n'
-          if [[ -d "${report_dir}" ]]; then
-            find "${report_dir}" -maxdepth 1 -type f -print -exec sh -c 'printf "\n--- %s ---\n" "$1"; cat "$1" || true' sh {} \;
-          else
-            printf 'report_dir_missing=%s\n' "${report_dir}"
-          fi
+            "${report_dir}" > "${report_dir}/acceptance-step.log" 2>&1
+          code=$?
+          set -e
+          printf '\n### RMA-134 acceptance-step.log tail\n'
+          tail -n 120 "${report_dir}/acceptance-step.log" || true
+          printf '\n### RMA-134 report files\n'
+          find "${report_dir}" -maxdepth 1 -type f ! -name 'logcat.txt' -print -exec sh -c 'printf "\n--- %s ---\n" "$1"; cat "$1" || true' sh {} \;
+          exit "${code}"
