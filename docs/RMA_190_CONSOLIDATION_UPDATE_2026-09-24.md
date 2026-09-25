@@ -4,7 +4,7 @@ This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after 
 
 ## Canonical branch heads after transplant pass
 
-- Core offline/MuJoCo/gesture evidence lane: PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`.
+- Core offline/MuJoCo/gesture evidence lane: PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `4afbc0e84c34bf1a75246ad88629ce2714c4622c`.
 - Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at docs head `3de12462923b2cae062eedd325ec372859034ea2`; physically validated source/test head `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`.
 - Independent provider combinations lane: PR #44, `ralph/rma190-independent-provider-combinations` at `218845dded0f758f0d1a5ec8f6cd56b9e575c768`.
 - Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `ef3aba85008ee0a84cd68e2af4168ec4de8f6e87`.
@@ -55,7 +55,24 @@ A temporary branch-only validation workflow was started from exact current `mast
 
 That current-master workflow proved the A54 build/install/pin path and ran the core RMA-190 acceptance step successfully, but it could not close the camera checkbox because the combined workflow used `continue-on-error` and the camera lane still failed.
 
-The canonical front-camera lane was then debugged while the A54 was available. The key diagnostic came from PR #72 head `c6840c799148c52bd5bb7496058f01e651d5186f`, physical run `36066778327`, and compact device report dump `36068367008`:
+### Core offline/MuJoCo/gesture scenarios
+
+The safe core evidence lane is PR #71, `ralph/rma190-core-evidence-reconcile-v2`. It records both the original canonical RMA-190 core physical pass and a later clean standalone A54 rerun:
+
+- PR #71 head: `4afbc0e84c34bf1a75246ad88629ce2714c4622c`
+- original canonical run: `35768977213`, exact source SHA `b188ce3b18635d24da79cb762e245c52e361ab5e`, result `success`
+- standalone A54 rerun branch: `ralph/a54-rma190-core-20260925`
+- standalone A54 rerun head: `b69ec73b3b8ad0196447a00bf791dd214dbaf7a9`
+- standalone A54 rerun id: `36104854865`
+- workflow: `A54 RMA-190 Core E2E`
+- job: `RMA-190 core E2E on A54`
+- result: `success`
+
+The standalone A54 rerun changed only a branch-scoped workflow file and executed current `master` application source. It passed source-contract validation, Unity/Android resolution, generated presentation preparation, MuJoCo Android runtime staging, ARM64 APK build, APK verification, physical A54 pin, and `scripts/run_rma190_core_end_to_end_android.sh` acceptance. It was configured to print report files into the job log rather than upload artifacts because GitHub Actions artifact storage quota was exhausted.
+
+### Front-camera transformed-frame scenario
+
+The canonical front-camera lane was debugged while the A54 was available. The key diagnostic came from PR #72 head `c6840c799148c52bd5bb7496058f01e651d5186f`, physical run `36066778327`, and compact device report dump `36068367008`:
 
 ```text
 last perception state=NoCameraFrame; message=Homography reprojection did not produce a frame: The camera texture and phone orientation are not timestamp-corresponding.; revision=2709
