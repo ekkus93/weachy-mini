@@ -1,0 +1,55 @@
+name: RMA-190 failure matrix
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma190-failure-matrix.yml'
+      - 'Assets/ReachyMini/Runtime/**'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraDiscoveryTests.cs'
+      - 'managed/ReachyMini.AndroidOnDeviceAsr.Tests/**'
+      - 'managed/ReachyMini.Core.Tests/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'managed/ReachyMini.LocalModelPackages.Tests/**'
+      - 'scripts/run_rma190_failure_matrix.sh'
+      - 'scripts/tests/test_rma190_failure_matrix.py'
+  pull_request:
+    paths:
+      - '.github/workflows/rma190-failure-matrix.yml'
+      - 'Assets/ReachyMini/Runtime/**'
+      - 'Assets/ReachyMini/Tests/Editor/ReachyAndroidCameraDiscoveryTests.cs'
+      - 'managed/ReachyMini.AndroidOnDeviceAsr.Tests/**'
+      - 'managed/ReachyMini.Core.Tests/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'managed/ReachyMini.LocalModelPackages.Tests/**'
+      - 'scripts/run_rma190_failure_matrix.sh'
+      - 'scripts/tests/test_rma190_failure_matrix.py'
+
+permissions:
+  contents: read
+
+jobs:
+  failure-matrix:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build test-only native interop library
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake             -S .             -B build/managed-native             -G Ninja             -DBUILD_TESTING=ON
+          cmake             --build build/managed-native             --target reachy_sim_managed_contract             --parallel
+
+          native_library="$(find build/managed-native -type f -name 'libreachy_sim.so' -print -quit)"
+          if [[ -z "${native_library}" ]]; then
+            printf '%s\n' 'RMA-190 failure matrix did not produce libreachy_sim.so.' >&2
+            exit 1
+          fi
+          printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n'             "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
+      - name: Run RMA-190 failure matrix
+        run: bash scripts/run_rma190_failure_matrix.sh
