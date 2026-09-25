@@ -79,6 +79,9 @@ namespace ReachyMini.AppState
         public event EventHandler<ReachyPerceptionServiceSnapshotChangedEventArgs>?
             SnapshotChanged;
 
+        // Called once by ReachyAndroidPerceptionApplicationService.OnInitialize()
+        // after its own Application.platform == Android gate, so every
+        // Android-only construction below (the ML Kit backend) is safe.
         public void Configure(
             ReachyProductionAuthoritativeRuntime runtime,
             ReachyCameraCalibrationPersistenceStore calibrations)
@@ -114,6 +117,29 @@ namespace ReachyMini.AppState
             paused = false;
         }
 
+        // RMA-195 phase D (voice+visual grounding, 2026-08-22): an on-demand
+        // capture entry point for a caller (the conversation orchestrator's
+        // VLM fold-in) that needs one TransformedReachyEye frame right now,
+        // outside the per-tick tracking loop. Reuses the exact same
+        // calibration/warp construction as RunOneFrameAsync via
+        // TryBuildFrame -- there is one code path for "produce a frame,"
+        // not two independent copies of that logic -- but returns the frame
+        // to the caller instead of feeding it to the tracker. The caller
+        // owns the returned frame's lifetime and must await
+        // frame.DisposeAsync() when done with it: ReachyUnityTrackingFrameResources
+        // clones its own GPU textures at construction (see
+        // ReachyUnityVisionFrameFactory.CreateOwnedTrackingFrame), so it does
+        // not alias the warp pipeline's per-tick render targets and is safe
+        // to hold beyond this call.
+        //
+        // Fails closed (returns null) rather than starting the camera
+        // acquisition session itself: this deliberately requires the
+        // camera-preview toggle already be on (see
+        // ReachyMainScreen.RequestCameraPreview), matching the existing
+        // fail-closed philosophy throughout this pipeline rather than
+        // reaching into ReachyAndroidCameraAcquisition's start/stop state
+        // machine, which assumes a single logical owner (the settings-panel
+        // toggle) driving it.
         public Task<ReachyVisionFrame?> CaptureFrameForAnalysisAsync(
             CancellationToken cancellationToken)
         {
@@ -122,6 +148,15 @@ namespace ReachyMini.AppState
                 allowWhilePaused: false);
         }
 
+        // RMA-190 physical acceptance needs a deterministic single-frame
+        // capture while the continuous tracker is suspended so it cannot race
+        // the acceptance harness for the same production warp pipeline. This
+        // internal entry point still uses TryBuildFrame -- exactly the shipping
+        // calibration/authoritative-rotation/homography path -- and differs
+        // only in allowing a capture while this driver is intentionally paused.
+        // It remains unavailable whenever another analysis operation is in
+        // flight, so a caller must pause first and retry until the prior frame
+        // finishes rather than running the GPU pipeline concurrently.
         internal Task<ReachyVisionFrame?> CaptureFrameForAcceptanceAsync(
             CancellationToken cancellationToken)
         {
@@ -174,6 +209,8 @@ namespace ReachyMini.AppState
             warpPipeline?.Dispose();
             if (tracker != null)
             {
+                // Fire-and-forget: OnDestroy is synchronous (Unity lifecycle
+                // contract), and the tracker's own DisposeAsync bounds itself.
                 _ = tracker.DisposeAsync().AsTask();
             }
         }
@@ -243,6 +280,13 @@ namespace ReachyMini.AppState
             public bool Succeeded => Frame != null;
         }
 
+        // The shared, synchronous "calibrate + reproject a TransformedReachyEye
+        // frame right now" sequence used both by the continuous per-tick
+        // tracking loop (RunOneFrameAsync) and by the on-demand
+        // CaptureFrameForAnalysisAsync entry point -- one code path for
+        // frame construction, not two independent copies of the
+        // calibration/warp logic. Callers are responsible for disposing the
+        // returned frame.
         private FrameBuildResult TryBuildFrame(ReachyAndroidCameraTextureBridge bridge)
         {
             ReachyCameraTextureBridgeSnapshot bridgeSnapshot = bridge.Current;
@@ -260,6 +304,15 @@ namespace ReachyMini.AppState
                     descriptor.LensFacing,
                     descriptor.OutputWidth,
                     descriptor.OutputHeight,
+                    // No production calibration-capture flow exists yet
+                    // to say what "the Reachy-side image" was captured
+                    // at; using the same live phone-side output
+                    // dimensions (the same ones
+                    // ReachyCameraHomographyWarpPipeline.Execute() itself
+                    // builds its plan from) is the least speculative
+                    // choice available. A real mismatch here fails
+                    // closed as ImageSizeMismatch, not silently wrong --
+                    // see ReachyCameraCalibrationStateStore.SelectExact.
                     descriptor.OutputWidth,
                     descriptor.OutputHeight,
                     ReachyCameraMujocoOpticalBinding.OfficialModelCompatibility);
@@ -432,6 +485,8 @@ namespace ReachyMini.AppState
                 }
                 if (match >= 0)
                 {
+                    // Duplicated canonical camera body: fail closed rather
+                    // than pick one arbitrarily.
                     return null;
                 }
                 match = index;
