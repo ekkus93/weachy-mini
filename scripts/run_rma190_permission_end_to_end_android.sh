@@ -22,14 +22,61 @@ command -v "${ADB_BIN}" >/dev/null
 rm -rf -- "${REPORT_DIR}"
 mkdir -p "${REPORT_DIR}"
 
+emit_failure_diagnostics()
+{
+    local label="$1"
+    local nested_exit="${2:-}"
+    printf '%s\n' 'RMA190_PERMISSION_FAILURE_BEGIN'
+    printf 'failure_label=%s\n' "${label}"
+    if [[ -n "${nested_exit}" ]]; then
+        printf 'nested_exit=%s\n' "${nested_exit}"
+    fi
+    printf 'report_dir=%s\n' "${REPORT_DIR}"
+    printf 'nested_report_dir=%s\n' "${NESTED_REPORT_DIR}"
+    printf '%s\n' 'available_files:'
+    if [[ -d "${REPORT_DIR}" ]]; then
+        find "${REPORT_DIR}" -maxdepth 3 -type f -printf '%p\n' | sort || true
+    fi
+    for candidate in \
+        "${NESTED_REPORT_DIR}/rma090-camera-discovery.json" \
+        "${NESTED_REPORT_DIR}/device-report.json" \
+        "${NESTED_REPORT_DIR}/environment.txt" \
+        "${NESTED_REPORT_DIR}/package.txt" \
+        "${NESTED_REPORT_DIR}/activity.txt" \
+        "${NESTED_REPORT_DIR}/logcat.txt" \
+        "${REPORT_DIR}/package-after-revocation.txt" \
+        "${REPORT_DIR}/rma190-permission-end-to-end.json"; do
+        if [[ -s "${candidate}" ]]; then
+            printf '--- %s ---\n' "${candidate}"
+            case "${candidate}" in
+                *.json|*.txt)
+                    tail -n 120 "${candidate}" || true
+                    ;;
+                *)
+                    printf 'file exists but is not text-captured by diagnostic helper\n'
+                    ;;
+            esac
+        fi
+    done
+    printf '%s\n' 'RMA190_PERMISSION_FAILURE_END'
+}
+
+set +e
 RMA090_CAMERA_REPORT_DIR="${NESTED_REPORT_DIR}" \
 UNITY_DEVICE_APK_PATH="${APK_PATH}" \
 REACHY_ANDROID_SERIAL="${REACHY_ANDROID_SERIAL:-}" \
 ADB_BIN="${ADB_BIN}" \
 bash "${RMA090_RUNNER}"
+nested_exit=$?
+set -e
+if (( nested_exit != 0 )); then
+    emit_failure_diagnostics "nested-rma090-camera-permission-cycle-failed" "${nested_exit}" >&2
+    exit "${nested_exit}"
+fi
 
 RMA090_REPORT="${NESTED_REPORT_DIR}/rma090-camera-discovery.json"
 if [[ ! -s "${RMA090_REPORT}" ]]; then
+    emit_failure_diagnostics "fresh-rma090-report-missing" >&2
     printf 'Fresh RMA-090 camera permission evidence is missing: %s\n' \
         "${RMA090_REPORT}" >&2
     exit 1
@@ -42,6 +89,7 @@ if [[ -z "${DEVICE_SERIAL}" ]]; then
             | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
     )
     if (( ${#serials[@]} != 1 )); then
+        emit_failure_diagnostics "ambiguous-physical-device-after-rma090" >&2
         printf 'Expected one physical Android device after RMA-090 cycle; found %s.\n' \
             "${#serials[@]}" >&2
         exit 1
@@ -55,6 +103,7 @@ ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 if grep -Eq \
     '^[[:space:]]*android\.permission\.CAMERA: granted=true' \
     "${REPORT_DIR}/package-after-revocation.txt"; then
+    emit_failure_diagnostics "camera-permission-remained-granted" >&2
     printf '%s\n' 'Camera permission remained granted after the revocation scenario.' >&2
     exit 1
 fi
@@ -64,6 +113,7 @@ export RMA190_PERMISSION_DEVICE_MODEL="$(${ADB[@]} shell getprop ro.product.mode
 export RMA190_PERMISSION_DEVICE_SDK="$(${ADB[@]} shell getprop ro.build.version.sdk | tr -d '\r')"
 export RMA190_PERMISSION_DEVICE_ABI="$(${ADB[@]} shell getprop ro.product.cpu.abi | tr -d '\r')"
 
+set +e
 python3 - "${RMA090_REPORT}" "${REPORT_DIR}/rma190-permission-end-to-end.json" <<'PY'
 from __future__ import annotations
 
@@ -124,6 +174,12 @@ destination.write_text(
 )
 print(json.dumps(report, indent=2, sort_keys=True))
 PY
+python_exit=$?
+set -e
+if (( python_exit != 0 )); then
+    emit_failure_diagnostics "rma190-report-validation-failed" "${python_exit}" >&2
+    exit "${python_exit}"
+fi
 
 printf 'RMA-190 physical permission denial/revocation acceptance passed on %s.\n' \
     "${DEVICE_SERIAL}"
