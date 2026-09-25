@@ -116,7 +116,33 @@ a second transformed frame whose camera source sequence and authoritative state
 sequence both advance on the same camera session and continuity. The roadmap
 checkbox remains open until this harness passes on a physical Android device.
 
-## 5. Completion policy
+## 6. Failure Matrix
+
+`rma190_failure_matrix` is a deterministic regression matrix for the still-open
+failure-oriented roadmap scenarios:
+
+- Permission denial/revocation.
+- Network loss, rate limit, malformed response, cancellation.
+- Model corruption/OOM.
+- Solver fault and controlled reset.
+
+The matrix is intentionally supporting evidence rather than a substitute for the
+future scenario-level end-to-end reports. It proves that the repository still
+contains fail-closed lower-level coverage for the production boundaries that those
+scenarios depend on: Android permission state transitions, ASR permission failure,
+VLM/HTTP transport unauthorized/malformed/cancelled outcomes, local model package
+corruption, local LLM out-of-memory handling, and native-backed simulation worker
+fault retention.
+
+The matrix runner builds the managed-native contract library, exports
+`REACHY_MANAGED_NATIVE_TESTS=1`, and executes the managed Android ASR, core,
+local-model-package, and local-LLM test projects. The matrix must remain
+artifact-free and must not claim physical acceptance, provider availability,
+network-disabled operation, model-download success, or controlled runtime reset
+completion by itself. Each roadmap checkbox stays open until its own required
+RMA-190 evidence exists.
+
+## 7. Completion policy
 
 The first three RMA-190 roadmap checkboxes remain open until the physical Android
 run passes on an exact commit and its artifact is recorded in the roadmap/validation
