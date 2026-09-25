@@ -1,11 +1,11 @@
 # RMA-190 consolidation update — 2026-09-24
 
-This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after the duplicate-lane transplant pass. It does not close any RMA-190 checkbox and does not replace physical acceptance evidence.
+This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after the duplicate-lane transplant pass. It does not close any RMA-190 checkbox on `master` by itself and does not replace TODO reconciliation on a mergeable branch.
 
 ## Canonical branch heads after transplant pass
 
 - Core offline/MuJoCo/gesture evidence lane: PR #71, `ralph/rma190-core-evidence-reconcile-v2` at `bebea19d3102531114b5fd3188324f5bd5f8ac6c`.
-- Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at `a0844b79089b48272e2c9d65fd0962604eb5d955`.
+- Front-camera requalification lane: PR #72, `ralph/rma190-camera-requalify` at docs head `3de12462923b2cae062eedd325ec372859034ea2`; physically validated source/test head `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`.
 - Independent provider combinations lane: PR #44, `ralph/rma190-independent-provider-combinations` at `218845dded0f758f0d1a5ec8f6cd56b9e575c768`.
 - Network/provider failure lane: PR #67, `ralph/rma190-network-failure-modes` at `ef3aba85008ee0a84cd68e2af4168ec4de8f6e87`.
 - Model corruption/OOM lane: PR #68, `ralph/rma190-model-corruption-oom` at `6350208c5beaa8566c5240a8a077b5972f4a948a`.
@@ -53,15 +53,25 @@ A temporary branch-only validation workflow was started from exact current `mast
 - workflow: `A54 RMA-190 Core And Camera E2E`
 - run id: `36058331090`
 
-That current-master workflow proved the A54 build/install/pin path and ran the core RMA-190 acceptance step successfully, but it cannot close the camera checkbox because the combined workflow used `continue-on-error` and the camera lane still failed.
+That current-master workflow proved the A54 build/install/pin path and ran the core RMA-190 acceptance step successfully, but it could not close the camera checkbox because the combined workflow used `continue-on-error` and the camera lane still failed.
 
-The canonical front-camera lane was then debugged while the A54 was still available. The key diagnostic came from PR #72 head `c6840c799148c52bd5bb7496058f01e651d5186f`, physical run `36066778327`, and compact device report dump `36068367008`:
+The canonical front-camera lane was then debugged while the A54 was available. The key diagnostic came from PR #72 head `c6840c799148c52bd5bb7496058f01e651d5186f`, physical run `36066778327`, and compact device report dump `36068367008`:
 
 ```text
 last perception state=NoCameraFrame; message=Homography reprojection did not produce a frame: The camera texture and phone orientation are not timestamp-corresponding.; revision=2709
 ```
 
-PR #72 head `a0844b79089b48272e2c9d65fd0962604eb5d955` now includes a source-side fix: the production perception driver stamps the fail-closed identity phone-orientation sample with the source texture timestamp (`descriptor.TimestampNanoseconds`) instead of driver wall-clock time, with a source-contract guard in `scripts/tests/test_rma190_camera_end_to_end.py`. The A54 was disconnected before this fixed head could be physically revalidated, so the front-camera checkbox remains open and needs another exact-head A54 run.
+PR #72 then fixed the source-side timestamp-correspondence defect: the production perception driver now stamps the fail-closed identity phone-orientation sample with the source texture timestamp (`descriptor.TimestampNanoseconds`) instead of driver wall-clock time, with a source-contract guard in `scripts/tests/test_rma190_camera_end_to_end.py`.
+
+The A54 was reconnected and the canonical PR #72 physical workflow passed for the exact source/test head containing that fix and hardened guard:
+
+- physically validated source/test head: `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`
+- workflow: `RMA-190 Front Camera End-to-End Android Acceptance`
+- run id: `36104066566`
+- job: `RMA-190 front camera E2E on Android`
+- result: `success`
+
+All required physical workflow steps passed: source-contract validation, Unity/Android resolution, generated Reachy Unity presentation preparation, production MuJoCo Android runtime staging, ARM64 API-26 APK build, APK verification, physical A54 pin, `scripts/run_rma190_camera_end_to_end_android.sh` front-camera acceptance, and evidence upload. The PR #72 docs head `3de12462923b2cae062eedd325ec372859034ea2` only records that evidence; it does not change app behavior beyond the physically validated source/test head.
 
 ## Remaining consolidation/audit work
 
@@ -72,4 +82,4 @@ The following lanes still require audit before they are closed, superseded, or t
 - `ralph/rma190-failure-modes` / PR #65;
 - `ralph/rma190-solver-recovery` / PR #60.
 
-No authoritative TODO checkbox should be marked complete until the relevant canonical PR is merged and its required exact-head CI/physical/provider/native/model evidence exists.
+No authoritative TODO checkbox should be marked complete on `master` until the relevant canonical PR is merged and its required exact-head CI/physical/provider/native/model evidence exists.
