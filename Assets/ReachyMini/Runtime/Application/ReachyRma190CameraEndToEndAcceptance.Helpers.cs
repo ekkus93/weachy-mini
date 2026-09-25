@@ -117,10 +117,12 @@ namespace ReachyMini.AppState
             }
         }
 
-        private static async Task<ReachyVisionFrame> CaptureAcceptanceFrameAsync(
+        private async Task<ReachyVisionFrame> CaptureAcceptanceFrameAsync(
             ReachyAndroidPerceptionDriver driver,
             CancellationToken cancellationToken)
         {
+            string phasePrefix = activePhase;
+            string lastDiagnostic = string.Empty;
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -130,6 +132,22 @@ namespace ReachyMini.AppState
                 {
                     return frame;
                 }
+
+                ReachyPerceptionServiceSnapshot snapshot = driver.Snapshot;
+                string diagnostic =
+                    phasePrefix + "; last perception state=" +
+                    snapshot.ExecutionState + "; message=" +
+                    snapshot.StatusMessage + "; revision=" +
+                    snapshot.Revision;
+                if (!string.Equals(
+                        diagnostic,
+                        lastDiagnostic,
+                        StringComparison.Ordinal))
+                {
+                    MarkPhase(diagnostic);
+                    lastDiagnostic = diagnostic;
+                }
+
                 await Task.Delay(ReadyPollMilliseconds, cancellationToken);
             }
         }
