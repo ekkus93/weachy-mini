@@ -11,6 +11,7 @@ This update supplements `docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md` after 
 - Failure-matrix regression lane: PR #55, `ralph/rma190-failure-matrix` at `b27c4978b111d3ea20477001ff18b890a86ab3c7`.
 - Model corruption/OOM lane: PR #68, `ralph/rma190-model-corruption-oom` at `6350208c5beaa8566c5240a8a077b5972f4a948a`.
 - Solver fault/controlled-reset lane: PR #69, `ralph/rma190-solver-fault-reset` at `80dbb42102dc0ea92c011903106e9baa77df1aa6`.
+- Production runtime failure-scenarios decision lane: PR #63, `ralph/rma190-failure-scenarios` at `09a9c62e4a94c2067bdd9bdd5a8f11c4f68e07cd`.
 
 ## Coverage transplanted into canonical lanes
 
@@ -50,11 +51,11 @@ Its branch-local consolidation note is `docs/validation/RMA_190_MODEL_FAILURE_CO
 
 The canonical solver lane now preserves the focused solver-fault source contract plus controlled native numeric-failure injection and managed controlled-reset coverage from `ralph/rma190-solver-fault-reset-e2e`.
 
-`ralph/rma190-solver-recovery` is intentionally **not** folded into PR #69. It modifies shipping production runtime recovery behavior and should remain a separate production-runtime decision/review lane unless a later exact-head transplant is deliberately made.
+### PR #63, PR #60, and PR #65 audit status
 
-### PR #63 and PR #65 audit status
+`ralph/rma190-failure-scenarios` / PR #63 is not a pure duplicate: it contains production runtime recovery behavior (`ReachyProductionAuthoritativeRuntime.RecoverFaultedAndResetNeutral`) plus deterministic native solver-failure injection. It remains the production-runtime failure-scenarios decision lane unless its production behavior is deliberately reconciled into PR #69.
 
-`ralph/rma190-failure-scenarios` / PR #63 is not a pure duplicate: it contains production runtime recovery behavior (`ReachyProductionAuthoritativeRuntime.RecoverFaultedAndResetNeutral`) plus deterministic native solver-failure injection. It should remain a separate production-runtime failure-scenarios lane unless its production behavior is deliberately reconciled with PR #60 and PR #69.
+`ralph/rma190-solver-recovery` / PR #60 has been audited. It is narrower than PR #63 and adds an unused `RecoverFromFault()` production method plus a static source contract. It should not be merged independently while PR #63 contains the broader recovery-plus-neutral-reset production path.
 
 `ralph/rma190-failure-modes` / PR #65 has been partially preserved: its unique LLM provider network/rate-limit coverage is now transplanted to PR #67. Its solver-recreation assertions overlap the PR #63/PR #60/PR #69 solver-runtime work and should not be merged separately without that reconciliation.
 
@@ -106,8 +107,6 @@ All required physical workflow steps passed: source-contract validation, Unity/A
 
 ## Remaining consolidation/audit work
 
-The following lane still requires production-runtime reconciliation before it is closed, superseded, or transplanted:
-
-- `ralph/rma190-solver-recovery` / PR #60.
+Duplicate-lane audit is complete for the RMA-190 branches inspected here. Remaining work is implementation, qualification, CI/merge-gate recovery, and safe TODO reconciliation after canonical PRs merge.
 
 No authoritative TODO checkbox should be marked complete on `master` until the relevant canonical PR is merged and its required exact-head CI/physical/provider/native/model evidence exists.
