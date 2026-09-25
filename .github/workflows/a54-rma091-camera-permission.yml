@@ -45,6 +45,7 @@ jobs:
           }
           printf 'UNITY_6000_5_2F1_PATH=%s\n' "${unity_path}" >> "${GITHUB_ENV}"
           printf 'UNITY_EXECUTABLE=%s\n' "${unity_path}" >> "${GITHUB_ENV}"
+          printf 'UNITY_EDITOR=%s\n' "${unity_path}" >> "${GITHUB_ENV}"
           printf 'ANDROID_SDK_ROOT=%s\n' "${sdk_root}" >> "${GITHUB_ENV}"
           printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
           "${adb_bin}" version
