@@ -82,7 +82,34 @@ jobs:
 
       - name: Build ARM64 API-26 device APK
         shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
+        run: |
+          set -euo pipefail
+          build_log="${RUNNER_TEMP}/rma190-rear-visual-build.log"
+          set +e
+          bash scripts/build_unity_android.sh device-feasibility > "${build_log}" 2>&1
+          code=$?
+          set -e
+          if (( code != 0 )); then
+            printf '\n### RMA-190 rear visual Unity Android build log tail\n'
+            tail -n 260 "${build_log}" || true
+            printf '\n### Candidate Unity editor log tails\n'
+            for log in \
+              "${HOME}/.config/unity3d/Editor.log" \
+              "${HOME}/.config/unity3d/Unity/Editor.log" \
+              "${GITHUB_WORKSPACE}/Editor.log" \
+              "${GITHUB_WORKSPACE}/Logs/Editor.log"; do
+              if [[ -s "${log}" ]]; then
+                printf '\n--- %s ---\n' "${log}"
+                tail -n 220 "${log}" || true
+              fi
+            done
+            printf '\n### Build output discovery\n'
+            find Builds Library -maxdepth 4 -type f 2>/dev/null | grep -E '(apk$|\.log$|gradle|launcher|unityLibrary)' | tail -n 120 || true
+          else
+            printf '\n### RMA-190 rear visual Unity Android build log tail\n'
+            tail -n 80 "${build_log}" || true
+          fi
+          exit "${code}"
 
       - name: Verify ARM64 API-26 device APK
         shell: bash
