@@ -52,4 +52,4 @@ jobs:
           fi
           printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n'             "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
       - name: Run RMA-190 failure matrix
-        run: ./scripts/run_rma190_failure_matrix.sh
+        run: bash scripts/run_rma190_failure_matrix.sh
