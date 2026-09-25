@@ -3,9 +3,9 @@
 ## Branch and source under test
 
 - Canonical lane: PR #72, `ralph/rma190-camera-requalify`
-- Latest source head: `d2ada8375b29088eb4e506ee98133c3ce5bbe1b6`
+- Latest physically validated source/test head: `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`
 - Base source: current `master` `b188ce3b18635d24da79cb762e245c52e361ab5e`
-- Device used while available: Samsung A54 reported by adb as serial `R5CW31AX4FL`, `arm64-v8a`, SDK `36`
+- Device used: Samsung A54 reported by adb as serial `R5CW31AX4FL`, `arm64-v8a`, SDK `36`
 
 ## Runs
 
@@ -17,7 +17,7 @@ A temporary current-master workflow first verified the attached A54 runner/devic
 - head: `924c0f169f0b05cfe5ad782985bac1370171f137`
 - run id: `36058331090`
 
-That run built the APK, pinned the A54, ran the RMA-190 core acceptance step, uploaded core evidence, then attempted camera acceptance. Because the workflow used `continue-on-error` to allow both evidence uploads, its final verdict step failed and could not be used as clean closure evidence.
+That run built the APK, pinned the A54, ran the RMA-190 core acceptance step, uploaded core evidence, then attempted camera acceptance. Because the workflow used `continue-on-error` to allow both evidence uploads, its final verdict step failed and could not be used as clean camera-closure evidence.
 
 A follow-up standalone camera run removed `continue-on-error` from the camera acceptance step:
 
@@ -63,30 +63,50 @@ last perception state=NoCameraFrame; message=Homography reprojection did not pro
 
 That diagnostic means host/runtime discovery, camera discovery, front-camera acquisition, baseline authoritative state, and deterministic calibration fixture installation all progressed far enough to reach baseline transformed-frame capture. The blocker was the shipping homography path rejecting every frame because `ReachyAndroidPerceptionDriver` stamped the fail-closed identity phone-orientation sample with driver wall-clock time instead of the exact camera texture timestamp required by `ReachyCameraHomographyCalculator`.
 
-### Source-side fix prepared after the A54 was disconnected
+### Source-side timestamp-correspondence fix
 
-The A54 was no longer available after the diagnostic dump. The current PR #72 head now contains a source-side fix and a source-contract guard:
+PR #72 then added a source-side fix and source-contract guard:
 
-- head: `d2ada8375b29088eb4e506ee98133c3ce5bbe1b6`
 - production change: `ReachyAndroidPerceptionDriver.TryBuildFrame` now constructs the identity `ReachyPhoneOpticalOrientationSample` using `descriptor.TimestampNanoseconds`.
-- regression guard: `scripts/tests/test_rma190_camera_end_to_end.py` asserts the driver uses `descriptor.TimestampNanoseconds` and does not regress to `ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds())`.
+- regression guard: `scripts/tests/test_rma190_camera_end_to_end.py` asserts the driver uses `descriptor.TimestampNanoseconds`, asserts the explanatory timestamp-correspondence comment remains present, and guards against regressing to `ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds())`.
 
-Local sandbox validation performed before publishing the guard:
+Local sandbox validation before publishing the guard:
 
 ```text
 python3 scripts/tests/test_rma190_camera_end_to_end.py
 # Ran 5 tests in 0.003s — OK
 ```
 
-The exact-head physical workflow for `d2ada8375b29088eb4e506ee98133c3ce5bbe1b6` may not be usable as closure evidence because the phone was disconnected after the diagnostic. Any subsequent physical-device failure at pin/install/acceptance must be interpreted in that context.
+### Passing exact-head A54 validation
+
+The A54 was reconnected and the canonical PR #72 physical workflow was run against the exact source/test head containing the timestamp-correspondence fix and hardened source contract:
+
+- head: `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`
+- run id: `36104066566`
+- workflow: `RMA-190 Front Camera End-to-End Android Acceptance`
+- job: `RMA-190 front camera E2E on Android`
+- result: `success`
+
+All workflow steps passed:
+
+- source-contract validation;
+- Unity/Android resolution;
+- generated Reachy Unity presentation preparation;
+- production MuJoCo Android runtime staging;
+- ARM64 API-26 APK build;
+- APK verification;
+- physical A54 pin;
+- `scripts/run_rma190_camera_end_to_end_android.sh` front-camera acceptance;
+- evidence upload.
+
+Ralph synthesized CI report for run `36104066566` reported `result="success"`, `head_sha="c2d730aafe7ad9ce396f6f431c95563c8ac6bc83"`, and no failed steps.
 
 ## Current conclusion
 
-The RMA-190 front-camera scenario is **not closed**. The A54 device path worked while the phone was connected, and the source-side timestamp-correspondence defect has a concrete fix on PR #72, but the camera checkbox remains open until the fixed head gets a clean physical A54 acceptance run and inspectable passing report.
+The RMA-190 front-camera scenario has clean physical A54 acceptance evidence for PR #72 source/test head `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`. The branch should still be treated as unmerged until normal PR review/merge gates complete; the authoritative `master` TODO checkbox should not be closed on `master` until the reconciled evidence reaches `master` safely.
 
-## Next debugging steps
+## Next steps
 
-1. Re-run `RMA-190 Front Camera End-to-End Android Acceptance` on PR #72 head `d2ada8375b29088eb4e506ee98133c3ce5bbe1b6` when a physical A54 is available again.
-2. If the fixed head reaches a new failure, inspect `/sdcard/Android/data/com.ekkus.weachymini/files/rma190-camera-end-to-end-acceptance.json`; the current diagnostics should name the exact active phase plus the last perception-driver state/message.
-3. Keep the RMA-190 front-camera TODO checkbox open until a physical run passes and the resulting report is inspectable.
-4. Do not treat the current branch as merge-ready solely because source contracts pass; physical acceptance still needs to pass on the exact head.
+1. Reconcile the authoritative TODO on a safe branch/PR with the exact evidence above.
+2. Merge PR #72 only when the repository's merge policy is satisfied. Do not confuse the unrelated generic zero-step/log-unavailable CI failures with source failures.
+3. If the branch receives any non-documentation source changes after `c2d730aafe7ad9ce396f6f431c95563c8ac6bc83`, rerun `RMA-190 Front Camera End-to-End Android Acceptance` before relying on this scenario as closed.
