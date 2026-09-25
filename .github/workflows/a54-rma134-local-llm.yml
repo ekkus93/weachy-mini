@@ -175,5 +175,16 @@ jobs:
           bash scripts/run_rma134_local_llm_acceptance_android.sh \
             Builds/Android/weachy-mini-device-arm64-api26.apk \
             "${report_dir}"
+
+      - name: Print RMA-134 local LLM diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_dir="${RUNNER_TEMP}/rma134-local-llm-android"
           printf '\n### RMA-134 local LLM report files\n'
-          find "${report_dir}" -maxdepth 1 -type f -print -exec sh -c 'printf "\n--- %s ---\n" "$1"; cat "$1"' sh {} \;
+          if [[ -d "${report_dir}" ]]; then
+            find "${report_dir}" -maxdepth 1 -type f -print -exec sh -c 'printf "\n--- %s ---\n" "$1"; cat "$1" || true' sh {} \;
+          else
+            printf 'report_dir_missing=%s\n' "${report_dir}"
+          fi
