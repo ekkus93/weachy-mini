@@ -1,0 +1,66 @@
+name: A54 RMA-134 Dump
+
+on:
+  push:
+    branches:
+      - ralph/a54-rma134-dump-20260925
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a54-rma134-dump
+  cancel-in-progress: true
+
+jobs:
+  dump:
+    name: Dump RMA-134 report from A54
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 5
+
+    steps:
+      - name: Dump compact RMA-134 report
+        shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          adb_bin="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}/platform-tools/adb"
+          if [[ ! -x "${adb_bin}" ]]; then
+            adb_bin="$(command -v adb || true)"
+          fi
+          [[ -n "${adb_bin}" && -x "${adb_bin}" ]] || { echo 'adb unavailable' >&2; exit 1; }
+          mapfile -t serials < <("${adb_bin}" devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}')
+          serial="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -z "${serial}" ]]; then
+            if (( ${#serials[@]} != 1 )); then
+              echo "expected exactly one physical device, found ${#serials[@]}" >&2
+              "${adb_bin}" devices -l >&2
+              exit 1
+            fi
+            serial="${serials[0]}"
+          fi
+          "${adb_bin}" -s "${serial}" wait-for-device
+          package='com.ekkus.weachymini'
+          files="/sdcard/Android/data/${package}/files"
+          result="${files}/rma134-local-llm-acceptance.json"
+          echo "RMA134_DUMP_BEGIN serial=${serial}"
+          echo "device_model=$("${adb_bin}" -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+          echo "package_pid=$("${adb_bin}" -s "${serial}" shell pidof "${package}" 2>/dev/null | tr -d '\r' || true)"
+          echo 'remote_files:'
+          "${adb_bin}" -s "${serial}" shell "ls -1 '${files}' 2>/dev/null | grep -E 'rma134|checkpoint|gguf' || true" | tr -d '\r'
+          echo 'latest_checkpoint_one_line:'
+          "${adb_bin}" -s "${serial}" shell "latest=\$(ls -1 ${files}/rma134-local-llm-checkpoint-*.json 2>/dev/null | tail -n 1); if test -n \"\${latest}\"; then tr -d '\n\r' < \"\${latest}\"; fi" | tr -d '\r'
+          echo
+          echo 'result_one_line:'
+          "${adb_bin}" -s "${serial}" shell "if test -f '${result}'; then tr -d '\n\r' < '${result}'; fi" | tr -d '\r'
+          echo
+          echo 'recent_weachy_log_lines:'
+          "${adb_bin}" -s "${serial}" logcat -d -v threadtime | grep -i -E 'rma134|local llm|reachy llama|weachy|out.of.memory|exception|fatal|error' | tail -n 80 || true
+          echo 'RMA134_DUMP_END'
+          exit 1
