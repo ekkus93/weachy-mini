@@ -1,0 +1,47 @@
+name: A54 RMA-125 Speech Device Preflight
+
+on:
+  push:
+    branches:
+      - ralph/a54-rma125-speech-preflight-20260925
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a54-rma125-speech-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Run RMA-125 speech device preflight on A54
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Run physical speech preflight
+        shell: bash
+        env:
+          REACHY_ANDROID_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+          RMA125_SPEECH_PREFLIGHT_REPORT_DIR: build/rma125-speech-device-preflight
+        run: |
+          set -euo pipefail
+          bash scripts/run_rma125_speech_device_preflight.sh
+
+      - name: Upload speech preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma125-speech-device-preflight-${{ github.sha }}
+          path: build/rma125-speech-device-preflight/
+          if-no-files-found: error
