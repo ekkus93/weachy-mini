@@ -129,17 +129,18 @@ namespace ReachyMini.AppState
                 new ReachyLicenseNotice(
                     "Reachy Mini hardware and model assets",
                     "Pollen Robotics",
-                    "CC BY-NC-SA; attribution, noncommercial, ShareAlike, and " +
+                    "CC BY-NC-SA; Unity presentation meshes are coordinate-converted " +
+                        "derivatives; attribution, noncommercial, ShareAlike, and " +
                         "modification notices apply."),
                 new ReachyLicenseNotice(
                     "llama.cpp",
                     "ggml-org contributors",
                     "MIT License; pinned upstream license retained."),
                 new ReachyLicenseNotice(
-                    "Sub-1B local language model",
-                    "Not selected",
-                    "Candidate only; no model binary is packaged until selection and " +
-                        "license review complete."),
+                    "Qwen3 0.6B Q4_K_M",
+                    "Qwen project contributors",
+                    "Apache-2.0; benchmark-selected upstream GGUF is not bundled; " +
+                        "installation/import remains explicit and integrity-checked."),
                 new ReachyLicenseNotice(
                     "AndroidX CameraX",
                     "Android Open Source Project / Google",

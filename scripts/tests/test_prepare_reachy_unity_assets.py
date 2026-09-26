@@ -52,6 +52,16 @@ class ReachyUnityAssetPreparationTests(unittest.TestCase):
             json.dumps(provenance, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
+        (self.source / "ATTRIBUTION.md").write_text(
+            "# Reachy Mini imported assets\n\n"
+            "Source: Pollen Robotics Reachy Mini repository.\n\n"
+            "Hardware/model asset license: CC-BY-NC-SA.\n",
+            encoding="utf-8",
+        )
+        (self.source / "UPSTREAM_LICENSE").write_text(
+            "fixture upstream license\n",
+            encoding="utf-8",
+        )
 
     @staticmethod
     def write_binary_stl(path: Path) -> None:
@@ -158,6 +168,12 @@ endsolid head
         second = self.run_conversion()
         self.assertEqual(0, second.returncode, second.stderr)
         self.assertEqual(first_output, self.output_bytes())
+        self.assertIn("ATTRIBUTION.md", first_output)
+        self.assertIn("UPSTREAM_LICENSE", first_output)
+        attribution = first_output["ATTRIBUTION.md"].decode("utf-8")
+        self.assertIn("CC-BY-NC-SA", attribution)
+        self.assertIn("modified derivative", attribution)
+        self.assertIn("reachy_stl_to_unity_obj_v1", attribution)
         self.assertEqual(
             source_hashes,
             {
@@ -216,6 +232,12 @@ endsolid head
         self.assertEqual(
             hashlib.sha256((self.source / "MODEL_MAP.json").read_bytes()).hexdigest(),
             manifest["source"]["model_map_sha256"],
+        )
+        self.assertEqual("CC-BY-NC-SA", manifest["licensing"]["asset_license"])
+        self.assertTrue(manifest["licensing"]["modified_derivative"])
+        self.assertEqual(
+            "reachy_stl_to_unity_obj_v1",
+            manifest["licensing"]["transformation_id"],
         )
 
     def test_obj_applies_scale_basis_change_and_reversed_winding(self) -> None:
