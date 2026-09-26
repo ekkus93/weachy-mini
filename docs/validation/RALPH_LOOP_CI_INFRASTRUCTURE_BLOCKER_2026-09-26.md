@@ -24,6 +24,7 @@ Representative exact heads observed during the 2026-09-26 loop:
 - `fab7ba35cdeee3d021fd773fa8b1ecf3c04d30c9` — this documentation branch immediately before the current reconciliation, CI run `36231328047`; the generic CI failure persisted.
 - `3ecd11c27b99fd0d2104edaeaf6005e1988df9ba` — `ralph/rma194-release-acceptance-status`, CI run `36243960610`; a later documentation/status-only head still reproduced the hosted-CI failure.
 - `d09e84580c2cb4e276147eb8fcb3b40e58babff2` — this documentation branch after reconciling the passing A54 evidence, CI run `36247080879`; the fresh central blocker update itself still reproduced the hosted-CI failure.
+- `e7148010140a94f88781d586bbf384dfb051121f` — this documentation branch after the rerun/local-validation gate update, CI run `36249265201`; the newest central blocker update again reproduced five zero-step `JOB_NOT_FOUND` jobs.
 
 The current `master` head `b188ce3b18635d24da79cb762e245c52e361ab5e` also has a later workflow-run status publication failure (`36224599730`) with the same no-step/no-log evidence boundary.
 
@@ -65,6 +66,16 @@ A later local-validation probe on the RMA-193 documentation branch head `e0a9e7c
 
 This means local Ralph validation is not currently available as a substitute qualification path for the affected branches.
 
+## Dispatch validation gate
+
+Ralph Bridge dispatch validation was probed on `ralph/rma193-documentation` with profile `static` after the bridge reconnected. It was rejected with:
+
+```text
+VALIDATION_PROFILE_NOT_FOUND: Validation profile is not configured or enabled.
+```
+
+This means there is not currently a configured dispatch-validation substitute for the hosted PR CI gate.
+
 ## Required next action
 
 Before any pending roadmap PR is merged on the basis of CI, exact-head qualification must be re-established by one of the following:
@@ -72,6 +83,7 @@ Before any pending roadmap PR is merged on the basis of CI, exact-head qualifica
 1. GitHub Actions begins producing normal job logs/steps again and an exact-head run passes for the PR being merged.
 2. Ralph Bridge receives the required Actions write permission and successfully reruns failed jobs, followed by an exact-head pass.
 3. Ralph Bridge local validation is enabled with an approved repository profile that covers the affected TODO acceptance criteria, and the exact branch head passes that profile.
-4. An authorized equivalent exact-head qualification path is provided and recorded with concrete run/SHA evidence.
+4. Ralph Bridge dispatch validation is configured with an approved repository profile that covers the affected TODO acceptance criteria, and the exact branch head passes that profile.
+5. An authorized equivalent exact-head qualification path is provided and recorded with concrete run/SHA evidence.
 
 Until then, pending branches may be reviewed and kept ready, but their TODO checkboxes must remain open unless their own required evidence already exists independently of the failed CI runs.
