@@ -23,6 +23,7 @@ Representative exact heads observed during the 2026-09-26 loop:
 - `560f2a313450e9570e9fede518098323eb702606` — this documentation branch before this update, CI run `36230946592`; the third documentation-only CI run again reproduced five zero-step `JOB_NOT_FOUND` jobs.
 - `fab7ba35cdeee3d021fd773fa8b1ecf3c04d30c9` — this documentation branch immediately before the current reconciliation, CI run `36231328047`; the generic CI failure persisted.
 - `3ecd11c27b99fd0d2104edaeaf6005e1988df9ba` — `ralph/rma194-release-acceptance-status`, CI run `36243960610`; a later documentation/status-only head still reproduced the hosted-CI failure.
+- `d09e84580c2cb4e276147eb8fcb3b40e58babff2` — this documentation branch after reconciling the passing A54 evidence, CI run `36247080879`; the fresh central blocker update itself still reproduced the hosted-CI failure.
 
 The current `master` head `b188ce3b18635d24da79cb762e245c52e361ab5e` also has a later workflow-run status publication failure (`36224599730`) with the same no-step/no-log evidence boundary.
 
@@ -50,7 +51,7 @@ A Ralph Bridge attempt to rerun failed jobs for CI run `36224078717` was rejecte
 WRITE_PERMISSION_REQUIRED: GitHub Actions write permission is required for this Phase 2 operation.
 ```
 
-Later rerun attempts for the self-reproduced documentation-only CI run `36230046936` and the now-A54-unblocked permission branch run `36201301960` returned the same `WRITE_PERMISSION_REQUIRED` error. That means the loop cannot currently repair the condition by rerunning failed Actions jobs through Ralph Bridge.
+Later rerun attempts for the self-reproduced documentation-only CI run `36230046936`, the now-A54-unblocked permission branch run `36201301960`, and the refreshed RMA-194 status branch run `36243960610` returned the same `WRITE_PERMISSION_REQUIRED` error. That means the loop cannot currently repair the condition by rerunning failed Actions jobs through Ralph Bridge.
 
 ## Local validation gate
 
@@ -59,6 +60,8 @@ Ralph Bridge local validation was also probed on exact head `4117261432e0f4243f5
 ```text
 LOCAL_RUNNER_DISABLED: Local validation is disabled by Ralph Bridge policy.
 ```
+
+A later local-validation probe on the RMA-193 documentation branch head `e0a9e7c215128df7e70883817afd7fb9bede4a5f` with the same `static` profile returned the same `LOCAL_RUNNER_DISABLED` policy error.
 
 This means local Ralph validation is not currently available as a substitute qualification path for the affected branches.
 
