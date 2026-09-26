@@ -105,7 +105,7 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
         self.assertEqual(identity["source_revision"], selected["source_revision"])
         self.assertEqual(identity["license_id"], selected["license"])
         self.assertEqual("selected_not_bundled", selected["status"])
-        self.assertIn("not bundled", selected["required_notice"].lower())
+        self.assertIn("not committed or bundled", selected["required_notice"].lower())
 
         self.assertEqual(396704416, artifact["file_size_bytes"])
         self.assertEqual(
