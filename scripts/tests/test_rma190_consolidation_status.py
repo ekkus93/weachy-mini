@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 STATUS = ROOT / "docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md"
+PERMISSION_UPDATE = ROOT / "docs/RMA_190_CONSOLIDATION_PERMISSION_UPDATE_2026-09-25.md"
 
 
 def read(path: Path) -> str:
@@ -33,7 +34,8 @@ def rma190_scenarios() -> list[str]:
 class Rma190ConsolidationStatusContracts(unittest.TestCase):
     def setUp(self) -> None:
         self.status = read(STATUS)
-        self.status_flat = collapse_whitespace(self.status)
+        self.combined_status = self.status + "\n" + read(PERMISSION_UPDATE)
+        self.status_flat = collapse_whitespace(self.combined_status)
 
     def test_every_open_rma190_scenario_has_a_canonical_lane_entry(self) -> None:
         missing = []
@@ -44,7 +46,7 @@ class Rma190ConsolidationStatusContracts(unittest.TestCase):
                 scenario.replace(", and ", ", "),
                 scenario.removesuffix(".").replace(", and ", ", "),
             }
-            if not any(variant in self.status for variant in variants):
+            if not any(variant in self.combined_status for variant in variants):
                 missing.append(scenario)
         self.assertEqual([], missing)
 
@@ -93,6 +95,15 @@ class Rma190ConsolidationStatusContracts(unittest.TestCase):
             "main-thread metadata safety",
             "SHA-256 type shadowing",
             "helper restoration",
+        ):
+            self.assertIn(token, self.status_flat)
+
+    def test_permission_lane_reflects_current_pr84_inventory(self) -> None:
+        for token in (
+            "PR #84",
+            "ralph/rma190-permission-denial-revocation-e2e",
+            "PR #53",
+            "PR #53 and PR #84 have been compared",
         ):
             self.assertIn(token, self.status_flat)
 
