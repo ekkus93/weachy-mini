@@ -69,11 +69,16 @@ class Rma173SilentFailureContractTests(unittest.TestCase):
 
     def test_invalid_camera_pixels_do_not_reuse_stale_world_model_content(self) -> None:
         driver = read(APP / "ReachyAndroidPerceptionDriver.cs")
+        fault_publish = (
+            "PublishSnapshot(\n"
+            "                            ReachyPerceptionServiceExecutionState.Faulted,\n"
+            "                            null,"
+        )
         self.assertIn("FrameBuildResult.Failure", driver)
         self.assertIn("ReachyPerceptionServiceExecutionState.NoCameraFrame", driver)
         self.assertIn("PublishSnapshot(built.FailureState, null, built.FailureMessage)", driver)
         self.assertIn("Tracking failed", driver)
-        self.assertIn("PublishSnapshot(\n                            ReachyPerceptionServiceExecutionState.Faulted,\n                            null,", driver)
+        self.assertIn(fault_publish, driver)
         self.assertIn("The world model rejected a tracking batch", driver)
         self.assertIn("ReachyUnityVisionFrameFactory.CreateOwnedTrackingFrame", driver)
 
@@ -104,7 +109,10 @@ class Rma173SilentFailureContractTests(unittest.TestCase):
         runtime = read(RENDERING / "ReachyProductionAuthoritativeRuntime.cs")
         sink = read(RENDERING / "ReachyProductionBehaviorControllerTargetSink.cs")
         self.assertIn("worker.EnqueueCommandBatch(batch)", runtime)
-        self.assertIn("if (result == ReachySimulationCommandEnqueueResult.Accepted)", runtime)
+        self.assertIn(
+            "if (result == ReachySimulationCommandEnqueueResult.Accepted)",
+            runtime,
+        )
         self.assertIn("nextCommandSequence = checked(nextCommandSequence + 1UL)", runtime)
         self.assertIn("ReachyBehaviorTargetSubmissionStatus.QueueFull", sink)
         self.assertIn("ReachyBehaviorTargetSubmissionStatus.ControllerUnavailable", sink)
@@ -116,7 +124,10 @@ class Rma173SilentFailureContractTests(unittest.TestCase):
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         self.assertIn("llm-missing-validation", llm)
         self.assertIn("ReachyBehaviorIntentRecoveryPolicy.Evaluate", llm)
-        self.assertIn("decision.Action != ReachyBehaviorIntentRecoveryAction.Regenerate", llm)
+        self.assertIn(
+            "decision.Action != ReachyBehaviorIntentRecoveryAction.Regenerate",
+            llm,
+        )
         self.assertIn("return LlmTurnResult.Failure", llm)
         self.assertIn("FailTurnClosed(llmResult.DiagnosticCode, llmResult.Detail)", orchestrator)
         self.assertIn("no fabricated apology speech, no silent", orchestrator)
