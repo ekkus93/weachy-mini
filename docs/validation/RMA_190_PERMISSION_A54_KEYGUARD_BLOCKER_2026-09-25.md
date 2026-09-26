@@ -4,7 +4,7 @@
 
 This note records the current physical A54 status for the RMA-190 permission denial/revocation lane.
 
-The branch is `ralph/rma190-permission-end-to-end`. The run below used exact branch head:
+The branch is `ralph/rma190-permission-end-to-end`. The earlier run below used exact branch head:
 
 - `8f672b3b77a5f5be4ff9a620e05687aebf4466c8`
 
@@ -48,6 +48,10 @@ The foreground helper correctly refused to bypass an unoccluded PIN/pattern/pass
 
 ## Current status
 
-The A54 is currently unavailable to the self-hosted runner. Do not dispatch another A54 permission validation until the phone is available, unlocked, and explicitly confirmed ready by the user.
+The user reported on 2026-09-26 that the A54 phone is connected again to the server where the self-hosted runner is running. This lifts the earlier "device disconnected/unavailable" blocker for this lane.
 
-This lane remains open. The next physical attempt should reuse this exact acceptance path after the hardware/keyguard condition is cleared, or after a deliberate harness change that still does not bypass secure keyguard.
+The exact physical acceptance path should be retried now that the device is connected. The retry must still fail closed if the phone is behind an unoccluded PIN/pattern/password keyguard, if more than one physical Android device is attached, or if the connected device does not satisfy the workflow's ARM64/API-26+ requirements.
+
+This branch update intentionally adds this status file to the A54 workflow path filter so future status-only hardware-readiness updates can retrigger the branch-specific physical workflow without changing source behavior.
+
+This lane remains open until a fresh exact-head physical acceptance run passes and its run ID, job ID, branch head, and report evidence are recorded.

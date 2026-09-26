@@ -10,6 +10,7 @@ on:
       - 'scripts/run_rma190_permission_end_to_end_android.sh'
       - 'scripts/run_rma090_camera_discovery_acceptance_android.sh'
       - 'scripts/tests/test_rma190_permission_end_to_end.py'
+      - 'docs/validation/RMA_190_PERMISSION_A54_KEYGUARD_BLOCKER_2026-09-25.md'
       - 'scripts/android_device_acceptance_foreground.sh'
       - 'scripts/build_unity_android.sh'
       - 'scripts/prepare_reachy_unity_presentation.sh'
