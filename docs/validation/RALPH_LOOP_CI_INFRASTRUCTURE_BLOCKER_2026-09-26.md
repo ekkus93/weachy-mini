@@ -18,6 +18,7 @@ Representative exact heads observed during the 2026-09-26 loop:
 - `9c13614f78849e2a2b469f0d4e9c8b6c7f2af945` — `ralph/rma192-license-attribution-review`, CI runs `36217867530`, `36217867557`, and `36217867369`.
 - `925e00cf7c9a9273bcd1623bda92601459cf627a` — `ralph/rma194-deferred-feature-fidelity-gate`, CI run `36222945712`.
 - `f45d0a8db45fa5d820aa4df6966f0d2d992f13b5` — `ralph/rma194-release-acceptance-status`, CI run `36224078717`.
+- `42f2922e2884fdf40f95e3f9a808985ad0feadf7` — this documentation branch before this update, CI run `36229941010`; the documentation-only PR reproduced the same zero-step `JOB_NOT_FOUND` signature.
 
 The current `master` head `b188ce3b18635d24da79cb762e245c52e361ab5e` also has a later workflow-run status publication failure (`36224599730`) with the same no-step/no-log evidence boundary.
 
