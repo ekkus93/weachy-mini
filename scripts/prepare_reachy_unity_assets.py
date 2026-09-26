@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 import struct
 import sys
 import tempfile
@@ -19,6 +20,7 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 TRANSFORMATION_ID = "reachy_stl_to_unity_obj_v1"
+EXPECTED_REACHY_ASSET_LICENSE = "CC-BY-NC-SA"
 FLOAT_PATTERN = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 
 
@@ -519,6 +521,49 @@ def build_render_manifest(source_root: Path, staging: Path) -> dict[str, Any]:
     }
 
 
+def write_derivative_notices(source_root: Path, staging: Path) -> dict[str, Any]:
+    """Carry Reachy attribution/license evidence into the modified presentation output."""
+    attribution_source = checked_relative_file(source_root, "ATTRIBUTION.md")
+    upstream_license_source = checked_relative_file(source_root, "UPSTREAM_LICENSE")
+    try:
+        attribution = attribution_source.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise UnityAssetError(f"Cannot read Reachy attribution: {exc}") from exc
+    required_asset_notice = (
+        "Hardware/model asset license: " + EXPECTED_REACHY_ASSET_LICENSE + "."
+    )
+    if required_asset_notice not in attribution:
+        raise UnityAssetError(
+            "Imported Reachy attribution does not carry the expected hardware/model asset license."
+        )
+
+    modification_notice = (
+        "\nUnity presentation modification: source mesh geometry is deterministically "
+        "scale-baked, converted from MuJoCo coordinates to Unity coordinates, has "
+        "triangle winding adjusted, and is emitted as OBJ by "
+        f"{TRANSFORMATION_ID}. This presentation is a modified derivative; "
+        "the attribution, noncommercial, ShareAlike, and modification-notice "
+        "requirements recorded above continue to apply.\n"
+    )
+    attribution_output = staging / "ATTRIBUTION.md"
+    attribution_output.write_text(
+        attribution.rstrip() + "\n" + modification_notice,
+        encoding="utf-8",
+        newline="\n",
+    )
+    upstream_license_output = staging / "UPSTREAM_LICENSE"
+    shutil.copyfile(upstream_license_source, upstream_license_output)
+    return {
+        "asset_license": EXPECTED_REACHY_ASSET_LICENSE,
+        "attribution_path": "ATTRIBUTION.md",
+        "attribution_sha256": sha256(attribution_output),
+        "upstream_license_path": "UPSTREAM_LICENSE",
+        "upstream_license_sha256": sha256(upstream_license_output),
+        "modified_derivative": True,
+        "transformation_id": TRANSFORMATION_ID,
+    }
+
+
 def replace_output(staging: Path, output_root: Path, temp_root: Path) -> None:
     """Replace output with rollback if the final rename fails."""
     backup = temp_root / "previous-output"
@@ -544,6 +589,7 @@ def write_conversion(source_root: Path, output_root: Path) -> Path:
         staging = temp_root / "new-output"
         staging.mkdir()
         manifest = build_render_manifest(source_root, staging)
+        manifest["licensing"] = write_derivative_notices(source_root, staging)
         (staging / "UNITY_RENDER_MAP.json").write_text(
             json.dumps(manifest, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
