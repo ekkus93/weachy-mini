@@ -43,15 +43,25 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
         ):
             self.assertIn(token, status)
 
-    def test_blockers_cover_ci_physical_spoken_turn_and_rma002(self) -> None:
+    def test_blockers_cover_ci_spoken_turn_and_rma002(self) -> None:
         status = read(STATUS) + "\n" + read(STATUS_UPDATE)
         for token in (
             "zero-step/`JOB_NOT_FOUND` infrastructure failures",
-            "A54 is currently unavailable",
             "Full RMA-125/RMA-190 spoken-turn evidence is still missing",
             "RMA-002 still requires second independently provisioned Unity/Android build evidence",
         ):
             self.assertIn(token, status)
+
+    def test_a54_status_tracks_successful_permission_requalification(self) -> None:
+        status = read(STATUS) + "\n" + read(STATUS_UPDATE)
+        for token in (
+            "Samsung A54 is connected",
+            "36233165870",
+            "36235582188",
+            "removes the prior A54-unavailable/keyguard blocker",
+        ):
+            self.assertIn(token, status)
+        self.assertNotIn("The A54 is currently unavailable", status)
 
     def test_unmerged_evidence_branches_are_explicitly_not_final_release_evidence(self) -> None:
         status = read(STATUS) + "\n" + read(STATUS_UPDATE)
@@ -79,7 +89,7 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
             "PR #85",
             "PR #86",
             "PR #87",
-            "PR #84",
+            "ralph/rma190-permission-end-to-end",
         ):
             self.assertIn(token, status)
 

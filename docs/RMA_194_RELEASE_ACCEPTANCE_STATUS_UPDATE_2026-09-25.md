@@ -21,9 +21,12 @@ planning/status artifact only and does not close any RMA-194 checkbox.
   PR #87. It supports the release-gate criteria for no half-enabled deferred
   features and accurate current fidelity labeling, but it does not close the
   full RMA-194 release gate.
-- RMA-190 permission-denial/revocation also now has PR #84 for
-  `ralph/rma190-permission-denial-revocation-e2e`; the RMA-190 consolidation
-  branch carries the detailed scenario-lane correction.
+- RMA-190 permission denial/revocation is physically qualified on the A54 on
+  branch `ralph/rma190-permission-end-to-end`: run `36233165870` passed at
+  `7072a5043d4632398d02174b6fdc8525fd8fbeaa`, and the evidence-updated exact
+  head `80e37b0dbf35a6684f8b6eecc0a5dcde719e62d2` passed again in run
+  `36235582188`. This removes the prior A54-unavailable/keyguard blocker for
+  that scenario while hosted generic CI remains the merge gate.
 
 ## Infrastructure boundary
 
