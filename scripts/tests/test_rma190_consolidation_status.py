@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 STATUS = ROOT / "docs/RMA_190_CONSOLIDATION_STATUS_2026-09-24.md"
 PERMISSION_UPDATE = ROOT / "docs/RMA_190_CONSOLIDATION_PERMISSION_UPDATE_2026-09-25.md"
+CURRENT_A54_STATUS = ROOT / "docs/RMA_190_CONSOLIDATION_CURRENT_A54_STATUS_2026-09-25.md"
 
 
 def read(path: Path) -> str:
@@ -34,7 +35,13 @@ def rma190_scenarios() -> list[str]:
 class Rma190ConsolidationStatusContracts(unittest.TestCase):
     def setUp(self) -> None:
         self.status = read(STATUS)
-        self.combined_status = self.status + "\n" + read(PERMISSION_UPDATE)
+        self.combined_status = (
+            self.status
+            + "\n"
+            + read(PERMISSION_UPDATE)
+            + "\n"
+            + read(CURRENT_A54_STATUS)
+        )
         self.status_flat = collapse_whitespace(self.combined_status)
 
     def test_every_open_rma190_scenario_has_a_canonical_lane_entry(self) -> None:
@@ -106,6 +113,24 @@ class Rma190ConsolidationStatusContracts(unittest.TestCase):
             "PR #53 and PR #84 have been compared",
         ):
             self.assertIn(token, self.status_flat)
+
+    def test_permission_lane_tracks_successful_a54_requalification(self) -> None:
+        for token in (
+            "80e37b0dbf35a6684f8b6eecc0a5dcde719e62d2",
+            "36233165870",
+            "36235582188",
+            "36235584403",
+            "permission denial/revocation acceptance",
+        ):
+            self.assertIn(token, self.status_flat)
+        self.assertNotIn(
+            "The A54 is no longer available to the self-hosted runner",
+            self.status_flat,
+        )
+        self.assertIn(
+            "A54 availability must be verified by each physical workflow at run start",
+            self.status_flat,
+        )
 
 
 if __name__ == "__main__":
