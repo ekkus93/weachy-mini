@@ -19,9 +19,23 @@ Representative exact heads observed during the 2026-09-26 loop:
 - `925e00cf7c9a9273bcd1623bda92601459cf627a` — `ralph/rma194-deferred-feature-fidelity-gate`, CI run `36222945712`.
 - `f45d0a8db45fa5d820aa4df6966f0d2d992f13b5` — `ralph/rma194-release-acceptance-status`, CI run `36224078717`.
 - `42f2922e2884fdf40f95e3f9a808985ad0feadf7` — this documentation branch before the prior update, CI run `36229941010`; the documentation-only PR reproduced the same zero-step `JOB_NOT_FOUND` signature.
-- `4117261432e0f4243f5f603ee2b18f65d32b64b5` — this documentation branch before this update, CI run `36230046936`; the second documentation-only CI run again reproduced five zero-step `JOB_NOT_FOUND` jobs.
+- `4117261432e0f4243f5f603ee2b18f65d32b64b5` — this documentation branch before the previous update, CI run `36230046936`; the second documentation-only CI run again reproduced five zero-step `JOB_NOT_FOUND` jobs.
+- `560f2a313450e9570e9fede518098323eb702606` — this documentation branch before this update, CI run `36230946592`; the third documentation-only CI run again reproduced five zero-step `JOB_NOT_FOUND` jobs.
 
 The current `master` head `b188ce3b18635d24da79cb762e245c52e361ab5e` also has a later workflow-run status publication failure (`36224599730`) with the same no-step/no-log evidence boundary.
+
+## A54 device status update
+
+The A54 phone is now reported connected again to the self-hosted-runner server. That lifts the prior physical-device availability blocker for A54-dependent validation lanes.
+
+However, the affected A54-gated PR heads have not automatically rerun. Representative current exact-head runs still show only old pull-request CI failures:
+
+- `eece8c319829cf91dd9cab801c09712b115303a1` — `ralph/rma190-permission-end-to-end`, CI run `36201301960`.
+- `fd1443a9e3485dadad01f64bb104dab701a2e3dd` — `ralph/rma190-permission-denial-revocation-e2e`, CI run `36220562782`.
+- `bc59b100d44a4140a4816eef05ac02b58d53e872` — `ralph/rma125-network-disabled-speech-evidence`, CI run `36183752370`.
+- `1de44522801a7b4fd80d76c3fa59393f9eaf3f18` — `ralph/rma195-a54-application-composition-evidence`, CI run `36173285007`.
+
+The `ralph/rma190-permission-end-to-end` CI run `36201301960` was inspected after the A54 reconnection notice. Its five CI jobs still have no failed steps and no logs, with `JOB_NOT_FOUND` warnings for every job. A rerun attempt for that run was rejected by Ralph Bridge with the same Actions write-permission error recorded below.
 
 ## Classification
 
@@ -37,7 +51,7 @@ A Ralph Bridge attempt to rerun failed jobs for CI run `36224078717` was rejecte
 WRITE_PERMISSION_REQUIRED: GitHub Actions write permission is required for this Phase 2 operation.
 ```
 
-A later rerun attempt for the self-reproduced documentation-only CI run `36230046936` returned the same `WRITE_PERMISSION_REQUIRED` error. That means the loop cannot currently repair the condition by rerunning failed Actions jobs through Ralph Bridge.
+Later rerun attempts for the self-reproduced documentation-only CI run `36230046936` and the now-A54-unblocked permission branch run `36201301960` returned the same `WRITE_PERMISSION_REQUIRED` error. That means the loop cannot currently repair the condition by rerunning failed Actions jobs through Ralph Bridge.
 
 ## Local validation gate
 
