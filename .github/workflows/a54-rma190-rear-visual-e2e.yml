@@ -1,0 +1,169 @@
+name: A54 RMA-190 Rear Visual E2E
+
+on:
+  push:
+    branches:
+      - ralph/rma190-rear-visual-e2e
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: a54-rma190-rear-visual-e2e
+  cancel-in-progress: true
+
+jobs:
+  physical:
+    name: RMA-190 rear visual E2E on A54
+    runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate rear-visual harness contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma190_rear_visual_end_to_end.py
+          bash -n scripts/run_rma190_rear_visual_end_to_end_android.sh
+          python3 scripts/check_docs_links.py
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+          unity_editor="${UNITY_EDITOR:-}"
+          if [[ -z "${unity_editor}" ]]; then
+            for candidate in \
+              "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+              "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+              "/opt/unity/editors/${project_version}/Editor/Unity"; do
+              [[ -x "${candidate}" ]] && unity_editor="${candidate}" && break
+            done
+          fi
+          [[ -n "${unity_editor}" && -x "${unity_editor}" ]] || { echo "Pinned Unity ${project_version} was not found." >&2; exit 1; }
+          android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          [[ -x "${android_sdk_root}/platform-tools/adb" ]] || { echo "adb missing under ${android_sdk_root}" >&2; exit 1; }
+          {
+            printf 'UNITY_EDITOR=%s\n' "${unity_editor}"
+            printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}"
+            printf 'ANDROID_HOME=%s\n' "${android_sdk_root}"
+            printf 'ADB_BIN=%s\n' "${android_sdk_root}/platform-tools/adb"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
+          "${unity_editor}" -version -batchmode -quit 2>&1 | tee unity-version.txt
+          grep -F "${project_version}" unity-version.txt
+          "${android_sdk_root}/platform-tools/adb" version
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_log="${RUNNER_TEMP}/rma190-rear-visual-build.log"
+          set +e
+          bash scripts/build_unity_android.sh device-feasibility > "${build_log}" 2>&1
+          code=$?
+          set -e
+          if (( code != 0 )); then
+            printf '\n### RMA-190 rear visual Unity Android build log tail\n'
+            tail -n 260 "${build_log}" || true
+            printf '\n### Candidate Unity editor log tails\n'
+            for log in \
+              "${HOME}/.config/unity3d/Editor.log" \
+              "${HOME}/.config/unity3d/Unity/Editor.log" \
+              "${GITHUB_WORKSPACE}/Editor.log" \
+              "${GITHUB_WORKSPACE}/Logs/Editor.log"; do
+              if [[ -s "${log}" ]]; then
+                printf '\n--- %s ---\n' "${log}"
+                tail -n 220 "${log}" || true
+              fi
+            done
+            printf '\n### Build output discovery\n'
+            find Builds Library -maxdepth 4 -type f 2>/dev/null | grep -E '(apk$|\.log$|gradle|launcher|unityLibrary)' | tail -n 120 || true
+          else
+            printf '\n### RMA-190 rear visual Unity Android build log tail\n'
+            tail -n 80 "${build_log}" || true
+          fi
+          exit "${code}"
+
+      - name: Verify ARM64 API-26 device APK
+        shell: bash
+        run: test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+
+      - name: Pin one physical Android device
+        shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          mapfile -t serials < <(adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}')
+          accepted=()
+          for serial in "${serials[@]}"; do
+            state="$(adb -s "${serial}" get-state | tr -d '\r')"
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            qemu="$(adb -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+            model="$(adb -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
+            printf 'physical_device=%s state=%s model=%s abi=%s sdk=%s qemu=%s\n' "${serial}" "${state}" "${model}" "${abi}" "${sdk}" "${qemu}"
+            [[ "${state}" == device && "${abi}" == arm64-v8a && "${sdk}" =~ ^[0-9]+$ && "${qemu}" != 1 ]] && (( sdk >= 26 )) && accepted+=("${serial}")
+          done
+          serial="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial}" ]]; then
+            printf '%s\n' "${accepted[@]}" | grep -Fx "${serial}" >/dev/null || { adb devices -l >&2; exit 1; }
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            echo "Expected exactly one physical arm64 API-26+ device; found ${#accepted[@]}." >&2
+            adb devices -l >&2
+            exit 1
+          fi
+          adb -s "${serial}" wait-for-device
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Run RMA-190 rear-camera visual end-to-end acceptance
+        shell: bash
+        env:
+          RMA190_REAR_VISUAL_REPORT_DIR: ${{ runner.temp }}/rma190-rear-visual-end-to-end-report
+          RMA190_REAR_VISUAL_TIMEOUT_SECONDS: '180'
+        run: |
+          set -euo pipefail
+          report_dir="${RMA190_REAR_VISUAL_REPORT_DIR}"
+          set +e
+          bash scripts/run_rma190_rear_visual_end_to_end_android.sh > "${RUNNER_TEMP}/rma190-rear-visual.log" 2>&1
+          code=$?
+          set -e
+          printf '\n### RMA-190 rear visual log tail\n'
+          tail -n 160 "${RUNNER_TEMP}/rma190-rear-visual.log" || true
+          printf '\n### RMA-190 rear visual report files\n'
+          if [[ -d "${report_dir}" ]]; then
+            find "${report_dir}" -maxdepth 1 -type f ! -name 'logcat.txt' ! -name 'device-screen-final.png' ! -name 'activity.txt' ! -name 'package.txt' ! -name 'camera.txt' -print -exec sh -c 'printf "\n--- %s ---\n" "$1"; cat "$1" || true' sh {} \;
+          else
+            printf 'report_dir_missing=%s\n' "${report_dir}"
+          fi
+          exit "${code}"

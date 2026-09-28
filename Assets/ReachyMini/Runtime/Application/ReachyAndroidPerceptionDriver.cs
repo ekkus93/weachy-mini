@@ -359,7 +359,8 @@ namespace ReachyMini.AppState
                 cameraPose.Value.QuaternionZ,
                 cameraPose.Value.QuaternionW);
             ReachyPhoneOpticalOrientationSample phoneOrientation =
-                ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds());
+                ReachyPhoneOpticalOrientationSample.Identity(
+                    descriptor.TimestampNanoseconds);
             ReachyCameraRelativeRotationSample rotation =
                 ReachyCameraRelativeRotationCalculator.Calculate(
                     ReachyCameraMujocoOpticalBinding.PinnedReachyMini,
