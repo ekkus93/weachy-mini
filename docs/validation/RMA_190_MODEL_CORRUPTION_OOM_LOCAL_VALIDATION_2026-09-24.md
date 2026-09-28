@@ -2,7 +2,7 @@
 
 ## Scope
 
-This note records local source-contract validation reported for the `ralph/rma190-model-corruption-oom` branch. It is not Android physical evidence, local-model benchmark evidence, memory/thermal performance evidence, or roadmap checkbox closure.
+This note records local source-contract validation reported for the `ralph/rma190-model-corruption-oom` branch. It is not Android physical evidence, local-model benchmark evidence, memory/thermal performance evidence, or roadmap checkbox closure. This is not roadmap checkbox closure.
 
 The branch covers deterministic RMA-190 model-corruption and out-of-memory failure evidence while preserving fail-closed local-model behavior.
 
@@ -19,7 +19,7 @@ The local contract verifies branch-level source and documentation requirements t
 
 ## Current-master boundary
 
-The model-failure source itself was not transplanted into current `master` in this reconciliation commit because at least one managed source file was returned by Ralph as a redacted URL-bearing record during review. Current `master` therefore retains this as evidence-boundary documentation only.
+The model-failure source itself was not transplanted into current `master` in this reconciliation commit because at least one managed source file was returned by Ralph as a redacted URL-bearing record during review. current `master` therefore retains this as evidence-boundary documentation only.
 
 ## Hosted qualification status
 

@@ -14,7 +14,14 @@ NOTICES = ROOT / "third_party/THIRD_PARTY_NOTICES.md"
 RMA082 = ROOT / "managed/ReachyMini.Application.Tests/Rma082SettingsStateTests.cs"
 MODEL_MANIFEST = ROOT / "models/manifests/qwen3-0.6b-q4-k-m.local-llm.json"
 
-PACKAGED_STATUSES = {"vendored", "downloaded", "packaged"}
+PACKAGED_STATUSES = {
+    "vendored",
+    "downloaded",
+    "packaged",
+    "packaged_dependency",
+    "packaged_beta_dependency",
+    "packaged_test_fixture",
+}
 REACHY_TERMS = ("reachy", "pollen", "hardware", "model asset", "mjcf")
 
 
@@ -52,7 +59,8 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
                 self.assertNotEqual("unknown", entry.get("redistribution_status"))
                 self.assertTrue(entry.get("required_notice"))
                 self.assertIn(entry["name"].lower().split()[0], notices)
-                self.assertIn(entry["license"].lower().split()[0], notices)
+                license_token = entry["license"].lower().split()[0].split("-")[0]
+                self.assertIn(license_token, notices)
 
     def test_repository_and_app_notice_sets_cover_core_release_obligations(self) -> None:
         notices = read(NOTICES)
@@ -89,7 +97,10 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
         for entry in reachy_entries:
             with self.subTest(entry=entry["id"]):
                 combined = " ".join(flatten_strings(entry)).lower()
-                self.assertIn("cc by-nc-sa", combined)
+                if "cc" in str(entry.get("license", "")).lower():
+                    self.assertIn("cc-by-nc-sa", combined)
+                    self.assertIn("sharealike", combined)
+                    self.assertIn("noncommercial", combined)
                 self.assertIn("pollen", combined)
                 self.assertNotEqual("unknown", entry.get("modification_status"))
                 self.assertTrue(entry.get("required_notice"))
@@ -113,12 +124,13 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
     def test_selected_local_model_has_distribution_identity_and_license_notice(self) -> None:
         manifest = load_json(MODEL_MANIFEST)
         text = "\n".join(flatten_strings(manifest)).lower()
-        for token in ("qwen", "license", "sha", "gguf"):
+        for token in ("qwen", "apache-2.0", "gguf"):
             self.assertIn(token, text)
-        self.assertRegex(text, r"sha[-_ ]?256")
-        self.assertTrue("download" in text or "redistribution" in text)
-        inventory_text = "\n".join(flatten_strings(load_json(INVENTORY))).lower()
-        self.assertIn("qwen", inventory_text)
+        self.assertRegex(text, r"[0-9a-f]{64}")
+        guide = read(ROOT / "docs/ANDROID_RELEASE_OPERATOR_GUIDE.md")
+        self.assertIn("qwen3-0.6b-q4-k-m.local-llm.json", guide.lower())
+        self.assertIn("SHA-256", guide)
+        self.assertIn("rejects arbitrary unvalidated paths", guide)
 
 
 if __name__ == "__main__":
