@@ -1,0 +1,108 @@
+name: RMA-191 security and privacy review
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/rma191-security-privacy-review.yml'
+      - 'Assets/ReachyMini/Runtime/**'
+      - 'Assets/Plugins/Android/**'
+      - 'managed/ReachyMini.Application.Tests/**'
+      - 'managed/ReachyMini.Core.Tests/**'
+      - 'managed/ReachyMini.RemoteVlm.Tests/**'
+      - 'scripts/tests/test_rma161_credential_lifecycle.py'
+      - 'scripts/tests/test_rma162_private_media_retention.py'
+      - 'scripts/tests/test_rma170_structured_logging.py'
+      - 'scripts/tests/test_rma172_diagnostic_bundle_export.py'
+      - 'scripts/tests/test_rma191_security_privacy_review.py'
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/rma191-security-privacy-review.yml'
+      - 'Assets/ReachyMini/Runtime/**'
+      - 'Assets/Plugins/Android/**'
+      - 'managed/ReachyMini.Application.Tests/**'
+      - 'managed/ReachyMini.Core.Tests/**'
+      - 'managed/ReachyMini.RemoteVlm.Tests/**'
+      - 'scripts/tests/test_rma161_credential_lifecycle.py'
+      - 'scripts/tests/test_rma162_private_media_retention.py'
+      - 'scripts/tests/test_rma170_structured_logging.py'
+      - 'scripts/tests/test_rma172_diagnostic_bundle_export.py'
+      - 'scripts/tests/test_rma191_security_privacy_review.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run static security and privacy audits
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma161_credential_lifecycle.py
+          python3 scripts/tests/test_rma162_private_media_retention.py
+          python3 scripts/tests/test_rma170_structured_logging.py
+          python3 scripts/tests/test_rma172_diagnostic_bundle_export.py
+          python3 scripts/tests/test_rma191_security_privacy_review.py
+          python3 -m py_compile scripts/tests/test_rma191_security_privacy_review.py
+
+      - name: Run application privacy contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run \
+            --project managed/ReachyMini.Application.Tests/ReachyMini.Application.Tests.csproj \
+            --configuration Release
+
+      - name: Run provider redaction contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet run \
+            --project managed/ReachyMini.RemoteVlm.Tests/ReachyMini.RemoteVlm.Tests.csproj \
+            --configuration Release
+
+      - name: Build native lifecycle test library
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/rma191-native \
+            -G Ninja \
+            -DBUILD_TESTING=ON
+          cmake \
+            --build build/rma191-native \
+            --target reachy_sim_managed_contract \
+            --parallel 2
+          native_library="$(find build/rma191-native -type f -name 'libreachy_sim.so' -print -quit)"
+          if [[ -z "${native_library}" ]]; then
+            printf '%s\n' 'RMA-191 native lifecycle build did not produce libreachy_sim.so.' >&2
+            exit 1
+          fi
+          printf 'REACHY_MANAGED_NATIVE_LIBRARY_DIR=%s\n' \
+            "$(dirname "${native_library}")" >> "${GITHUB_ENV}"
+
+      - name: Run diagnostics and native lifetime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="${REACHY_MANAGED_NATIVE_LIBRARY_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          export REACHY_MANAGED_NATIVE_TESTS=1
+          dotnet run \
+            --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj \
+            --configuration Release
