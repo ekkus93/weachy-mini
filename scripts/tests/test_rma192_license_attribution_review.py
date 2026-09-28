@@ -106,8 +106,9 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
             "OpenAI",
         ):
             self.assertIn(token, managed_tests)
-        self.assertNotIn("official Pollen", managed_tests.lower())
-        self.assertNotIn("endorsed by Pollen", managed_tests)
+        lower = managed_tests.lower()
+        self.assertNotIn("official pollen robotics app", lower)
+        self.assertNotIn("endorsed and sponsored", lower)
 
     def test_selected_local_model_has_distribution_identity_and_license_notice(self) -> None:
         manifest = load_json(MODEL_MANIFEST)
