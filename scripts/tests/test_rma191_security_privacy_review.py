@@ -126,7 +126,7 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         self.assertIn("AUTHORIZE CLOUD LLM", ui)
         self.assertIn("AUTHORIZE CLOUD VLM", ui)
         self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory", asr_turn)
-        self.assertIn("ReachyAndroidSystemAsrProviderFactory", asr_turn)
+        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory", asr_turn)
         self.assertNotIn("OpenAi", asr_turn)
         self.assertIn("ReachyAndroidOfflineTtsProviderFactory", tts_turn)
         self.assertIn("SelectExactOfflineVoice", tts_turn)
