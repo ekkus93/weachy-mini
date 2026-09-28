@@ -57,6 +57,28 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("StringComparison.OrdinalIgnoreCase", policy)
         self.assertNotIn("return voices[0]", tts)
 
+    def test_live_asr_never_falls_back_to_potentially_network_backed_system_asr(self) -> None:
+        asr = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
+        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", asr)
+        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory.Create", asr)
+        self.assertIn("return null;", asr)
+
+    def test_live_tts_never_falls_back_to_network_voice(self) -> None:
+        tts = read(APP / "ReachyConversationTurnOrchestrator.Tts.cs")
+        self.assertIn("ReachyAndroidOfflineTtsProviderFactory.Create", tts)
+        self.assertNotIn("ReachyAndroidSystemTtsProviderFactory.Create", tts)
+        self.assertIn("SelectExactOfflineVoice", tts)
+
+    def test_llm_execution_does_not_cross_provider_boundary_on_failure(self) -> None:
+        llm = read(APP / "ReachyConversationTurnOrchestrator.Llm.cs")
+        switch = llm[llm.index("switch (execution)"):]
+        cloud_case = switch.index("case ReachyProviderExecution.Cloud:")
+        local_case = switch.index("case ReachyProviderExecution.OnDevice:")
+        self.assertLess(cloud_case, local_case)
+        local_body = switch[local_case:]
+        self.assertIn("RunLocalLlmAsync", local_body)
+        self.assertNotIn("RunCloudLlmAsync", local_body)
+
     def test_shared_simulation_adapter_survives_dead_composition_removal(self) -> None:
         simulation = APP / "ReachyProductionSimulationApplicationService.cs"
         settings = read(APP / "ReachySettingsApplicationCompositionProvider.cs")

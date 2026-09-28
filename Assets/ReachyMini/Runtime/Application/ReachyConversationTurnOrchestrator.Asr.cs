@@ -51,11 +51,12 @@ namespace ReachyMini.AppState
         }
 
         // Fully self-contained: resolves, uses, and disposes its own ASR
-        // provider instance for this one turn. Mirrors
-        // ReachyAndroidSpeechCapabilityApplicationService's probe pattern
-        // (on-device first, system ASR as a fallback with broader API-level
-        // coverage), but performs a real recognition instead of only an
-        // availability check.
+        // provider instance for this one turn. The shipping conversation
+        // path is deliberately on-device-only: an unavailable or failed
+        // on-device recognizer must not cross the privacy boundary into the
+        // potentially network-backed Android system recognizer. System ASR
+        // remains an explicit provider option elsewhere, never an automatic
+        // fallback from this path.
         private async Task<AsrTurnResult> RunAsrAsync(
             ReachyConversationOperation listening,
             CancellationToken cancellationToken)
@@ -161,17 +162,10 @@ namespace ReachyMini.AppState
             }
             await onDevice.DisposeAsync().ConfigureAwait(true);
 
-            IAsrProvider systemAsr = ReachyAndroidSystemAsrProviderFactory.Create(
-                "conversation-turn-system-asr", AsrLanguageTag, AsrTimeout);
-            SpeechProviderAvailability systemAvailability = await systemAsr
-                .CheckAvailabilityAsync(probeOptions, cancellationToken)
-                .ConfigureAwait(true);
-            if (systemAvailability.IsAvailable)
-            {
-                return systemAsr;
-            }
-            await systemAsr.DisposeAsync().ConfigureAwait(true);
-
+            // Fail closed. Android system ASR is explicitly documented as
+            // potentially network-backed, so it may only be selected through
+            // an explicit provider choice; it is never a fallback for an
+            // unavailable on-device recognizer.
             return null;
         }
     }
