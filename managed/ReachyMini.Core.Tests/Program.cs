@@ -6,6 +6,7 @@ namespace ReachyMini.Core.Tests
     {
         private static int Main()
         {
+            Rma190IndependentProviderCombinationTests.RunAll();
             TestProjectMetadata();
             TestNativeLayouts();
             TestSimulationWorkerWarningAccounting();
