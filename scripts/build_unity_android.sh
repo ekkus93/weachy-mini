@@ -7,6 +7,7 @@ MODE="${1:-}"
 UNITY_EDITOR="${UNITY_EDITOR:-}"
 PINNED_UNITY_VERSION="$(sed -n 's/^m_EditorVersion: //p' "${ROOT_DIR}/ProjectSettings/ProjectVersion.txt")"
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+ANDROID_LIMIT_WRAPPER="${ROOT_DIR}/scripts/run_android_limited.sh"
 
 if [[ -z "${UNITY_EDITOR}" ]]; then
     printf 'UNITY_EDITOR must point to Unity %s.\n' "${PINNED_UNITY_VERSION}" >&2
@@ -15,6 +16,12 @@ fi
 
 if [[ ! -x "${UNITY_EDITOR}" ]]; then
     printf 'UNITY_EDITOR is not executable: %s\n' "${UNITY_EDITOR}" >&2
+    exit 1
+fi
+
+if [[ ! -x "${ANDROID_LIMIT_WRAPPER}" ]]; then
+    printf 'Android CPU-limit wrapper is missing or not executable: %s\n' \
+        "${ANDROID_LIMIT_WRAPPER}" >&2
     exit 1
 fi
 
@@ -116,7 +123,8 @@ SDKMANAGER_PATH="${UNITY_JAVA_HOME}/bin:${PATH}"
 
 run_sdkmanager()
 {
-    env \
+    "${ANDROID_LIMIT_WRAPPER}" \
+        env \
         JAVA_HOME="${UNITY_JAVA_HOME}" \
         PATH="${SDKMANAGER_PATH}" \
         "${SDKMANAGER}" \
@@ -236,7 +244,8 @@ if [[ ! -x "${UNITY_LIMIT_WRAPPER}" ]]; then
     exit 1
 fi
 
-env \
+"${ANDROID_LIMIT_WRAPPER}" \
+    env \
     WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" \
     "${UNITY_LIMIT_WRAPPER}" \
     "${UNITY_EDITOR}" \
