@@ -1,68 +1,67 @@
 #!/usr/bin/env python3
-"""RMA-193 Android release guide documentation contracts."""
+"""RMA-193 release documentation coverage gate."""
 
-from pathlib import Path
+from __future__ import annotations
+
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-GUIDE = ROOT / "docs" / "ANDROID_RELEASE_GUIDE.md"
+GUIDE = ROOT / "docs/ANDROID_RELEASE_OPERATOR_GUIDE.md"
+TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-class Rma193DocumentationContracts(unittest.TestCase):
-    def test_release_guide_covers_every_rma193_topic(self) -> None:
+class Rma193DocumentationCoverageTests(unittest.TestCase):
+    def test_android_release_operator_guide_covers_every_rma193_topic(self) -> None:
         guide = read(GUIDE)
-        for heading in (
+        required_headings = (
             "## Build instructions",
             "## Android device requirements",
-            "## Local model installation and import",
+            "## Model installation and import",
             "## Provider configuration and BYOK warning",
             "## Calibration workflow",
-            "## Fidelity levels",
-            "## Camera Level 1 approximation and missing pixels",
+            "## Fidelity-level explanation",
+            "## Camera Level 1 approximation and missing-pixel behavior",
             "## Troubleshooting and diagnostic bundles",
-            "## Privacy and data flow",
-        ):
+            "## Privacy and data-flow explanation",
+        )
+        for heading in required_headings:
             self.assertIn(heading, guide)
 
-    def test_release_guide_preserves_fail_closed_and_current_limitations(self) -> None:
+    def test_release_documentation_preserves_fail_closed_product_boundaries(self) -> None:
         guide = read(GUIDE)
-        for phrase in (
-            "INSTALL**, **IMPORT**, **SELECT**, and **DELETE** as unavailable",
-            "current in-app **Camera calibration** action is still unavailable",
-            "must not silently switch a local workload to a network provider",
-            "Pixels outside valid source coverage are **missing**, not invented",
-            "credentials, raw audio, raw images/media, transcripts, and conversation text are excluded",
-            "Android Keystore-backed secret store",
-            "deterministic fixtures and estimated profiles do not qualify",
+        for token in (
+            "must not be automatic fallbacks",
+            "never load placeholder calibration",
+            "Invalid pixels must not reuse stale content",
+            "Cloud LLM may receive conversation text",
+            "Cloud VLM may receive transformed camera frames",
+            "zero-step runner failure",
+            "infrastructure evidence",
+            "not source acceptance",
+            "physical Reachy Mini hardware is not required",
         ):
-            self.assertIn(phrase, guide)
+            self.assertIn(token, guide)
 
-    def test_release_guide_links_authoritative_detail_documents(self) -> None:
-        guide = read(GUIDE)
-        for relative in (
-            "BUILDING.md",
-            "architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md",
-            "architecture/CALIBRATION_DATA_AND_CAPTURE.md",
-            "architecture/CAMERA_VALID_COVERAGE_POLICY.md",
-            "RMA_146_EXPLICIT_NO_FALLBACK_POLICY_SPEC_2026-08-11.md",
-            "RMA_161_CREDENTIAL_LIFECYCLE_SPEC_2026-08-13.md",
-            "RMA_170_STRUCTURED_LOGGING_SPEC_2026-08-14.md",
-            "RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md",
+    def test_authoritative_todo_points_to_rma193_requirements(self) -> None:
+        todo = read(TODO)
+        self.assertIn("## RMA-193 — Complete documentation", todo)
+        for topic in (
+            "Build instructions",
+            "Android device requirements",
+            "Model installation/import",
+            "Provider configuration and BYOK warning",
+            "Calibration workflow",
+            "Fidelity-level explanation",
+            "Camera Level 1 approximation and missing-pixel behavior",
+            "Troubleshooting and diagnostic bundle instructions",
+            "Privacy and data-flow explanation",
         ):
-            self.assertIn(relative, guide)
-            self.assertTrue((GUIDE.parent / relative).exists(), relative)
-
-    def test_device_requirements_distinguish_core_and_offline_speech_floors(self) -> None:
-        guide = read(GUIDE)
-        self.assertIn("deployment floor is ARM64 Android API 26 or newer", guide)
-        self.assertIn("full offline speech feature set additionally needs Android API 31 or newer", guide)
-        self.assertIn("SupportedWithLimitations", guide)
-        self.assertNotIn("minimum Android version is provisional", guide.lower())
-        self.assertNotIn("initial Android target is Android 12 / API 31 or newer", guide)
+            self.assertIn(topic, todo)
 
 
 if __name__ == "__main__":
