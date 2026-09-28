@@ -71,7 +71,9 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
 
     def test_llm_execution_does_not_cross_provider_boundary_on_failure(self) -> None:
         llm = read(APP / "ReachyConversationTurnOrchestrator.Llm.cs")
-        switch = llm[llm.index("switch (execution)"):]
+        switch_start = llm.index("switch (execution)")
+        switch_end = llm.index("private async Task<LlmTurnResult> RunCloudLlmAsync", switch_start)
+        switch = llm[switch_start:switch_end]
         cloud_case = switch.index("case ReachyProviderExecution.Cloud:")
         local_case = switch.index("case ReachyProviderExecution.OnDevice:")
         self.assertLess(cloud_case, local_case)
