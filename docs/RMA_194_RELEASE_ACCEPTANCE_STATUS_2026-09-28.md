@@ -2,6 +2,8 @@
 
 This document records the current release-gate status for the Reachy Mini Android digital twin. It is intentionally conservative: implementation and static contracts may exist before exact-head CI, Local Unity Android Validation, physical-device, provider, performance, privacy, license, and release-acceptance evidence is complete.
 
+It is a planning/status artifact only. It does **not** close any checkbox in `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md`.
+
 ## Release status
 
 **Release status: not accepted.** No final release tag should be cut from the current tree, and no TODO checkbox in RMA-194 should be closed merely because this status document exists.
@@ -13,6 +15,31 @@ The project currently has evidence for three RMA-194 subitems that were already 
 - Level 1 camera reprojection passes reference tests, with RMA-104 validation evidence and the reprojection workflow retained.
 
 All other RMA-194 checklist entries remain open until their own acceptance evidence passes at the exact candidate head.
+
+## Current merge and qualification boundary
+
+Several hosted workflows continue to fail with the repository-wide zero-step/no-log or `JOB_NOT_FOUND` signature. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
+
+Long-running self-hosted Android validation lanes may remain queued, pending, or in progress while the runner is busy. Queued status is not a pass and is not a source failure.
+
+Artifact upload failures are infrastructure failures, not source failures, when the relevant acceptance step completed before artifact upload. A physical Android run blocked by secure keyguard, device disconnection, missing installed ASR/TTS services, or unavailable runner hardware is a hardware/service availability condition, not a source-code failure. Lack of physical Reachy Mini hardware is not a release blocker for the virtual Reachy Mini product unless a later optional physical-calibration milestone explicitly requires it.
+
+## RMA-194 item map
+
+| RMA-194 item | Current evidence/status | Blocker before checkbox closure |
+| --- | --- | --- |
+| App launches and runs offline on supported hardware. | Historical offline and application-composition evidence exists, but current `master` still needs exact-head release-candidate physical evidence. | Exact-head physical Android run on supported hardware, then TODO reconciliation. |
+| MuJoCo is authoritative and stable. | Already checked in the TODO with RMA-032/RMA-060 through RMA-065 evidence. | Keep checked unless future source changes invalidate the evidence. |
+| Full closed-loop Reachy model is rendered from native state. | Already checked in the TODO with RMA-051/RMA-052 evidence and `hidden_kinematic_fallback=false`. | Keep checked unless future source changes invalidate the evidence. |
+| Level 1 camera reprojection passes reference tests. | Already checked in the TODO with RMA-104 validation evidence and the reprojection workflow retained. | Keep checked unless future source changes invalidate the evidence. |
+| Android on-device ASR and offline TTS work where installed. | RMA-121/RMA-123/RMA-125 source and provider contracts exist; full spoken-turn proof remains open. | Non-fabricated ASR -> local LLM -> behavior -> offline TTS evidence, preferably with networking disabled where required. |
+| Selected benchmark-backed local LLM works without blocking physics. | RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically. | Exact-head validation and representative-device profile reconciliation for the release candidate. |
+| OpenAI and compatible providers are independently configurable. | Provider configuration, BYOK, and cloud LLM/VLM wiring exist; real cloud-provider success is not claimed by this document. | Exact-head provider validation and intentionally supplied endpoint/credential evidence if a real cloud success claim is made. |
+| Behavior planner validates all AI output. | RMA-151/RMA-195 design routes validated behavior intents through production behavior capability. | Exact-head evidence that the full current path remains intact under malformed-provider responses and regeneration limits. |
+| No silent provider, privacy, calibration, or kinematic fallbacks remain. | RMA-173/RMA-191 gates now enforce key fail-closed boundaries; TODO closure still requires accepted exact-head evidence. | Exact-head CI/security/privacy/failure-mode validation and no redacted source gaps for the closure claim. |
+| Diagnostics identify active fidelity, providers, and failures. | RMA-170/RMA-171/RMA-172 diagnostics and bundle export exist; release closure needs current-head verification. | Exact-head CI plus audit that diagnostics remain wired to active fidelity/provider/failure state. |
+| Representative-device performance report exists. | RMA-184 defines the matrix; measured default profiles remain open. | Safely readable detailed measured profiles and supported-device target reconciliation. |
+| Licenses and attribution are complete. | RMA-192 review gate is now in-tree; final closure still needs exact-head validation. | Full exact-head license-review validation and TODO reconciliation. |
 
 ## Current open release blockers
 
