@@ -358,8 +358,16 @@ namespace ReachyMini.AppState
                 cameraPose.Value.QuaternionY,
                 cameraPose.Value.QuaternionZ,
                 cameraPose.Value.QuaternionW);
+            // RMA-190 camera acceptance and the production homography
+            // contract require the phone-orientation sample to correspond to
+            // the exact camera texture being warped. Until a live IMU-backed
+            // phone-orientation provider is available, the fail-closed identity
+            // sample must be stamped with the source texture timestamp rather
+            // than wall-clock/driver time; otherwise the homography calculator
+            // correctly rejects every real camera frame as non-corresponding.
             ReachyPhoneOpticalOrientationSample phoneOrientation =
-                ReachyPhoneOpticalOrientationSample.Identity(NowNanoseconds());
+                ReachyPhoneOpticalOrientationSample.Identity(
+                    descriptor.TimestampNanoseconds);
             ReachyCameraRelativeRotationSample rotation =
                 ReachyCameraRelativeRotationCalculator.Calculate(
                     ReachyCameraMujocoOpticalBinding.PinnedReachyMini,
