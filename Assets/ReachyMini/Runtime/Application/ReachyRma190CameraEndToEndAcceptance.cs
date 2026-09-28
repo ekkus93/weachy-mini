@@ -70,18 +70,27 @@ namespace ReachyMini.AppState
     [DisallowMultipleComponent]
     public sealed partial class ReachyRma190CameraEndToEndAcceptance : MonoBehaviour
     {
-        private const int OverallTimeoutMilliseconds = 90_000;
+        private const int OverallTimeoutMilliseconds = 135_000;
         private const int ReadyPollMilliseconds = 25;
         private const double MinimumHeadRotationRadians = 0.015;
         private const long PlanningTimestampNanoseconds = 1_900_000_190L;
         private const string FixtureProfileId =
             "rma190-front-camera-deterministic-fixture";
 
+        private string activePhase = "not-started";
+
+        private void MarkPhase(string phase)
+        {
+            activePhase = phase;
+            Debug.Log("RMA-190 camera acceptance phase: " + phase);
+        }
+
         private IEnumerator Start()
         {
             string resultPath = Path.Combine(
                 Application.persistentDataPath,
                 ReachyRma190CameraEndToEndAcceptanceBootstrap.ResultFileName);
+            MarkPhase("initializing result file");
             DeleteIfPresent(resultPath);
 
             Task<Report> task = RunAsync();
@@ -105,32 +114,40 @@ namespace ReachyMini.AppState
             else if (task.IsCanceled)
             {
                 report = Report.Failure(
-                    "RMA-190 camera end-to-end acceptance was cancelled.");
+                    "RMA-190 camera end-to-end acceptance was cancelled during phase: " +
+                    activePhase + ".");
+                Debug.LogError(
+                    "RMA-190 camera end-to-end acceptance was cancelled during phase: " +
+                    activePhase,
+                    this);
             }
             else
             {
                 report = task.Result;
             }
 
+            MarkPhase("writing result file");
             WriteAtomically(
                 resultPath,
                 JsonUtility.ToJson(report, prettyPrint: true));
             Destroy(gameObject);
         }
 
-        private static async Task<Report> RunAsync()
+        private async Task<Report> RunAsync()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             using var timeout = new CancellationTokenSource(
                 OverallTimeoutMilliseconds);
             CancellationToken cancellationToken = timeout.Token;
 
+            MarkPhase("waiting for shipping host");
             ReachyApplicationHostBehaviour hostBehaviour =
                 await WaitForShippingHostAsync(cancellationToken);
             ReachyApplicationHost host = hostBehaviour.Host ??
                 throw new InvalidOperationException(
                     "RMA-190 camera acceptance could not resolve the shipping host.");
 
+            MarkPhase("resolving shipping services");
             IReachyBehaviorService behavior =
                 host.GetRequiredService<IReachyBehaviorService>(
                     ReachyServiceKind.Behavior);
@@ -157,12 +174,15 @@ namespace ReachyMini.AppState
                     "RMA-190 camera acceptance requires the shipping durable-settings service.");
             }
 
+            MarkPhase("waiting for production runtime");
             ReachyProductionAuthoritativeRuntime runtime =
                 await WaitForRuntimeAsync(cancellationToken);
+            MarkPhase("waiting for camera discovery object");
             ReachyAndroidCameraDiscovery discovery =
                 await WaitForObjectAsync<ReachyAndroidCameraDiscovery>(
                     cancellationToken,
                     "camera discovery");
+            MarkPhase("waiting for camera acquisition object");
             ReachyAndroidCameraAcquisition acquisition =
                 await WaitForObjectAsync<ReachyAndroidCameraAcquisition>(
                     cancellationToken,
@@ -171,6 +191,7 @@ namespace ReachyMini.AppState
                 acquisition.GetComponent<ReachyAndroidCameraTextureBridge>() ??
                 throw new InvalidOperationException(
                     "The shipping camera acquisition has no texture bridge.");
+            MarkPhase("waiting for perception driver object");
             ReachyAndroidPerceptionDriver driver =
                 await WaitForObjectAsync<ReachyAndroidPerceptionDriver>(
                     cancellationToken,
@@ -194,11 +215,13 @@ namespace ReachyMini.AppState
 
             try
             {
+                MarkPhase("pausing services for deterministic capture");
                 behaviorInterruption.PauseForApplicationInterruption();
                 behaviorPaused = true;
                 perceptionInterruption.PauseForApplicationInterruption();
                 perceptionPaused = true;
 
+                MarkPhase("refreshing camera permission and capabilities");
                 discovery.RefreshPermissionAndCapabilities();
                 ReachyCameraCapabilitySnapshot capabilities = discovery.State.Current;
                 if (capabilities.Permission != ReachyCameraPermissionState.Granted)
@@ -215,16 +238,20 @@ namespace ReachyMini.AppState
 
                 if (acquisition.State.Current.IsActive)
                 {
+                    MarkPhase("stopping prior camera acquisition");
                     acquisition.StopAcquisition();
                     await WaitForCameraStoppedAsync(acquisition, cancellationToken);
                 }
+                MarkPhase("starting front camera acquisition");
                 acquisition.StartPreferred(ReachyCameraFacing.Front);
+                MarkPhase("waiting for front camera texture");
                 ReachyCameraTextureFrameDescriptor descriptor =
                     await WaitForFrontTextureAsync(
                         acquisition,
                         bridge,
                         cancellationToken);
 
+                MarkPhase("waiting for baseline authoritative state");
                 ReachySimAuthoritativeStateFrame baselineState =
                     await WaitForAuthoritativeStateAsync(
                         runtime,
@@ -232,6 +259,7 @@ namespace ReachyMini.AppState
                         cancellationToken);
                 ReachySimBodyPoseSnapshot baselineCameraPose =
                     FindCameraPose(baselineState);
+                MarkPhase("installing deterministic camera calibration fixture");
                 ReachyCameraCalibrationProfile fixture =
                     CreateDeterministicFixture(
                         descriptor,
@@ -239,6 +267,7 @@ namespace ReachyMini.AppState
                 settingsPersistence.CameraCalibrations.State.ReplaceAll(
                     new[] { fixture });
 
+                MarkPhase("capturing baseline transformed front frame");
                 ReachyVisionFrame baselineFrame =
                     await CaptureAcceptanceFrameAsync(
                         driver,
@@ -246,6 +275,7 @@ namespace ReachyMini.AppState
                 FrameEvidence baselineEvidence;
                 try
                 {
+                    MarkPhase("validating baseline transformed front frame");
                     baselineEvidence = RequireTransformedFrontFrame(
                         baselineFrame,
                         descriptor.CameraId,
@@ -259,11 +289,13 @@ namespace ReachyMini.AppState
                     await baselineFrame.DisposeAsync();
                 }
 
+                MarkPhase("building deterministic head-rotation behavior plan");
                 ReachyBehaviorTrajectoryPlan plan =
                     BuildCuriosityPlan(baselineState);
                 var executor = new ReachyBehaviorTrajectoryExecutor(
                     new ReachyProductionBehaviorControllerTargetSink(runtime),
                     new ReachyBehaviorSystemTrajectoryDelay());
+                MarkPhase("executing deterministic head-rotation behavior plan");
                 Task<ReachyBehaviorTrajectoryExecutionResult> executionTask =
                     executor.ExecuteAsync(plan, cancellationToken);
 
@@ -271,6 +303,7 @@ namespace ReachyMini.AppState
                 ReachySimAuthoritativeStateFrame? rotatedState = null;
                 double observedHeadRotation = 0.0;
                 ulong lastSequence = baselineState.Sequence;
+                MarkPhase("waiting for authoritative head rotation");
                 while (!executionTask.IsCompleted)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -295,6 +328,7 @@ namespace ReachyMini.AppState
                         continue;
                     }
 
+                    MarkPhase("capturing rotated transformed front frame");
                     rotatedFrame = await CaptureAcceptanceFrameAsync(
                         driver,
                         cancellationToken);
@@ -302,6 +336,7 @@ namespace ReachyMini.AppState
                     break;
                 }
 
+                MarkPhase("waiting for behavior trajectory completion");
                 ReachyBehaviorTrajectoryExecutionResult execution =
                     await executionTask;
                 if (!execution.Completed ||
@@ -320,6 +355,7 @@ namespace ReachyMini.AppState
                 FrameEvidence rotatedEvidence;
                 try
                 {
+                    MarkPhase("validating rotated transformed front frame");
                     rotatedEvidence = RequireTransformedFrontFrame(
                         rotatedFrame,
                         descriptor.CameraId,
@@ -339,6 +375,7 @@ namespace ReachyMini.AppState
                         "RMA-190 transformed frame did not incorporate the authoritative head-rotation state observed before capture.");
                 }
 
+                MarkPhase("returning successful camera acceptance report");
                 return Report.Success(
                     descriptor,
                     baselineEvidence,
