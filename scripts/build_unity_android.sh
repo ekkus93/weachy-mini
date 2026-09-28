@@ -229,8 +229,16 @@ case "${MODE}" in
         ;;
 esac
 
+UNITY_LIMIT_WRAPPER="${ROOT_DIR}/scripts/run_unity_limited.sh"
+if [[ ! -x "${UNITY_LIMIT_WRAPPER}" ]]; then
+    printf 'Unity CPU-limit wrapper is missing or not executable: %s\n' \
+        "${UNITY_LIMIT_WRAPPER}" >&2
+    exit 1
+fi
+
 env \
     WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" \
+    "${UNITY_LIMIT_WRAPPER}" \
     "${UNITY_EDITOR}" \
     -batchmode \
     -nographics \
