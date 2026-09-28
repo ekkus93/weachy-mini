@@ -9,12 +9,15 @@ The project is at the **foundation/scaffold stage**. It is not yet a working rob
 ## Platform target
 
 - Unity 6.3 LTS
-- Android 12 / API 31 or newer for the initial compatibility spike
+- Android API 26 or newer for the core ARM64 deployment floor
+- Android API 31 or newer for explicit on-device ASR / the full offline-speech tier
 - Android ARM64 (`arm64-v8a`)
 - IL2CPP for release builds
-- Vulkan preferred; OpenGL ES 3 is a later validated fallback
+- Vulkan or OpenGL ES 3 according to the representative-device support policy
 
-The minimum Android version is provisional until the device compatibility spike is complete.
+## Android release guide
+
+For build, device, model, provider/BYOK, calibration, fidelity, camera-validity, troubleshooting, and privacy/data-flow guidance, see `docs/ANDROID_RELEASE_GUIDE.md`.
 
 ## Authoritative project documents
 
