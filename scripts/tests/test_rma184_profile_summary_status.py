@@ -24,6 +24,7 @@ class Rma184ProfileSummaryStatusTests(unittest.TestCase):
     def test_status_records_only_bounded_visible_summary(self) -> None:
         status = STATUS.read_text(encoding="utf-8")
         for token in (
+            "Workflow head: `4eabd6995aa713686526eeecf6b2422d0e043745`",
             "Run ID: `36192045766`",
             "Job ID: `108259212316`",
             "\"profile_count\":2",

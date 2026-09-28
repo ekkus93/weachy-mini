@@ -8,7 +8,7 @@ This note records bounded Ralph-visible evidence from the A54 RMA-184 profile-su
 
 - Repository: `ekkus93/weachy-mini`
 - Workflow branch: `ralph/a54-rma184-profile-summary-extract-20260925`
-- Workflow head: `4eabd6995aa713686526eeec8f6b2422d0e043745`
+- Workflow head: `4eabd6995aa713686526eeecf6b2422d0e043745`
 - Workflow: `A54 RMA-184 Profile Summary Extract`
 - Run ID: `36192045766`
 - Job ID: `108259212316`
