@@ -20,10 +20,10 @@
       "license": "Apache-2.0",
       "source_url": "https://github.com/google-deepmind/mujoco",
       "source_revision": "237c17e48539b6c90bf90d3161547cbdcbfaa1e0",
-      "status": "pinned_not_imported",
-      "modification_status": "not_imported",
+      "status": "packaged_dependency",
+      "modification_status": "unmodified_build_source",
       "redistribution_status": "allowed_with_notice",
-      "required_notice": "Apache License 2.0 and upstream NOTICE when pinned and packaged."
+      "required_notice": "Apache License 2.0 and upstream NOTICE for the generated packaged runtime."
     },
     {
       "id": "reachy-mini-software",
@@ -32,10 +32,10 @@
       "license": "Apache-2.0",
       "source_url": "https://github.com/pollen-robotics/reachy_mini",
       "source_revision": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
-      "status": "planned",
-      "modification_status": "not_imported",
+      "status": "imported_from_pinned_source",
+      "modification_status": "deterministically_imported_with_provenance",
       "redistribution_status": "allowed_with_notice",
-      "required_notice": "Pin exact paths and retain upstream notices."
+      "required_notice": "Retain upstream notices and generated provenance for imported paths."
     },
     {
       "id": "reachy-mini-hardware-assets",
@@ -44,10 +44,10 @@
       "license": "CC-BY-NC-SA",
       "source_url": "https://github.com/pollen-robotics/reachy_mini",
       "source_revision": "a739a6e461eb6d722901f1cfc225265ffc85c28d",
-      "status": "planned",
-      "modification_status": "not_imported",
-      "redistribution_status": "blocked_pending_asset_audit",
-      "required_notice": "Attribution, noncommercial restriction, ShareAlike, modification notice, and exact asset audit."
+      "status": "imported_from_pinned_source",
+      "modification_status": "deterministically_transformed_with_provenance",
+      "redistribution_status": "allowed_subject_to_attribution_noncommercial_sharealike",
+      "required_notice": "Attribution, noncommercial restriction, ShareAlike, modification notice, exact source revision, and generated provenance."
     },
     {
       "id": "llama-cpp",
@@ -63,15 +63,15 @@
     },
     {
       "id": "local-llm-candidate",
-      "name": "Sub-1B local language model",
-      "owner": "Not selected",
-      "license": "Not selected",
-      "source_url": "about:blank",
-      "source_revision": null,
-      "status": "candidate",
-      "modification_status": "not_imported",
-      "redistribution_status": "blocked_pending_selection",
-      "required_notice": "Select through benchmark and licensing review; do not package candidate binaries."
+      "name": "Qwen3 0.6B Q4_K_M",
+      "owner": "Qwen",
+      "license": "Apache-2.0",
+      "source_url": "https://huggingface.co/Qwen/Qwen3-0.6B-GGUF",
+      "source_revision": "8e42d41f70cb6c571f58c3f31bd9287b372d97cc",
+      "status": "selected_external_model",
+      "modification_status": "selected_quantized_artifact_not_vendored",
+      "redistribution_status": "not_redistributed_by_repository",
+      "required_notice": "Present the selected model identity, Apache-2.0 license, source revision, exact SHA-256, and download/import provenance; do not imply the GGUF is bundled."
     },
     {
       "id": "androidx-camerax",
