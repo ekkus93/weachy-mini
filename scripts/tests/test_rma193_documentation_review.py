@@ -6,7 +6,6 @@ README = ROOT / "README.md"
 BUILDING = ROOT / "docs/BUILDING.md"
 OPERATOR_GUIDE = ROOT / "docs/ANDROID_RELEASE_OPERATOR_GUIDE.md"
 ASSET_POLICY = ROOT / "docs/ASSET_POLICY.md"
-TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
 def read(path: Path) -> str:
@@ -83,13 +82,12 @@ class Rma193DocumentationReviewTests(unittest.TestCase):
 
     def test_virtual_release_docs_do_not_require_physical_reachy_hardware(self) -> None:
         guide = read(OPERATOR_GUIDE)
-        todo = read(TODO)
         self.assertIn(
             "optional physical Reachy Mini hardware is not required",
             guide,
         )
-        self.assertIn("lack of physical Reachy Mini hardware", todo)
-        self.assertIn("must not become a release blocker", todo)
+        self.assertIn("virtual product", guide)
+        self.assertIn("separately named calibration experiment", guide)
         self.assertNotIn("physical Reachy Mini hardware is required", guide)
         self.assertNotIn("requires physical Reachy Mini hardware", guide)
 

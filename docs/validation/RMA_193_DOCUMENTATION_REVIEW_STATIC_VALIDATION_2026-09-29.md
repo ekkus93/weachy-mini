@@ -2,13 +2,13 @@
 
 ## Scope
 
-This document records the first permanent source-level regression gate for RMA-193 documentation review.
+This document records a permanent source-level regression gate for RMA-193 documentation review.
 
 The gate does not close the full release documentation checklist by itself. It creates repository contracts that keep the current build, device, model, provider, calibration, fidelity, camera, troubleshooting, privacy, data-flow, asset-policy, and virtual-product-scope documentation from drifting or disappearing silently.
 
 ## Added permanent gate
 
-New test file:
+Test file:
 
 - `scripts/tests/test_rma193_documentation_review.py`
 
@@ -33,6 +33,10 @@ python3 -m unittest discover -s scripts/tests -v
 | Privacy and data-flow explanation | Requires offline/cloud data-flow distinction and visible-failure/no-silent-fallback language. |
 | Virtual product scope | Requires the release guide to state that physical Reachy Mini hardware is not required for the virtual Android digital twin unless a separate calibration experiment says so. |
 | Asset/sensitive-data policy | Requires `docs/ASSET_POLICY.md` to document pinned/provenance-controlled upstream imports and prohibit committed keys, model binaries, raw media, and raw calibration captures. |
+
+## Follow-up hardening
+
+The follow-up commit removes a brittle direct TODO-phrase assertion from this gate. The virtual-product-scope requirement remains bound to `docs/ANDROID_RELEASE_OPERATOR_GUIDE.md`, which is the release-facing documentation hub, while the authoritative TODO remains the checklist of evidence that must close before release.
 
 ## Current evidence boundary
 
