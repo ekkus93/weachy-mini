@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the exact-head physical-device evidence for the first RMA-190 automated end-to-end tranche.
+This document records physical-device evidence for the first RMA-190 automated end-to-end tranche.
 
 The validated tranche covers only scenarios implemented by the shipping `ReachyRma190CoreEndToEndAcceptance` harness:
 
@@ -12,26 +12,26 @@ The validated tranche covers only scenarios implemented by the shipping `ReachyR
 
 The harness explicitly does **not** close the remaining RMA-190 scenarios for camera/VLM, speech/local-LLM, cloud-provider combinations, network/provider failures, model corruption/OOM, or solver-fault recovery.
 
-## Exact source under test
+## Latest exact source under test
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Commit: `c8495d346206fd85d100d6b7e17d1a2c4f1cb4a7`
-- Commit message: `RMA-173: document silent-failure regression coverage`
+- Commit: `b2b55a213c794e6960315e3f5585f32c1789ad2d`
+- Commit message: `RMA-193: harden documentation review contract`
 
-## Validation run
+## Latest validation run
 
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36628711072`
-- Job: `109612187221`
+- Run: `36635346761`
+- Job: `109634619675`
 - Job name: `Validate Unity Android device path on A54`
 - Result: success
 - Event: push
 - Attempt: 1
 
-The run completed successfully on the exact source commit above. Ralph's synthesized CI report observed one job and no failing steps.
+The run completed successfully on the exact source commit above. Ralph's synthesized CI report observed one job, a successful conclusion, and no failing steps.
 
-## Successful stages observed
+## Successful stages observed on the latest exact-head run
 
 The successful job completed all of the following stages:
 
@@ -56,12 +56,12 @@ The successful job completed all of the following stages:
 
 ## RMA-190 scenario mapping
 
-| RMA-190 scenario | Result from this run | Evidence boundary |
+| RMA-190 scenario | Result from latest run | Evidence boundary |
 | --- | --- | --- |
 | Offline launch with no network | Accepted by the RMA-190 core harness. | The harness captures a network snapshot after the shipping host is operational and fails if a validated Internet-capable active network is present. |
 | MuJoCo full model load and neutral reset | Accepted by the RMA-190 core harness. | The harness requires the shipping production simulation service, waits for the production authoritative runtime, verifies nonzero model hash and 18-body model layout, performs neutral reset, and verifies continuity advancement. |
 | Deterministic gesture replay | Accepted by the RMA-190 core harness. | The harness builds a deterministic acknowledgment trajectory, executes it twice through `ReachyProductionBehaviorControllerTargetSink` into the authoritative runtime, requires observed actuator motion, and compares final authoritative qpos/qvel within the configured tolerance. |
-| Front camera -> head rotation -> transformed Reachy-eye frame | Not closed by this run. | Camera acquisition, texture, tracking, visual-servo, and composition stages passed, but this RMA-190 scenario still requires a dedicated live transformed-frame E2E assertion. |
+| Front camera -> head rotation -> transformed Reachy-eye frame | Not closed by this run. | Camera discovery/acquisition/texture, lightweight tracking, visual-servo, and composition stages passed, but this RMA-190 scenario still requires a dedicated live transformed-frame E2E assertion using the real front-camera path. The RMA-154 stage uses deterministic synthetic optics and cannot be represented as real front-camera evidence. |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Not closed by this run. | The RMA-195 composition stage verifies application wiring, but RMA-125/RMA-190 spoken-turn physical proof remains separate. |
 | Rear-camera visual question with optional VLM | Not closed by this run. | No credentialed or optional VLM request was exercised by this core harness. |
 | Independent cloud provider combinations | Not closed by this run. | No cloud credentials or live cloud-provider execution was injected. |
@@ -80,8 +80,21 @@ This validation supports marking the following RMA-190 scenario checkboxes compl
 
 Do not use this evidence to mark any other RMA-190 scenario complete.
 
+## Earlier supporting run
+
+An earlier exact-head A54 no-artifacts run also accepted this same RMA-190 core tranche:
+
+- Commit: `c8495d346206fd85d100d6b7e17d1a2c4f1cb4a7`
+- Commit message: `RMA-173: document silent-failure regression coverage`
+- Workflow: `Local Unity Android Device Validation No Artifacts`
+- Run: `36628711072`
+- Job: `109612187221`
+- Result: success
+
+That earlier run is retained as historical support. The latest exact-head evidence above is the authoritative evidence for the current `master` line as of this document update.
+
 ## CI and infrastructure notes
 
-Hosted CI for this source line was still exhibiting the separate zero-step/bootstrap failure pattern observed on adjacent commits. That hosted failure had empty job step lists and did not produce source-level failure evidence.
+Hosted CI for this source line was still exhibiting the separate zero-step/bootstrap failure pattern observed on adjacent commits. The hosted `CI` jobs completed in seconds with empty step lists and did not produce source-level failure evidence.
 
-The physical A54 no-artifacts workflow above is the authoritative evidence for this RMA-190 core E2E tranche and for the physical-device stages it explicitly ran.
+The regular `Local Unity Android Validation` workflow on this source line passed Unity tests and failed at `Upload Unity test results`; downstream Android device stages were skipped by that artifact-upload failure. The no-artifacts A54 workflow above exists specifically to avoid artifact-upload fragility and is the authoritative physical evidence for this RMA-190 core E2E tranche and for the physical-device stages it explicitly ran.
