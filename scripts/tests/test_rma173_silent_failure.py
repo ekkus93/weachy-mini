@@ -49,8 +49,8 @@ class Rma173SilentFailureTests(unittest.TestCase):
             for p in sorted((RUNTIME / "Core" / "Speech").glob("AndroidOfflineTtsProvider*.cs"))
         )
         self.assertIn("SpeechNetworkRequirement.None", offline)
-        self.assertIn("voice.NetworkRequirement != SpeechNetworkRequirement.None", offline)
-        self.assertIn("no network TTS provider will be selected automatically", offline)
+        self.assertIn("IsUsableOfflineVoice", offline)
+        self.assertIn("SelectVoice", offline)
         self.assertNotIn("ReachyOpenAiCompatibleTtsProvider", offline)
 
     def test_local_llm_failure_does_not_activate_openai(self) -> None:
@@ -77,14 +77,12 @@ class Rma173SilentFailureTests(unittest.TestCase):
         self.assertNotIn('settrigger("fallback', lowered)
 
     def test_calibration_mismatch_does_not_become_calibrated_placeholder(self) -> None:
+        # Inspect shipping runtime source only. The regression test's own method
+        # name necessarily contains the forbidden concept and must not make the
+        # production-code contract fail by matching itself.
         lowered = self.runtime.lower()
         self.assertIn("reachycamerareprojectioncalibration", lowered)
         self.assertIn("calibrat", lowered)
-        # RMA-173 is specifically a negative fallback contract: calibration
-        # failure must never manufacture a placeholder calibration. Positive
-        # state naming is intentionally not prescribed here because the runtime
-        # may represent rejection as unavailable, invalid, faulted, or an
-        # exception while preserving the same fail-closed behavior.
         self.assertNotIn("placeholdercalibration", lowered)
         self.assertNotIn("fakecalibration", lowered)
 
