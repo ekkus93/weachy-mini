@@ -98,11 +98,11 @@ namespace ReachyMini.AppState
 
         public static ReachyLicenseNotice[] GetLicenseNotices()
         {
-            // RMA-012: keep the installed, offline notice surface aligned with
-            // third_party/inventory.json. The first two entries are first-party
+            // RMA-012/RMA-192: keep the installed, offline notice surface aligned
+            // with third_party/inventory.json. The first two entries are first-party
             // project disclosures; every remaining Component exactly matches an
-            // inventory entry name so scripts/tests/test_rma012_licenses.py can
-            // fail closed if the repository inventory and packaged UI drift.
+            // inventory entry name so release-review contracts fail closed if the
+            // repository inventory and packaged UI drift.
             return new[]
             {
                 new ReachyLicenseNotice(
@@ -136,10 +136,10 @@ namespace ReachyMini.AppState
                     "ggml-org contributors",
                     "MIT License; pinned upstream license retained."),
                 new ReachyLicenseNotice(
-                    "Sub-1B local language model",
-                    "Not selected",
-                    "Candidate only; no model binary is packaged until selection and " +
-                        "license review complete."),
+                    "Qwen3 0.6B Q4_K_M",
+                    "Qwen",
+                    "Apache-2.0; selected external model, verified on import; " +
+                        "GGUF is not bundled by this application."),
                 new ReachyLicenseNotice(
                     "AndroidX CameraX",
                     "Android Open Source Project / Google",
