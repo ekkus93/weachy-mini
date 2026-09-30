@@ -3,18 +3,23 @@
 
 from __future__ import annotations
 
+import json
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GUIDE = ROOT / "docs" / "ANDROID_RELEASE_GUIDE.md"
+BUILDING = ROOT / "docs" / "BUILDING.md"
 README = ROOT / "README.md"
+MATRIX = ROOT / "models" / "reachy-mini" / "android-device-matrix.json"
+TOOLCHAIN = ROOT / "toolchain.lock.json"
 
 
 class Rma193DocumentationContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.guide = GUIDE.read_text(encoding="utf-8")
+        cls.building = BUILDING.read_text(encoding="utf-8")
         cls.readme = README.read_text(encoding="utf-8")
         cls.guide_lower = cls.guide.lower()
 
@@ -45,6 +50,21 @@ class Rma193DocumentationContractTests(unittest.TestCase):
         ):
             self.assertIn(token, self.guide)
 
+    def test_device_floor_matches_rma184_support_policy(self) -> None:
+        matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+        toolchain = json.loads(TOOLCHAIN.read_text(encoding="utf-8"))
+        core_floor = matrix["support_policy"]["minimum_android_api"]
+        speech_floor = matrix["support_policy"]["minimum_explicit_on_device_asr_api"]
+        self.assertEqual(26, core_floor)
+        self.assertEqual(31, speech_floor)
+        self.assertIn(f"API {core_floor}", self.guide)
+        self.assertIn(f"API {speech_floor}", self.guide)
+        self.assertIn(f"API {core_floor}", self.building)
+        self.assertIn(f"API {speech_floor}", self.building)
+        self.assertEqual(core_floor, toolchain["android"]["unity_device_feasibility_min_sdk"])
+        self.assertEqual(speech_floor, toolchain["android"]["min_sdk"])
+        self.assertEqual("provisional_until_compatibility_spike", toolchain["android"]["min_sdk_status"])
+
     def test_model_provider_calibration_privacy_fail_closed_language(self) -> None:
         for token in (
             "qwen3-0.6b-q4-k-m.local-llm.json",
@@ -74,4 +94,4 @@ class Rma193DocumentationContractTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

@@ -88,7 +88,7 @@ MUJOCO_SOURCE_DIR=/path/to/mujoco \
 ./scripts/build_mujoco_android.sh
 ```
 
-The native feasibility artifacts target `arm64-v8a` with API 26 so they can run on the LG G6 test phone. This does not lower the provisional API 31 minimum for normal development or release application builds.
+The native feasibility artifacts target `arm64-v8a` with API 26 so they can run on the LG G6 test phone. The RMA-184 support policy now treats ARM64 API 26 as the core app floor; API 31 or newer is required only for the full explicit on-device ASR experience. `toolchain.lock.json` still carries the older provisional `android.min_sdk=31` field for compatibility and must not be read as overriding the measured/support-policy floor.
 
 ## Android bridge
 
@@ -118,26 +118,11 @@ Set `UNITY_EDITOR` to the exact pinned Unity executable and ensure at least one 
 ```bash
 export UNITY_EDITOR=/home/phil/Unity/Hub/Editor/6000.5.2f1/Editor/Unity
 
+# Development APK using the core supported API-26 floor.
 ./scripts/build_unity_android.sh device-feasibility
-./scripts/build_unity_android.sh development
+
+# Release AAB from the pinned release toolchain.
 ./scripts/build_unity_android.sh release
 ```
 
-The `device-feasibility` command produces an ARM64 APK with a test-only API 26 floor for the connected LG G6. The normal development APK and release AAB retain the provisional API 31 floor. All Android builds use IL2CPP and ARM64; no Android x86_64 player target exists in Unity 6000.5.
-
-The scaffold intentionally fails if no scene is configured rather than silently generating or selecting one.
-
-## Run the MuJoCo feasibility probe on a phone
-
-After a successful Android MuJoCo/probe build, connect one authorized physical ARM64 Android phone and run:
-
-```bash
-REACHY_ANDROID_SERIAL=LGH87250967ab9 \
-./scripts/run_mujoco_probe_android.sh
-```
-
-Other ADB targets, including emulators, may remain online when `REACHY_ANDROID_SERIAL` identifies the physical phone. The default run performs 900,000 steps at a model timestep of 0.002 seconds and writes machine-readable timing plus device identification under `diagnostics-output/mujoco-probe/`. A first-party contract mock is used only for desktop boundary tests and does not satisfy the real-solver acceptance gate.
-
-## Current limitations
-
-The repository has not yet passed the two-machine Unity build acceptance criterion, Android bridge wrapper generation, physical-phone Unity installation, or MuJoCo Android feasibility gate. Those items remain incomplete in the authoritative TODO.
+For physical qualification, use the ticket-scoped acceptance workflow or runner script for the scenario being closed. Evidence must identify the exact source SHA and device/API used; a successful build alone is not physical acceptance.
