@@ -26,10 +26,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Run RMA-161 credential lifecycle contract
+        run: python3 scripts/tests/test_rma161_credential_lifecycle.py
+
+      - name: Run RMA-162 private-media retention contract
+        run: python3 scripts/tests/test_rma162_private_media_retention.py
+
+      - name: Run RMA-170 structured-logging contract
+        run: python3 scripts/tests/test_rma170_structured_logging.py
+
+      - name: Run RMA-172 diagnostic-bundle contract
+        run: python3 scripts/tests/test_rma172_diagnostic_bundle_export.py
+
+      - name: Run RMA-195 fail-closed composition contract
+        run: python3 scripts/tests/test_rma195_application_composition.py
 
       - name: Run RMA-191 security-review contract
         run: python3 scripts/tests/test_rma191_security_review.py
