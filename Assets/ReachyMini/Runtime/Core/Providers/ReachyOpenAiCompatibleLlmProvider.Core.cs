@@ -9,17 +9,12 @@ using ReachyMini.Behavior;
 
 namespace ReachyMini.Providers
 {
-    // RMA-142/143: no cloud LLM provider class existed at all before this file --
-    // following the RMA-144/145 OpenAI-compatible ASR/TTS adapter pattern (one real
-    // ReachySharedHttpTransport-backed class per endpoint style, mirroring the
-    // RMA-115 VLM base-class/two-thin-subclasses shape). Scope: bounded, non-streaming
-    // text-in/JSON-behavior-intent-out generation only. Image input ("transformed-image
-    // input where enabled") is deliberately NOT implemented here -- RMA-115's VLM
-    // providers already cover image-grounded scene description/questions separately,
-    // and RMA-195 Phase D's own framing gates conversational behavior intents on text
-    // landing first; ReachyLlmCapabilities.SupportsImages stays false on every
-    // provider instance produced by this file, so a caller can detect the mismatch
-    // rather than have it silently ignored.
+    // RMA-142/143: OpenAI-compatible cloud LLM adapters over the shared bounded
+    // HTTP transport. Text-only remains the default capability. When a configured
+    // endpoint explicitly advertises image support, RMA-142 additionally accepts the
+    // RMA-115 RemoteVlmEncodedImage boundary: transformed Reachy-eye, validity-masked,
+    // valid-only content. Raw camera bytes never cross this provider contract and an
+    // image is rejected before network I/O when SupportsImages is false.
     public abstract partial class ReachyOpenAiCompatibleLlmProviderBase : ICloudLlmProviderCapability, IAsyncDisposable
     {
         private const string InternalBearerSecretReference = "reachy.internal.llm.bearer";
@@ -85,6 +80,25 @@ namespace ReachyMini.Providers
             {
                 return Cancelled();
             }
+            if (request.TransformedImage != null)
+            {
+                if (!Capabilities.SupportsImages)
+                {
+                    return new ReachyLlmGenerationResult(
+                        ReachyLlmGenerationStatus.HttpFailure,
+                        null,
+                        string.Empty,
+                        "The selected LLM provider does not advertise transformed-image input support.");
+                }
+                if (request.TransformedImage.Image.IsDisposed)
+                {
+                    return new ReachyLlmGenerationResult(
+                        ReachyLlmGenerationStatus.HttpFailure,
+                        null,
+                        string.Empty,
+                        "The transformed-image input was disposed before LLM generation.");
+                }
+            }
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMilliseconds(sourceProfile.TimeoutMilliseconds));
@@ -98,6 +112,7 @@ namespace ReachyMini.Providers
                     sourceProfile.GetModelId(ReachyProviderModelRole.Text),
                     options.SystemPrompt,
                     request.Messages,
+                    request.TransformedImage,
                     options.MaximumOutputTokens);
 
                 using var transportRequest = new ReachyHttpTransportRequest(

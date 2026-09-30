@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Behavior;
+using ReachyMini.Perception;
 
 namespace ReachyMini.Providers
 {
@@ -19,6 +20,7 @@ namespace ReachyMini.Providers
         public const int MaximumMessageCharacters = 4096;
         public const int MaximumRequestIdCharacters = 128;
         public const int MaximumDiagnosticCharacters = 384;
+        public const int MaximumTransformedImageBytes = 4 * 1024 * 1024;
     }
 
     public enum ReachyLlmChatRole
@@ -51,11 +53,63 @@ namespace ReachyMini.Providers
         public string Content { get; }
     }
 
+    // RMA-142: image input is deliberately typed as the already-sanitized RMA-115
+    // remote-VLM payload. Callers cannot pass a raw phone frame or arbitrary bytes:
+    // RemoteVlmEncodedImage proves transformed Reachy-eye origin, validity-mask
+    // application, valid-only content, and no upscaling before this boundary.
+    // Ownership remains with the caller; generation only borrows the payload.
+    public sealed class ReachyLlmTransformedImageInput
+    {
+        public ReachyLlmTransformedImageInput(
+            RemoteVlmEncodedImage image,
+            RemoteVlmImageDetail detail)
+        {
+            Image = image ?? throw new ArgumentNullException(nameof(image));
+            if (image.IsDisposed)
+            {
+                throw new ObjectDisposedException(nameof(image));
+            }
+            if (image.SourceOrigin != VisionFrameOrigin.TransformedReachyEye ||
+                !image.ValidityMaskApplied ||
+                !image.ContainsOnlyValidPixels ||
+                image.Upscaled)
+            {
+                throw new ArgumentException(
+                    "LLM image input requires valid-only transformed Reachy-eye content.",
+                    nameof(image));
+            }
+            if (image.EncodedByteCount > ReachyLlmProviderPolicy.MaximumTransformedImageBytes)
+            {
+                throw new ArgumentException(
+                    "LLM transformed-image input exceeds the bounded encoded-image size.",
+                    nameof(image));
+            }
+            if (!Enum.IsDefined(typeof(RemoteVlmImageDetail), detail))
+            {
+                throw new ArgumentOutOfRangeException(nameof(detail));
+            }
+
+            Detail = detail;
+        }
+
+        public RemoteVlmEncodedImage Image { get; }
+
+        public RemoteVlmImageDetail Detail { get; }
+    }
+
     public sealed class ReachyLlmGenerationRequest
     {
         public ReachyLlmGenerationRequest(
             string requestId,
             IReadOnlyList<ReachyLlmChatMessage> messages)
+            : this(requestId, messages, transformedImage: null)
+        {
+        }
+
+        public ReachyLlmGenerationRequest(
+            string requestId,
+            IReadOnlyList<ReachyLlmChatMessage> messages,
+            ReachyLlmTransformedImageInput? transformedImage)
         {
             if (string.IsNullOrWhiteSpace(requestId) ||
                 requestId.Length > ReachyLlmProviderPolicy.MaximumRequestIdCharacters)
@@ -93,11 +147,14 @@ namespace ReachyMini.Providers
 
             RequestId = requestId;
             Messages = messages;
+            TransformedImage = transformedImage;
         }
 
         public string RequestId { get; }
 
         public IReadOnlyList<ReachyLlmChatMessage> Messages { get; }
+
+        public ReachyLlmTransformedImageInput? TransformedImage { get; }
     }
 
     public enum ReachyLlmGenerationStatus

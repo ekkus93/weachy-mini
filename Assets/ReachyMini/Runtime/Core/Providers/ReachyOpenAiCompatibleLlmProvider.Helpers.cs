@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+using ReachyMini.Perception;
 
 namespace ReachyMini.Providers
 {
@@ -80,9 +81,25 @@ namespace ReachyMini.Providers
             string model,
             string systemPrompt,
             IReadOnlyList<ReachyLlmChatMessage> messages,
+            ReachyLlmTransformedImageInput? transformedImage,
             int maximumOutputTokens)
         {
-            var builder = new StringBuilder(512 + systemPrompt.Length);
+            string? imageDataUri = null;
+            string? imageDetail = null;
+            if (transformedImage != null)
+            {
+                RemoteVlmEncodedImage image = transformedImage.Image;
+                if (image.IsDisposed)
+                {
+                    throw new ObjectDisposedException(nameof(transformedImage));
+                }
+                string base64Image = Convert.ToBase64String(image.EncodedBytes.Span);
+                imageDataUri = "data:" + image.MediaType + ";base64," + base64Image;
+                imageDetail = DetailToken(transformedImage.Detail);
+            }
+
+            var builder = new StringBuilder(
+                512 + systemPrompt.Length + (imageDataUri?.Length ?? 0));
             builder.Append('{');
             AppendProperty(builder, "model", model, first: true);
             builder.Append(',');
@@ -92,11 +109,29 @@ namespace ReachyMini.Providers
             AppendMessage(builder, "system", systemPrompt, first: true);
             for (int index = 0; index < messages.Count; ++index)
             {
-                AppendMessage(
-                    builder,
-                    RoleName(messages[index].Role),
-                    messages[index].Content,
-                    first: false);
+                bool attachImage =
+                    imageDataUri != null &&
+                    index == messages.Count - 1 &&
+                    messages[index].Role == ReachyLlmChatRole.User;
+                if (attachImage)
+                {
+                    AppendMultimodalMessage(
+                        builder,
+                        endpointStyle,
+                        RoleName(messages[index].Role),
+                        messages[index].Content,
+                        imageDataUri!,
+                        imageDetail!,
+                        first: false);
+                }
+                else
+                {
+                    AppendMessage(
+                        builder,
+                        RoleName(messages[index].Role),
+                        messages[index].Content,
+                        first: false);
+                }
             }
             builder.Append(']');
             builder.Append(',');
@@ -126,6 +161,74 @@ namespace ReachyMini.Providers
             builder.Append(',');
             AppendProperty(builder, "content", content, first: true);
             builder.Append('}');
+        }
+
+        private static void AppendMultimodalMessage(
+            StringBuilder builder,
+            ReachyProviderEndpointStyle endpointStyle,
+            string role,
+            string text,
+            string imageDataUri,
+            string detail,
+            bool first)
+        {
+            if (!first)
+            {
+                builder.Append(',');
+            }
+            builder.Append('{');
+            AppendProperty(builder, "role", role, first: true);
+            builder.Append(',');
+            AppendJsonString(builder, "content");
+            builder.Append(':');
+            builder.Append('[');
+            builder.Append('{');
+            if (endpointStyle == ReachyProviderEndpointStyle.Responses)
+            {
+                AppendProperty(builder, "type", "input_text", first: true);
+            }
+            else
+            {
+                AppendProperty(builder, "type", "text", first: true);
+            }
+            builder.Append(',');
+            AppendProperty(builder, "text", text, first: true);
+            builder.Append('}');
+            builder.Append(',');
+            builder.Append('{');
+            if (endpointStyle == ReachyProviderEndpointStyle.Responses)
+            {
+                AppendProperty(builder, "type", "input_image", first: true);
+                builder.Append(',');
+                AppendProperty(builder, "image_url", imageDataUri, first: true);
+                builder.Append(',');
+                AppendProperty(builder, "detail", detail, first: true);
+            }
+            else
+            {
+                AppendProperty(builder, "type", "image_url", first: true);
+                builder.Append(',');
+                AppendJsonString(builder, "image_url");
+                builder.Append(':');
+                builder.Append('{');
+                AppendProperty(builder, "url", imageDataUri, first: true);
+                builder.Append(',');
+                AppendProperty(builder, "detail", detail, first: true);
+                builder.Append('}');
+            }
+            builder.Append('}');
+            builder.Append(']');
+            builder.Append('}');
+        }
+
+        private static string DetailToken(RemoteVlmImageDetail detail)
+        {
+            switch (detail)
+            {
+                case RemoteVlmImageDetail.Low: return "low";
+                case RemoteVlmImageDetail.High: return "high";
+                default: return "auto";
+            }
         }
 
         private static string RoleName(ReachyLlmChatRole role)
