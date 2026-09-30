@@ -330,8 +330,17 @@ jobs:
           RMA090_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma090-camera-device-report
         run: bash scripts/run_rma090_camera_discovery_acceptance_android.sh
 
+      - name: Verify RMA-090 camera discovery evidence
+        if: ${{ always() && steps.camera_discovery_acceptance.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "${RUNNER_TEMP}/rma090-camera-device-report/rma090-camera-discovery.json"
+          test -s "${RUNNER_TEMP}/rma090-camera-device-report/device.txt"
+
       - name: Upload RMA-090 camera discovery evidence
         if: ${{ always() && steps.camera_discovery_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma090-camera-device-report-${{ github.sha }}
