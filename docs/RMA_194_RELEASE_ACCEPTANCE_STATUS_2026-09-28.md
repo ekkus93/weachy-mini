@@ -2,7 +2,7 @@
 
 This document records the current release-gate status for the Reachy Mini Android digital twin. It is intentionally conservative: implementation and static contracts may exist before exact-head CI, Local Unity Android Validation, physical-device, provider, performance, privacy, license, and release-acceptance evidence is complete.
 
-It is a planning/status artifact only. It does **not** close any checkbox in `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md`. TODO checkbox closure must wait for exact current-master evidence and authoritative TODO reconciliation.
+It is a planning/status artifact only. It does **not** close any checkbox in `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md`. TODO checkbox closure must wait for accepted evidence and authoritative TODO reconciliation.
 
 ## Release status
 
@@ -14,13 +14,15 @@ The project currently has evidence for three RMA-194 subitems that were already 
 - The full closed-loop Reachy model is rendered from native state, with RMA-051/RMA-052 evidence and no hidden kinematic fallback.
 - Level 1 camera reprojection passes reference tests, with RMA-104 validation evidence and the reprojection workflow retained.
 
-All other RMA-194 checklist entries remain open until their own acceptance evidence passes at the exact candidate head.
+RMA-190 also has accepted physical A54 evidence for its first three scenarios — offline launch, production MuJoCo full-model load plus neutral reset, and deterministic gesture replay — in `docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md`. The authoritative TODO is stale for those three scenario checkboxes and should be reconciled from that evidence; the evidence does not close the other RMA-190 scenarios.
+
+All other RMA-194 checklist entries remain open until their own acceptance evidence passes.
 
 ## Current merge and qualification boundary
 
 Several hosted workflows continue to fail with the repository-wide zero-step/no-log or `JOB_NOT_FOUND` signature. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
 
-Long-running self-hosted Android validation lanes may remain queued, pending, or in progress while the runner is busy. Queued status is not a pass and is not a source failure.
+A dedicated `RMA Release Review Contracts` workflow now runs the RMA-012, RMA-161, RMA-162, RMA-170, RMA-172, RMA-195, RMA-191, RMA-192, RMA-193, and RMA-194 static/reconciliation contracts on a generic self-hosted Linux runner without requiring an Android phone. A queued run is not a pass and is not a source failure.
 
 Artifact upload failures are infrastructure failures, not source failures, when the relevant acceptance step completed before artifact upload. A physical Android run blocked by secure keyguard, device disconnection, missing installed ASR/TTS services, or unavailable runner hardware is a hardware/service availability condition, not a source-code failure. Lack of physical Reachy Mini hardware is not a release blocker for the virtual Reachy Mini product unless a later optional physical-calibration milestone explicitly requires it.
 
@@ -28,7 +30,7 @@ Artifact upload failures are infrastructure failures, not source failures, when 
 
 | RMA-194 item | Current evidence/status | Blocker before checkbox closure |
 | --- | --- | --- |
-| App launches and runs offline on supported hardware. | Open. Historical offline and application-composition evidence exists, but current `master` still needs exact-head release-candidate physical evidence. | Exact-head physical Android run on supported hardware, then TODO reconciliation. |
+| App launches and runs offline on supported hardware. | Open in RMA-194, but the RMA-190 core harness has accepted physical A54 offline-launch evidence on the current source line. | Reconcile the RMA-190 scenario checkbox; final RMA-194 closure still belongs to the release-candidate evidence set. |
 | MuJoCo is authoritative and stable. | Already checked in the TODO with RMA-032/RMA-060 through RMA-065 evidence. | Keep checked unless future source changes invalidate the evidence. |
 | Full closed-loop Reachy model is rendered from native state. | Already checked in the TODO with RMA-051/RMA-052 evidence and `hidden_kinematic_fallback=false`. | Keep checked unless future source changes invalidate the evidence. |
 | Level 1 camera reprojection passes reference tests. | Already checked in the TODO with RMA-104 validation evidence and the reprojection workflow retained. | Keep checked unless future source changes invalidate the evidence. |
@@ -36,31 +38,30 @@ Artifact upload failures are infrastructure failures, not source failures, when 
 | Selected benchmark-backed local LLM works without blocking physics. | Open. RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically. | Exact-head validation and representative-device profile reconciliation for the release candidate. |
 | OpenAI and compatible providers are independently configurable. | Open. Provider configuration, BYOK, and cloud LLM/VLM wiring exist; real cloud-provider success is not claimed by this document. | Exact-head provider validation and intentionally supplied endpoint/credential evidence if a real cloud success claim is made. |
 | Behavior planner validates all AI output. | Open. RMA-151/RMA-195 design routes validated behavior intents through production behavior capability. | Exact-head evidence that the full current path remains intact under malformed-provider responses and regeneration limits. |
-| No silent provider, privacy, calibration, or kinematic fallbacks remain. | Open. RMA-173/RMA-191 gates now enforce key fail-closed boundaries; TODO closure still requires accepted exact-head evidence. | Exact-head CI/security/privacy/failure-mode validation and no redacted source gaps for the closure claim. |
-| Diagnostics identify active fidelity, providers, and failures. | Open. RMA-170/RMA-171/RMA-172 diagnostics and bundle export exist; release closure needs current-head verification. | Exact-head CI plus audit that diagnostics remain wired to active fidelity/provider/failure state. |
-| Representative-device performance report exists. | Open. RMA-184 defines the matrix; measured default profiles remain open; detailed rows are not reconstructed from redacted output. | Safely readable detailed measured profiles and supported-device target reconciliation. |
-| Licenses and attribution are complete. | Open. RMA-192 review gate is now in-tree; final closure still needs exact-head validation; partial reconstruction from redacted inventory output is not acceptable. | Full exact-head license-review validation and TODO reconciliation. |
+| No silent provider, privacy, calibration, or kinematic fallbacks remain. | Open. RMA-173/RMA-191 gates enforce key fail-closed boundaries; TODO closure still requires accepted release-review evidence. | Exact-head security/privacy/failure-mode validation. |
+| Diagnostics identify active fidelity, providers, and failures. | Open. RMA-170/RMA-171/RMA-172 diagnostics and bundle export exist; release closure needs current-head verification. | Exact-head release-review/static validation plus audit that diagnostics remain wired to active fidelity/provider/failure state. |
+| Representative-device performance report exists. | Open. RMA-184 defines low/mid/high classes and has partial low/A54 measurements; measured mid/high default-profile closure remains pending. | Complete the remaining physical representative-device measurements and target reconciliation. |
+| Licenses and attribution are complete. | Open. The full inventory/notices/app notice source are readable and RMA-192 now mechanically binds them to selected-model and Reachy-derived-asset obligations. | Exact-head RMA-012/RMA-192 release-review pass, then TODO reconciliation. |
 
 ## Current open release blockers
 
 The current release gate remains blocked by the following evidence gaps:
 
 - RMA-125 / RMA-190: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
-- RMA-184: representative-device default profiles require measured low, mid, and high class reports; mid/high physical measurements are still pending.
-- RMA-190: production end-to-end scenarios remain unchecked and must exercise shipping runtime paths, not test-only substitutes represented as production evidence.
-- RMA-191: the security and privacy review has systematic contracts in-tree, but exact-head CI/device evidence must pass before TODO closure.
-- RMA-192: the license and attribution review has systematic contracts in-tree, but exact-head CI evidence must pass before TODO closure.
-- RMA-193: the release operator documentation hub exists in-tree, but exact-head CI evidence must pass before TODO closure.
+- RMA-184: representative-device default profiles require remaining measured mid/high evidence.
+- RMA-190: the first three core scenarios have physical evidence, while camera/VLM, speech/local-LLM, cloud-provider, failure-injection, model-corruption/OOM, and solver-fault scenarios remain open.
+- RMA-191: systematic security/privacy contracts are in-tree; exact-head release-review validation is still required before TODO closure.
+- RMA-192: inventory, repository notices, offline app notices, Reachy attribution/share-alike obligations, no-endorsement disclosure, and selected-model presentation are now mechanically reconciled; exact-head release-review validation is still required before TODO closure.
+- RMA-193: the release documentation hub and device-floor consistency contract are in-tree; exact-head release-review validation is still required before TODO closure.
 - RMA-194: the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete.
-
 
 ## Release-gate blockers
 
-1. Generic CI and several status-publisher workflows continue to show zero-step/`JOB_NOT_FOUND` infrastructure failures.
+1. Generic hosted CI and several status-publisher workflows continue to show zero-step/`JOB_NOT_FOUND` infrastructure failures.
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: on-device ASR utterance -> local LLM -> behavior -> offline TTS with the required offline/network-disabled conditions, or an explicitly accepted non-fabricated ASR acceptance method.
 3. RMA-002 still requires second independently provisioned Unity/Android build evidence.
-4. RMA-184 still needs detailed measured default profiles and representative-device target reconciliation.
-5. RMA-192 still needs full readable inventory/notices/source changes plus exact-head license-review validation before release closure.
+4. RMA-184 still needs remaining measured default profiles and representative-device target reconciliation.
+5. RMA-191/RMA-192/RMA-193 release-review contracts must pass on the exact candidate head before their TODO sections can be closed.
 
 ## Non-blocker classifications
 
