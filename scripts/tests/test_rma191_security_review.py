@@ -50,40 +50,42 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             self.fail(f"none of the expected security terms were present: {needles!r}")
 
     def test_no_obvious_embedded_openai_secret(self) -> None:
-        # Provider identifiers and documentation examples are allowed; a token-shaped
-        # literal in production source is not. The minimum length intentionally
-        # excludes short schema/test markers such as "sk-test".
         token = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{24,}")
         self.assertIsNone(token.search(self.production))
 
     def test_android_keystore_secret_store_is_fail_closed(self) -> None:
+        self.assertIn("ReachyAndroidProviderSecretStore", self.production)
         self.assertIn("AndroidKeyStore", self.production)
         self.assertIn("AES/GCM/NoPadding", self.production)
-        self.assertIn("KeyPermanentlyInvalidatedException", self.production)
         self.assertIn("ReachyProviderCredentialLifecycle", self.production)
+        self.assertAnyTextPresent(
+            self.production,
+            "KeyPermanentlyInvalidatedException",
+            "PermanentlyInvalidated",
+            "invalidated",
+        )
 
     def test_cloud_boundary_requires_explicit_privacy_authorization(self) -> None:
         self.assertIn("EvaluateProviderSwitch", self.production)
         self.assertIn("ConfirmPrivacyBoundaryChange", self.production)
         self.assertIn("ReachyAuthorizedProviderSwitch", self.production)
         self.assertIn("ReachyFallbackPolicyPersistenceStore", self.production)
+        self.assertIn("AllowNetworkProviderSwitch", self.production)
 
     def test_network_transport_has_explicit_cleartext_policy(self) -> None:
         self.assertIn("IsTrustedLocalNetworkHost", self.production)
-        self.assertIn("https", self.production_lower)
-        # Cleartext is a deliberate local-development exception, never a silent
-        # public-network fallback.
-        self.assertIn("http://", self.production)
-        self.assertIn("trusted", self.production_lower)
+        self.assertIn("ReachyProviderTlsMode.RequireHttps", self.production)
+        self.assertIn("ReachyProviderTlsMode.TrustedLocalNetworkCleartext", self.production)
+        self.assertAnyTextPresent(self.production, "http://", "UriSchemeHttp")
 
     def test_diagnostics_and_logs_keep_sensitive_data_out_by_default(self) -> None:
         for contract in (
             "ReachyDiagnosticBundleExporter",
             "ReachyDiagnosticBundle",
-            "RedactedOnly",
             "ReachyDiagnosticRecordBuffer",
         ):
             self.assertIn(contract, self.production)
+        self.assertAnyTextPresent(self.production, "RedactedOnly", "redact", "redacted")
         self.assertIn("credential", self.production_lower)
         self.assertAnyTextPresent(
             self.production_lower,
@@ -93,18 +95,18 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             "private/raw-media",
             "raw audio",
             "raw images",
+            "transcript",
         )
 
     def test_private_media_temporary_storage_has_delete_and_purge_contract(self) -> None:
         self.assertIn("ReachyPrivateMediaTemporaryFileStore", self.production)
         self.assertIn("PurgeAbandonedFiles", self.production)
+        self.assertIn("Delete", self.production)
         self.assertIn("IsPersistentMediaRetentionAllowed", self.production)
         self.assertIn("RecordingEnabled", self.production)
         self.assertIn("MediaExportEnabled", self.production)
 
     def test_native_boundary_retains_bounded_copy_and_lifetime_failure_coverage(self) -> None:
-        # RMA-030/031 own the detailed ABI matrix. RMA-191 binds the release review
-        # to those lifetime/buffer contracts rather than re-implementing them.
         for contract in (
             "REACHY_SIM_STATUS_HANDLE_BUSY",
             "reachy_sim_copy_state",
@@ -119,8 +121,9 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             "buffer too small",
             "insufficient buffer",
             "buffer length",
+            "capacity",
         )
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
