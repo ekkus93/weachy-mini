@@ -58,7 +58,6 @@ def main() -> int:
     require(revalidation, "network-disabled evidence", "A54 revalidation report")
 
     require(blocker, "Hardware/API prerequisite cleared on A54; network-disabled spoken-conversation acceptance still open", "RMA-125 blocker")
-    require(blocker, "claimsing", "negative sentinel") if False else None
     if "**Status:** Blocked on an API-31+ physical Android device" in blocker:
         raise AssertionError("RMA-125 blocker still has the stale API-31+ hardware-blocker status")
     require(blocker, "This updated evidence clears only the device/API/service-readiness prerequisite.", "RMA-125 blocker")
