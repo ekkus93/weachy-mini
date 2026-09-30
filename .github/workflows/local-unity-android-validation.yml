@@ -356,8 +356,17 @@ jobs:
           RMA091_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma091-camera-device-report
         run: bash scripts/run_rma091_camera_acquisition_acceptance_android.sh
 
+      - name: Verify RMA-091 camera acquisition evidence
+        if: ${{ always() && steps.camera_acquisition_acceptance.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "${RUNNER_TEMP}/rma091-camera-device-report/rma091-camera-acquisition.json"
+          test -s "${RUNNER_TEMP}/rma091-camera-device-report/device.txt"
+
       - name: Upload RMA-091 camera acquisition evidence
         if: ${{ always() && steps.camera_acquisition_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma091-camera-device-report-${{ github.sha }}
