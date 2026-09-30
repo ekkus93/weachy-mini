@@ -3336,33 +3336,52 @@ pending, but implementation alone does not close its checkbox.
 
 ## RMA-191 — Complete privacy and security review
 
-- [ ] Verify no embedded keys.
-- [ ] Verify Keystore usage.
-- [ ] Verify network security configuration.
-- [ ] Verify provider disclosure before cloud-bound audio/image/text.
-- [ ] Verify logs and diagnostics redaction.
-- [ ] Verify temporary media cleanup.
-- [ ] Review native buffer and lifetime safety.
+**Status:** Complete (2026-09-30). **Completion evidence:** exact-head
+`RMA Release Review Contracts` run `36776925974` passed on
+`7c3e2e99c043836f0cdb2c293c9abb88528d6513`. The canonical
+`scripts/tests/test_rma191_security_privacy_review.py` gate covers every
+requirement below, and the compatibility guard plus dedicated release workflow
+prevent policy drift.
+
+- [x] Verify no embedded keys.
+- [x] Verify Keystore usage.
+- [x] Verify network security configuration.
+- [x] Verify provider disclosure before cloud-bound audio/image/text.
+- [x] Verify logs and diagnostics redaction.
+- [x] Verify temporary media cleanup.
+- [x] Review native buffer and lifetime safety.
 
 ## RMA-192 — Complete license and attribution review
 
-- [ ] Reconcile packaged dependencies/assets against inventory.
-- [ ] Verify notices in repository and app.
-- [ ] Verify modified Reachy-derived assets have required attribution/share-alike treatment.
-- [ ] Verify no endorsement claim.
-- [ ] Verify selected local model redistribution/download presentation.
+**Status:** Complete (2026-09-30). **Completion evidence:** exact-head
+`RMA Release Review Contracts` run `36776925974` passed on
+`7c3e2e99c043836f0cdb2c293c9abb88528d6513`, including
+`scripts/tests/test_rma192_license_reconciliation.py` and the RMA-012
+in-app license contract.
+
+- [x] Reconcile packaged dependencies/assets against inventory.
+- [x] Verify notices in repository and app.
+- [x] Verify modified Reachy-derived assets have required attribution/share-alike treatment.
+- [x] Verify no endorsement claim.
+- [x] Verify selected local model redistribution/download presentation.
 
 ## RMA-193 — Complete documentation
 
-- [ ] Build instructions.
-- [ ] Android device requirements.
-- [ ] Model installation/import.
-- [ ] Provider configuration and BYOK warning.
-- [ ] Calibration workflow.
-- [ ] Fidelity-level explanation.
-- [ ] Camera Level 1 approximation and missing-pixel behavior.
-- [ ] Troubleshooting and diagnostic bundle instructions.
-- [ ] Privacy and data-flow explanation.
+**Status:** Complete (2026-09-30). **Completion evidence:** exact-head
+`RMA Release Review Contracts` run `36776925974` passed on
+`7c3e2e99c043836f0cdb2c293c9abb88528d6513`, including
+`scripts/tests/test_rma193_documentation_contract.py`, which requires the
+release guide to cover every topic below and remain linked from the README.
+
+- [x] Build instructions.
+- [x] Android device requirements.
+- [x] Model installation/import.
+- [x] Provider configuration and BYOK warning.
+- [x] Calibration workflow.
+- [x] Fidelity-level explanation.
+- [x] Camera Level 1 approximation and missing-pixel behavior.
+- [x] Troubleshooting and diagnostic bundle instructions.
+- [x] Privacy and data-flow explanation.
 
 ## RMA-194 — Release acceptance checklist
 
