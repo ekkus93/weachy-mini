@@ -44,7 +44,10 @@ jobs:
       - name: Run RMA-195 fail-closed composition contract
         run: python3 scripts/tests/test_rma195_application_composition.py
 
-      - name: Run RMA-191 security-review contract
+      - name: Run canonical RMA-191 security/privacy contract
+        run: python3 scripts/tests/test_rma191_security_privacy_review.py
+
+      - name: Run RMA-191 compatibility guard
         run: python3 scripts/tests/test_rma191_security_review.py
 
       - name: Run RMA-192 license-review contract

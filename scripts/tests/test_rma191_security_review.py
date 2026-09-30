@@ -1,125 +1,39 @@
 #!/usr/bin/env python3
-"""RMA-191 repository-wide security-review regression contract.
+"""Compatibility guard for the canonical RMA-191 security/privacy gate.
 
-RMA-191 is a release-review gate, not a duplicate implementation of the
-security/privacy subsystems. Bind it to established subsystem regression
-contracts and concrete shipping security boundaries. Physical Android
-credential/lifecycle evidence remains owned by device acceptance.
+The comprehensive release review lives in test_rma191_security_privacy_review.py
+and is also exercised by the dedicated RMA-191 workflow. Keep this small guard
+so the older filename cannot silently diverge into a second security policy.
 """
 
 from __future__ import annotations
 
-import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS = ROOT / "scripts" / "tests"
+CANONICAL = ROOT / "scripts/tests/test_rma191_security_privacy_review.py"
+DEDICATED_WORKFLOW = ROOT / ".github/workflows/rma191-security-privacy-review.yml"
+RELEASE_WORKFLOW = ROOT / ".github/workflows/rma-release-review-contracts.yml"
 
 
-def read(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="strict")
-
-
-class Rma191SecurityReviewTests(unittest.TestCase):
-    def test_no_obvious_embedded_openai_secret_in_production_source(self) -> None:
-        token = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{24,}")
-        ignored = {
-            ".git", "Library", "Temp", "obj", "bin", "build", "Builds", "Tests", "tests"
-        }
-        suffixes = {".cs", ".java", ".kt", ".xml", ".cpp", ".c", ".h", ".hpp"}
-        matches: list[str] = []
-        for path in ROOT.rglob("*"):
-            if not path.is_file() or path.suffix.lower() not in suffixes:
-                continue
-            if any(part in ignored for part in path.parts):
-                continue
-            if token.search(read(path)):
-                matches.append(str(path.relative_to(ROOT)))
-        self.assertEqual([], matches, f"token-shaped embedded secrets found: {matches}")
-
-    def test_keystore_review_is_owned_by_rma161_contract(self) -> None:
-        contract = read(SCRIPTS / "test_rma161_credential_lifecycle.py")
+class Rma191SecurityReviewCompatibilityTests(unittest.TestCase):
+    def test_release_review_uses_canonical_security_privacy_gate(self) -> None:
+        canonical = CANONICAL.read_text(encoding="utf-8")
+        dedicated = DEDICATED_WORKFLOW.read_text(encoding="utf-8")
+        release = RELEASE_WORKFLOW.read_text(encoding="utf-8")
         for token in (
-            'private static final String KEYSTORE = "AndroidKeyStore";',
-            'private static final String CIPHER = "AES/GCM/NoPadding";',
-            "KeyPermanentlyInvalidatedException",
-            "encrypted credential records require explicit deletion before replacement",
-            "RedactedProviderExportNeverContainsCredentialValuesOrReferences",
+            "test_no_embedded_production_credentials",
+            "test_android_keystore_storage_is_authenticated_and_non_plaintext",
+            "test_android_and_provider_network_policy_does_not_enable_global_cleartext",
+            "test_cloud_bound_audio_image_and_text_are_disclosed_in_visible_settings",
+            "test_diagnostics_redact_secrets_private_text_audio_images_and_media",
+            "test_temporary_private_media_is_deleted_and_abandoned_files_are_purged",
+            "test_native_handles_buffers_and_session_lifetimes_have_bounded_ownership",
         ):
-            self.assertIn(token, contract)
-
-    def test_network_and_provider_boundary_review_is_fail_closed(self) -> None:
-        engine = read(
-            ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs"
-        )
-        cloud = read(
-            ROOT / "Assets/ReachyMini/Runtime/Application/ReachyCloudLlmCredentialCoordinator.cs"
-        )
-        composition = read(SCRIPTS / "test_rma195_application_composition.py")
-        for token in (
-            "EvaluateProviderSwitch",
-            "ConfirmPrivacyBoundaryChange",
-            "RequiresPrivacyConfirmation",
-            "AllowNetworkProviderSwitch",
-            "target-provider-not-authorized",
-        ):
-            self.assertIn(token, engine)
-        for token in (
-            "TrustedLocalNetworkCleartext",
-            "RequireHttps",
-            "IsTrustedLocalNetworkHost",
-            "authorization revoked. Generation requests will fail closed",
-        ):
-            self.assertIn(token, cloud)
-        self.assertIn(
-            "test_llm_execution_does_not_cross_provider_boundary_on_failure",
-            composition,
-        )
-
-    def test_logging_and_diagnostic_review_is_owned_by_rma170_and_rma172_contracts(self) -> None:
-        logging_contract = read(SCRIPTS / "test_rma170_structured_logging.py")
-        bundle_contract = read(SCRIPTS / "test_rma172_diagnostic_bundle_export.py")
-        for token in (
-            'RedactedValue = "[redacted]"',
-            '"authorization"',
-            '"cookie"',
-            "RedactUrl",
-        ):
-            self.assertIn(token, logging_contract)
-        for token in (
-            "RequireRedactedOnlySelection",
-            "Sensitive diagnostic export is not implemented",
-            "credentials, raw audio, raw images, raw media, transcripts, conversation text",
-            "DefaultDeniedDataClasses",
-        ):
-            self.assertIn(token, bundle_contract)
-
-    def test_private_media_cleanup_review_is_owned_by_rma162_contract(self) -> None:
-        contract = read(SCRIPTS / "test_rma162_private_media_retention.py")
-        for token in (
-            "PurgeAbandonedFiles",
-            "File.Delete",
-            "Application.temporaryCachePath",
-            "Application.persistentDataPath",
-            "RecordingEnabled => false",
-            "MediaExportEnabled => false",
-        ):
-            self.assertIn(token, contract)
-
-    def test_native_buffer_and_lifetime_review_binds_to_public_abi(self) -> None:
-        abi = read(ROOT / "native/reachy_sim/include/reachy_sim.h")
-        for token in (
-            "REACHY_SIM_STATUS_STALE_HANDLE",
-            "REACHY_SIM_STATUS_HANDLE_BUSY",
-            "REACHY_SIM_STATUS_BUFFER_TOO_SMALL",
-            "reachy_sim_copy_state",
-            "size_t byte_capacity",
-            "size_t* required_size",
-            "reachy_sim_destroy",
-            "reachy_sim_get_last_error",
-        ):
-            self.assertIn(token, abi)
+            self.assertIn(token, canonical)
+        self.assertIn("test_rma191_security_privacy_review.py", dedicated)
+        self.assertIn("test_rma191_security_privacy_review.py", release)
 
 
 if __name__ == "__main__":
