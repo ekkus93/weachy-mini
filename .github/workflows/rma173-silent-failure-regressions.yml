@@ -1,0 +1,28 @@
+name: RMA-173 Silent Failure Regressions
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma173-silent-failure-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  silent-failure-contract:
+    name: Prove fail-closed regression contracts
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Run RMA-173 no-silent-failure contract
+        run: python3 scripts/tests/test_rma173_silent_failure.py
