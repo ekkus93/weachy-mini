@@ -70,7 +70,11 @@ namespace ReachyMini.AppState
     [DisallowMultipleComponent]
     public sealed partial class ReachyRma190CameraEndToEndAcceptance : MonoBehaviour
     {
-        private const int OverallTimeoutMilliseconds = 90_000;
+        // Keep the player-side budget below the shell runner's 150-second
+        // evidence timeout so cleanup/report capture still has bounded headroom on
+        // slower physical devices. The A54 exact-head run on 2026-09-30 reached
+        // the former 90-second budget after a successful APK build/device pin.
+        private const int OverallTimeoutMilliseconds = 130_000;
         private const int ReadyPollMilliseconds = 25;
         private const double MinimumHeadRotationRadians = 0.015;
         private const long PlanningTimestampNanoseconds = 1_900_000_190L;

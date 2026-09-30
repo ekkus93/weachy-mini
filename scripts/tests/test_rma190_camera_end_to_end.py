@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import re
 import unittest
 from pathlib import Path
 
@@ -62,6 +63,25 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
         self.assertIn('report["measured_calibration_claimed"] is False', runner)
         self.assertIn('report["synthetic_camera_frame_injected"] is False', runner)
         self.assertIn("report JSON validation failed", runner)
+
+    def test_player_timeout_leaves_runner_cleanup_headroom(self) -> None:
+        source = read(APP / "ReachyRma190CameraEndToEndAcceptance.cs")
+        runner = read(RUNNER)
+        player_match = re.search(
+            r"OverallTimeoutMilliseconds\s*=\s*([0-9_]+);",
+            source,
+        )
+        runner_match = re.search(
+            r'TIMEOUT_SECONDS="\$\{RMA190_CAMERA_TIMEOUT_SECONDS:-([0-9]+)\}"',
+            runner,
+        )
+        self.assertIsNotNone(player_match)
+        self.assertIsNotNone(runner_match)
+        player_seconds = int(player_match.group(1).replace("_", "")) // 1000
+        runner_seconds = int(runner_match.group(1))
+        self.assertGreaterEqual(player_seconds, 120)
+        self.assertGreater(runner_seconds, player_seconds)
+        self.assertGreaterEqual(runner_seconds - player_seconds, 15)
 
     def test_workflow_uses_physical_android_runner(self) -> None:
         workflow = read(WORKFLOW)
