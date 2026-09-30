@@ -8,13 +8,15 @@ This report updates the physical-device prerequisite state for RMA-125 after the
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Exact source SHA: `2f0f40c909034b65e25526e69d66816c203b6210`
+- Exact source SHA: `35928d183fb48d12d228fdd4b8a2f1515db6bb0e`
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36741114024`
-- Job: `109975440245`
+- Run: `36752801658`
+- Job: `110015411312`
 - Result: **success**
 
-The workflow's RMA-195 application-composition stage runs `scripts/run_rma195_application_composition_acceptance_android.sh`. That harness is pinned to the physical Samsung A54 `SM-A546E`, requires ARM64 and API 31 or newer, grants the microphone permission, and exercises the shipping application composition rather than a test-only speech substitute.
+The workflow now runs the `RMA-125 A54 speech revalidation contract` before the Unity build/device acceptance stack. That contract proves this record stays tied to the authoritative TODO, the explicit A54 blocker correction, and the still-open spoken-conversation criteria.
+
+The same exact-head workflow passed the RMA-195 application-composition stage through `scripts/run_rma195_application_composition_acceptance_android.sh`. That harness is pinned to the physical Samsung A54 `SM-A546E`, requires ARM64 and API 31 or newer, grants the microphone permission, and exercises the shipping application composition rather than a test-only speech substitute.
 
 The physical acceptance code requires `ProbeOnDeviceAsrAsync()` to report explicit on-device ASR `Available`; otherwise the stage fails. It separately exercises the shipping offline TTS path and requires an installed exact-locale voice whose `MayUseNetwork` flag is false, plus successful TTS start and completion. The report validator rejects a passing result unless `on_device_asr_state == "Available"`, `offline_tts_state == "Available"`, the selected voice is installed, `selected_tts_voice_may_use_network == false`, and TTS started and completed.
 

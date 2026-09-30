@@ -14,14 +14,14 @@ It does **not** claim closure for the remaining RMA-190 scenarios (camera reproj
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Exact source SHA: `f09987c1b2fa96ab8f29d0e7f6b099ff9109de44`
+- Exact source SHA: `35928d183fb48d12d228fdd4b8a2f1515db6bb0e`
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36718496149`
-- Job: `109897310776` (`Validate Unity Android device path on A54`)
+- Run: `36752801658`
+- Job: `110015411312` (`Validate Unity Android device path on A54`)
 - Result: **success**
 - Physical-device step: `Install and run RMA-190 core end-to-end acceptance` — **success**
 
-The same exact-head job also passed Unity tests, built and verified the ARM64/API-26 APK, pinned a real ARM64 API-26+ Android device, and subsequently passed the camera, tracking, visual-servo, lifecycle, shipping-composition, and authoritative-rendering device stages.
+The same exact-head job also passed RMA-191/192/193 repository contracts, the RMA-125 A54 speech revalidation contract, Unity tests, the ARM64/API-26 APK build/verification, physical-device pinning, camera, tracking, visual-servo, lifecycle, shipping-composition, and authoritative-rendering device stages.
 
 ## Acceptance harness contract
 
@@ -59,10 +59,10 @@ The remaining RMA-190 checkboxes must stay open until their own required end-to-
 
 ## Adjacent exact-head evidence
 
-On the same exact SHA:
+On the same source SHA:
 
-- RMA-173 Silent Failure Regressions run `36718496194` passed all eight fail-closed obligations.
-- RMA Release Review Contracts run `36718496188` passed the canonical RMA-191 security/privacy, RMA-192 license, RMA-193 documentation, and RMA-194 release-status contracts.
-- The no-artifacts device workflow run `36718496149` passed the A54 physical-device path without depending on GitHub artifact upload availability.
+- RMA-173 Silent Failure Regressions run `36752801842` passed all eight fail-closed obligations.
+- RMA Release Review Contracts run `36752801891` passed the canonical RMA-191 security/privacy, RMA-192 license, RMA-193 documentation, and RMA-194 release-status contracts.
+- The no-artifacts device workflow run `36752801658` passed the A54 physical-device path without depending on GitHub artifact upload availability.
 
-The ordinary `Local Unity Android Validation` run failed later at `Upload RMA-090 camera discovery evidence`; the corresponding no-artifacts physical workflow passed. That upload failure is therefore infrastructure/artifact publication evidence, not a source or physical-device failure.
+The ordinary `Local Unity Android Validation` run `36752801584` passed Unity tests, built/verified the APK, pinned the physical device, and passed RMA-090 camera discovery, but failed at `Upload RMA-090 camera discovery evidence`. The corresponding no-artifacts physical workflow passed the full stack. That upload failure is therefore infrastructure/artifact-publication evidence, not a source or physical-device failure.

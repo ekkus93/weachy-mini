@@ -22,7 +22,7 @@ The application-wide Android deployment floor remains API 26. RMA-125's audio-fo
 
 The historical API-26-device prerequisite is now cleared for the current self-hosted Android runner: the pinned physical Samsung Galaxy A54 (`SM-A546E`) is API-31+ and has repeatedly passed the no-artifacts A54 validation lane.
 
-Exact-head revalidation evidence is recorded in `docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md`. On source SHA `2f0f40c909034b65e25526e69d66816c203b6210`, workflow run `36741114024`, job `109975440245`, passed the RMA-195 application-composition stage. That stage requires explicit on-device ASR availability and an installed exact-locale offline TTS voice that does not require network, and it rejects human transcript injection, cloud credentials, and local-model injection.
+Exact-head revalidation evidence is recorded in `docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md`. On source SHA `35928d183fb48d12d228fdd4b8a2f1515db6bb0e`, workflow run `36752801658`, job `110015411312`, passed both the `RMA-125 A54 speech revalidation contract` step and the RMA-195 application-composition stage. The physical RMA-195 stage requires explicit on-device ASR availability and an installed exact-locale offline TTS voice that does not require network, and it rejects human transcript injection, cloud credentials, and local-model injection.
 
 This updated evidence clears only the device/API/service-readiness prerequisite. It does **not** prove the network-disabled spoken-conversation acceptance sequence below.
 

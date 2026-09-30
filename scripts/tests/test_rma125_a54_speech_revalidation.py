@@ -48,9 +48,10 @@ def main() -> int:
         require_unchecked(todo, label)
 
     require(revalidation, "SM-A546E", "A54 revalidation report")
-    require(revalidation, "Exact source SHA: `2f0f40c909034b65e25526e69d66816c203b6210`", "A54 revalidation report")
-    require(revalidation, "Run: `36741114024`", "A54 revalidation report")
-    require(revalidation, "Job: `109975440245`", "A54 revalidation report")
+    require(revalidation, "Exact source SHA: `35928d183fb48d12d228fdd4b8a2f1515db6bb0e`", "A54 revalidation report")
+    require(revalidation, "Run: `36752801658`", "A54 revalidation report")
+    require(revalidation, "Job: `110015411312`", "A54 revalidation report")
+    require(revalidation, "RMA-125 A54 speech revalidation contract", "A54 revalidation report")
     require(revalidation, "on_device_asr_state == \"Available\"", "A54 revalidation report")
     require(revalidation, "selected_tts_voice_may_use_network == false", "A54 revalidation report")
     require(revalidation, "does **not** close RMA-125", "A54 revalidation report")
