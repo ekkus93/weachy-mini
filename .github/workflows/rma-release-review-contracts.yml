@@ -26,6 +26,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Run RMA-012 in-app license contract
+        run: python3 scripts/tests/test_rma012_licenses.py
+
       - name: Run RMA-161 credential lifecycle contract
         run: python3 scripts/tests/test_rma161_credential_lifecycle.py
 

@@ -6,9 +6,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 INVENTORY_PATH = ROOT / "third_party" / "inventory.json"
 NOTICES_PATH = ROOT / "third_party" / "THIRD_PARTY_NOTICES.md"
+LABELS_PATH = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Labels.cs"
+SCREEN_PATH = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs"
 MODEL_MANIFEST_PATH = (
     ROOT / "models" / "manifests" / "qwen3-0.6b-q4-k-m.local-llm.json"
 )
+RMA012_CONTRACT = ROOT / "scripts" / "tests" / "test_rma012_licenses.py"
 
 
 def _load_json(path: Path) -> dict:
@@ -33,12 +36,8 @@ class Rma192LicenseReconciliationTests(unittest.TestCase):
         self.assertEqual(identity["source_uri"], entry["source_url"])
         self.assertEqual(identity["source_revision"], entry["source_revision"])
         self.assertEqual("selected_external_model", entry["status"])
-        self.assertEqual(
-            "not_redistributed_by_repository",
-            entry["redistribution_status"],
-        )
+        self.assertEqual("not_redistributed_by_repository", entry["redistribution_status"])
         self.assertIn("sha-256", entry["required_notice"].lower())
-        self.assertIn("not", entry["redistribution_status"])
 
     def test_selected_local_model_notice_is_not_stale_candidate_copy(self) -> None:
         manifest = _load_json(MODEL_MANIFEST_PATH)
@@ -53,7 +52,7 @@ class Rma192LicenseReconciliationTests(unittest.TestCase):
         self.assertNotIn("candidate only; no model is selected", notices)
         self.assertIn("not bundled", notices)
 
-    def test_reachy_inventory_no_longer_claims_imported_assets_are_planned(self) -> None:
+    def test_reachy_inventory_records_import_provenance_and_sharealike(self) -> None:
         software = _inventory_entry("reachy-mini-software")
         hardware = _inventory_entry("reachy-mini-hardware-assets")
 
@@ -63,7 +62,30 @@ class Rma192LicenseReconciliationTests(unittest.TestCase):
         self.assertIn("provenance", hardware["required_notice"].lower())
         self.assertIn("attribution", hardware["required_notice"].lower())
         self.assertIn("sharealike", hardware["required_notice"].lower())
+        self.assertIn("noncommercial", hardware["required_notice"].lower())
+        self.assertIn("modification notice", hardware["required_notice"].lower())
+
+    def test_repository_and_offline_app_notices_cover_inventory_and_no_endorsement(self) -> None:
+        inventory = _load_json(INVENTORY_PATH)
+        labels = LABELS_PATH.read_text(encoding="utf-8")
+        screen = SCREEN_PATH.read_text(encoding="utf-8")
+        notices = NOTICES_PATH.read_text(encoding="utf-8")
+        rma012 = RMA012_CONTRACT.read_text(encoding="utf-8")
+
+        for entry in inventory["entries"]:
+            self.assertIn(entry["name"], labels)
+        for token in (
+            "Unofficial community project",
+            "not endorsed by Pollen Robotics",
+            "free and noncommercial",
+        ):
+            self.assertIn(token, labels)
+        self.assertIn("not endorsed", notices.lower())
+        self.assertIn("free and noncommercial", notices.lower())
+        self.assertIn("ReachySettingsStateStore.GetLicenseNotices()", screen)
+        self.assertIn("test_in_app_notice_components_cover_inventory", rma012)
+        self.assertIn("test_project_status_is_explicit_and_offline", rma012)
 
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
