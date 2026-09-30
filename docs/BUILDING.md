@@ -118,11 +118,26 @@ Set `UNITY_EDITOR` to the exact pinned Unity executable and ensure at least one 
 ```bash
 export UNITY_EDITOR=/home/phil/Unity/Hub/Editor/6000.5.2f1/Editor/Unity
 
-# Development APK using the core supported API-26 floor.
 ./scripts/build_unity_android.sh device-feasibility
-
-# Release AAB from the pinned release toolchain.
+./scripts/build_unity_android.sh development
 ./scripts/build_unity_android.sh release
 ```
 
-For physical qualification, use the ticket-scoped acceptance workflow or runner script for the scenario being closed. Evidence must identify the exact source SHA and device/API used; a successful build alone is not physical acceptance.
+The `device-feasibility` command produces an ARM64 APK at the RMA-184 core supported API-26 floor. The normal development APK and release AAB retain the provisional API-31 build floor in `toolchain.lock.json`; API 31 is also the minimum for the full explicit on-device ASR experience. All Android builds use IL2CPP and ARM64; no Android x86_64 player target exists in Unity 6000.5.
+
+The scaffold intentionally fails if no scene is configured rather than silently generating or selecting one.
+
+## Run the MuJoCo feasibility probe on a phone
+
+After a successful Android MuJoCo/probe build, connect one authorized physical ARM64 Android phone and run:
+
+```bash
+REACHY_ANDROID_SERIAL=LGH87250967ab9 \
+./scripts/run_mujoco_probe_android.sh
+```
+
+Other ADB targets, including emulators, may remain online when `REACHY_ANDROID_SERIAL` identifies the physical phone. The default run performs 900,000 steps at a model timestep of 0.002 seconds and writes machine-readable timing plus device identification under `diagnostics-output/mujoco-probe/`. A first-party contract mock is used only for desktop boundary tests and does not satisfy the real-solver acceptance gate.
+
+## Current limitations
+
+The authoritative TODO is the source of completion truth. Build and probe instructions do not by themselves close two-machine, physical-device, speech, performance, or end-to-end acceptance gates; each requires the evidence named by its owning TODO item.
