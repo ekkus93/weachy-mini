@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   release-review-contracts:
-    name: Run RMA-191/192/193 contracts without Android device
+    name: Run RMA-191/192/193/194 contracts without Android device
     runs-on:
       - self-hosted
       - linux
@@ -52,3 +52,6 @@ jobs:
 
       - name: Run RMA-193 documentation contract
         run: python3 scripts/tests/test_rma193_documentation_contract.py
+
+      - name: Run RMA-194 release-status contract
+        run: python3 scripts/tests/test_rma194_release_acceptance.py
