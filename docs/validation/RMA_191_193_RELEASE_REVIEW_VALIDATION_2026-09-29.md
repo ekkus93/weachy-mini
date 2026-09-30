@@ -8,13 +8,13 @@ This report records exact-head non-device release-review evidence for RMA-191 (p
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Exact source SHA: `949c0e61d4b2ab90228870c73579ebf8fa2ecde9`
+- Exact source SHA: `a6f1714b15431da6d6b195774d3d4b3bd7d972e6`
 - Workflow: `RMA Release Review Contracts`
-- Run: `36658518119`
-- Job: `109707913617`
+- Run: `36712522030`
+- Job: `109877463647`
 - Result: **success**
 
-The job completed successfully at 2026-09-30 02:28:30 UTC and exercised the release-review contracts against the exact source SHA above.
+The job completed successfully at 2026-09-30 12:23:26 UTC and exercised the release-review contracts against the exact source SHA above. This supersedes the earlier accepted exact-head run `36658518119` on `949c0e61d4b2ab90228870c73579ebf8fa2ecde9` with fresher evidence after the RMA-173 validation-record commit.
 
 ## RMA-191 — privacy and security review
 
@@ -52,9 +52,18 @@ The successful RMA-193 documentation contract verifies that maintained documenta
 
 The contract also ties documented Android requirements to the RMA-184 support policy so API/architecture requirements cannot silently drift apart.
 
+## Exact-head companion evidence
+
+On the same source SHA `a6f1714b15431da6d6b195774d3d4b3bd7d972e6`:
+
+- `RMA-173 Silent Failure Regressions` run `36712522090` passed.
+- A54-backed `Local Unity Android Device Validation No Artifacts` run `36712522076` passed.
+
+These companion runs strengthen the release-review context without changing the qualification boundary below. In particular, the A54 run is real physical-device evidence but is not treated as proof of the still-open offline-speech, local-LLM thermal, or representative-device long-run gates.
+
 ## Release-status guard
 
-The same exact-head job also passed the RMA-194 release-status contract. That contract is intentionally conservative: it prevents the release status from claiming closure for device-dependent gates that remain physically unqualified. Passing it is not evidence that those physical gates are complete.
+The same exact-head release-review job also passed the RMA-194 release-status contract. That contract is intentionally conservative: it prevents the release status from claiming closure for device-dependent gates that remain physically unqualified. Passing it is not evidence that those physical gates are complete.
 
 ## Qualification boundary
 
@@ -64,6 +73,6 @@ This report closes only the review evidence represented by RMA-191, RMA-192, and
 - local-LLM thermal/physics acceptance on the SM-A546E;
 - RMA-184 measured default profiles or long-run representative-device qualification;
 - RMA-190 scenarios not already backed by physical end-to-end evidence; or
-- any device run attempted while the A54 is unavailable.
+- any other physical claim not explicitly exercised by the cited exact-head device workflow.
 
 Those remain governed by their own acceptance evidence and must stay open until that evidence exists.
