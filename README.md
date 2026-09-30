@@ -2,25 +2,26 @@
 
 [![CI](https://github.com/ekkus93/weachy-mini/actions/workflows/ci.yml/badge.svg)](https://github.com/ekkus93/weachy-mini/actions/workflows/ci.yml)
 
-Weachy Mini is a free, noncommercial Android application that will run a virtual Reachy Mini robot in Unity. MuJoCo will be the authoritative dynamics engine; Unity will render the robot, provide the Android user interface, and integrate camera, speech, and AI providers.
+Weachy Mini is a free, noncommercial Android application that runs a virtual Reachy Mini robot in Unity. MuJoCo is the authoritative dynamics engine; Unity renders the robot, provides the Android user interface, and integrates camera, speech, local-model, and BYOK cloud-provider paths.
 
-The project is at the **foundation/scaffold stage**. It is not yet a working robot simulator.
+The project is in release-hardening. Several core physical-device gates now exist, but the authoritative TODO remains the source of truth for which release scenarios are fully qualified.
 
 ## Platform target
 
-- Unity 6.3 LTS
-- Android 12 / API 31 or newer for the initial compatibility spike
+- Unity 6000.5.2f1
 - Android ARM64 (`arm64-v8a`)
 - IL2CPP for release builds
 - Vulkan preferred; OpenGL ES 3 is a later validated fallback
+- Physical-device acceptance currently requires one connected ARM64 API-26+ Android device; recent qualification has used a Samsung A54-class device.
 
-The minimum Android version is provisional until the device compatibility spike is complete.
+The final public release floor must follow the checked release profile and the authoritative TODO evidence, not an undocumented local assumption.
 
 ## Authoritative project documents
 
 - [Implementation specification](docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md)
 - [Ordered implementation TODO](docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md)
 - [Build instructions](docs/BUILDING.md)
+- [Android release and user guide](docs/ANDROID_RELEASE_GUIDE.md)
 - [GitHub Actions setup](docs/ci/GITHUB_ACTIONS_SETUP.md)
 - [Asset policy](docs/ASSET_POLICY.md)
 - [Warning policy](docs/WARNING_POLICY.md)
@@ -50,7 +51,7 @@ The Android Gradle bridge is in `android-plugin/`. Its wrapper JAR is intentiona
 - `Assets/Plugins/Android/`: packaged Android plug-ins copied from verified build outputs
 - `android-plugin/`: Android library source used by Unity
 - `native/reachy_sim/`: first-party simulation wrapper and desktop tests
-- `native/llama_runtime/`: future first-party llama.cpp wrapper
+- `native/llama_runtime/`: first-party llama.cpp wrapper integration surface
 - `models/manifests/`: model metadata only; model binaries are not committed
 - `calibration/schemas/`: versioned calibration schemas; generated datasets are not committed
 - `third_party/`: dependency inventory and notices; vendored code is kept separate from first-party code
