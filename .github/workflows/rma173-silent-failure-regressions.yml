@@ -24,5 +24,19 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Run RMA-173 no-silent-failure contract
-        run: python3 scripts/tests/test_rma173_silent_failure.py
+      - name: On-device ASR cannot activate cloud ASR
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_on_device_asr_failure_does_not_activate_cloud_asr
+      - name: Offline TTS cannot activate network voice
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_offline_tts_failure_does_not_activate_network_voice
+      - name: Local LLM cannot activate OpenAI
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_local_llm_failure_does_not_activate_openai
+      - name: Invalid camera pixels cannot reuse stale content
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_invalid_camera_pixels_do_not_reuse_stale_content
+      - name: Solver failure cannot switch to Unity animation
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_solver_failure_does_not_switch_to_unity_animation
+      - name: Calibration mismatch cannot become calibrated placeholder
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_calibration_mismatch_does_not_become_calibrated_placeholder
+      - name: Dropped command or state buffers are visible
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_dropped_command_or_state_buffers_are_visible
+      - name: Malformed provider response cannot fabricate intent
+        run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_malformed_provider_response_does_not_fabricate_intent
