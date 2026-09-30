@@ -8,10 +8,10 @@ This report updates the physical-device prerequisite state for RMA-125 after the
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Exact source SHA: `5af798390da01b3098d62e6e289da8b1e510d678`
+- Exact source SHA: `2f0f40c909034b65e25526e69d66816c203b6210`
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36726339061`
-- Job: `109924061787`
+- Run: `36741114024`
+- Job: `109975440245`
 - Result: **success**
 
 The workflow's RMA-195 application-composition stage runs `scripts/run_rma195_application_composition_acceptance_android.sh`. That harness is pinned to the physical Samsung A54 `SM-A546E`, requires ARM64 and API 31 or newer, grants the microphone permission, and exercises the shipping application composition rather than a test-only speech substitute.
