@@ -34,6 +34,10 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Run static release-review contracts
+        shell: bash
+        run: bash scripts/ci.sh --static-only
+
       - name: Resolve local Unity and Android installations
         shell: bash
         run: |
