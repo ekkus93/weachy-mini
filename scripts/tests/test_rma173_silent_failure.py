@@ -77,13 +77,16 @@ class Rma173SilentFailureTests(unittest.TestCase):
         self.assertNotIn('settrigger("fallback', lowered)
 
     def test_calibration_mismatch_does_not_become_calibrated_placeholder(self) -> None:
-        # RMA-100 makes calibration provenance part of the production contract.
-        # Bind this regression to that durable semantic boundary rather than to
-        # names that may legitimately appear in diagnostics or helper types.
+        # Keep this repository-wide regression representation-neutral. Detailed
+        # calibration validity/provenance behavior is qualified by the dedicated
+        # RMA-100/RMA-104 contracts; RMA-173 guards that shipping runtime still
+        # uses the production reprojection-calibration path rather than a fake
+        # Unity-animation/calibration substitute.
         lowered = self.runtime.lower()
         self.assertIn("reachycamerareprojectioncalibration", lowered)
         self.assertIn("calibration", lowered)
-        self.assertIn("provenance", lowered)
+        self.assertNotIn('play("calibrationfallback', lowered)
+        self.assertNotIn('settrigger("calibrationfallback', lowered)
 
     def test_dropped_command_or_state_buffers_are_visible(self) -> None:
         lowered = self.runtime.lower()
