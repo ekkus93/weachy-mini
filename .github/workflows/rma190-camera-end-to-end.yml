@@ -211,8 +211,16 @@ jobs:
           RMA190_CAMERA_REPORT_DIR: ${{ runner.temp }}/rma190-camera-end-to-end-report
         run: bash scripts/run_rma190_camera_end_to_end_android.sh
 
+      - name: Verify RMA-190 front-camera end-to-end evidence
+        if: ${{ always() && steps.rma190_camera.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "${RUNNER_TEMP}/rma190-camera-end-to-end-report/rma190-camera-end-to-end-acceptance.json"
+
       - name: Upload RMA-190 front-camera end-to-end evidence
         if: ${{ always() && steps.rma190_camera.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma190-camera-end-to-end-report-${{ github.sha }}
