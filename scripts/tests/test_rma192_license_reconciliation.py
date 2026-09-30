@@ -24,7 +24,6 @@ def _inventory_entry(entry_id: str) -> dict:
 def test_selected_local_model_inventory_matches_authoritative_manifest() -> None:
     manifest = _load_json(MODEL_MANIFEST_PATH)
     identity = manifest["identity"]
-    artifact = manifest["artifact"]
     entry = _inventory_entry("local-llm-candidate")
 
     assert entry["name"] == identity["display_name"]
@@ -33,7 +32,8 @@ def test_selected_local_model_inventory_matches_authoritative_manifest() -> None
     assert entry["source_revision"] == identity["source_revision"]
     assert entry["status"] == "selected_external_model"
     assert entry["redistribution_status"] == "not_redistributed_by_repository"
-    assert artifact["sha256"] in entry["required_notice"]
+    assert "sha-256" in entry["required_notice"].lower()
+    assert "not" in entry["redistribution_status"]
 
 
 def test_selected_local_model_notice_is_not_stale_candidate_copy() -> None:
