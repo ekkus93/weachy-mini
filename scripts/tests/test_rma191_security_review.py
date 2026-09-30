@@ -2,10 +2,9 @@
 """RMA-191 repository-wide security-review regression contract.
 
 RMA-191 is a release-review gate, not a duplicate implementation of the
-security/privacy subsystems.  Bind it to the established subsystem regression
-contracts and add a small repository-wide embedded-secret scan.  Physical
-Android credential/lifecycle evidence remains owned by the device acceptance
-workflows and is not fabricated here.
+security/privacy subsystems. Bind it to established subsystem regression
+contracts and concrete shipping security boundaries. Physical Android
+credential/lifecycle evidence remains owned by device acceptance.
 """
 
 from __future__ import annotations
@@ -25,7 +24,9 @@ def read(path: Path) -> str:
 class Rma191SecurityReviewTests(unittest.TestCase):
     def test_no_obvious_embedded_openai_secret_in_production_source(self) -> None:
         token = re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{24,}")
-        ignored = {".git", "Library", "Temp", "obj", "bin", "build", "Builds", "Tests", "tests"}
+        ignored = {
+            ".git", "Library", "Temp", "obj", "bin", "build", "Builds", "Tests", "tests"
+        }
         suffixes = {".cs", ".java", ".kt", ".xml", ".cpp", ".c", ".h", ".hpp"}
         matches: list[str] = []
         for path in ROOT.rglob("*"):
@@ -50,12 +51,10 @@ class Rma191SecurityReviewTests(unittest.TestCase):
 
     def test_network_and_provider_boundary_review_is_fail_closed(self) -> None:
         engine = read(
-            ROOT
-            / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs"
+            ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs"
         )
         cloud = read(
-            ROOT
-            / "Assets/ReachyMini/Runtime/Application/ReachyCloudLlmCredentialCoordinator.cs"
+            ROOT / "Assets/ReachyMini/Runtime/Application/ReachyCloudLlmCredentialCoordinator.cs"
         )
         composition = read(SCRIPTS / "test_rma195_application_composition.py")
         for token in (
@@ -108,26 +107,19 @@ class Rma191SecurityReviewTests(unittest.TestCase):
         ):
             self.assertIn(token, contract)
 
-    def test_native_buffer_and_lifetime_review_binds_to_native_contracts(self) -> None:
-        native_files = [
-            path
-            for path in ROOT.rglob("*")
-            if path.is_file() and path.suffix.lower() in {".c", ".cpp", ".h", ".hpp"}
-        ]
-        native = "\n".join(read(path) for path in native_files)
+    def test_native_buffer_and_lifetime_review_binds_to_public_abi(self) -> None:
+        abi = read(ROOT / "native/reachy_sim/include/reachy_sim.h")
         for token in (
+            "REACHY_SIM_STATUS_STALE_HANDLE",
             "REACHY_SIM_STATUS_HANDLE_BUSY",
+            "REACHY_SIM_STATUS_BUFFER_TOO_SMALL",
             "reachy_sim_copy_state",
+            "size_t byte_capacity",
+            "size_t* required_size",
             "reachy_sim_destroy",
-            "reachy_sim_last_error",
+            "reachy_sim_get_last_error",
         ):
-            self.assertIn(token, native)
-        lowered = native.lower()
-        self.assertIn("stale", lowered)
-        self.assertTrue(
-            any(token in lowered for token in ("undersized", "buffer too small", "capacity")),
-            "native source must retain an explicit bounded-buffer failure contract",
-        )
+            self.assertIn(token, abi)
 
 
 if __name__ == "__main__":
