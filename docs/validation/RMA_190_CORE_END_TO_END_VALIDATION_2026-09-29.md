@@ -10,20 +10,22 @@ The validated tranche covers only scenarios implemented by the shipping `ReachyR
 2. production MuJoCo full-model load and deterministic neutral reset;
 3. deterministic baseline gesture replay through the production behavior controller target sink and authoritative MuJoCo state.
 
-The harness explicitly does **not** close the remaining RMA-190 scenarios for camera/VLM, speech/local-LLM, cloud-provider combinations, network/provider failures, model corruption/OOM, or solver-fault recovery.
+The harness explicitly does **not** close the remaining RMA-190 scenarios for front-camera transformed-frame E2E, speech/local-LLM/offline-TTS, rear-camera optional VLM, cloud-provider combinations, provider/network failure injection, model corruption/OOM, or solver-fault recovery.
 
-## Latest exact source under test
+## Latest executable-source evidence
 
 - Repository: `ekkus93/weachy-mini`
 - Branch: `master`
-- Commit: `b2b55a213c794e6960315e3f5585f32c1789ad2d`
-- Commit message: `RMA-193: harden documentation review contract`
+- Commit under physical validation: `3f513871c134eeb9c03356bdbdf1b8571f1c6254`
+- Commit message: `RMA-173/191/192/193: record exact-head evidence`
+
+This file may be edited by later documentation-only reconciliation commits. Those edits do not replace the executable-source boundary above; a new executable-source claim must name its own exact validation commit and workflow run.
 
 ## Latest validation run
 
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36635346761`
-- Job: `109634619675`
+- Run: `36764241991`
+- Job: `110054250041`
 - Job name: `Validate Unity Android device path on A54`
 - Result: success
 - Event: push
@@ -37,6 +39,10 @@ The successful job completed all of the following stages:
 
 - repository checkout;
 - Python setup;
+- RMA-191 security-review contract;
+- RMA-192 license-review contract;
+- RMA-193 documentation contract;
+- RMA-125 A54 speech revalidation contract;
 - local Unity and Android installation resolution;
 - generated Reachy Unity presentation preparation;
 - production MuJoCo runtime staging for Unity Android;
@@ -65,7 +71,7 @@ The successful job completed all of the following stages:
 | On-device ASR -> local LLM -> behavior -> offline TTS | Not closed by this run. | The RMA-195 composition stage verifies application wiring, but RMA-125/RMA-190 spoken-turn physical proof remains separate. |
 | Rear-camera visual question with optional VLM | Not closed by this run. | No credentialed or optional VLM request was exercised by this core harness. |
 | Independent cloud provider combinations | Not closed by this run. | No cloud credentials or live cloud-provider execution was injected. |
-| Permission denial/revocation | Not closed by this run. | Earlier RMA camera/lifecycle stages cover their own scopes, but this RMA-190 scenario remains a separate E2E scenario. |
+| Permission denial/revocation | Not closed by this run. | RMA-090 discovery acceptance exercised permission states in its own scope, but this RMA-190 scenario still requires a dedicated E2E scenario-level assertion before the checklist item is closed. |
 | Network loss, rate limit, malformed response, and cancellation | Not closed by this run. | The core harness runs with no cloud/provider failure injection. |
 | Model corruption/OOM | Not closed by this run. | No model-corruption or OOM path was injected. |
 | Solver fault and controlled reset | Not closed by this run. | No solver fault was injected into the shipping runtime during this harness. |
@@ -80,21 +86,26 @@ This validation supports marking the following RMA-190 scenario checkboxes compl
 
 Do not use this evidence to mark any other RMA-190 scenario complete.
 
-## Earlier supporting run
+## Earlier supporting runs
 
-An earlier exact-head A54 no-artifacts run also accepted this same RMA-190 core tranche:
+Earlier exact-head A54 no-artifacts runs also accepted this same RMA-190 core tranche:
 
-- Commit: `c8495d346206fd85d100d6b7e17d1a2c4f1cb4a7`
-- Commit message: `RMA-173: document silent-failure regression coverage`
+- Commit: `b2b55a213c794e6960315e3f5585f32c1789ad2d`
 - Workflow: `Local Unity Android Device Validation No Artifacts`
-- Run: `36628711072`
-- Job: `109612187221`
+- Run: `36635346761`
+- Job: `109634619675`
 - Result: success
 
-That earlier run is retained as historical support. The latest exact-head evidence above is the authoritative evidence for the current `master` line as of this document update.
+- Commit: `06a24789361a459a41ed07b683059c349b1fa689`
+- Workflow: `Local Unity Android Device Validation No Artifacts`
+- Run: `36756177401`
+- Job: `110027101935`
+- Result: success
+
+Those earlier runs are retained as historical support. The latest exact-head evidence above is the authoritative evidence for the current executable source line as of this document update.
 
 ## CI and infrastructure notes
 
-Hosted CI for this source line was still exhibiting the separate zero-step/bootstrap failure pattern observed on adjacent commits. The hosted `CI` jobs completed in seconds with empty step lists and did not produce source-level failure evidence.
+Hosted CI for this source line continued to exhibit the separate zero-step/bootstrap failure pattern observed on adjacent commits. The hosted `CI` jobs completed in seconds with empty step lists and did not produce source-level failure evidence.
 
-The regular `Local Unity Android Validation` workflow on this source line passed Unity tests and failed at `Upload Unity test results`; downstream Android device stages were skipped by that artifact-upload failure. The no-artifacts A54 workflow above exists specifically to avoid artifact-upload fragility and is the authoritative physical evidence for this RMA-190 core E2E tranche and for the physical-device stages it explicitly ran.
+The regular `Local Unity Android Validation` workflow on the latest source line passed the same useful Unity/device stages up to RMA-090 and failed at `Upload RMA-090 camera discovery evidence`. The no-artifacts A54 workflow above exists specifically to avoid artifact-upload fragility and is the authoritative physical evidence for this RMA-190 core E2E tranche and for the physical-device stages it explicitly ran.
