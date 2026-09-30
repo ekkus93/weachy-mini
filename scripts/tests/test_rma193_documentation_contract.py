@@ -25,25 +25,23 @@ class Rma193DocumentationContractTests(unittest.TestCase):
         for heading in (
             "## Build instructions",
             "## Android device requirements",
-            "## Model installation/import",
+            "## Local model installation and import",
             "## Provider configuration and BYOK warning",
             "## Calibration workflow",
-            "## Fidelity-level explanation",
-            "## Camera Level 1 approximation and missing-pixel behavior",
-            "## Troubleshooting and diagnostic bundle instructions",
-            "## Privacy and data-flow explanation",
+            "## Fidelity levels",
+            "## Camera Level 1 approximation and missing pixels",
+            "## Troubleshooting and diagnostic bundles",
+            "## Privacy and data flow",
         ):
             self.assertIn(heading, self.guide)
 
     def test_build_and_device_guidance_names_authoritative_paths(self) -> None:
         for token in (
             "toolchain.lock.json",
-            "scripts/ci.sh --static-only",
-            "scripts/build_unity_android.sh",
-            "REACHY_ANDROID_SERIAL",
-            "REACHY_PHYSICAL_DEVICE_SERIAL",
+            "docs/BUILDING.md",
             "arm64-v8a",
             "API 26",
+            "exact head SHA",
         ):
             self.assertIn(token, self.guide)
 
@@ -51,12 +49,12 @@ class Rma193DocumentationContractTests(unittest.TestCase):
         for token in (
             "qwen3-0.6b-q4-k-m.local-llm.json",
             "not bundled",
-            "bring-your-own-key",
+            "BYOK warning",
             "Android Keystore",
             "privacy-boundary authorization",
             "fail closed",
             "unavailable/degraded",
-            "placeholder constants",
+            "measured claim",
         ):
             self.assertIn(token.lower(), self.guide_lower)
 
@@ -67,10 +65,10 @@ class Rma193DocumentationContractTests(unittest.TestCase):
             "Servo-fidelity",
             "Calibrated twin",
             "Level 1",
-            "missing, invalid, or out-of-view pixels",
-            "redacted-by-default",
+            "missing, not invented",
+            "redacted",
             "raw private media",
-            "cloud API keys",
+            "API keys",
         ):
             self.assertIn(token.lower(), self.guide_lower)
 

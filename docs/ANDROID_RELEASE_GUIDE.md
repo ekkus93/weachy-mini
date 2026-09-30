@@ -1,70 +1,106 @@
-# Android release and user guide
+# Android Release and Operations Guide
 
-This guide is the RMA-193 release-documentation surface for the Android Reachy Mini digital twin. It is intentionally tied to repository scripts and manifests so release claims stay aligned with the authoritative TODO and validation evidence.
+This guide is the release-facing entry point for building, configuring, operating, and troubleshooting Weachy Mini on Android. Detailed architecture and validation documents remain authoritative for their individual subsystems; this page links them together without changing those contracts.
 
 ## Build instructions
 
-Use `docs/BUILDING.md` for full toolchain setup. The short release-oriented path is:
+Use the pinned toolchain in `toolchain.lock.json`; do not substitute arbitrary Unity, Android SDK/NDK, Gradle, JDK, .NET, or lint-tool versions. The complete workstation setup, static checks, native build, managed tests, Android bridge, Unity Android build, and physical-device probe commands are documented in [`docs/BUILDING.md`](BUILDING.md).
 
-```bash
-./scripts/ci.sh --static-only
-./scripts/build_native.sh
-./scripts/build_unity_android.sh device-feasibility
-./scripts/build_unity_android.sh development
-./scripts/build_unity_android.sh release
-```
-
-The machine-readable pins are in `toolchain.lock.json`. Unity, Android SDK, NDK, CMake, Gradle, JDK, .NET, and lint-tool versions must match that file before a release candidate is trusted.
+The normal Android product target is ARM64 (`arm64-v8a`) with IL2CPP. Before publishing a build, run the repository structure/static checks and the relevant managed/native suites, then build the Unity Android artifact from the same source revision. GitHub Actions evidence must be tied to the exact head SHA being released.
 
 ## Android device requirements
 
-The application is built for Android ARM64 (`arm64-v8a`) through Unity IL2CPP. Physical-device acceptance scripts require a connected, authorized, non-emulator ARM64 device with Android API 26 or newer, selected by `REACHY_ANDROID_SERIAL` or by the workflow-level `REACHY_PHYSICAL_DEVICE_SERIAL` variable. Release qualification must record the tested device model, SDK level, ABI, APK hash, and exact commit SHA.
+The application-wide Android deployment floor is ARM64 Android API 26 or newer. The representative-device policy classifies a device that meets the core floor but lacks the front camera, explicit API-31 on-device ASR, or offline TTS as `SupportedWithLimitations`; those optional capability gaps do not raise the global deployment floor.
 
-A device is not qualified just because it can install the APK. The release gate must also pass the required Android acceptance scripts, including camera discovery/acquisition/texture, lifecycle, application composition, authoritative rendering, and the RMA-190 end-to-end scenarios that are in scope for the release.
+A device for the full offline speech feature set additionally needs Android API 31 or newer, `SpeechRecognizer.isOnDeviceRecognitionAvailable(Context)`, the target recognition language installed for that explicit on-device recognizer, and an installed language-matching TTS voice that does not require a network connection. A usable device for the broader feature set also needs:
 
-## Model installation/import
+- enough free storage for the app, native MuJoCo assets, diagnostics, and any selected local model;
+- a camera exposed through the app's CameraX discovery path for camera/perception features; and
+- hardware resources that satisfy the selected local-model memory/thermal policy if local LLM inference is enabled.
 
-Model binaries are not committed to the repository. `models/manifests/qwen3-0.6b-q4-k-m.local-llm.json` is the selected local-model manifest and records the expected identity, source revision, license, artifact hash, size, and runtime compatibility. Any installed model must match the manifest before it is used; corrupted, mismatched, missing, or unsupported artifacts must fail closed rather than silently selecting another model.
+Feature availability is fail-closed. Missing camera, speech, model, calibration, provider, storage, or permission prerequisites are reported as unavailable/degraded rather than silently replaced with another provider or fidelity mode. Representative-device qualification remains tracked separately in RMA-184; the presence of instructions here is not a claim that every device class has passed that gate.
 
-The app and release notes must state that the selected local model is not bundled in the repository. A user or release process must provide the model artifact through the supported import/install path, and the app must surface an unavailable/degraded state if no compatible local model is installed.
+## Local model installation and import
+
+The trusted model-package boundary is documented in [`docs/architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md`](architecture/LOCAL_MODEL_PACKAGE_MANAGEMENT.md), with manifest rules in [`docs/architecture/LOCAL_LLM_MODEL_MANIFEST.md`](architecture/LOCAL_LLM_MODEL_MANIFEST.md).
+
+The selected local model is described by `models/manifests/qwen3-0.6b-q4-k-m.local-llm.json`. The model binary is not bundled in this repository; the manifest records the expected identity, source revision, license, artifact hash, size, and runtime compatibility that an installed artifact must match before it can be used.
+
+The package manager validates manifest identity, expected size and SHA-256, storage headroom, resumable-download metadata, and the installed artifact before exposing an approved path. Corrupt installed artifacts do not produce an approved model path, and package failure never selects a different model or cloud provider automatically.
+
+The current shipping settings UI intentionally labels **INSTALL**, **IMPORT**, **SELECT**, and **DELETE** as unavailable because the Android document/import and installer UI bridge is not complete. This is a visible product limitation, not an invitation to copy arbitrary model files into app storage. Development/acceptance harnesses may provision a model directly for controlled qualification, but those procedures do not turn the unavailable end-user UI into a supported workflow.
 
 ## Provider configuration and BYOK warning
 
-Cloud LLM and Cloud VLM settings are bring-your-own-key paths. Enabling them can send conversation text, camera-derived image data, or scene descriptions to the configured provider endpoint. The app must disclose that boundary before cloud-bound work is authorized.
+Provider execution is selected per workload: ASR, TTS, LLM, and VLM are independent choices. Cloud-capable paths are off/fail-closed until their required profile, credential, and privacy-boundary authorization are present.
 
-Provider profiles must use HTTPS for public endpoints. Cleartext HTTP is only allowed for trusted local-development hosts such as loopback, private-network, or `.local` endpoints; it must not become a public-network fallback. Credentials belong in the Android Keystore-backed provider secret store and must never be committed, logged, exported in diagnostic bundles, or embedded in source.
+For Cloud LLM and Cloud VLM configuration in the app:
+
+1. Open **Settings** and select **Cloud LLM** or **Cloud VLM**.
+2. Enter the endpoint base URL and model identifier, and select the supported endpoint style.
+3. Save the provider profile.
+4. Enter your own API key and choose **SAVE API KEY**. On Android, credential material is stored through the Android Keystore-backed secret store and is not displayed again after saving.
+5. Read the displayed data-boundary disclosure and explicitly authorize the cloud workload before use. Revoking authorization makes generation fail closed.
+
+**BYOK warning:** credentials are supplied by the user for the endpoint they choose. Enabling a cloud workload may send the corresponding application data to that endpoint: conversation text for cloud LLM, transformed camera imagery/question text for cloud VLM, and audio only for an explicitly selected cloud speech provider. Weachy Mini does not embed a shared production API key and must not silently switch a local workload to a network provider.
+
+Provider/fallback policy details are defined in [`docs/RMA_146_EXPLICIT_NO_FALLBACK_POLICY_SPEC_2026-08-11.md`](RMA_146_EXPLICIT_NO_FALLBACK_POLICY_SPEC_2026-08-11.md) and the RMA-195 composition record in the authoritative TODO.
 
 ## Calibration workflow
 
-Camera calibration is opt-in and evidence-bearing. Calibration data must come from the versioned schema under `calibration/schemas/` and from an explicit capture/import workflow. Placeholder constants, fabricated calibration, stale frames, and unlabeled temporary values must not be represented as measured calibration.
+Camera reprojection and physical Reachy calibration are separate concerns.
 
-When calibration is missing, stale, invalid, or not authorized, perception features that require calibrated camera geometry must report an unavailable/degraded diagnostic. They must not silently substitute uncalibrated homography, Unity cosmetic motion, stale camera frames, or a fake calibrated profile.
+For Android camera reprojection, the production perception path requires an exact camera calibration profile for the discovered camera/resolution before it publishes a Level 1 transformed Reachy-eye frame. Calibration storage is versioned and fail-closed; an absent or incompatible profile is reported rather than replaced with a measured claim. The current in-app **Camera calibration** action is still unavailable, so production camera calibration capture is not yet an end-user workflow. Architecture details are in [`docs/architecture/CALIBRATION_DATA_AND_CAPTURE.md`](architecture/CALIBRATION_DATA_AND_CAPTURE.md) and [`docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md`](architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md).
 
-## Fidelity-level explanation
+Physical Reachy Mini calibration is optional for the virtual product and is only required when making measured physical-twin accuracy claims. The optional runbook is [`docs/operations/RMA_074_PHYSICAL_CALIBRATION_RUNBOOK.md`](operations/RMA_074_PHYSICAL_CALIBRATION_RUNBOOK.md). Synthetic or deterministic acceptance fixtures must remain labeled as uncalibrated/test fixtures and must never be presented as measured device calibration.
 
-The product must label itself according to evidence, not aspiration:
+## Fidelity levels
 
-- **Geometric baseline** means imported Reachy geometry and attribution are present, but dynamics or physical acceptance are not release-qualified.
-- **Dynamic baseline** means MuJoCo is authoritative and stable, with neutral reset and model-state evidence.
-- **Servo-fidelity** means behavior, authoritative motion, camera/tracking, and visual-servo paths have device evidence for the stated scenarios.
-- **Calibrated twin** requires measured camera/robot calibration evidence and calibrated physical acceptance; this label is not available from placeholder calibration.
+Use fidelity labels as evidence claims, not UI decoration:
 
-Deferred Level 2 depth reprojection, Level 3 scene reconstruction, AR placement, movable observer camera, and VLA capabilities are future milestones and must not be half-enabled in production release builds.
+- **Geometric baseline** — model geometry/kinematics is present, without claiming validated dynamic or camera-servo fidelity.
+- **Dynamic baseline** — MuJoCo is authoritative and the rendered robot follows native state with the validated baseline dynamics/electrical/mechanical/thermal constraints that have passed their acceptance evidence.
+- **Servo-fidelity** — the authoritative dynamics plus validated behavior/perception/servo loop evidence support the corresponding servo-level claim.
+- **Calibrated twin** — requires measured, approved calibration evidence for the relevant physical unit/device path; deterministic fixtures and estimated profiles do not qualify.
 
-## Camera Level 1 approximation and missing-pixel behavior
+The release label must match the completion evidence in `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md`. Do not promote the product to a higher fidelity label merely because code for a later level exists.
 
-Level 1 camera support uses a camera-to-Reachy-eye transformation and homography-style reprojection. It is an approximation, not depth-aware scene reconstruction. The app must surface that limitation in release notes and diagnostics when camera-grounded behavior is enabled.
+## Camera Level 1 approximation and missing pixels
 
-Frames carry validity information. Missing, invalid, or out-of-view pixels must remain explicit through the frame path; they must not be treated as real observations. Where an image encoder needs concrete bytes for a provider request, invalid pixels are composited deterministically and must remain documented as invalid/masked source data rather than fabricated scene content.
+Level 1 camera reprojection is a geometric homography-based approximation from the Android camera into the Reachy-eye view. It is not depth reconstruction, AR scene reconstruction, or a movable observer camera. The coordinate-system and warp contracts are documented in [`docs/architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md`](architecture/CAMERA_REPROJECTION_COORDINATE_SYSTEMS.md) and [`docs/architecture/GPU_HOMOGRAPHY_WARP.md`](architecture/GPU_HOMOGRAPHY_WARP.md).
 
-## Troubleshooting and diagnostic bundle instructions
+Every transformed frame carries valid-coverage metadata and a validity mask. Pixels outside valid source coverage are **missing**, not invented. Consumers must use only valid pixels; stale pixels from an older frame, upscaled replacements, or hidden synthetic image content are not acceptable substitutes. Coverage propagation and failure behavior are defined in [`docs/architecture/CAMERA_VALID_COVERAGE_POLICY.md`](architecture/CAMERA_VALID_COVERAGE_POLICY.md).
 
-For build failures, run `./scripts/ci.sh --static-only`, `python3 scripts/verify_toolchain.py`, and the relevant native, managed, Unity, or Android acceptance script directly. For Android device failures, confirm ADB authorization, ABI/API level, selected serial, camera permission, installed offline TTS voice, selected model availability, and network state.
+## Troubleshooting and diagnostic bundles
 
-Diagnostic bundles must be redacted-by-default. They may include service state, provider identifiers, fidelity level, APK/report hashes, device model, SDK level, and bounded failure diagnostics. They must not include raw private media, cloud API keys, unredacted credentials, full transcripts beyond explicitly authorized evidence, or persistent camera/audio recordings unless the user has enabled an explicit media-export path.
+Start with the visible service/settings health messages. Provider, camera, speech, local-model, simulation, storage, and calibration failures are intended to surface as explicit unavailable/degraded/faulted states rather than silent fallbacks.
 
-## Privacy and data-flow explanation
+For a shareable support artifact, use the **Export diagnostic bundle** action in the app HUD. A successful export reports the local output path. Bundles are bounded and redacted by policy; credentials, raw audio, raw images/media, transcripts, and conversation text are excluded. The export contract is documented in [`docs/RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md`](RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md), and structured-log redaction rules are in [`docs/RMA_170_STRUCTURED_LOGGING_SPEC_2026-08-14.md`](RMA_170_STRUCTURED_LOGGING_SPEC_2026-08-14.md).
 
-Offline launch, MuJoCo simulation, deterministic behavior replay, camera acquisition, Level 1 reprojection, and offline TTS/local-model paths are intended to operate without cloud credentials. Cloud LLM/VLM paths are optional and must require explicit provider configuration plus privacy-boundary authorization.
+When reporting a defect, include the exact app/source SHA, Android device model/API level, which provider/fidelity selections were active, the visible failure text, and the redacted diagnostic bundle when available. Do not paste API keys or raw private media into issue reports.
 
-No optional provider may silently substitute for another provider. If ASR, TTS, local LLM, cloud LLM/VLM, camera, calibration, model loading, or network access is unavailable, the app must report unavailable/degraded/faulted status with a visible diagnostic and preserve fail-closed behavior.
+## Privacy and data flow
+
+The default architecture favors local processing and explicit disclosure at network/privacy boundaries:
+
+- MuJoCo simulation and Unity rendering are local.
+- Android on-device ASR and an installed offline TTS voice can keep speech input/output local when those capabilities are selected and available.
+- Local LLM inference uses an explicitly installed/approved local model and is governed by memory/thermal admission policy.
+- Cloud LLM sends conversation text only after the cloud profile/credential and workload authorization are configured.
+- Cloud VLM receives only a validated `TransformedReachyEye` image plus the visual question; arbitrary raw camera frames or URLs are not accepted by that provider contract.
+- Cloud speech must be explicitly selected; offline speech failures do not silently promote audio to a network provider.
+- Android provider credentials are stored through the Android Keystore-backed secret store.
+- Structured diagnostics redact secrets and exclude private/raw-media classes from diagnostic bundles by default.
+
+The detailed privacy/fallback contracts are in [`docs/RMA_146_EXPLICIT_NO_FALLBACK_POLICY_SPEC_2026-08-11.md`](RMA_146_EXPLICIT_NO_FALLBACK_POLICY_SPEC_2026-08-11.md), [`docs/RMA_161_CREDENTIAL_LIFECYCLE_SPEC_2026-08-13.md`](RMA_161_CREDENTIAL_LIFECYCLE_SPEC_2026-08-13.md), [`docs/RMA_162_PRIVATE_MEDIA_RETENTION_SPEC_2026-08-13.md`](RMA_162_PRIVATE_MEDIA_RETENTION_SPEC_2026-08-13.md), [`docs/RMA_170_STRUCTURED_LOGGING_SPEC_2026-08-14.md`](RMA_170_STRUCTURED_LOGGING_SPEC_2026-08-14.md), and [`docs/RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md`](RMA_172_DIAGNOSTIC_BUNDLE_EXPORT_SPEC_2026-08-14.md).
+
+## Current user-visible limitations
+
+This guide intentionally documents incomplete product surfaces instead of hiding them:
+
+- local-model install/import/select/delete buttons are currently unavailable in the shipping settings UI;
+- in-app camera calibration capture is currently unavailable;
+- some end-to-end and representative-device physical qualification gates remain open in the authoritative TODO; and
+- a feature that lacks its required permission, offline component, local model, calibration, credential, or authorization must remain unavailable rather than silently changing data flow or fidelity.
+
+Treat `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md` as the source of completion truth for those remaining release gates.
