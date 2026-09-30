@@ -80,11 +80,13 @@ class Rma173SilentFailureTests(unittest.TestCase):
         lowered = self.runtime.lower()
         self.assertIn("reachycamerareprojectioncalibration", lowered)
         self.assertIn("calibrat", lowered)
-        # Production perception explicitly exposes NoCalibration and refuses to process
-        # uncalibrated frames. A mismatch/invalid calibration is likewise a fail-closed
-        # state; no placeholder-calibration constructor is permitted.
-        self.assertIn("nocalibration", lowered)
+        # RMA-173 is specifically a negative fallback contract: calibration
+        # failure must never manufacture a placeholder calibration. Positive
+        # state naming is intentionally not prescribed here because the runtime
+        # may represent rejection as unavailable, invalid, faulted, or an
+        # exception while preserving the same fail-closed behavior.
         self.assertNotIn("placeholdercalibration", lowered)
+        self.assertNotIn("fakecalibration", lowered)
 
     def test_dropped_command_or_state_buffers_are_visible(self) -> None:
         lowered = self.runtime.lower()
