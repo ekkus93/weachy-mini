@@ -49,7 +49,8 @@ class Rma173SilentFailureTests(unittest.TestCase):
             for p in sorted((RUNTIME / "Core" / "Speech").glob("AndroidOfflineTtsProvider*.cs"))
         )
         self.assertIn("SpeechNetworkRequirement.None", offline)
-        self.assertIn("isNetworkConnectionRequired", offline)
+        self.assertIn("voice.NetworkRequirement != SpeechNetworkRequirement.None", offline)
+        self.assertIn("no network TTS provider will be selected automatically", offline)
         self.assertNotIn("ReachyOpenAiCompatibleTtsProvider", offline)
 
     def test_local_llm_failure_does_not_activate_openai(self) -> None:
@@ -80,8 +81,6 @@ class Rma173SilentFailureTests(unittest.TestCase):
         self.assertIn("reachycamerareprojectioncalibration", lowered)
         self.assertIn("calibrat", lowered)
         self.assertIn("placeholder", lowered)
-        # A mismatch must have an explicit rejection/unavailable path; merely
-        # finding a calibration-related class is not sufficient evidence.
         self.assertTrue(
             any(token in lowered for token in ("calibrationmismatch", "mismatch", "invalidcalibration", "nocalibration"))
         )
