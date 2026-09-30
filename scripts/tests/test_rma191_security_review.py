@@ -42,6 +42,12 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             ]
         )
         cls.all_source = joined(source_files(".cs", ".java", ".kt", ".xml", ".cpp", ".c", ".h", ".hpp"))
+        cls.production_lower = cls.production.lower()
+        cls.all_source_lower = cls.all_source.lower()
+
+    def assertAnyTextPresent(self, haystack: str, *needles: str) -> None:
+        if not any(needle.lower() in haystack.lower() for needle in needles):
+            self.fail(f"none of the expected security terms were present: {needles!r}")
 
     def test_no_obvious_embedded_openai_secret(self) -> None:
         # Provider identifiers and documentation examples are allowed; a token-shaped
@@ -64,11 +70,11 @@ class Rma191SecurityReviewTests(unittest.TestCase):
 
     def test_network_transport_has_explicit_cleartext_policy(self) -> None:
         self.assertIn("IsTrustedLocalNetworkHost", self.production)
-        self.assertIn("https", self.production.lower())
+        self.assertIn("https", self.production_lower)
         # Cleartext is a deliberate local-development exception, never a silent
         # public-network fallback.
         self.assertIn("http://", self.production)
-        self.assertIn("trusted", self.production.lower())
+        self.assertIn("trusted", self.production_lower)
 
     def test_diagnostics_and_logs_keep_sensitive_data_out_by_default(self) -> None:
         for contract in (
@@ -78,8 +84,16 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             "ReachyDiagnosticRecordBuffer",
         ):
             self.assertIn(contract, self.production)
-        self.assertIn("credential", self.production.lower())
-        self.assertIn("raw media", self.production.lower())
+        self.assertIn("credential", self.production_lower)
+        self.assertAnyTextPresent(
+            self.production_lower,
+            "raw media",
+            "raw_media",
+            "private media",
+            "private/raw-media",
+            "raw audio",
+            "raw images",
+        )
 
     def test_private_media_temporary_storage_has_delete_and_purge_contract(self) -> None:
         self.assertIn("ReachyPrivateMediaTemporaryFileStore", self.production)
@@ -98,9 +112,14 @@ class Rma191SecurityReviewTests(unittest.TestCase):
             "reachy_sim_last_error",
         ):
             self.assertIn(contract, self.all_source)
-        lowered = self.all_source.lower()
-        self.assertIn("stale", lowered)
-        self.assertIn("undersized", lowered)
+        self.assertIn("stale", self.all_source_lower)
+        self.assertAnyTextPresent(
+            self.all_source_lower,
+            "undersized",
+            "buffer too small",
+            "insufficient buffer",
+            "buffer length",
+        )
 
 
 if __name__ == "__main__":

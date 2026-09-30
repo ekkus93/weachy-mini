@@ -1,0 +1,41 @@
+name: RMA Release Review Contracts
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma-release-review-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-review-contracts:
+    name: Run RMA-191/192/193 contracts without Android device
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run RMA-191 security-review contract
+        run: python3 scripts/tests/test_rma191_security_review.py
+
+      - name: Run RMA-192 license-review contract
+        run: python3 scripts/tests/test_rma192_license_reconciliation.py
+
+      - name: Run RMA-193 documentation contract
+        run: python3 scripts/tests/test_rma193_documentation_contract.py
