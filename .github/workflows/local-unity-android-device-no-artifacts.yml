@@ -36,7 +36,11 @@ jobs:
 
       - name: Run static release-review contracts
         shell: bash
-        run: bash scripts/ci.sh --static-only
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma191_security_review.py
+          python3 scripts/tests/test_rma192_license_reconciliation.py
+          python3 scripts/tests/test_rma193_documentation_contract.py
 
       - name: Resolve local Unity and Android installations
         shell: bash

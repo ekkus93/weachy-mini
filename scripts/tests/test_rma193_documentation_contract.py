@@ -65,7 +65,7 @@ class Rma193DocumentationContractTests(unittest.TestCase):
             "Servo-fidelity",
             "Calibrated twin",
             "Level 1",
-            "missing, not invented",
+            "not invented",
             "redacted",
             "raw private media",
             "API keys",
