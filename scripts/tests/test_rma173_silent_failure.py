@@ -80,12 +80,10 @@ class Rma173SilentFailureTests(unittest.TestCase):
         lowered = self.runtime.lower()
         self.assertIn("reachycamerareprojectioncalibration", lowered)
         self.assertIn("calibrat", lowered)
-        # Fail-closed calibration is represented by explicit unavailable/invalid/no-calibration
-        # state. Do not require the word "placeholder": absence of placeholder construction is
-        # itself desirable and the previous assertion inverted the policy we are proving.
-        self.assertTrue(
-            any(token in lowered for token in ("calibrationmismatch", "mismatch", "invalidcalibration", "nocalibration"))
-        )
+        # Production perception explicitly exposes NoCalibration and refuses to process
+        # uncalibrated frames. A mismatch/invalid calibration is likewise a fail-closed
+        # state; no placeholder-calibration constructor is permitted.
+        self.assertIn("nocalibration", lowered)
         self.assertNotIn("placeholdercalibration", lowered)
 
     def test_dropped_command_or_state_buffers_are_visible(self) -> None:
