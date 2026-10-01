@@ -9,14 +9,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-SECRET_BRIDGE = ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib/src/main/java/com/ekkus93/weachy/providers/ReachyProviderSecretBridge.java"
+SECRET_BRIDGE = (
+    ROOT
+    / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib/src/main/java"
+    / "com/ekkus93/weachy/providers/ReachyProviderSecretBridge.java"
+)
 PROVIDER_CONFIG = ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs"
 PROVIDER_SELECTION = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyProviderSelection.cs"
-SETTINGS_TEXT = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.DerivedText.cs"
+SETTINGS_TEXT = (
+    ROOT
+    / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.DerivedText.cs"
+)
 SETTINGS_UI = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs"
 REDACTOR = ROOT / "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs"
 EXPORTER = ROOT / "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs"
-MEDIA_STORE = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyPrivateMediaTemporaryFileStore.cs"
+MEDIA_STORE = (
+    ROOT
+    / "Assets/ReachyMini/Runtime/Core/Application/ReachyPrivateMediaTemporaryFileStore.cs"
+)
 MEDIA_STORAGE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPrivateMediaStorage.cs"
 SAFE_HANDLE = ROOT / "Assets/ReachyMini/Runtime/Interop/ReachySimSafeHandle.cs"
 SESSION = ROOT / "Assets/ReachyMini/Runtime/Interop/ReachySimSession.cs"
@@ -69,7 +79,11 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
                 for label, pattern in patterns.items():
                     if pattern.search(content):
                         findings.append(f"{label}: {path.relative_to(ROOT)}")
-        self.assertEqual([], findings, "Embedded production credentials found: " + "; ".join(findings))
+        self.assertEqual(
+            [],
+            findings,
+            "Embedded production credentials found: " + "; ".join(findings),
+        )
 
     def test_android_keystore_storage_is_authenticated_and_non_plaintext(self) -> None:
         source = read(SECRET_BRIDGE)
@@ -86,7 +100,10 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         ):
             self.assertIn(token, source)
         self.assertIn("putString(ivKey(reference)", source)
-        self.assertIn("putString(\n                                ciphertextKey(reference)", source)
+        self.assertIn(
+            "putString(\n                                ciphertextKey(reference)",
+            source,
+        )
         self.assertNotIn("putString(reference,", source)
 
     def test_android_and_provider_network_policy_does_not_enable_global_cleartext(self) -> None:
@@ -100,7 +117,8 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         for token in (
             "ReachyProviderTlsMode.RequireHttps",
             "ReachyProviderTlsMode.TrustedLocalNetworkCleartext",
-            "Provider profiles require HTTPS unless the explicit trusted-local-network cleartext mode is selected.",
+            "Provider profiles require HTTPS unless the explicit "
+            "trusted-local-network cleartext mode is selected.",
             "Cleartext provider profiles are restricted to trusted local-network hosts.",
             "ReachyNetworkEndpointSecurity.IsTrustedLocalNetworkHost(baseUri)",
             "LOCAL DEVELOPMENT ONLY",

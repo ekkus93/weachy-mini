@@ -12,7 +12,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreen.Styles.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Tests/Editor/ReachyMainScreenTests.cs'
       - 'managed/ReachyMini.Application.Tests/Rma081MainScreenStateTests.cs'
       - 'docs/architecture/MAIN_SCREEN_APPLICATION_SHELL.md'
@@ -80,7 +80,7 @@ jobs:
           state = Path('Assets/ReachyMini/Runtime/Core/Application/ReachyMainScreenState.cs').read_text(encoding='utf-8')
           screen = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreen.cs').read_text(encoding='utf-8')
           bootstrap = Path('Assets/ReachyMini/Runtime/Application/ReachyMainScreenBootstrap.cs').read_text(encoding='utf-8')
-          composition = Path('Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs').read_text(encoding='utf-8')
+          composition = Path('Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs').read_text(encoding='utf-8')
 
           enum_match = re.search(r'enum ReachyInteractionState\s*\{([^}]*)\}', state, re.S)
           if enum_match is None:
