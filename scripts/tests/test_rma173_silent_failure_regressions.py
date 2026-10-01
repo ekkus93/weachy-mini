@@ -16,6 +16,7 @@ APP = ROOT / "Assets/ReachyMini/Runtime/Application"
 CORE = ROOT / "Assets/ReachyMini/Runtime/Core"
 MANAGED_CORE_TESTS = ROOT / "managed/ReachyMini.Core.Tests"
 NATIVE_TESTS = ROOT / "native/reachy_sim/tests"
+VALIDATION_DOC = ROOT / "docs/validation/RMA_173_SILENT_FAILURE_REGRESSIONS_VALIDATION_2026-10-01.md"
 
 
 def read(path: Path) -> str:
@@ -110,6 +111,15 @@ class Rma173SilentFailureRegressionTests(unittest.TestCase):
         self.assertIn("ReachyBehaviorIntentRecoveryPolicy.Evaluate", cloud_method)
         self.assertIn("Fail closed", cloud_method)
         self.assertNotIn("new ReachyBehaviorIntent", cloud_method)
+
+    def test_validation_note_records_exact_head_evidence_without_overclaiming(self) -> None:
+        doc = read(VALIDATION_DOC)
+        self.assertIn("36826674201", doc)
+        self.assertIn("110253782498", doc)
+        self.assertIn("a7c279d3ccc01e71294718d452774a5dfe042be8", doc)
+        self.assertIn("RMA Release Review Contracts", doc)
+        self.assertIn("does not claim completion of physical Android scenarios", doc)
+        self.assertIn("RMA-125, RMA-184, RMA-190", doc)
 
 
 if __name__ == "__main__":
