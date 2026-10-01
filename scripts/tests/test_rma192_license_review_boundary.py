@@ -21,7 +21,8 @@ class Rma192LicenseReviewBoundaryTests(unittest.TestCase):
         for item in (
             "Reconcile packaged dependencies/assets against inventory.",
             "Verify notices in repository and app.",
-            "Verify modified Reachy-derived assets have required attribution/share-alike treatment.",
+            "Verify modified Reachy-derived assets have required "
+            "attribution/share-alike treatment.",
             "Verify no endorsement claim.",
             "Verify selected local model redistribution/download presentation.",
         ):
