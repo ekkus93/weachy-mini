@@ -1,6 +1,6 @@
-import json
+from json import loads
 from pathlib import Path
-from unittest import TestCase, main
+from unittest import TestCase
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +15,7 @@ RMA012_CONTRACT = ROOT / "scripts" / "tests" / "test_rma012_licenses.py"
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return loads(path.read_text(encoding="utf-8"))
 
 
 def _inventory_entry(entry_id: str) -> dict:
@@ -88,4 +88,6 @@ class Rma192LicenseReconciliationTests(TestCase):
 
 
 if __name__ == "__main__":
+    from unittest import main
+
     main(verbosity=2)
