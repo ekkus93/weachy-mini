@@ -361,7 +361,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s "${RUNNER_TEMP}/rma091-camera-device-report/rma091-camera-acquisition.json"
+          test -s "${RUNNER_TEMP}/rma091-camera-device-report/summary.json"
           test -s "${RUNNER_TEMP}/rma091-camera-device-report/device.txt"
 
       - name: Upload RMA-091 camera acquisition evidence
@@ -498,6 +498,7 @@ jobs:
           passed = os.environ["JOB_STATUS"] == "success"
           print(json.dumps({
               "state": "success" if passed else "failure",
+
               "context": "Local Unity Android Validation",
               "description": "Unity and Android device validation passed" if passed else "Unity or Android device validation failed",
               "target_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",

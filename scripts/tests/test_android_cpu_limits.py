@@ -53,8 +53,18 @@ class AndroidCpuLimitContracts(unittest.TestCase):
         source = read(BUILD_ANDROID)
         self.assertIn('ANDROID_LIMIT_WRAPPER="${ROOT_DIR}/scripts/run_android_limited.sh"', source)
         self.assertIn('Android CPU-limit wrapper is missing or not executable', source)
-        self.assertIn('"${ANDROID_LIMIT_WRAPPER}" \\\n        env \\\n        JAVA_HOME="${UNITY_JAVA_HOME}"', source)
-        self.assertIn('"${ANDROID_LIMIT_WRAPPER}" \\\n    env \\\n    WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}"', source)
+        self.assertIn(
+            '"${ANDROID_LIMIT_WRAPPER}" \\\n'
+            '        env \\\n'
+            '        JAVA_HOME="${UNITY_JAVA_HOME}"',
+            source,
+        )
+        self.assertIn(
+            '"${ANDROID_LIMIT_WRAPPER}" \\\n'
+            '    env \\\n'
+            '    WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}"',
+            source,
+        )
         self.assertIn('"${UNITY_LIMIT_WRAPPER}" \\\', source)
         self.assertIn('"${UNITY_EDITOR}" \\\', source)
         self.assertNotIn(
