@@ -3,10 +3,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DOC = (
-    ROOT
-    / "docs/validation/RALPH_LOOP_CI_INFRASTRUCTURE_BLOCKER_2026-09-28.md"
-)
+DOC = ROOT / "docs/validation/RALPH_LOOP_CI_INFRASTRUCTURE_BLOCKER_2026-09-28.md"
+
 
 class InfrastructureBlockerContract(unittest.TestCase):
     def test_record_preserves_failure_classification(self):

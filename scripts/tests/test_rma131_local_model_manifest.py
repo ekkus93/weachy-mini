@@ -284,10 +284,7 @@ def test_ui_has_no_candidate_model_ids() -> None:
         for path in sorted(root.glob("*Settings*.cs"))
     )
     config = json.loads(V6_CONFIG_PATH.read_text(encoding="utf-8"))
-    candidate_ids = sorted(
-        str(item["candidate_id"]).lower()
-        for item in config["candidates"]
-    )
+    candidate_ids = sorted(str(item["candidate_id"]).lower() for item in config["candidates"])
     for prohibited in candidate_ids:
         if prohibited in source:
             raise AssertionError(
