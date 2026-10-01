@@ -75,7 +75,8 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
         self.assertIn("decision.TrackingMinimumIntervalNanoseconds", tracking)
         self.assertIn("stale tracking content was not reused", tracking)
 
-        self.assertIn("Application.targetFrameRate = decision.TargetRenderFps", unity)
+        self.assertIn("ReachyRuntimeThermalPolicy.Apply(decision.TargetRenderFps)", unity)
+        self.assertIn("ReachyRuntimeThermalPolicy.Restore(baselineFramePacing)", unity)
         self.assertIn("QualitySettings.shadows = ShadowQuality.Disable", unity)
         self.assertIn("QualitySettings.antiAliasing = 0", unity)
         self.assertIn("QualitySettings.softParticles = false", unity)
