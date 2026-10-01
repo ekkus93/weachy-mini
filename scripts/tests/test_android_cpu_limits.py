@@ -51,26 +51,29 @@ class AndroidCpuLimitContracts(unittest.TestCase):
 
     def test_unity_android_build_wraps_sdkmanager_and_unity_android_build_tree(self) -> None:
         source = read(BUILD_ANDROID)
-        self.assertIn('ANDROID_LIMIT_WRAPPER="${ROOT_DIR}/scripts/run_android_limited.sh"', source)
-        self.assertIn('Android CPU-limit wrapper is missing or not executable', source)
         self.assertIn(
-            '"${ANDROID_LIMIT_WRAPPER}" \\\n'
-            '        env \\\n'
-            '        JAVA_HOME="${UNITY_JAVA_HOME}"',
+            'ANDROID_LIMIT_WRAPPER="${ROOT_DIR}/scripts/run_android_limited.sh"',
             source,
         )
+        self.assertIn("Android CPU-limit wrapper is missing or not executable", source)
+
+        continuation = "\\"
+        android_wrapper = '"${ANDROID_LIMIT_WRAPPER}" ' + continuation
+        self.assertGreaterEqual(source.count(android_wrapper), 2)
+        self.assertIn('JAVA_HOME="${UNITY_JAVA_HOME}"', source)
         self.assertIn(
-            '"${ANDROID_LIMIT_WRAPPER}" \\\n'
-            '    env \\\n'
-            '    WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}"',
+            'WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}"',
             source,
         )
-        self.assertIn('"${UNITY_LIMIT_WRAPPER}" \\\', source)
-        self.assertIn('"${UNITY_EDITOR}" \\\', source)
-        self.assertNotIn(
-            'WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" \\\n    "${UNITY_LIMIT_WRAPPER}"',
-            source,
+        self.assertIn('"${UNITY_LIMIT_WRAPPER}" ' + continuation, source)
+        self.assertIn('"${UNITY_EDITOR}" ' + continuation, source)
+
+        legacy_order = (
+            'WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" '
+            + continuation
+            + '\n    "${UNITY_LIMIT_WRAPPER}"'
         )
+        self.assertNotIn(legacy_order, source)
 
     def test_unity_and_android_wrappers_are_separate_layers(self) -> None:
         android_source = read(ANDROID_WRAPPER)
