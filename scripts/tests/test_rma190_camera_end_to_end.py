@@ -27,6 +27,10 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
         self.assertIn("ReachyDeviceCameraFacing.Front", source)
         self.assertIn("VisionFrameOrigin.TransformedReachyEye", source)
         self.assertIn("synthetic_camera_frame_injected = false", source)
+        self.assertIn('SetStage("wait-front-camera-texture")', source)
+        self.assertIn('SetStage("capture-baseline-transformed-frame")', source)
+        self.assertIn('SetStage("execute-head-rotation")', source)
+        self.assertIn("currentStage", source)
         self.assertNotIn("ReachyRma154VisualServoAcceptance", source)
 
     def test_acceptance_fixture_is_explicitly_uncalibrated_and_restored(self) -> None:

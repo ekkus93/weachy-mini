@@ -15,6 +15,7 @@ namespace ReachyMini.AppState
             public int schema_version = 1;
             public string status = string.Empty;
             public string error = string.Empty;
+            public string stage = string.Empty;
             public string device_model = string.Empty;
             public int android_api_level;
             public bool real_front_camera;
@@ -54,6 +55,7 @@ namespace ReachyMini.AppState
                 return new Report
                 {
                     status = "passed",
+                    stage = "completed",
                     device_model = SystemInfo.deviceModel,
                     android_api_level = ReadApiLevel(),
                     real_front_camera =
@@ -85,12 +87,15 @@ namespace ReachyMini.AppState
                 };
             }
 
-            public static Report Failure(string error)
+            public static Report Failure(
+                string error,
+                string stage = "")
             {
                 return new Report
                 {
                     status = "failed",
                     error = Bound(error, 4096),
+                    stage = Bound(stage, 256),
                     device_model = SystemInfo.deviceModel,
                     android_api_level = TryReadApiLevel(),
                     deterministic_calibration_fixture = true,

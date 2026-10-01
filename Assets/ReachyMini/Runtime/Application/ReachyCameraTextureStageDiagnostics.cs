@@ -278,12 +278,12 @@ namespace ReachyMini.AppState
                 {
                     output.Release();
                 }
-                DestroyObject(readback);
-                DestroyObject(output);
-                DestroyObject(material);
-                DestroyObject(yTexture);
-                DestroyObject(uTexture);
-                DestroyObject(vTexture);
+                DestroyUnityObject(readback);
+                DestroyUnityObject(output);
+                DestroyUnityObject(material);
+                DestroyUnityObject(yTexture);
+                DestroyUnityObject(uTexture);
+                DestroyUnityObject(vTexture);
                 PublishMarker();
             }
         }
@@ -350,7 +350,7 @@ namespace ReachyMini.AppState
             return value.Replace(' ', '_');
         }
 
-        private static void DestroyObject(Object? value)
+        private static void DestroyUnityObject(Object? value)
         {
             if (value != null)
             {
