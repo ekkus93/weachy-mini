@@ -1,0 +1,57 @@
+name: RMA-142 OpenAI LLM Adapter Contracts
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/Providers/ReachyLlmContracts.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleLlmProvider*.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Providers/ReachyLlmResponseProtocolParser.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Perception/**'
+      - 'managed/ReachyMini.Core.Tests/Rma142Rma143OpenAiLlmAdapterContractTests.cs'
+      - 'managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma142-openai-llm-adapter.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma142-openai-llm-adapter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: Validate RMA-142 transformed-image LLM contracts
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build managed core with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.Core/ReachyMini.Core.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run RMA-142/143 mock-transport contracts
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.Core.Tests/ReachyMini.Core.Tests.csproj
+          --configuration Release
