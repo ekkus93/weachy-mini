@@ -42,9 +42,13 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             "- [ ] Diagnostics identify active fidelity, providers, and failures.",
             "- [ ] Representative-device performance report exists.",
             "- [ ] Licenses and attribution are complete.",
-            "- [ ] All incomplete items are either resolved or moved to an explicitly named later milestone with rationale.",
-            "- [ ] No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production.",
-            "- [ ] The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence.",
+            "- [ ] All incomplete items are either resolved or moved to an "
+            "explicitly named later milestone with rationale.",
+            "- [ ] No deferred Level 2, Level 3, AR, movable observer camera, "
+            "or VLA code is half-enabled in production.",
+            "- [ ] The release is labeled accurately as geometric baseline, "
+            "dynamic baseline, servo-fidelity, or calibrated twin according to "
+            "completed evidence.",
         ):
             self.assertIn(open_item, todo)
 

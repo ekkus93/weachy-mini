@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-import unittest
+from unittest import TestCase, main
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +25,7 @@ def _inventory_entry(entry_id: str) -> dict:
     return matches[0]
 
 
-class Rma192LicenseReconciliationTests(unittest.TestCase):
+class Rma192LicenseReconciliationTests(TestCase):
     def test_selected_local_model_inventory_matches_authoritative_manifest(self) -> None:
         manifest = _load_json(MODEL_MANIFEST_PATH)
         identity = manifest["identity"]
@@ -88,4 +88,4 @@ class Rma192LicenseReconciliationTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    main(verbosity=2)

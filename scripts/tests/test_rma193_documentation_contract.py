@@ -63,7 +63,10 @@ class Rma193DocumentationContractTests(unittest.TestCase):
         self.assertIn(f"API {speech_floor}", self.building)
         self.assertEqual(core_floor, toolchain["android"]["unity_device_feasibility_min_sdk"])
         self.assertEqual(speech_floor, toolchain["android"]["min_sdk"])
-        self.assertEqual("provisional_until_compatibility_spike", toolchain["android"]["min_sdk_status"])
+        self.assertEqual(
+            "provisional_until_compatibility_spike",
+            toolchain["android"]["min_sdk_status"],
+        )
 
     def test_model_provider_calibration_privacy_fail_closed_language(self) -> None:
         for token in (

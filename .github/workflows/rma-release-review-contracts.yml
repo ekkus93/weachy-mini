@@ -16,10 +16,7 @@ concurrency:
 jobs:
   release-review-contracts:
     name: Run RMA-191/192/193/194 contracts without Android device
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
