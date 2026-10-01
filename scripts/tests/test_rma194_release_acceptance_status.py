@@ -58,12 +58,18 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
         self.assertGreaterEqual(status.count("| Open."), len(rma194_unchecked_items()))
         self.assertIn("real cloud-provider success is not claimed", status)
         self.assertIn("detailed rows are not reconstructed from redacted output", status)
-        self.assertIn("partial reconstruction from redacted inventory output is not acceptable", status)
+        self.assertIn(
+            "partial reconstruction from redacted inventory output is not acceptable",
+            status,
+        )
 
     def test_non_blocker_classifications_do_not_hide_source_failures(self) -> None:
         status = read(STATUS)
         self.assertIn("Artifact upload quota failures are infrastructure failures", status)
-        self.assertIn("Zero-step CI failures with unavailable logs are infrastructure failures", status)
+        self.assertIn(
+            "Zero-step CI failures with unavailable logs are infrastructure failures",
+            status,
+        )
         self.assertIn("hardware availability condition, not a source failure", status)
         self.assertIn("Lack of physical Reachy Mini hardware is not a release blocker", status)
 
