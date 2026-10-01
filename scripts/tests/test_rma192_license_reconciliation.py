@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""RMA-192 license and attribution reconciliation contract."""
+
+from __future__ import annotations
+
 import json
 import unittest
 from pathlib import Path
