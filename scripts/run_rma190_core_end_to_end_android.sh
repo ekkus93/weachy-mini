@@ -194,6 +194,29 @@ while true; do
 done
 
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/${RESULT_FILE}"
+python3 - "${REPORT_DIR}/${RESULT_FILE}" <<'PY'
+from __future__ import annotations
+
+import json
+import re
+import sys
+
+report = json.load(open(sys.argv[1], encoding="utf-8"))
+if report.get("status") != "passed":
+    detail = " ".join(str(report.get("error", "")).split())
+    detail = re.sub(r"https?://\\S+", "[url-redacted]", detail)
+    detail = re.sub(
+        r"(?i)\\b(?:authorization|bearer|token|secret|api[_-]?key)\\b\\s*[:=]\\s*\\S+",
+        "[credential-redacted]",
+        detail,
+    )
+    print(
+        "RMA-190 core player failure: "
+        f"status={report.get('status', 'missing')}; "
+        f"error={detail[:512] or 'unspecified'}",
+        file=sys.stderr,
+    )
+PY
 if ! python3 - "${REPORT_DIR}/${RESULT_FILE}" <<'PY'
 from __future__ import annotations
 
@@ -204,7 +227,7 @@ import sys
 
 path = pathlib.Path(sys.argv[1])
 report = json.loads(path.read_text(encoding="utf-8"))
-assert report["status"] == "passed", report
+assert report["status"] == "passed", "player report status is not passed"
 assert report["network_offline"] is True, report
 assert report["active_network_validated"] is False, report
 assert report["simulation_service"] == "ReachyProductionSimulationApplicationService", report
