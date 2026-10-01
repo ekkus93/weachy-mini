@@ -17,15 +17,13 @@ SECRET_BRIDGE = (
 PROVIDER_CONFIG = ROOT / "Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderConfiguration.cs"
 PROVIDER_SELECTION = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyProviderSelection.cs"
 SETTINGS_TEXT = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.DerivedText.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.DerivedText.cs"
 )
 SETTINGS_UI = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs"
 REDACTOR = ROOT / "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticRedactor.cs"
 EXPORTER = ROOT / "Assets/ReachyMini/Runtime/Core/Diagnostics/ReachyDiagnosticBundleExporter.cs"
 MEDIA_STORE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Application/ReachyPrivateMediaTemporaryFileStore.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyPrivateMediaTemporaryFileStore.cs"
 )
 MEDIA_STORAGE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPrivateMediaStorage.cs"
 SAFE_HANDLE = ROOT / "Assets/ReachyMini/Runtime/Interop/ReachySimSafeHandle.cs"

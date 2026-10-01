@@ -3,12 +3,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TEST = (
-    ROOT
-    / "managed"
-    / "ReachyMini.Core.Tests"
-    / "Rma190IndependentProviderCombinationTests.cs"
-)
+TEST = ROOT / "managed" / "ReachyMini.Core.Tests" / "Rma190IndependentProviderCombinationTests.cs"
 PROGRAM = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.cs"
 
 

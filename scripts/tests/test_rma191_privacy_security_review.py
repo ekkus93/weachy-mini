@@ -26,9 +26,7 @@ def source_files() -> list[Path]:
         if not root.exists():
             continue
         files.extend(
-            path
-            for path in root.rglob("*")
-            if path.is_file() and path.suffix in SOURCE_SUFFIXES
+            path for path in root.rglob("*") if path.is_file() and path.suffix in SOURCE_SUFFIXES
         )
     return sorted(files)
 

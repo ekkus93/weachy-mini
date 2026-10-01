@@ -75,7 +75,7 @@ class Rma190SolverFaultResetContracts(unittest.TestCase):
         for token in (
             "private void ProcessResetRequest",
             "session.ResetRaw(request.ResetId)",
-            "EnterNativeFault(\"reset\", error)",
+            'EnterNativeFault("reset", error)',
             "ReachySimulationRunState.Faulted",
             "commandQueue.Clear()",
             "PublishCurrentState(stepDurationSeconds: 0.0)",

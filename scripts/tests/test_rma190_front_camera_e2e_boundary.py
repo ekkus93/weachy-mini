@@ -20,21 +20,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
-RMA190_VALIDATION = (
-    ROOT
-    / "docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md"
-)
-PERCEPTION_DRIVER = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyAndroidPerceptionDriver.cs"
-)
+RMA190_VALIDATION = ROOT / "docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md"
+PERCEPTION_DRIVER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyAndroidPerceptionDriver.cs"
 RMA154_ACCEPTANCE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.cs"
 )
 RMA154_FEEDBACK = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.Feedback.cs"
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma154VisualServoAcceptance.Feedback.cs"
 )
 
 

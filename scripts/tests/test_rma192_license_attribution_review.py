@@ -104,11 +104,11 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
         ):
             self.assertIn(token, notices + managed_tests)
         self.assertIn("Equal(12, notices.Length", managed_tests)
-        self.assertIn("FindNotice(notices, \"MuJoCo\")", managed_tests)
+        self.assertIn('FindNotice(notices, "MuJoCo")', managed_tests)
         self.assertIn(
             "FindNotice(\n"
             "                notices,\n"
-            "                \"Reachy Mini hardware and model assets\")",
+            '                "Reachy Mini hardware and model assets")',
             managed_tests,
         )
 

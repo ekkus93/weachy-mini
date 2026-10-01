@@ -7,13 +7,10 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TODO = ROOT / "docs" / "REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 CONSOLIDATION = ROOT / "docs" / "validation" / "RMA_190_MODEL_FAILURE_CONSOLIDATION_2026-09-24.md"
 LOCAL_VALIDATION = (
-    ROOT
-    / "docs"
-    / "validation"
-    / "RMA_190_MODEL_CORRUPTION_OOM_LOCAL_VALIDATION_2026-09-24.md"
+    ROOT / "docs" / "validation" / "RMA_190_MODEL_CORRUPTION_OOM_LOCAL_VALIDATION_2026-09-24.md"
 )
 
 
