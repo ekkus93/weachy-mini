@@ -8,8 +8,22 @@ SPEC = ROOT / "docs" / "RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md"
 PROGRAM = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.cs"
 WORKER_TESTS = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.Rma032WorkerTests.cs"
 FAULT_TESTS = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.Rma032WarningAndFaultTests.cs"
-REQUEST_HANDLERS = ROOT / "Assets" / "ReachyMini" / "Runtime" / "Simulation" / "ReachySimulationWorker.RequestHandlers.cs"
-CONTROL_REQUESTS = ROOT / "Assets" / "ReachyMini" / "Runtime" / "Simulation" / "ReachySimulationWorker.ControlRequests.cs"
+REQUEST_HANDLERS = (
+    ROOT
+    / "Assets"
+    / "ReachyMini"
+    / "Runtime"
+    / "Simulation"
+    / "ReachySimulationWorker.RequestHandlers.cs"
+)
+CONTROL_REQUESTS = (
+    ROOT
+    / "Assets"
+    / "ReachyMini"
+    / "Runtime"
+    / "Simulation"
+    / "ReachySimulationWorker.ControlRequests.cs"
+)
 
 
 def read(path: Path) -> str:
@@ -25,7 +39,9 @@ class Rma190SolverFaultResetContracts(unittest.TestCase):
         self.assertIn("Solver fault and controlled reset", spec)
         self.assertIn("Native-backed worker + application/runtime recovery", spec)
 
-    def test_controlled_reset_discards_commands_and_republishes_authoritative_zero_state(self) -> None:
+    def test_controlled_reset_discards_commands_and_republishes_authoritative_zero_state(
+        self,
+    ) -> None:
         worker = read(WORKER_TESTS)
         for token in (
             "worker.Reset(",
