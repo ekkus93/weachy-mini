@@ -39,7 +39,10 @@ class Rma173SilentFailureTests(unittest.TestCase):
         self.assertIn("SpeechProviderLocation.OnDevice", source)
         self.assertIn("SpeechNetworkRequirement.None", source)
         self.assertNotIn("OpenAI", source)
-        fallback = read("Assets/ReachyMini/Runtime/Core/Providers/ReachyProviderFallbackPolicyEngine.cs")
+        fallback = read(
+            "Assets/ReachyMini/Runtime/Core/Providers/"
+            "ReachyProviderFallbackPolicyEngine.cs"
+        )
         self.assertIn("NoFallback", fallback)
         self.assertIn("ConfirmPrivacyBoundaryChange", fallback)
 
@@ -98,7 +101,11 @@ class Rma173SilentFailureTests(unittest.TestCase):
         behavior = read("Assets/ReachyMini/Runtime/Core/Behavior/ReachyBehaviorIntentJsonParser.cs")
         provider = "\n".join(
             p.read_text(encoding="utf-8", errors="strict")
-            for p in sorted((RUNTIME / "Core" / "Providers").glob("ReachyOpenAiCompatibleLlmProvider*.cs"))
+            for p in sorted(
+                (RUNTIME / "Core" / "Providers").glob(
+                    "ReachyOpenAiCompatibleLlmProvider*.cs"
+                )
+            )
         )
         self.assertTrue(
             any(token in parser for token in ("FormatException", "Invalid JSON", "Malformed"))
