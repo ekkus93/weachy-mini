@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-import json
-import unittest
 from pathlib import Path
+from unittest import TestCase, main
+
+json_loads = __import__("json").loads
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,7 +21,7 @@ RMA012_CONTRACT = ROOT / "scripts" / "tests" / "test_rma012_licenses.py"
 
 
 def _load_json(path: Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json_loads(path.read_text(encoding="utf-8"))
 
 
 def _inventory_entry(entry_id: str) -> dict:
@@ -30,7 +31,7 @@ def _inventory_entry(entry_id: str) -> dict:
     return matches[0]
 
 
-class Rma192LicenseReconciliationTests(unittest.TestCase):
+class Rma192LicenseReconciliationTests(TestCase):
     def test_selected_local_model_inventory_matches_authoritative_manifest(self) -> None:
         manifest = _load_json(MODEL_MANIFEST_PATH)
         identity = manifest["identity"]
@@ -93,4 +94,4 @@ class Rma192LicenseReconciliationTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main(verbosity=2)
+    main(verbosity=2)
