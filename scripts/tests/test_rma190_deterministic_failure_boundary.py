@@ -29,7 +29,8 @@ class Rma190DeterministicFailureBoundaryTests(unittest.TestCase):
             "Program.Rma190DeterministicFailureAcceptance.Network.cs",
             "redacted by Ralph output",
             "avoids reconstructing source from redacted data",
-            "No hidden fallback, provider-success, model-failure, or solver-recovery success is claimed",
+            "No hidden fallback, provider-success, model-failure, or "
+            "solver-recovery success is claimed",
         ):
             self.assertIn(token, status)
 

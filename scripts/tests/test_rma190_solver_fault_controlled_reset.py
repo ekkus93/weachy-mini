@@ -6,7 +6,12 @@ ROOT = Path(__file__).resolve().parents[2]
 NATIVE = ROOT / "native" / "reachy_sim" / "tests" / "reachy_sim_fake_backend.c"
 HEADER = ROOT / "native" / "reachy_sim" / "tests" / "reachy_sim_blocking_backend.h"
 CONTROL = ROOT / "managed" / "ReachyMini.Core.Tests" / "Rma032NativeTestControls.cs"
-TEST = ROOT / "managed" / "ReachyMini.Core.Tests" / "Program.Rma190SolverFaultControlledResetTests.cs"
+TEST = (
+    ROOT
+    / "managed"
+    / "ReachyMini.Core.Tests"
+    / "Program.Rma190SolverFaultControlledResetTests.cs"
+)
 
 
 def read(path: Path) -> str:
