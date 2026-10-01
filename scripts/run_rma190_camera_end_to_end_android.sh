@@ -172,9 +172,9 @@ import sys
 report = json.load(open(sys.argv[1], encoding="utf-8"))
 if report.get("status") != "passed":
     detail = " ".join(str(report.get("error", "")).split())
-    detail = re.sub(r"https?://\\S+", "[url-redacted]", detail)
+    detail = re.sub(r"https?://\S+", "[url-redacted]", detail)
     detail = re.sub(
-        r"(?i)\\b(?:authorization|bearer|token|secret|api[_-]?key)\\b\\s*[:=]\\s*\\S+",
+        r"(?i)\b(?:authorization|bearer|token|secret|api[_-]?key)\b\s*[:=]\s*\S+",
         "[credential-redacted]",
         detail,
     )
