@@ -40,3 +40,5 @@ jobs:
         run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_dropped_command_or_state_buffers_are_visible
       - name: Malformed provider response cannot fabricate intent
         run: python3 -m unittest scripts.tests.test_rma173_silent_failure.Rma173SilentFailureTests.test_malformed_provider_response_does_not_fabricate_intent
+      - name: Run shipping-path silent-failure reconciliation gate
+        run: python3 scripts/tests/test_rma173_silent_failure_regressions.py
