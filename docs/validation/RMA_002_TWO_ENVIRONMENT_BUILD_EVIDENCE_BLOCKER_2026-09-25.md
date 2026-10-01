@@ -22,7 +22,7 @@ Those facts are useful, but they are **not** the RMA-002 two-clean-environment a
 
 ## Required closure evidence
 
-To close the RMA-002 acceptance criterion, a future branch must provide evidence equivalent to:
+To close the RMA-002 acceptance criterion, a future validation must provide evidence equivalent to:
 
 1. two independently provisioned clean environments;
 2. exact environment identities, including OS, Unity editor version, JDK, Android SDK/NDK/CMake, Gradle/AGP, and repository SHA;
