@@ -108,10 +108,14 @@ if grep -Eq \
     exit 1
 fi
 
-export RMA190_PERMISSION_DEVICE_MANUFACTURER="$(${ADB[@]} shell getprop ro.product.manufacturer | tr -d '\r')"
-export RMA190_PERMISSION_DEVICE_MODEL="$(${ADB[@]} shell getprop ro.product.model | tr -d '\r')"
-export RMA190_PERMISSION_DEVICE_SDK="$(${ADB[@]} shell getprop ro.build.version.sdk | tr -d '\r')"
-export RMA190_PERMISSION_DEVICE_ABI="$(${ADB[@]} shell getprop ro.product.cpu.abi | tr -d '\r')"
+RMA190_PERMISSION_DEVICE_MANUFACTURER="$("${ADB[@]}" shell getprop ro.product.manufacturer | tr -d '\r')"
+RMA190_PERMISSION_DEVICE_MODEL="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"
+RMA190_PERMISSION_DEVICE_SDK="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
+RMA190_PERMISSION_DEVICE_ABI="$("${ADB[@]}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+export RMA190_PERMISSION_DEVICE_MANUFACTURER
+export RMA190_PERMISSION_DEVICE_MODEL
+export RMA190_PERMISSION_DEVICE_SDK
+export RMA190_PERMISSION_DEVICE_ABI
 
 set +e
 python3 - "${RMA090_REPORT}" "${REPORT_DIR}/rma190-permission-end-to-end.json" <<'PY'
