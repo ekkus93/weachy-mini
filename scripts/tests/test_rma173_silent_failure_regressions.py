@@ -16,7 +16,9 @@ APP = ROOT / "Assets/ReachyMini/Runtime/Application"
 CORE = ROOT / "Assets/ReachyMini/Runtime/Core"
 MANAGED_CORE_TESTS = ROOT / "managed/ReachyMini.Core.Tests"
 NATIVE_TESTS = ROOT / "native/reachy_sim/tests"
-VALIDATION_DOC = ROOT / "docs/validation/RMA_173_SILENT_FAILURE_REGRESSIONS_VALIDATION_2026-10-01.md"
+VALIDATION_DOC = (
+    ROOT / "docs/validation/RMA_173_SILENT_FAILURE_REGRESSIONS_VALIDATION_2026-10-01.md"
+)
 
 
 def read(path: Path) -> str:
