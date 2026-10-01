@@ -43,9 +43,9 @@ reported as a blocker rather than replaced by system/cloud recognition.
 
 | Roadmap scenario | Primary execution class | Current implementation |
 | --- | --- | --- |
-| Offline launch with no network | Physical Android / shipping host | Tranche 1 harness implemented; physical evidence pending |
-| MuJoCo full model load and neutral reset | Physical Android / production runtime | Tranche 1 harness implemented; physical evidence pending |
-| Deterministic gesture replay | Physical Android / production target sink + authoritative state | Tranche 1 harness implemented; physical evidence pending |
+| Offline launch with no network | Physical Android / shipping host | Passed: run `36806841674`, SHA `1c741bce...` |
+| MuJoCo full model load and neutral reset | Physical Android / production runtime | Passed: run `36806841674`, SHA `1c741bce...` |
+| Deterministic gesture replay | Physical Android / production target sink + authoritative state | Passed: run `36806841674`, SHA `1c741bce...` |
 | Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Tranche 2 harness implemented; physical evidence pending |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
@@ -118,9 +118,11 @@ checkbox remains open until this harness passes on a physical Android device.
 
 ## 5. Completion policy
 
-The first three RMA-190 roadmap checkboxes remain open until the physical Android
-run passes on an exact commit and its artifact is recorded in the roadmap/validation
-record. Implementation alone is not completion evidence.
+The first three RMA-190 roadmap checkboxes are closed by physical Android run
+`36806841674` on exact implementation SHA
+`1c741bced63e62d5dcac5130f9ee9e981660b6cd`, with artifact
+`11137798819`. That run executes the shipping host/runtime and production
+behavior target sink with device networking disabled outside the application.
 
 The remaining eight roadmap scenarios remain open until their own end-to-end
 harnesses exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is

@@ -3318,13 +3318,22 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-Each scenario remains unchecked until its own end-to-end evidence passes; a
-hardware-dependent scenario may be implemented while physical evidence remains
-pending, but implementation alone does not close its checkbox.
+The first three core scenarios are physically accepted; the remaining scenarios
+stay open until their own end-to-end evidence passes.
 
-- [ ] Offline launch with no network.
-- [ ] MuJoCo full model load and neutral reset.
-- [ ] Deterministic gesture replay.
+**Tranche 1 completion evidence (2026-09-30):** physical Android workflow
+`RMA-190 Core End-to-End Android Acceptance` run `36806841674` passed on
+exact implementation SHA `1c741bced63e62d5dcac5130f9ee9e981660b6cd`.
+Artifact `11137798819`
+(`rma190-core-end-to-end-report-1c741bced63e62d5dcac5130f9ee9e981660b6cd`)
+records the shipping-host run with device Wi-Fi/mobile data disabled externally,
+the production MuJoCo runtime/full model, explicit neutral reset, and the same
+deterministic Acknowledgment plan replayed twice through the production target
+sink with authoritative-state validation.
+
+- [x] Offline launch with no network.
+- [x] MuJoCo full model load and neutral reset.
+- [x] Deterministic gesture replay.
 - [ ] Front camera -> head rotation -> transformed Reachy-eye frame.
 - [ ] On-device ASR -> local LLM -> behavior -> offline TTS.
 - [ ] Rear-camera visual question with optional VLM.

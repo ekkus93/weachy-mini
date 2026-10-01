@@ -59,15 +59,21 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("rma190-core-end-to-end-report-${{ github.sha }}", workflow)
         self.assertNotIn("RMA-195", workflow)
 
-    def test_roadmap_keeps_all_rma190_scenarios_open_pending_evidence(self) -> None:
+    def test_roadmap_reconciles_core_evidence_and_keeps_remaining_open(self) -> None:
         todo = read(TODO)
         start = todo.index("## RMA-190")
         end = todo.index("## RMA-191", start)
         section = todo[start:end]
+
         for item in (
             "Offline launch with no network.",
             "MuJoCo full model load and neutral reset.",
             "Deterministic gesture replay.",
+        ):
+            self.assertIn(f"- [x] {item}", section)
+            self.assertNotIn(f"- [ ] {item}", section)
+
+        for item in (
             "Front camera -> head rotation -> transformed Reachy-eye frame.",
             "On-device ASR -> local LLM -> behavior -> offline TTS.",
             "Rear-camera visual question with optional VLM.",
@@ -78,6 +84,10 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
             "Solver fault and controlled reset.",
         ):
             self.assertIn(f"- [ ] {item}", section)
+            self.assertNotIn(f"- [x] {item}", section)
+
+        self.assertIn("36806841674", section)
+        self.assertIn("1c741bced63e62d5dcac5130f9ee9e981660b6cd", section)
         self.assertNotIn("**Status:** Complete", section)
 
 
