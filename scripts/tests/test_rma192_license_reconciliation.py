@@ -14,9 +14,7 @@ INVENTORY_PATH = ROOT / "third_party" / "inventory.json"
 NOTICES_PATH = ROOT / "third_party" / "THIRD_PARTY_NOTICES.md"
 LABELS_PATH = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsStateStore.Labels.cs"
 SCREEN_PATH = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyMainScreen.SettingsSections.cs"
-MODEL_MANIFEST_PATH = (
-    ROOT / "models" / "manifests" / "qwen3-0.6b-q4-k-m.local-llm.json"
-)
+MODEL_MANIFEST_PATH = ROOT / "models" / "manifests" / "qwen3-0.6b-q4-k-m.local-llm.json"
 RMA012_CONTRACT = ROOT / "scripts" / "tests" / "test_rma012_licenses.py"
 
 
