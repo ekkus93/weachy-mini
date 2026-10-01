@@ -20,10 +20,10 @@ class UnityCpuLimitContracts(unittest.TestCase):
         source = read(WRAPPER)
         self.assertTrue(source.startswith("#!/usr/bin/env bash\n"))
         for token in (
-            "UNITY_JOB_WORKERS=\"${UNITY_JOB_WORKERS:-2}\"",
-            "UNITY_CPU_QUOTA=\"${UNITY_CPU_QUOTA:-300%}\"",
-            "UNITY_CPU_AFFINITY=\"${UNITY_CPU_AFFINITY:-0-3}\"",
-            "UNITY_NICE=\"${UNITY_NICE:-10}\"",
+            'UNITY_JOB_WORKERS="${UNITY_JOB_WORKERS:-2}"',
+            'UNITY_CPU_QUOTA="${UNITY_CPU_QUOTA:-300%}"',
+            'UNITY_CPU_AFFINITY="${UNITY_CPU_AFFINITY:-0-3}"',
+            'UNITY_NICE="${UNITY_NICE:-10}"',
             "-job-worker-count",
             "systemd-run",
             "CPUQuota=${UNITY_CPU_QUOTA}",
