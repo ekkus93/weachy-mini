@@ -14,11 +14,13 @@ The project currently has evidence for three RMA-194 subitems that were already 
 - The full closed-loop Reachy model is rendered from native state, with RMA-051/RMA-052 evidence and no hidden kinematic fallback.
 - Level 1 camera reprojection passes reference tests, with RMA-104 validation evidence and the reprojection workflow retained.
 
-RMA-190 has accepted physical A54 evidence for its first three scenarios — offline launch, production MuJoCo full-model load plus neutral reset, and deterministic gesture replay — in `docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md` and exact-head physical Android workflow run `36806841674` on commit `1c741bced63e62d5dcac5130f9ee9e981660b6cd`. The evidence does not close the other RMA-190 scenarios.
+RMA-190 has accepted physical A54 evidence for its first three scenarios — offline launch, production MuJoCo full-model load plus neutral reset, and deterministic gesture replay — in `docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md`. That evidence was refreshed on current master by exact-head no-artifacts workflow run `36823974738`, job `110245472761`, at commit `f03b83d8b29d2b099fa825b7b86721bafd5a0855`; the same run also passed RMA-090, RMA-091, RMA-092, RMA-111, RMA-154, RMA-022, RMA-195, and authoritative-rendering acceptance. This refresh does not close the other RMA-190 scenarios.
 
-Exact-head run `36764241908` on commit `3f513871c134eeb9c03356bdbdf1b8571f1c6254` passed the RMA-173 silent-failure regression workflow. Its job `110054250163` proved the on-device-ASR/cloud-ASR, offline-TTS/network-voice, local-LLM/OpenAI, stale-camera-content, solver/Unity-animation, calibration-placeholder, dropped-buffer, and malformed-provider-response fail-closed cases. The authoritative TODO is still conservative for RMA-173 until its section is separately reconciled.
+Exact-head RMA-173 silent-failure regression run `36823974671` passed at commit `f03b83d8b29d2b099fa825b7b86721bafd5a0855`, preserving the on-device-ASR/cloud-ASR, offline-TTS/network-voice, local-LLM/OpenAI, stale-camera-content, solver/Unity-animation, calibration-placeholder, dropped-buffer, and malformed-provider-response fail-closed cases. The authoritative TODO is still conservative for RMA-173 until its section is separately reconciled.
 
-Exact-head release-review run `36776925974` on commit `7c3e2e99c043836f0cdb2c293c9abb88528d6513` passed the RMA-191 security/privacy, RMA-192 license/attribution, RMA-193 documentation, and RMA-194 status-map contracts. The authoritative TODO has since been reconciled for RMA-191, RMA-192, and RMA-193. RMA-194 rows remain open until release-candidate-specific evidence exists for each row.
+Exact-head release-review run `36823974604` on commit `f03b83d8b29d2b099fa825b7b86721bafd5a0855` passed the RMA-191 security/privacy, RMA-192 license/attribution, RMA-193 documentation, and RMA-194 status-map contracts. The authoritative TODO has since been reconciled for RMA-191, RMA-192, and RMA-193. RMA-194 rows remain open until release-candidate-specific evidence exists for each row.
+
+Exact-head hosted CI run `36823974718` and Local Unity Android Validation run `36823974640` also passed at commit `f03b83d8b29d2b099fa825b7b86721bafd5a0855`; the latter completed Unity tests, APK build and verification, physical camera/tracking/visual-servo/lifecycle/application-composition/authoritative-rendering acceptance, artifact uploads, and final status publication.
 
 All remaining RMA-194 checklist entries stay open until their own acceptance evidence passes on the release-candidate head. Exact current-master evidence is required before any additional release checklist item is closed.
 
@@ -26,7 +28,7 @@ All remaining RMA-194 checklist entries stay open until their own acceptance evi
 
 Several hosted workflows have shown the repository-wide zero-step/no-log or `JOB_NOT_FOUND` signature. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
 
-A dedicated `RMA Release Review Contracts` workflow runs the RMA-012, RMA-161, RMA-162, RMA-170, RMA-172, RMA-195, RMA-191, RMA-192, RMA-193, and RMA-194 static/reconciliation contracts on a generic self-hosted Linux runner without requiring an Android phone. Run `36776925974` passed this gate at the exact executable-source head listed above.
+A dedicated `RMA Release Review Contracts` workflow runs the RMA-012, RMA-161, RMA-162, RMA-170, RMA-172, RMA-195, RMA-191, RMA-192, RMA-193, and RMA-194 static/reconciliation contracts on a generic self-hosted Linux runner without requiring an Android phone. Run `36823974604` passed this gate at the exact executable-source head listed above.
 
 Artifact upload quota failures are infrastructure failures; artifact-publication failures are also infrastructure failures, not source failures, when the relevant acceptance step completed before artifact upload. A physical Android run blocked by secure keyguard, device disconnection, missing installed ASR/TTS services, or unavailable runner hardware is a hardware/service availability condition, not a source-code failure. Lack of physical Reachy Mini hardware is not a release blocker for the virtual Reachy Mini product unless a later optional physical-calibration milestone explicitly requires it.
 
@@ -69,10 +71,10 @@ The current release gate remains blocked by the following evidence gaps:
 
 ## Completed release-review evidence requiring release-gate care
 
-- RMA-173: exact-head silent-failure regression run `36764241908` passed all eight fail-closed cases, but the TODO section remains conservative until separately reconciled.
-- RMA-191: exact-head release-review run `36776925974` passed the security/privacy contracts, and the authoritative TODO section is reconciled closed.
-- RMA-192: exact-head release-review run `36776925974` passed the license/attribution contracts, and the authoritative TODO section is reconciled closed.
-- RMA-193: exact-head release-review run `36776925974` passed the release-documentation contracts, and the authoritative TODO section is reconciled closed.
+- RMA-173: exact-head silent-failure regression run `36823974671` passed all eight fail-closed cases, but the TODO section remains conservative until separately reconciled.
+- RMA-191: exact-head release-review run `36823974604` passed the security/privacy contracts, and the authoritative TODO section is reconciled closed.
+- RMA-192: exact-head release-review run `36823974604` passed the license/attribution contracts, and the authoritative TODO section is reconciled closed.
+- RMA-193: exact-head release-review run `36823974604` passed the release-documentation contracts, and the authoritative TODO section is reconciled closed.
 
 ## Non-blocker classifications
 
