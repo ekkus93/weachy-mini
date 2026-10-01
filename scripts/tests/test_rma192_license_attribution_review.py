@@ -250,8 +250,7 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
             r"endorsed\s+by\s+openai",
         ]
         violations = [
-            pattern for pattern in prohibited_patterns
-            if re.search(pattern, scanned_text)
+            pattern for pattern in prohibited_patterns if re.search(pattern, scanned_text)
         ]
         self.assertEqual([], violations)
         self.assertIn("not endorsed", scanned_text)
