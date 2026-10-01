@@ -100,8 +100,9 @@ class Rma173SilentFailureRegressionTests(unittest.TestCase):
     def test_malformed_provider_response_does_not_fake_successful_intent(self) -> None:
         llm_turn = read(APP / "ReachyConversationTurnOrchestrator.Llm.cs")
         cloud_method = llm_turn[
-            llm_turn.index("private async Task<LlmTurnResult> RunCloudLlmAsync") :
-            llm_turn.index("private async Task<LlmTurnResult> RunLocalLlmAsync")
+            llm_turn.index("private async Task<LlmTurnResult> RunCloudLlmAsync") : llm_turn.index(
+                "private async Task<LlmTurnResult> RunLocalLlmAsync"
+            )
         ]
         self.assertIn("validation == null", cloud_method)
         self.assertIn("llm-missing-validation", cloud_method)

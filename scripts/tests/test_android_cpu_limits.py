@@ -22,15 +22,15 @@ class AndroidCpuLimitContracts(unittest.TestCase):
         source = read(ANDROID_WRAPPER)
         self.assertTrue(source.startswith("#!/usr/bin/env bash\n"))
         for token in (
-            "ANDROID_GRADLE_WORKERS=\"${ANDROID_GRADLE_WORKERS:-2}\"",
-            "ANDROID_NATIVE_JOBS=\"${ANDROID_NATIVE_JOBS:-2}\"",
-            "ANDROID_CPU_QUOTA=\"${ANDROID_CPU_QUOTA:-300%}\"",
-            "ANDROID_CPU_AFFINITY=\"${ANDROID_CPU_AFFINITY:-0-3}\"",
-            "ANDROID_NICE=\"${ANDROID_NICE:-10}\"",
-            "CMAKE_BUILD_PARALLEL_LEVEL=\"${ANDROID_NATIVE_JOBS}\"",
+            'ANDROID_GRADLE_WORKERS="${ANDROID_GRADLE_WORKERS:-2}"',
+            'ANDROID_NATIVE_JOBS="${ANDROID_NATIVE_JOBS:-2}"',
+            'ANDROID_CPU_QUOTA="${ANDROID_CPU_QUOTA:-300%}"',
+            'ANDROID_CPU_AFFINITY="${ANDROID_CPU_AFFINITY:-0-3}"',
+            'ANDROID_NICE="${ANDROID_NICE:-10}"',
+            'CMAKE_BUILD_PARALLEL_LEVEL="${ANDROID_NATIVE_JOBS}"',
             "org.gradle.workers.max=${ANDROID_GRADLE_WORKERS}",
             "-XX:ActiveProcessorCount=${ANDROID_GRADLE_WORKERS}",
-            "MAKEFLAGS=\"-j${ANDROID_NATIVE_JOBS}",
+            'MAKEFLAGS="-j${ANDROID_NATIVE_JOBS}',
         ):
             self.assertIn(token, source)
 

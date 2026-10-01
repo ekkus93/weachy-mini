@@ -16,8 +16,7 @@ def read(path: Path) -> str:
 class Rma190CameraEndToEndContracts(unittest.TestCase):
     def test_acceptance_uses_real_shipping_camera_and_authoritative_motion(self) -> None:
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("ReachyApplicationHostBehaviour", source)
         self.assertIn("ReachyAndroidCameraAcquisition", source)
@@ -36,8 +35,7 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
 
     def test_acceptance_fixture_is_explicitly_uncalibrated_and_restored(self) -> None:
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("ReachyCameraCalibrationProvenance.UncalibratedEstimate", source)
         self.assertIn("deterministic_calibration_fixture = true", source)
@@ -49,8 +47,7 @@ class Rma190CameraEndToEndContracts(unittest.TestCase):
     def test_validation_capture_reuses_production_try_build_frame(self) -> None:
         driver = read(APP / "ReachyAndroidPerceptionDriver.cs")
         source = "\n".join(
-            read(path)
-            for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
+            read(path) for path in sorted(APP.glob("ReachyRma190CameraEndToEndAcceptance*.cs"))
         )
         self.assertIn("CaptureFrameForAcceptanceAsync", driver)
         self.assertIn("return CaptureFrameAsync(", driver)

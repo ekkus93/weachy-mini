@@ -10,10 +10,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs" / "REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 REVALIDATION = (
-    ROOT
-    / "docs"
-    / "validation"
-    / "RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md"
+    ROOT / "docs" / "validation" / "RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md"
 )
 BLOCKER = ROOT / "docs" / "blockers" / "RMA-125_PHYSICAL_OFFLINE_SPEECH_BLOCKER.md"
 WORKFLOW = ROOT / ".github" / "workflows" / "rma125-speech-audio-focus.yml"
@@ -66,7 +63,7 @@ def main() -> int:
     require(revalidation, "Run: `36752801658`", "A54 revalidation report")
     require(revalidation, "Job: `110015411312`", "A54 revalidation report")
     require(revalidation, "RMA-125 A54 speech revalidation contract", "A54 revalidation report")
-    require(revalidation, "on_device_asr_state == \"Available\"", "A54 revalidation report")
+    require(revalidation, 'on_device_asr_state == "Available"', "A54 revalidation report")
     require(revalidation, "selected_tts_voice_may_use_network == false", "A54 revalidation report")
     require(revalidation, "does **not** close RMA-125", "A54 revalidation report")
     require(revalidation, "do not inject a transcript", "A54 revalidation report")
@@ -87,8 +84,7 @@ def main() -> int:
     )
     require(
         blocker,
-        "claiming A54 service-capability probes as a real network-disabled "
-        "spoken conversation",
+        "claiming A54 service-capability probes as a real network-disabled spoken conversation",
         "RMA-125 blocker",
     )
     require(blocker, "Use the connected physical Samsung A54", "RMA-125 blocker")
