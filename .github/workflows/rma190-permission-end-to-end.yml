@@ -1,15 +1,18 @@
-name: RMA-190 Permission End-to-End Android Acceptance
+name: RMA-190 Permission Denial and Revocation Android Acceptance
 
 on:
   push:
     branches:
       - master
     paths:
+      - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraAcquisition*.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidCameraDiscovery.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraDiscoveryEvidence.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionEvidence.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyCameraAcquisitionBootstrap.cs'
+      - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraAcquisition.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyCameraCapabilities.cs'
-      - 'Assets/Plugins/Android/ReachyCameraDiscovery.androidlib/**'
-      - 'scripts/run_rma090_camera_discovery_acceptance_android.sh'
+      - 'Packages/**'
+      - 'ProjectSettings/**'
       - 'scripts/run_rma190_permission_end_to_end_android.sh'
       - 'scripts/android_device_acceptance_foreground.sh'
       - 'scripts/build_unity_android.sh'
@@ -30,7 +33,7 @@ concurrency:
 
 jobs:
   physical:
-    name: RMA-190 permission denial/revocation on Android
+    name: RMA-190 permission E2E on Android
     runs-on:
       - self-hosted
       - linux
@@ -49,13 +52,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Validate permission acceptance source contracts
+      - name: Validate RMA-190 permission source contracts
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/tests/test_rma190_permission_end_to_end.py
           bash -n scripts/run_rma190_permission_end_to_end_android.sh
-          bash -n scripts/run_rma090_camera_discovery_acceptance_android.sh
+          python3 scripts/check_docs_links.py
 
       - name: Resolve local Unity and Android installations
         shell: bash
@@ -78,10 +81,7 @@ jobs:
               "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
               "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
               "/opt/unity/editors/${project_version}/Editor/Unity"; do
-              if [[ -x "${candidate}" ]]; then
-                unity_editor="${candidate}"
-                break
-              fi
+              if [[ -x "${candidate}" ]]; then unity_editor="${candidate}"; break; fi
             done
           fi
           if [[ -z "${unity_editor}" ]]; then
@@ -132,41 +132,34 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t physical_serials < <(
-            adb devices \
-              | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+            adb devices | awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
           )
           accepted=()
           for serial in "${physical_serials[@]}"; do
-            state="$(adb -s "${serial}" get-state | tr -d '\r')"
             abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
             sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
-            if [[ "${state}" == "device" && "${abi}" == "arm64-v8a" && \
-                  "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
+            if [[ "${abi}" == "arm64-v8a" && "${sdk}" =~ ^[0-9]+$ ]] && (( sdk >= 26 )); then
               accepted+=("${serial}")
             fi
           done
           serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
           if [[ -n "${serial_override}" ]]; then
-            override_ok=0
-            for candidate in "${accepted[@]}"; do
-              if [[ "${candidate}" == "${serial_override}" ]]; then
-                override_ok=1
-                break
-              fi
+            found=0
+            for serial in "${accepted[@]}"; do
+              if [[ "${serial}" == "${serial_override}" ]]; then found=1; break; fi
             done
-            if (( override_ok != 1 )); then
-              printf 'Pinned device %s is not an approved connected device.\n' \
-                "${serial_override}" >&2
+            if (( found != 1 )); then
+              printf 'Pinned physical device %s is unavailable or unsupported.\n' "${serial_override}" >&2
+              adb devices -l >&2
               exit 1
             fi
             serial="${serial_override}"
-          elif (( ${#accepted[@]} != 1 )); then
-            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' \
-              "${#accepted[@]}" >&2
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            printf 'Expected exactly one physical arm64-v8a API-26+ device; found %s.\n' "${#accepted[@]}" >&2
             adb devices -l >&2
             exit 1
-          else
-            serial="${accepted[0]}"
           fi
           adb -s "${serial}" wait-for-device
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
