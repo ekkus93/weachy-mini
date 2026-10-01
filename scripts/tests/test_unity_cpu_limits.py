@@ -39,7 +39,8 @@ class UnityCpuLimitContracts(unittest.TestCase):
         self.assertIn("systemd-run \\\n        --user \\\n        --scope", source)
         self.assertIn("systemd-run CPU scope unavailable; falling back to taskset", source)
         self.assertIn(
-            "systemd-run/taskset CPU limits unavailable; falling back to nice plus Unity job-worker-count only.",
+            "systemd-run/taskset CPU limits unavailable; falling back to nice "
+            "plus Unity job-worker-count only.",
             source,
         )
         self.assertIn("WEACHY_UNITY_CPU_LIMITS", source)

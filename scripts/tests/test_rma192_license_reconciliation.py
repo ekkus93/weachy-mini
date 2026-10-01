@@ -1,6 +1,6 @@
-from json import loads
+import json
+import unittest
 from pathlib import Path
-from unittest import TestCase
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +15,7 @@ RMA012_CONTRACT = ROOT / "scripts" / "tests" / "test_rma012_licenses.py"
 
 
 def _load_json(path: Path) -> dict:
-    return loads(path.read_text(encoding="utf-8"))
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _inventory_entry(entry_id: str) -> dict:
@@ -25,7 +25,7 @@ def _inventory_entry(entry_id: str) -> dict:
     return matches[0]
 
 
-class Rma192LicenseReconciliationTests(TestCase):
+class Rma192LicenseReconciliationTests(unittest.TestCase):
     def test_selected_local_model_inventory_matches_authoritative_manifest(self) -> None:
         manifest = _load_json(MODEL_MANIFEST_PATH)
         identity = manifest["identity"]
@@ -88,6 +88,4 @@ class Rma192LicenseReconciliationTests(TestCase):
 
 
 if __name__ == "__main__":
-    from unittest import main
-
-    main(verbosity=2)
+    unittest.main(verbosity=2)
