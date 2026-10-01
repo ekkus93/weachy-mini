@@ -63,8 +63,19 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         }
         findings: list[str] = []
         text_suffixes = {
-            ".cs", ".java", ".kt", ".xml", ".json", ".yaml", ".yml",
-            ".md", ".txt", ".properties", ".gradle", ".sh", ".py",
+            ".cs",
+            ".java",
+            ".kt",
+            ".xml",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".md",
+            ".txt",
+            ".properties",
+            ".gradle",
+            ".sh",
+            ".py",
         }
         for root in roots:
             if not root.exists():
