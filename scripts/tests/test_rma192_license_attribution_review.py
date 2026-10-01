@@ -188,7 +188,7 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
                         "inventory entry lacks a repository notice anchor",
                     )
 
-    def test_reachy_asset_policy_keeps_redistribution_blocked_until_audit(self) -> None:
+    def test_reachy_asset_policy_records_allowed_sharealike_redistribution(self) -> None:
         inventory = {entry["id"]: entry for entry in load_json(INVENTORY)["entries"]}
         reachy_assets = inventory["reachy-mini-hardware-assets"]
         notices = read(NOTICES)
@@ -196,7 +196,7 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
 
         self.assertEqual("CC-BY-NC-SA", reachy_assets["license"])
         self.assertEqual(
-            "blocked_pending_asset_audit",
+            "allowed_subject_to_attribution_noncommercial_sharealike",
             reachy_assets["redistribution_status"],
         )
         for token in ("Attribution", "noncommercial", "ShareAlike", "modification notice"):
@@ -224,30 +224,37 @@ class Rma192LicenseAttributionReview(unittest.TestCase):
         self.assertIn("License", app_sources)
         self.assertIn("Attribution", app_sources)
 
-    def test_candidate_model_binaries_remain_blocked_until_explicit_selection(self) -> None:
+    def test_selected_external_model_is_not_bundled_and_has_import_notice(self) -> None:
         inventory = {entry["id"]: entry for entry in load_json(INVENTORY)["entries"]}
         local_model = inventory["local-llm-candidate"]
-        notices = read(NOTICES)
+        notices = read(NOTICES).lower()
         asset_policy = read(ASSET_POLICY)
-        self.assertEqual("candidate", local_model["status"])
-        self.assertEqual("blocked_pending_selection", local_model["redistribution_status"])
-        self.assertIn("no model is selected or distributed", notices.lower())
+        self.assertEqual("selected_external_model", local_model["status"])
+        self.assertEqual("not_redistributed_by_repository", local_model["redistribution_status"])
+        self.assertIn("selected qwen3 gguf", notices)
+        self.assertIn("not bundled", notices)
+        self.assertIn("verified download/import path", notices)
         self.assertIn("GGUF", asset_policy)
         self.assertIn("model binaries", asset_policy)
-        self.assertIn("do not package candidate binaries", local_model["required_notice"].lower())
+        self.assertIn("do not imply the gguf is bundled", local_model["required_notice"].lower())
 
     def test_repository_notices_do_not_introduce_positive_endorsement_claims(self) -> None:
-        scanned_text = "\n".join(
-            read(path)
-            for root in (ROOT / "README.md", NOTICES)
-            for path in ([root] if root.is_file() else sorted(root.glob("*.md")))
-        ).lower()
+        scanned_text = " ".join(
+            re.split(
+                r"\s+",
+                "\n".join(
+                    read(path)
+                    for root in (ROOT / "README.md", NOTICES)
+                    for path in ([root] if root.is_file() else sorted(root.glob("*.md")))
+                ).lower(),
+            )
+        )
         prohibited_patterns = [
             r"official\s+reachy\s+mini\s+app",
-            r"endorsed\s+by\s+pollen",
-            r"endorsed\s+by\s+hugging\s*face",
-            r"endorsed\s+by\s+google",
-            r"endorsed\s+by\s+openai",
+            r"(?<!not )endorsed\s+by\s+pollen",
+            r"(?<!not )endorsed\s+by\s+hugging\s*face",
+            r"(?<!not )endorsed\s+by\s+google",
+            r"(?<!not )endorsed\s+by\s+openai",
         ]
         violations = [
             pattern for pattern in prohibited_patterns if re.search(pattern, scanned_text)

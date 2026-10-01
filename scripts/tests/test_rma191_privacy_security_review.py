@@ -113,7 +113,7 @@ class Rma191PrivacySecurityReviewTests(unittest.TestCase):
         concurrency = read(ROOT / "native/reachy_sim/tests/reachy_sim_concurrency_test.inc")
         self.assertIn("ReachySimHandle layout changed", contract)
         self.assertIn("stale handle after destroy", contract)
-        self.assertIn("operation after close", contract)
+        self.assertIn("double destroy is stale", contract)
         self.assertIn("invalid state copy leaves required size unchanged", concurrency)
         self.assertIn("busy state copy leaves output unchanged", concurrency)
         self.assertIn("busy snapshot copy leaves output unchanged", concurrency)

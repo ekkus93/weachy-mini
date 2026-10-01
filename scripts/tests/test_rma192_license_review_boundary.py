@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard the RMA-192 license/attribution review boundary."""
+"""Guard the RMA-192 license/attribution review reconciliation."""
 
 from __future__ import annotations
 
@@ -16,8 +16,11 @@ def read(path: Path) -> str:
 
 
 class Rma192LicenseReviewBoundaryTests(unittest.TestCase):
-    def test_rma192_checkboxes_remain_open(self) -> None:
+    def test_rma192_checkboxes_are_reconciled_closed(self) -> None:
         todo = read(TODO)
+        self.assertIn("**Status:** Complete (2026-09-30)", todo)
+        self.assertIn("36776925974", todo)
+        self.assertIn("7c3e2e99c043836f0cdb2c293c9abb88528d6513", todo)
         for item in (
             "Reconcile packaged dependencies/assets against inventory.",
             "Verify notices in repository and app.",
@@ -26,8 +29,8 @@ class Rma192LicenseReviewBoundaryTests(unittest.TestCase):
             "Verify no endorsement claim.",
             "Verify selected local model redistribution/download presentation.",
         ):
-            self.assertIn(f"- [ ] {item}", todo)
-            self.assertNotIn(f"- [x] {item}", todo)
+            self.assertIn(f"- [x] {item}", todo)
+            self.assertNotIn(f"- [ ] {item}", todo)
 
     def test_status_records_redacted_inventory_boundary(self) -> None:
         status = read(STATUS)

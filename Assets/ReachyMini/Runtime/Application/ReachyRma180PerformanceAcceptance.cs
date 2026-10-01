@@ -3,6 +3,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using ReachyMini.AppState;
 using ReachyMini.Performance;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -43,8 +44,8 @@ namespace ReachyMini.Validation
             string resultPath = Path.Combine(
                 Application.persistentDataPath,
                 ResultFileName);
-            int originalTargetFrameRate = Application.targetFrameRate;
-            int originalVSyncCount = QualitySettings.vSyncCount;
+            ReachyRuntimeThermalPolicy.FramePacingSnapshot originalFramePacing =
+                ReachyRuntimeThermalPolicy.CaptureCurrentPacing();
             int profileSeconds = ReadProfileSeconds();
 
             try
@@ -52,7 +53,6 @@ namespace ReachyMini.Validation
                 DeleteIfExists(resultPath);
                 await Task.Delay(WarmupDuration);
 
-                QualitySettings.vSyncCount = 0;
                 ReachyPerformanceReport fps30 =
                     await CaptureProfileAsync(30, profileSeconds);
                 ReachyPerformanceReport fps60 =
@@ -75,8 +75,7 @@ namespace ReachyMini.Validation
             }
             finally
             {
-                Application.targetFrameRate = originalTargetFrameRate;
-                QualitySettings.vSyncCount = originalVSyncCount;
+                ReachyRuntimeThermalPolicy.Restore(originalFramePacing);
             }
         }
 
@@ -84,7 +83,7 @@ namespace ReachyMini.Validation
             int targetFps,
             int profileSeconds)
         {
-            Application.targetFrameRate = targetFps;
+            ReachyRuntimeThermalPolicy.Apply(targetFps);
             await Task.Yield();
 
             using ReachyPerformanceSession session =

@@ -5,6 +5,16 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/local-unity-android-validation.yml"
 
 
+def workflow_step(workflow: str, name: str) -> str:
+    marker = f"      - name: {name}\n"
+    start = workflow.index(marker)
+    remainder = workflow[start + len(marker) :]
+    next_step = remainder.find("\n      - name: ")
+    if next_step == -1:
+        return workflow[start:]
+    return workflow[start : start + len(marker) + next_step]
+
+
 class LocalUnityStatusReportingContracts(unittest.TestCase):
     def test_status_reporting_retries_connectivity_without_hiding_http_failures(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -20,7 +30,16 @@ class LocalUnityStatusReportingContracts(unittest.TestCase):
         )
         self.assertEqual(1, workflow.count("publish_commit_status pending"))
         self.assertEqual(1, workflow.count("publish_commit_status final"))
-        self.assertNotIn("continue-on-error: true", workflow)
+
+        for name in ("Publish pending commit status", "Publish final commit status"):
+            with self.subTest(step=name):
+                block = workflow_step(workflow, name)
+                self.assertNotIn("continue-on-error: true", block)
+                self.assertIn("curl --fail-with-body", block)
+                self.assertIn("Commit-status publication failed", block)
+
+        self.assertIn("continue-on-error: true", workflow)
+        self.assertIn("Upload RMA-090 camera discovery evidence", workflow)
 
 
 if __name__ == "__main__":

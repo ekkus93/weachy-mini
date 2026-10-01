@@ -68,12 +68,18 @@ class AndroidCpuLimitContracts(unittest.TestCase):
         self.assertIn('"${UNITY_LIMIT_WRAPPER}" ' + continuation, source)
         self.assertIn('"${UNITY_EDITOR}" ' + continuation, source)
 
-        legacy_order = (
-            'WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" '
+        unity_build_tree = (
+            android_wrapper
+            + "\n    env "
             + continuation
-            + '\n    "${UNITY_LIMIT_WRAPPER}"'
+            + '\n    WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" '
+            + continuation
+            + '\n    "${UNITY_LIMIT_WRAPPER}" '
+            + continuation
+            + '\n    "${UNITY_EDITOR}" '
+            + continuation
         )
-        self.assertNotIn(legacy_order, source)
+        self.assertIn(unity_build_tree, source)
 
     def test_unity_and_android_wrappers_are_separate_layers(self) -> None:
         android_source = read(ANDROID_WRAPPER)

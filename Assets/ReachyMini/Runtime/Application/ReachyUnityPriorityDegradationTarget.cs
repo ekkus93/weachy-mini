@@ -10,8 +10,7 @@ namespace ReachyMini.AppState
         IReachyPriorityDegradationTarget
     {
         private bool baselineCaptured;
-        private int baselineTargetFrameRate;
-        private int baselineVSyncCount;
+        private ReachyRuntimeThermalPolicy.FramePacingSnapshot baselineFramePacing;
         private ShadowQuality baselineShadows;
         private int baselineAntiAliasing;
         private bool baselineSoftParticles;
@@ -25,8 +24,7 @@ namespace ReachyMini.AppState
             }
 
             CaptureBaselineIfNeeded();
-            QualitySettings.vSyncCount = 0;
-            Application.targetFrameRate = decision.TargetRenderFps;
+            ReachyRuntimeThermalPolicy.Apply(decision.TargetRenderFps);
             if (decision.ExpensiveVisualEffectsAllowed)
             {
                 QualitySettings.shadows = baselineShadows;
@@ -47,8 +45,7 @@ namespace ReachyMini.AppState
                 return;
             }
 
-            Application.targetFrameRate = baselineTargetFrameRate;
-            QualitySettings.vSyncCount = baselineVSyncCount;
+            ReachyRuntimeThermalPolicy.Restore(baselineFramePacing);
             QualitySettings.shadows = baselineShadows;
             QualitySettings.antiAliasing = baselineAntiAliasing;
             QualitySettings.softParticles = baselineSoftParticles;
@@ -61,8 +58,7 @@ namespace ReachyMini.AppState
                 return;
             }
 
-            baselineTargetFrameRate = Application.targetFrameRate;
-            baselineVSyncCount = QualitySettings.vSyncCount;
+            baselineFramePacing = ReachyRuntimeThermalPolicy.CaptureCurrentPacing();
             baselineShadows = QualitySettings.shadows;
             baselineAntiAliasing = QualitySettings.antiAliasing;
             baselineSoftParticles = QualitySettings.softParticles;

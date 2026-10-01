@@ -24,6 +24,19 @@ namespace ReachyMini.AppState
         public const string DisableEnvironmentVariable =
             "WEACHY_DISABLE_RUNTIME_THERMAL_POLICY";
 
+        public readonly struct FramePacingSnapshot
+        {
+            internal FramePacingSnapshot(int targetFrameRate, int vSyncCount)
+            {
+                TargetFrameRate = BoundRestoredTargetFrameRate(targetFrameRate);
+                VSyncCount = BoundVSyncCount(vSyncCount);
+            }
+
+            public int TargetFrameRate { get; }
+
+            public int VSyncCount { get; }
+        }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void ApplyBeforeSceneLoad()
         {
@@ -52,6 +65,20 @@ namespace ReachyMini.AppState
             return DefaultTargetFrameRate;
         }
 
+        public static FramePacingSnapshot CaptureCurrentPacing()
+        {
+            return new FramePacingSnapshot(
+                Application.targetFrameRate,
+                QualitySettings.vSyncCount);
+        }
+
+        public static void Restore(FramePacingSnapshot snapshot)
+        {
+            Application.targetFrameRate = BoundTargetFrameRate(
+                snapshot.TargetFrameRate);
+            QualitySettings.vSyncCount = BoundVSyncCount(snapshot.VSyncCount);
+        }
+
         public static void Apply(int targetFrameRate)
         {
             int boundedTarget = BoundTargetFrameRate(targetFrameRate);
@@ -78,6 +105,16 @@ namespace ReachyMini.AppState
                 string.Equals(disabled, "yes", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static int BoundRestoredTargetFrameRate(int targetFrameRate)
+        {
+            if (targetFrameRate <= 0)
+            {
+                return DefaultTargetFrameRate;
+            }
+
+            return BoundTargetFrameRate(targetFrameRate);
+        }
+
         private static int BoundTargetFrameRate(int targetFrameRate)
         {
             if (targetFrameRate < MinimumTargetFrameRate)
@@ -91,6 +128,11 @@ namespace ReachyMini.AppState
             }
 
             return targetFrameRate;
+        }
+
+        private static int BoundVSyncCount(int vSyncCount)
+        {
+            return vSyncCount > 0 ? 1 : 0;
         }
     }
 }
