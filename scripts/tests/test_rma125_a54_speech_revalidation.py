@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Guard RMA-125 A54 speech-capability evidence against stale blockers/overclaims."""
+
 from __future__ import annotations
 
 import pathlib
