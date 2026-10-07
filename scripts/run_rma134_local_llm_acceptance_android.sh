@@ -114,6 +114,8 @@ APK_SHA256="$(sha256sum "${APK_PATH}" | awk '{print $1}')"
 printf '%s  %s\n' "${APK_SHA256}" "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"
 sha256sum "${MODEL_CACHE_PATH}" > "${REPORT_DIR}/model-host-sha256.txt"
 
+"${ADB[@]}" wait-for-device
+"${ADB[@]}" install -r -d "${APK_PATH}" > "${REPORT_DIR}/apk-install.txt"
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 mapfile -t INSTALLED_APK_PATHS < <(
   "${ADB[@]}" shell pm path "${PACKAGE_NAME}" \
@@ -121,7 +123,7 @@ mapfile -t INSTALLED_APK_PATHS < <(
     | sed -n 's/^package://p'
 )
 if (( ${#INSTALLED_APK_PATHS[@]} != 1 )); then
-  printf 'Expected one installed base APK from the successful exact-SHA Local Unity run; found %s.\n' \
+  printf 'Expected one installed base APK after exact-SHA install; found %s.\n' \
     "${#INSTALLED_APK_PATHS[@]}" >&2
   exit 1
 fi
