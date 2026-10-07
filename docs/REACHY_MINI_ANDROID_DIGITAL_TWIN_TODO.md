@@ -1998,6 +1998,7 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 
 - [x] Trigger only for user visual questions, explicit planner requests, significant scene changes, new entities, manual requests, or a configured slow interval.
 - [x] Add per-provider rate and concurrency limits.
+
 - [x] Never run VLM continuously at camera frame rate by default.
 - [x] Cancel obsolete requests when the scene or question changes.
 - [x] Surface cost/network disclosure for cloud requests.
@@ -2723,16 +2724,24 @@ Example:
 
 ## RMA-173 — Add silent-failure regression tests
 
+**Status:** Complete (2026-10-07). **Completion evidence:** exact-head
+`RMA-173 Silent Failure Regressions` run `37602003061` passed on
+`1a32baa464bb4dcb42b654a49484f320b2038e4f`. The permanent workflow
+`.github/workflows/rma173-silent-failure-regressions.yml` executes one
+named shipping-path regression for every contract below and then runs
+`scripts/tests/test_rma173_silent_failure_regressions.py` as the
+repository-wide reconciliation gate.
+
 Create tests proving that:
 
-- [ ] on-device ASR failure does not activate cloud ASR;
-- [ ] offline TTS failure does not activate a network voice;
-- [ ] local LLM failure does not activate OpenAI;
-- [ ] invalid camera pixels do not reuse stale content;
-- [ ] solver failure does not switch to Unity animation;
-- [ ] calibration mismatch does not load placeholders as calibrated;
-- [ ] dropped command/state buffers produce visible errors;
-- [ ] malformed provider response does not produce a fake successful intent.
+- [x] on-device ASR failure does not activate cloud ASR;
+- [x] offline TTS failure does not activate a network voice;
+- [x] local LLM failure does not activate OpenAI;
+- [x] invalid camera pixels do not reuse stale content;
+- [x] solver failure does not switch to Unity animation;
+- [x] calibration mismatch does not load placeholders as calibrated;
+- [x] dropped command/state buffers produce visible errors;
+- [x] malformed provider response does not produce a fake successful intent.
 
 ---
 
