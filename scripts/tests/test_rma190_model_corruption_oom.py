@@ -69,9 +69,16 @@ class Rma190ModelCorruptionOomContracts(unittest.TestCase):
     def test_ci_runs_package_and_provider_projects_for_this_scenario(self) -> None:
         rma132 = read(RMA132_WORKFLOW)
         rma134 = read(RMA134_WORKFLOW)
-        self.assertIn("managed/ReachyMini.LocalModelPackages.Tests/ReachyMini.LocalModelPackages.Tests.csproj", rma132)
+        self.assertIn(
+            "managed/ReachyMini.LocalModelPackages.Tests/"
+            "ReachyMini.LocalModelPackages.Tests.csproj",
+            rma132,
+        )
         self.assertIn("managed/ReachyMini.LocalModelPackages.Tests/Program.cs", rma132)
-        self.assertIn("managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj", rma134)
+        self.assertIn(
+            "managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj",
+            rma134,
+        )
         self.assertIn("managed/ReachyMini.LocalLlm.Tests/Program.OutOfMemoryTests.cs", rma134)
         self.assertIn("managed/ReachyMini.LocalLlm.Tests/Fakes.cs", rma134)
 
