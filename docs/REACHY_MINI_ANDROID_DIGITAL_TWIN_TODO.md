@@ -1199,6 +1199,7 @@ public:
 
 **Status:** Complete (2026-07-31)
 
+
 - [x] Implement scripted unloaded sweeps.
 - [x] Implement gravity-loaded static-pose tests.
 - [x] Implement step and frequency-response tests.
@@ -2398,6 +2399,7 @@ reliably and the remaining failure is thermal, not code. Kept open as a known de
 limitation by explicit user decision (2026-08-22); a same-day related experiment
 (`docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md`) found that
 offloading LLM generation to a cloud/network endpoint instead of running it on-device
+
 keeps this same device at `mStatus=0` for 45s where the on-device path reached light
 throttling in ~16s -- informative context, not a fix to this on-device acceptance gap.
 
@@ -2428,12 +2430,14 @@ throttling in ~16s -- informative context, not a fix to this on-device acceptanc
 ## RMA-142 — Implement OpenAI LLM adapter
 
 - [x] Implement Responses API requests with configurable model ID.
-- [ ] Support text and transformed-image input where enabled.
+- [x] Support text and transformed-image input where enabled.
 - [x] Support structured high-level behavior output.
 - [x] Keep model IDs configurable.
 - [x] Add mock-server contract tests.
 
-**Status:** Partially complete (2026-08-22). No cloud LLM provider class existed at all before this pass -- new code, not wiring, following the RMA-144/145 OpenAI-compatible ASR/TTS pattern per this ticket's own scoping note in RMA-195 Phase D. `OpenAiResponsesLlmProvider`/`OpenAiChatCompletionsLlmProvider` (`Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleLlmProvider.{Core,Helpers}.cs`) send bounded, non-streaming `v1/responses`/`v1/chat/completions` requests through the RMA-141 shared transport, with the model id resolved from `ReachyProviderProfile.GetModelId(ReachyProviderModelRole.Text)`. The assistant's raw text response is parsed by a bounded hand-rolled scanner (`ReachyLlmResponseProtocolParser.cs`, mirroring `ReachyAsrTranscriptionProtocolParser`'s style) and fed directly into RMA-151's `ReachyBehaviorIntentJsonParser.Validate` -- `ReachyLlmGenerationResult` wraps the resulting `ReachyBehaviorIntentValidationResult` verbatim, so "structured high-level behavior output" is the RMA-151 schema itself, not a second parallel one. Verified by 8 mock-server contract tests (`managed/ReachyMini.Core.Tests/Rma142Rma143OpenAiLlmAdapterContractTests.cs`) exercising a fake `HttpMessageHandler` through the real transport/auth/parsing pipeline via a newly-authorized internal `transportOverride` seam (`Assets/ReachyMini/Runtime/Core/ReachyMiniCoreAssemblyInfo.cs`'s `InternalsVisibleTo` -- this seam already existed on the RMA-144/145 ASR/TTS providers but was previously unreachable from any test project). **Text and transformed-image input deliberately NOT implemented**: RMA-115's VLM providers already cover image-grounded scene description/questions as a separate pipeline, and RMA-195 Phase D's own framing gates conversational behavior intents on text landing first -- `ReachyLlmCapabilities.SupportsImages` is hardcoded `false` on every instance this file produces so a caller can detect the gap rather than have it silently ignored. Wiring first cloud-provider enablement through `ReachyProviderFallbackPolicyEngine`'s privacy-boundary confirmation (per this ticket's parent note) is an RMA-195 Phase D composition concern, not implemented here, matching how the RMA-144/145 ASR/TTS adapters don't call the fallback engine either.
+**Status:** Complete (reconciled 2026-10-07). No cloud LLM provider class existed at all before this pass -- new code, not wiring, following the RMA-144/145 OpenAI-compatible ASR/TTS pattern per this ticket's own scoping note in RMA-195 Phase D. `OpenAiResponsesLlmProvider`/`OpenAiChatCompletionsLlmProvider` (`Assets/ReachyMini/Runtime/Core/Providers/ReachyOpenAiCompatibleLlmProvider.{Core,Helpers}.cs`) send bounded, non-streaming `v1/responses`/`v1/chat/completions` requests through the RMA-141 shared transport, with the model id resolved from `ReachyProviderProfile.GetModelId(ReachyProviderModelRole.Text)`. The assistant's raw text response is parsed by a bounded hand-rolled scanner (`ReachyLlmResponseProtocolParser.cs`, mirroring `ReachyAsrTranscriptionProtocolParser`'s style) and fed directly into RMA-151's `ReachyBehaviorIntentJsonParser.Validate` -- `ReachyLlmGenerationResult` wraps the resulting `ReachyBehaviorIntentValidationResult` verbatim, so "structured high-level behavior output" is the RMA-151 schema itself, not a second parallel one. Verified by 8 mock-server contract tests (`managed/ReachyMini.Core.Tests/Rma142Rma143OpenAiLlmAdapterContractTests.cs`) exercising a fake `HttpMessageHandler` through the real transport/auth/parsing pipeline via a newly-authorized internal `transportOverride` seam (`Assets/ReachyMini/Runtime/Core/ReachyMiniCoreAssemblyInfo.cs`'s `InternalsVisibleTo` -- this seam already existed on the RMA-144/145 ASR/TTS providers but was previously unreachable from any test project). **Text and transformed-image input deliberately NOT implemented**: RMA-115's VLM providers already cover image-grounded scene description/questions as a separate pipeline, and RMA-195 Phase D's own framing gates conversational behavior intents on text landing first -- `ReachyLlmCapabilities.SupportsImages` is hardcoded `false` on every instance this file produces so a caller can detect the gap rather than have it silently ignored. Wiring first cloud-provider enablement through `ReachyProviderFallbackPolicyEngine`'s privacy-boundary confirmation (per this ticket's parent note) is an RMA-195 Phase D composition concern, not implemented here, matching how the RMA-144/145 ASR/TTS adapters don't call the fallback engine either.
+
+**RMA-142 reconciliation evidence (2026-10-07):** Current `master` now implements transformed-image input in the shipping OpenAI-compatible LLM adapters. `Rma142Rma143OpenAiLlmAdapterContractTests` exercises both Responses and Chat Completions image serialization, rejects image input when capability metadata disables it, and preserves the transformed-frame boundary. Exact-head hosted CI run `37615562315` passed on `12ce95b2c76866ae4e2d48f3889cdff26b58d141`; the same head also passed the RMA release-review and physical Android validation workflows. The earlier 2026-08-22 limitation paragraph above is retained as historical implementation context, but is superseded by this evidence.
 
 ## RMA-143 — Implement OpenAI-compatible text adapters
 
