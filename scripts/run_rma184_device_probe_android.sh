@@ -12,6 +12,9 @@ if [[ -n "${serial}" ]]; then
   adb_cmd+=(-s "${serial}")
 fi
 
+# A previous invocation must not be mistaken for this invocation's evidence.
+# Remove local evidence before any fallible device operation.
+rm -f -- "${output}"
 "${adb_cmd[@]}" get-state >/dev/null
 if ! "${adb_cmd[@]}" shell pm grant "${package}" android.permission.CAMERA; then
   printf '%s\n' 'RMA-184 could not pre-grant CAMERA; probe may report incomplete camera capability.' >&2
@@ -20,11 +23,20 @@ if ! "${adb_cmd[@]}" shell pm grant "${package}" android.permission.RECORD_AUDIO
   printf '%s\n' 'RMA-184 could not pre-grant RECORD_AUDIO; ASR availability may report permission required.' >&2
 fi
 "${adb_cmd[@]}" shell am force-stop "${package}"
+
+remote="/sdcard/Android/data/${package}/files/rma184-device-probe.json"
+if ! "${adb_cmd[@]}" shell rm -f "${remote}"; then
+  printf '%s\n' 'RMA-184 could not remove the prior on-device report; refusing stale evidence.' >&2
+  exit 1
+fi
+if ! "${adb_cmd[@]}" shell test ! -f "${remote}"; then
+  printf '%s\n' 'RMA-184 prior on-device report is still present; refusing stale evidence.' >&2
+  exit 1
+fi
 "${adb_cmd[@]}" shell am start -W \
   -n "${package}/${activity}" \
   --ez reachy_rma184_device_probe true >/dev/null
 
-remote="/sdcard/Android/data/${package}/files/rma184-device-probe.json"
 for ((attempt = 0; attempt < 90; ++attempt)); do
   if "${adb_cmd[@]}" shell test -f "${remote}"; then
     break
