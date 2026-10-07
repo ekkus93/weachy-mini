@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """RMA-190 front-camera transformed-frame evidence-boundary gate.
 
-The current RMA-190 core physical harness proves offline launch, full-model
-neutral reset, and deterministic gesture replay. It must not be treated as proof
-of the still-open real-camera scenario:
+The RMA-190 core physical harness proves offline launch, full-model neutral
+reset, and deterministic gesture replay. It must not be treated as proof of the
+real-camera scenario by itself:
 
     front camera -> head rotation -> transformed Reachy-eye frame
 
-RMA-154 is intentionally useful supporting evidence for transformed-frame visual
-servo behavior, but it uses deterministic synthetic optics. This source-level
-contract keeps that distinction explicit until a dedicated live front-camera
-physical acceptance harness exists and the roadmap is safely reconciled.
+RMA-154 remains useful supporting evidence for transformed-frame visual-servo
+behavior, but it uses deterministic synthetic optics. This source-level contract
+keeps that distinction explicit while also requiring the authoritative roadmap to
+close the front-camera checkbox only with dedicated live front-camera physical
+acceptance evidence.
 """
 
 from __future__ import annotations
@@ -35,16 +36,22 @@ def read(path: Path) -> str:
 
 
 class Rma190FrontCameraEvidenceBoundaryTests(unittest.TestCase):
-    def test_front_camera_scenario_remains_open_until_dedicated_evidence(self) -> None:
+    def test_front_camera_scenario_is_closed_only_with_dedicated_evidence(self) -> None:
         todo = read(TODO)
         self.assertIn(
-            "- [ ] Front camera -> head rotation -> transformed Reachy-eye frame.",
-            todo,
-        )
-        self.assertNotIn(
             "- [x] Front camera -> head rotation -> transformed Reachy-eye frame.",
             todo,
         )
+        self.assertNotIn(
+            "- [ ] Front camera -> head rotation -> transformed Reachy-eye frame.",
+            todo,
+        )
+        self.assertIn("RMA-190 Front Camera End-to-End Android Acceptance", todo)
+        self.assertIn("37605466118", todo)
+        self.assertIn("11475530644", todo)
+        self.assertIn("859aa4ed9fc04030e5056511d027af83e0baa85a", todo)
+        self.assertIn("shipping front-camera path", todo)
+        self.assertIn("pinned a physical Android", todo)
 
     def test_core_validation_does_not_overclaim_camera_closure(self) -> None:
         validation = read(RMA190_VALIDATION)
