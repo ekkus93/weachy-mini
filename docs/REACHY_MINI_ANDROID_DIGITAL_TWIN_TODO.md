@@ -398,6 +398,7 @@ uint32_t reachy_sim_abi_version(void);
 **Completion evidence**
 
 - The production boundary is ABI version 2 and uses an opaque 64-bit generation-tagged handle, explicit-width structures, copied error records, typed recoverability, bounded variable-size output contracts, and capability/version queries.
+
 - Native contract targets cover fixed layouts, C and C++ compatibility, malformed versions and sizes, null and undersized buffers, stale generations, double destroy, exact command byte counts and sequencing, duplicate actuator identifiers, reserved fields, finite/range validation, snapshots, errors, and 1,000 create/destroy cycles.
 - Caller-owned buffers and size outputs remain unchanged for invalid, undersized, and busy results.
 - Every public operation acquires an exclusive per-handle lease. Concurrent same-handle operations return `REACHY_SIM_STATUS_HANDLE_BUSY`; independent handles continue to make progress. Blocking-backend and eight-thread contention tests verify the contract.
@@ -799,6 +800,7 @@ while running:
 - [x] Forced transform modification is detected in tests/development builds.
 - [x] Production rendering contains no hidden kinematic fallback.
 
+
 **Completion evidence — 2026-07-30**
 
 - The renderer records expected Unity world transforms, authoritative
@@ -1199,6 +1201,7 @@ public:
 
 **Status:** Complete (2026-07-31)
 
+
 - [x] Implement scripted unloaded sweeps.
 - [x] Implement gravity-loaded static-pose tests.
 - [x] Implement step and frequency-response tests.
@@ -1597,6 +1600,7 @@ block normal uncalibrated/nominal virtual operation.
   `docs/validation/RMA_092_GPU_TEXTURE_BRIDGE_VALIDATION_2026-08-04.md`.
 
 ---
+
 
 # Phase 11 — Level 1 rotation-only Reachy-eye reprojection
 
@@ -1999,6 +2003,7 @@ public interface IVisionLanguageProvider : IAsyncDisposable
 - [x] Trigger only for user visual questions, explicit planner requests, significant scene changes, new entities, manual requests, or a configured slow interval.
 - [x] Add per-provider rate and concurrency limits.
 
+
 - [x] Never run VLM continuously at camera frame rate by default.
 - [x] Cancel obsolete requests when the scene or question changes.
 - [x] Surface cost/network disclosure for cloud requests.
@@ -2398,6 +2403,7 @@ reliably and the remaining failure is thermal, not code. Kept open as a known de
 limitation by explicit user decision (2026-08-22); a same-day related experiment
 (`docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md`) found that
 offloading LLM generation to a cloud/network endpoint instead of running it on-device
+
 keeps this same device at `mStatus=0` for 45s where the on-device path reached light
 throttling in ~16s -- informative context, not a fix to this on-device acceptance gap.
 
@@ -2799,6 +2805,7 @@ Order of preservation:
 
 **Status:** Complete (2026-08-15)
 
+
 - [x] Pause simulation deterministically.
 - [x] Stop/release camera and speech resources as required by lifecycle.
 - [x] Cancel or suspend network and inference jobs safely.
@@ -3198,6 +3205,7 @@ provider-driven intents) needs perception and provider both Ready.
       prompt, requestId, cancellationToken)` takes the camera frame as an
       explicit caller-supplied parameter rather than sourcing one
       internally -- there is no established "capture a frame on demand"
+
       path yet (the tracking driver's frames are consumed in-place by
       `ReachyOnDeviceLightweightTracker`, not exposed for reuse), so this
       stays honest about what is and is not wired rather than inventing a
@@ -3417,20 +3425,20 @@ release guide to cover every topic below and remain linked from the README.
 
 ## RMA-194 — Release acceptance checklist
 
-- [ ] App launches and runs offline on supported hardware.
+- [x] App launches and runs offline on supported hardware.
 - [x] MuJoCo is authoritative and stable.
 - [x] Full closed-loop Reachy model is rendered from native state.
 - [x] Level 1 camera reprojection passes reference tests.
 - [ ] Android on-device ASR and offline TTS work where installed.
 - [ ] Selected benchmark-backed local LLM works without blocking physics.
-- [ ] OpenAI and compatible providers are independently configurable.
-- [ ] Behavior planner validates all AI output.
-- [ ] No silent provider, privacy, calibration, or kinematic fallbacks remain.
-- [ ] Diagnostics identify active fidelity, providers, and failures.
+- [x] OpenAI and compatible providers are independently configurable.
+- [x] Behavior planner validates all AI output.
+- [x] No silent provider, privacy, calibration, or kinematic fallbacks remain.
+- [x] Diagnostics identify active fidelity, providers, and failures.
 - [ ] Representative-device performance report exists.
-- [ ] Licenses and attribution are complete.
+- [x] Licenses and attribution are complete.
 
-**Note (2026-08-22):** the 3 items checked above are individually evidenced (`docs/IMPLEMENTATION_STATUS.md`'s RMA-032/060-065 for MuJoCo authority/stability, RMA-051/052 for the closed-loop native-state render with `hidden_kinematic_fallback=false`, and `docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md` + `.github/workflows/rma104-reprojection-test-suite.yml` for Level 1 reprojection). The remaining 9 items stay unchecked — several are directly blocked by RMA-195 Phase D (still open) or by other still-open tickets cited elsewhere in this doc (RMA-012 in-app notices, RMA-125's offline-speech physical-device blocker, RMA-135's thermal finding, RMA-184's pending mid/high physical measurements).
+**Release-gate reconciliation (2026-10-07):** the MuJoCo-authority, closed-loop native-state render, and Level 1 reprojection gates retain their earlier evidence. Offline launch is now physically accepted by RMA-190 tranche 1. Independent OpenAI-compatible configuration is established by RMA-140 through RMA-143; behavior-intent validation is enforced by RMA-150/RMA-151 and the shipping RMA-195 composition; the permanent RMA-173 silent-failure workflow proves fail-closed provider/camera/solver/calibration behavior; diagnostics are implemented and exercised by the provider/governor/application contracts; and RMA-012/RMA-192 plus the release-review contracts reconcile licenses and attribution. Exact-head release-review and RMA-173 runs `37667597203` and `37667597119` passed on `0ba951e80b6bb1d0259fee2f682d406ae6f38d23`. The remaining unchecked release items are genuine physical/performance gaps: RMA-125 offline speech, RMA-135 local-LLM physics timing, and RMA-184 representative-device performance.
 
 **Acceptance criteria — initial release gate**
 
