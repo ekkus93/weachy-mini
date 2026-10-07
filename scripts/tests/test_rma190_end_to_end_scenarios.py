@@ -75,10 +75,15 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
 
         for item in (
             "Front camera -> head rotation -> transformed Reachy-eye frame.",
+            "Permission denial/revocation.",
+        ):
+            self.assertIn(f"- [x] {item}", section)
+            self.assertNotIn(f"- [ ] {item}", section)
+
+        for item in (
             "On-device ASR -> local LLM -> behavior -> offline TTS.",
             "Rear-camera visual question with optional VLM.",
             "Independent cloud provider combinations.",
-            "Permission denial/revocation.",
             "Network loss, rate limit, malformed response, and cancellation.",
             "Model corruption/OOM.",
             "Solver fault and controlled reset.",
@@ -88,6 +93,9 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
 
         self.assertIn("36806841674", section)
         self.assertIn("1c741bced63e62d5dcac5130f9ee9e981660b6cd", section)
+        self.assertIn("37605466118", section)
+        self.assertIn("37605466032", section)
+        self.assertIn("859aa4ed9fc04030e5056511d027af83e0baa85a", section)
         self.assertNotIn("**Status:** Complete", section)
 
 
