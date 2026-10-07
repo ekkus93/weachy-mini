@@ -1199,7 +1199,6 @@ public:
 
 **Status:** Complete (2026-07-31)
 
-
 - [x] Implement scripted unloaded sweeps.
 - [x] Implement gravity-loaded static-pose tests.
 - [x] Implement step and frequency-response tests.
@@ -2399,7 +2398,6 @@ reliably and the remaining failure is thermal, not code. Kept open as a known de
 limitation by explicit user decision (2026-08-22); a same-day related experiment
 (`docs/validation/RMA_195_CLOUD_LLM_THERMAL_COMPARISON_2026-08-22.md`) found that
 offloading LLM generation to a cloud/network endpoint instead of running it on-device
-
 keeps this same device at `mStatus=0` for 45s where the on-device path reached light
 throttling in ~16s -- informative context, not a fix to this on-device acceptance gap.
 
