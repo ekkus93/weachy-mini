@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+SPEC = ROOT / "docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md"
 RMA190_VALIDATION = ROOT / "docs/validation/RMA_190_CORE_END_TO_END_VALIDATION_2026-09-29.md"
 PERCEPTION_DRIVER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyAndroidPerceptionDriver.cs"
 RMA154_ACCEPTANCE = (
@@ -38,6 +39,7 @@ def read(path: Path) -> str:
 class Rma190FrontCameraEvidenceBoundaryTests(unittest.TestCase):
     def test_front_camera_scenario_is_closed_only_with_dedicated_evidence(self) -> None:
         todo = read(TODO)
+        spec = read(SPEC)
         self.assertIn(
             "- [x] Front camera -> head rotation -> transformed Reachy-eye frame.",
             todo,
@@ -46,12 +48,24 @@ class Rma190FrontCameraEvidenceBoundaryTests(unittest.TestCase):
             "- [ ] Front camera -> head rotation -> transformed Reachy-eye frame.",
             todo,
         )
-        self.assertIn("RMA-190 Front Camera End-to-End Android Acceptance", todo)
-        self.assertIn("37605466118", todo)
-        self.assertIn("11475530644", todo)
-        self.assertIn("859aa4ed9fc04030e5056511d027af83e0baa85a", todo)
-        self.assertIn("shipping front-camera path", todo)
-        self.assertIn("pinned a physical Android", todo)
+        for evidence in (
+            "RMA-190 Front Camera End-to-End Android Acceptance",
+            "37605466118",
+            "11475530644",
+            "859aa4ed9fc04030e5056511d027af83e0baa85a",
+            "shipping front-camera path",
+            "pinned a physical Android",
+        ):
+            self.assertIn(evidence, todo)
+        for evidence in (
+            "Passed: run `37605466118`, SHA `859aa4ed...`",
+            "37605466118",
+            "11475530644",
+            "859aa4ed9fc04030e5056511d027af83e0baa85a",
+            "The remaining six roadmap scenarios remain open",
+        ):
+            self.assertIn(evidence, spec)
+        self.assertNotIn("physical evidence pending", spec)
 
     def test_core_validation_does_not_overclaim_camera_closure(self) -> None:
         validation = read(RMA190_VALIDATION)

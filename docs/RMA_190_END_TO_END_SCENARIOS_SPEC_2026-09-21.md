@@ -46,11 +46,11 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Offline launch with no network | Physical Android / shipping host | Passed: run `36806841674`, SHA `1c741bce...` |
 | MuJoCo full model load and neutral reset | Physical Android / production runtime | Passed: run `36806841674`, SHA `1c741bce...` |
 | Deterministic gesture replay | Physical Android / production target sink + authoritative state | Passed: run `36806841674`, SHA `1c741bce...` |
-| Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Tranche 2 harness implemented; physical evidence pending |
+| Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Passed: run `37605466118`, SHA `859aa4ed...` |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Open |
-| Permission denial/revocation | Physical Android + deterministic application-state assertions | Open |
+| Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
 | Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Open |
 | Model corruption/OOM | Local-model package/provider integration | Open |
 | Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Open |
@@ -113,10 +113,20 @@ frame or requested controller target is accepted as proof.
 A pass requires a baseline observation-eligible `TransformedReachyEye` frame,
 real authoritative head rotation from a deterministic Curiosity trajectory, and
 a second transformed frame whose camera source sequence and authoritative state
-sequence both advance on the same camera session and continuity. The roadmap
-checkbox remains open until this harness passes on a physical Android device.
+sequence both advance on the same camera session and continuity. This harness
+passed in physical Android workflow `37605466118` on exact SHA
+`859aa4ed9fc04030e5056511d027af83e0baa85a`, producing artifact
+`11475530644` (`rma190-camera-end-to-end-report-859aa4ed9fc04030e5056511d027af83e0baa85a`).
 
-## 5. Completion policy
+## 6. Tranche 2 permission contract
+
+`ReachyRma190PermissionEndToEndAcceptance` proves the shipping application keeps
+permission denial and revocation visible without substituting a fake camera,
+stale frame, or alternate provider path. The scenario passed in physical Android
+workflow `37605466032` on exact SHA
+`859aa4ed9fc04030e5056511d027af83e0baa85a` on a pinned physical Android device.
+
+## 7. Completion policy
 
 The first three RMA-190 roadmap checkboxes are closed by physical Android run
 `36806841674` on exact implementation SHA
@@ -124,6 +134,13 @@ The first three RMA-190 roadmap checkboxes are closed by physical Android run
 `11137798819`. That run executes the shipping host/runtime and production
 behavior target sink with device networking disabled outside the application.
 
-The remaining eight roadmap scenarios remain open until their own end-to-end
+The front-camera transformed-frame checkbox is closed by physical Android run
+`37605466118` on exact implementation SHA
+`859aa4ed9fc04030e5056511d027af83e0baa85a`, with artifact
+`11475530644`. The permission denial/revocation checkbox is closed by physical
+Android run `37605466032` on the same exact SHA.
+
+The remaining six roadmap scenarios remain open until their own end-to-end
 harnesses exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is
-supporting evidence but is not substituted for the RMA-190 scenario result.
+supporting evidence but is not substituted for the remaining RMA-190 scenario
+results.
