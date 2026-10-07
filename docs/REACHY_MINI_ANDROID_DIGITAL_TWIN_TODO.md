@@ -3327,8 +3327,8 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-The first three core scenarios are physically accepted; the remaining scenarios
-stay open until their own end-to-end evidence passes.
+Five scenarios are now physically accepted; the remaining scenarios stay open
+until their own end-to-end evidence passes.
 
 **Tranche 1 completion evidence (2026-09-30):** physical Android workflow
 `RMA-190 Core End-to-End Android Acceptance` run `36806841674` passed on
@@ -3340,14 +3340,26 @@ the production MuJoCo runtime/full model, explicit neutral reset, and the same
 deterministic Acknowledgment plan replayed twice through the production target
 sink with authoritative-state validation.
 
+**Tranche 2 completion evidence (2026-10-07):** exact-head physical Android
+workflow `RMA-190 Front Camera End-to-End Android Acceptance` run
+`37605466118` passed on `859aa4ed9fc04030e5056511d027af83e0baa85a`.
+The job built and verified the ARM64 API-26 device APK, pinned a physical Android
+device, exercised the shipping front-camera path, and verified the end-to-end
+evidence. Artifact `11475530644`
+(`rma190-camera-end-to-end-report-859aa4ed9fc04030e5056511d027af83e0baa85a`)
+contains the captured acceptance report. On the same exact head,
+`RMA-190 Permission Denial and Revocation Android Acceptance` run
+`37605466032` passed its production permission-denial/revocation scenario on
+a pinned physical Android device.
+
 - [x] Offline launch with no network.
 - [x] MuJoCo full model load and neutral reset.
 - [x] Deterministic gesture replay.
-- [ ] Front camera -> head rotation -> transformed Reachy-eye frame.
+- [x] Front camera -> head rotation -> transformed Reachy-eye frame.
 - [ ] On-device ASR -> local LLM -> behavior -> offline TTS.
 - [ ] Rear-camera visual question with optional VLM.
 - [ ] Independent cloud provider combinations.
-- [ ] Permission denial/revocation.
+- [x] Permission denial/revocation.
 - [ ] Network loss, rate limit, malformed response, and cancellation.
 - [ ] Model corruption/OOM.
 - [ ] Solver fault and controlled reset.
