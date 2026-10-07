@@ -33,15 +33,9 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
     def test_authoritative_todo_keeps_unqualified_release_items_open(self) -> None:
         todo = read(TODO)
         for open_item in (
-            "- [ ] App launches and runs offline on supported hardware.",
             "- [ ] Android on-device ASR and offline TTS work where installed.",
             "- [ ] Selected benchmark-backed local LLM works without blocking physics.",
-            "- [ ] OpenAI and compatible providers are independently configurable.",
-            "- [ ] Behavior planner validates all AI output.",
-            "- [ ] No silent provider, privacy, calibration, or kinematic fallbacks remain.",
-            "- [ ] Diagnostics identify active fidelity, providers, and failures.",
             "- [ ] Representative-device performance report exists.",
-            "- [ ] Licenses and attribution are complete.",
             "- [ ] All incomplete items are either resolved or moved to an "
             "explicitly named later milestone with rationale.",
             "- [ ] No deferred Level 2, Level 3, AR, movable observer camera, "
@@ -55,9 +49,15 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
     def test_authoritative_todo_preserves_evidenced_checked_items(self) -> None:
         todo = read(TODO)
         for checked_item in (
+            "- [x] App launches and runs offline on supported hardware.",
             "- [x] MuJoCo is authoritative and stable.",
             "- [x] Full closed-loop Reachy model is rendered from native state.",
             "- [x] Level 1 camera reprojection passes reference tests.",
+            "- [x] OpenAI and compatible providers are independently configurable.",
+            "- [x] Behavior planner validates all AI output.",
+            "- [x] No silent provider, privacy, calibration, or kinematic fallbacks remain.",
+            "- [x] Diagnostics identify active fidelity, providers, and failures.",
+            "- [x] Licenses and attribution are complete.",
         ):
             self.assertIn(checked_item, todo)
         self.assertIn("RMA-032/060-065", todo)
