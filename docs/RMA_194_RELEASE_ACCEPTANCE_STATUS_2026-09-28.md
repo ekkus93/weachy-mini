@@ -8,7 +8,7 @@ It is a planning/status artifact only. It does **not** close any checkbox in `do
 
 **Release status: not accepted.** No final release tag should be cut from the current tree, and no TODO checkbox in RMA-194 should be closed merely because this status document exists. No final release label is assigned.
 
-The authoritative TODO has been reconciled beyond the original 2026-09-28 status snapshot. Current checked RMA-194 rows have evidence elsewhere in the TODO and associated validation docs; remaining unchecked rows are still genuine evidence gaps, not formatting omissions.
+The authoritative TODO has been reconciled beyond the original 2026-09-28 status snapshot. Current checked RMA-194 rows have evidence elsewhere in the TODO and associated validation docs; remaining unchecked rows are still genuine evidence gaps, not formatting omissions. The release-review boundary still explicitly includes RMA-191 security/privacy, RMA-192 license/attribution, RMA-193 documentation, and RMA-194 release-acceptance status contracts.
 
 ## Current checked RMA-194 rows
 
@@ -59,7 +59,7 @@ Current `master` before this status-only reconciliation was `e618c6adb7109d37e5f
 
 - `CI` run `37676348629` passed.
 - `Local Unity Android Validation` run `37676348632` passed.
-- `RMA Release Review Contracts` run `37676348616` passed.
+- `RMA Release Review Contracts` run `37676348616` passed, including the RMA-191, RMA-192, RMA-193, and RMA-194 contract set.
 - `RMA-173 Silent Failure Regressions` run `37676348614` passed.
 - `Publish Hosted CI Status` run `37676548144` passed.
 - `Publish Local Unity Validation Status` run `37679004837` passed.
