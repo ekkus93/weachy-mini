@@ -17,6 +17,7 @@ BEHAVIOR = LOCAL_MODELS / "ReachyLocalLlmBehaviorContract.cs"
 NATIVE = INTEROP / "NativeReachyLlama.cs"
 SYSTEM_PROMPT = ROOT / "benchmarks/rma133/system_prompt-v4.txt"
 GRAMMAR = ROOT / "benchmarks/rma133/behavior-output-v1.gbnf"
+RMA134_ANDROID_ACCEPTANCE = ROOT / "scripts/run_rma134_local_llm_acceptance_android.sh"
 
 
 def read(path: Path) -> str:
@@ -226,6 +227,33 @@ def test_terminal_validation_and_consumer_failures_are_visible() -> None:
     )
 
 
+def test_android_acceptance_installs_exact_apk_before_verification() -> None:
+    script = read(RMA134_ANDROID_ACCEPTANCE)
+    install_index = script.find('"${ADB[@]}" install -r -d "${APK_PATH}"')
+    pm_path_index = script.find('shell pm path "${PACKAGE_NAME}"')
+    sha_check_index = script.find('Installed APK SHA-256 does not match exact source artifact')
+    require(
+        install_index >= 0,
+        "RMA-134 Android acceptance must install the exact downloaded APK itself.",
+    )
+    require(
+        '"${REPORT_DIR}/apk-install.txt"' in script,
+        "RMA-134 Android acceptance must retain exact APK install evidence.",
+    )
+    require(
+        pm_path_index >= 0 and install_index < pm_path_index,
+        "RMA-134 Android acceptance checks the installed package before installing the exact APK.",
+    )
+    require(
+        sha_check_index >= 0 and pm_path_index < sha_check_index,
+        "RMA-134 Android acceptance must verify installed APK SHA after package resolution.",
+    )
+    require(
+        "from the successful exact-SHA Local Unity run" not in script,
+        "RMA-134 Android acceptance still assumes a prior workflow left the exact APK installed.",
+    )
+
+
 def main() -> int:
     tests = (
         test_no_unconstrained_generation_binding,
@@ -235,10 +263,11 @@ def main() -> int:
         test_frozen_behavior_lineage,
         test_no_repair_or_hidden_retry,
         test_terminal_validation_and_consumer_failures_are_visible,
+        test_android_acceptance_installs_exact_apk_before_verification,
     )
     for test in tests:
         test()
-    print("RMA-134 local LLM static contracts passed (7 groups).")
+    print("RMA-134 local LLM static contracts passed (8 groups).")
     return 0
 
 
