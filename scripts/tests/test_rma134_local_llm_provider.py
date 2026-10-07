@@ -231,7 +231,7 @@ def test_android_acceptance_installs_exact_apk_before_verification() -> None:
     script = read(RMA134_ANDROID_ACCEPTANCE)
     install_index = script.find('"${ADB[@]}" install -r -d "${APK_PATH}"')
     pm_path_index = script.find('shell pm path "${PACKAGE_NAME}"')
-    sha_check_index = script.find('Installed APK SHA-256 does not match exact source artifact')
+    sha_check_index = script.find("Installed APK SHA-256 does not match exact source artifact")
     require(
         install_index >= 0,
         "RMA-134 Android acceptance must install the exact downloaded APK itself.",
