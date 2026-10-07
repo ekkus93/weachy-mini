@@ -18,11 +18,11 @@ The authoritative TODO has been reconciled beyond the original 2026-09-28 status
 | MuJoCo is authoritative and stable. | Checked with RMA-032/RMA-060 through RMA-065 evidence. | Keep checked unless future source changes invalidate the evidence. |
 | Full closed-loop Reachy model is rendered from native state. | Checked with RMA-051/RMA-052 native-state rendering evidence and no hidden kinematic fallback. | Keep checked unless future source changes invalidate the evidence. |
 | Level 1 camera reprojection passes reference tests. | Checked with RMA-104 validation evidence and the reprojection workflow retained. | Keep checked unless future source changes invalidate the evidence. |
-| OpenAI and compatible providers are independently configurable. | Checked after RMA-140 through RMA-143 plus RMA-195 provider-configuration wiring established independent OpenAI-compatible configuration. | Do not claim a successful external provider call without intentionally supplied endpoint/credential evidence. |
+| OpenAI and compatible providers are independently configurable. | Checked after RMA-140 through RMA-143 plus RMA-195 provider-configuration wiring established independent OpenAI-compatible configuration. | Do not claim a successful external provider call; real cloud-provider success is not claimed without intentionally supplied endpoint/credential evidence. |
 | Behavior planner validates all AI output. | Checked by the RMA-150/RMA-151 behavior-intent contracts and the shipping RMA-195 composition path. | Malformed-provider and regeneration-limit safety remain covered by RMA-173 release-review contracts. |
 | No silent provider, privacy, calibration, or kinematic fallbacks remain. | Checked after exact-head RMA-173 and release-review gates proved fail-closed provider/camera/solver/calibration behavior and security/privacy boundaries. | New optional provider, camera, calibration, or animation paths must preserve explicit unavailable/degraded/faulted outcomes. |
 | Diagnostics identify active fidelity, providers, and failures. | Checked with RMA-170/RMA-171/RMA-172 diagnostics and release-review contracts. | Release candidates still need an audit that active runtime state is what diagnostics report. |
-| Licenses and attribution are complete. | Checked after RMA-012/RMA-192 reconciled the repository inventory, in-app notices, Reachy attribution/share-alike obligations, no-endorsement disclosure, and selected-model presentation. | Final packaging must still include the reconciled notice set. |
+| Licenses and attribution are complete. | Checked after RMA-012/RMA-192 reconciled the repository inventory, in-app notices, Reachy attribution/share-alike obligations, no-endorsement disclosure, and selected-model presentation. | Final packaging must still include the reconciled notice set; detailed rows are not reconstructed from redacted output, and partial reconstruction from redacted inventory output is not acceptable. |
 
 ## Current unchecked RMA-194 rows
 
@@ -70,18 +70,22 @@ The conservative CI outcome for that head remains pending while physical/self-ho
 
 The current release gate remains blocked by these evidence gaps:
 
-1. RMA-002: second independently provisioned Unity/Android build environment evidence remains missing.
-2. RMA-125 / RMA-190: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
+1. RMA-002 still requires second independently provisioned Unity/Android build evidence.
+2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
-4. RMA-184: detailed measured default profiles and representative-device target reconciliation remain pending.
+4. RMA-184 still needs detailed measured default profiles and representative-device target reconciliation.
 5. RMA-190: rear-camera/VLM, independent cloud combinations, network/rate-limit/malformed/cancellation, model-corruption/OOM, and solver-fault/reset scenarios remain open.
-6. RMA-194: the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
+6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
+
+Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
 
 ## Release-gate blockers versus non-blockers
 
+Artifact upload quota failures are infrastructure failures, not source failures, when the relevant acceptance step completed before artifact upload. Artifact-publication failures are also infrastructure failures, not source failures, when the relevant acceptance step completed before artifact upload. Zero-step CI failures with unavailable logs are infrastructure failures, not source failures.
+
 Infrastructure failures such as zero-step hosted CI jobs, missing job logs, artifact-storage/upload failures, pending self-hosted jobs, runner outages, or transient bridge/API failures are not release evidence and are not source-code failures. They should keep affected checklist items open while independent source, documentation, security, privacy, license, and release-gate work continues.
 
-A physical Android run blocked by secure keyguard, device disconnection, missing installed ASR/TTS services, or unavailable runner hardware is a hardware/service availability condition, not a source failure. Lack of physical Reachy Mini hardware is not a release blocker for the virtual Reachy Mini product unless a later optional physical-calibration milestone explicitly requires it.
+A physical Android run blocked by secure keyguard, device disconnection, missing installed ASR/TTS services, or unavailable runner hardware is a hardware availability condition, not a source failure. Lack of physical Reachy Mini hardware is not a release blocker for the virtual Reachy Mini product unless a later optional physical-calibration milestone explicitly requires it.
 
 A compiler error, test failure, lint/formatting failure, merge conflict, or implementation defect remains normal repository work and must be diagnosed and fixed before treating that head as qualified.
 
