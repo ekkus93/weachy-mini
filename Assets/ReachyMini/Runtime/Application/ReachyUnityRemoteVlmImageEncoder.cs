@@ -57,11 +57,15 @@ namespace ReachyMini.AppState
             ReachyTrackingFramePixels pixels;
             try
             {
+                // StageAsync may yield while reading GPU/camera-backed pixels.
+                // This encoder immediately uses Unity Texture2D APIs afterward,
+                // which are main-thread-affine on Android. Preserve the Unity
+                // synchronization context rather than resuming on a pool thread.
                 pixels = await pixelSource.StageAsync(
                         request.Frame,
                         maximumDimension,
                         cancellationToken)
-                    .ConfigureAwait(false);
+                    .ConfigureAwait(true);
             }
             catch (OperationCanceledException)
             {

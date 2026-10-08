@@ -103,8 +103,11 @@ namespace ReachyMini.AppState
                     "Perception is not running on this platform.");
             }
 
-            ReachyVisionFrame? frame = await driver.CaptureFrameForAnalysisAsync(cancellationToken)
-                .ConfigureAwait(false);
+            // This application service is Unity-bound. Keep the Unity
+            // synchronization context through frame capture so the downstream
+            // image encoder can safely use Texture2D/ImageConversion APIs.
+            ReachyVisionFrame? frame = await driver.CaptureFrameForAnalysisAsync(
+                cancellationToken).ConfigureAwait(true);
             if (frame == null)
             {
                 return SceneCaptureAnalysisOutcome.NoFrame(
@@ -115,8 +118,11 @@ namespace ReachyMini.AppState
             try
             {
                 VisionLanguageResult result =
-                    await AnalyzeSceneAsync(frame, prompt, requestId, cancellationToken)
-                        .ConfigureAwait(false);
+                    await AnalyzeSceneAsync(
+                        frame,
+                        prompt,
+                        requestId,
+                        cancellationToken).ConfigureAwait(true);
                 return SceneCaptureAnalysisOutcome.Analyzed(result);
             }
             finally
@@ -136,8 +142,12 @@ namespace ReachyMini.AppState
                 throw new ArgumentNullException(nameof(frame));
             }
 
+            // Provider construction creates the Unity-backed image encoder.
+            // Do not abandon UnitySynchronizationContext before that object is
+            // created or before AnalyzeAsync synchronously enters the encoder.
             (IVisionLanguageProvider? provider, string detail) =
-                await EnsureCloudVlmLoadedAsync(cancellationToken).ConfigureAwait(false);
+                await EnsureCloudVlmLoadedAsync(
+                    cancellationToken).ConfigureAwait(true);
 
             VisionProviderSelectionSnapshot selection = new VisionProviderSelectionSnapshot(
                 VisionProviderKind.SemanticVisionLanguage,
@@ -168,7 +178,9 @@ namespace ReachyMini.AppState
                     detail);
             }
 
-            return await provider.AnalyzeAsync(request, cancellationToken).ConfigureAwait(false);
+            return await provider.AnalyzeAsync(
+                request,
+                cancellationToken).ConfigureAwait(true);
         }
 
         private void DisposeCloudVlm()
@@ -201,7 +213,8 @@ namespace ReachyMini.AppState
                 }
             }
 
-            await cloudVlmLoadGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await cloudVlmLoadGate.WaitAsync(
+                cancellationToken).ConfigureAwait(true);
             try
             {
                 lock (cloudVlmSync)

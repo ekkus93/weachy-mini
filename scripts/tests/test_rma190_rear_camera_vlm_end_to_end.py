@@ -116,6 +116,26 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertLess(capture_stage, vlm_call)
         self.assertNotIn("priorityDegradation.CurrentDecision =", source)
 
+    def test_unity_vlm_encoder_preserves_main_thread_context(self) -> None:
+        encoder = (APP / "ReachyUnityRemoteVlmImageEncoder.cs").read_text(
+            encoding="utf-8"
+        )
+        cloud = (
+            APP / "ReachyAndroidPerceptionApplicationService.CloudVlm.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Texture2D(", encoder)
+        self.assertIn("EncodeToJPG", encoder)
+        self.assertIn("ConfigureAwait(true)", encoder)
+        self.assertNotIn("ConfigureAwait(false)", encoder)
+        for token in (
+            "CaptureFrameForAnalysisAsync",
+            "EnsureCloudVlmLoadedAsync",
+            "provider.AnalyzeAsync",
+            "cloudVlmLoadGate.WaitAsync",
+        ):
+            self.assertIn(token, cloud)
+        self.assertNotIn("ConfigureAwait(false)", cloud)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(
