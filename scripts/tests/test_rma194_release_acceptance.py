@@ -90,7 +90,6 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn("named physical calibration profile", status)
         self.assertIn("held-out physical evidence", status)
 
-
     def test_deferred_ar_xr_packages_are_not_in_shipping_unity_dependencies(self) -> None:
         dependencies = json.loads(read(ROOT / "Packages/manifest.json"))["dependencies"]
         deferred_packages = {
@@ -151,9 +150,11 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             if pattern.search(read(source))
         ]
         self.assertEqual(
-            [], violations,
+            [],
+            violations,
             "Deferred AR/XR/depth/scene components cannot be enabled in shipping runtime",
         )
+
 
 if __name__ == "__main__":
     unittest.main()
