@@ -1,4 +1,4 @@
-# RMA-194 Release Acceptance Status — updated 2026-10-07
+# RMA-194 Release Acceptance Status — updated 2026-10-08
 
 This document records the current release-gate status for the Reachy Mini Android digital twin. It is intentionally conservative: implementation and static contracts may exist before exact-head CI, Local Unity Android Validation, physical-device, provider, performance, privacy, license, and release-acceptance evidence is complete.
 
@@ -45,12 +45,12 @@ The authoritative TODO records these accepted scenarios:
 - Permission denial/revocation.
 - Network loss, rate limit, malformed response, and cancellation.
 - Model corruption/OOM.
+- Solver fault and controlled reset.
 
 The following scenarios remain open until their own end-to-end evidence passes:
 
 - On-device ASR -> local LLM -> behavior -> offline TTS.
 - Rear-camera visual question with optional VLM.
-- Solver fault and controlled reset.
 
 Physical core/camera/permission evidence and the deterministic provider-integration
 evidence are cited in the authoritative RMA-190 section. Provider run `37757168563`
@@ -60,7 +60,11 @@ integration run `37759478803` passed on
 `6f3019c4c9e8a8c963161267defaff71a966a658` with artifact `11541646432`.
 The authoritative RMA-190 section closes that scenario using explicitly labeled
 deterministic package/OOM fixtures; this is not physical memory or performance
-evidence and does not close RMA-135 or RMA-184.
+evidence and does not close RMA-135 or RMA-184. Solver-fault/controlled-reset
+integration is also accepted from exact-head CI run `37760354266` on
+`405711d5dd0d03253959742dcf66a957012ad0a8`; that managed/native fixture proves
+fail-closed worker fault retention, explicit handle recreation, neutral reset, and
+resumed finite authoritative progress without claiming physical-device evidence.
 
 ## Current exact-head evidence on `master`
 
@@ -83,7 +87,7 @@ The current release gate remains blocked by these evidence gaps:
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
 4. RMA-184 still needs detailed measured default profiles and representative-device target reconciliation.
-5. RMA-190: rear-camera/VLM and solver-fault/reset scenarios remain open; provider-combination, network/rate-limit/malformed/cancellation, and model-corruption/OOM scenarios have accepted deterministic integration evidence.
+5. RMA-190: rear-camera/VLM remains open pending its physical shipping-path run; solver-fault/reset, provider-combination, network/rate-limit/malformed/cancellation, and model-corruption/OOM scenarios have accepted integration evidence.
 6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
 
 Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
