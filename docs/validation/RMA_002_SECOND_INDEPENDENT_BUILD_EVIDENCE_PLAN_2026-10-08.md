@@ -21,15 +21,38 @@ machine, does not meet the authoritative RMA-002 acceptance criterion.
 4. Generate the Reachy Unity presentation and stage the production MuJoCo
    runtime using the checked-in scripts, then build the ARM64/API-26 device
    APK with `bash scripts/build_unity_android.sh device-feasibility`.
-5. Record the exact build SHA, runner/provisioning provenance, exit status,
+5. Collect a machine-local build record using the checked-in tool, after
+   the device-feasibility APK has been built:
+
+   ```bash
+   python3 scripts/rma002_independent_build_evidence.py capture \\
+     --apk Builds/Android/weachy-mini-device-arm64-api26.apk \\
+     --machine first-machine --provisioning independent-install-a \\
+     --output build/rma002-machine-a.json
+   ```
+
+   Repeat on the second independently provisioned machine with distinct
+   non-secret machine/provisioning labels. Compare the records:
+
+   ```bash
+   python3 scripts/rma002_independent_build_evidence.py compare \\
+     build/rma002-machine-a.json build/rma002-machine-b.json \\
+     --output build/rma002-comparison.json
+   ```
+
+   The comparator checks the exact source SHA, pinned toolchain,
+   application identity/SDK levels, and production ARM64 library inventory.
+   It separately reports byte identity and deliberately does **not**
+   attest that the two machines were independently provisioned.
+6. Record the exact build SHA, runner/provisioning provenance, exit status,
    Android package identity, minimum/target SDK, native-library inventory,
    APK SHA-256, and CI/build-log reference for **each** independent machine.
    Check that the APK packages production MuJoCo, Reachy simulation, and
    IL2CPP ARM64 libraries; do not substitute a fixture application.
-6. Compare both results. Binary hashes may differ due to nondeterministic
+7. Compare both results. Binary hashes may differ due to nondeterministic
    packaging; distinguish structural application compatibility from strict
    byte-for-byte reproducibility, and explain any material differences.
-7. Have the operator verify that the environments are genuinely independent.
+8. Have the operator verify that the environments are genuinely independent.
    Only then reconcile the RMA-002 checkbox with both exact-head build logs,
    evidence records, and the comparison report.
 
