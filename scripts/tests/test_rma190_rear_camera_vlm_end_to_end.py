@@ -213,6 +213,29 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertNotIn("exception.ToString()", diagnostic)
         self.assertNotIn(".StackTrace", diagnostic)
 
+    def test_failed_vlm_transport_preserves_only_validated_physical_frame_evidence(
+        self,
+    ) -> None:
+        source = ACCEPTANCE.read_text(encoding="utf-8")
+        self.assertIn("private Report? observedFrameEvidence;", source)
+        self.assertIn("observedFrameEvidence = Report.ObservedFrame(", source)
+        self.assertIn("observedFrameEvidence.production_vlm_transport_and_encoder = true;", source)
+        self.assertIn("currentStage,\n                    observedFrameEvidence);", source)
+        self.assertIn("Report report = observedEvidence ?? new Report();", source)
+        self.assertIn('report.status = "failed";', source)
+        observed = source[
+            source.index("public static Report ObservedFrame(") : source.index(
+                "public static Report Success("
+            )
+        ]
+        self.assertIn("frame.Identity.SourceSequence", observed)
+        self.assertIn("frame.Identity.AuthoritativeSequence", observed)
+        self.assertIn("descriptor.SessionId", observed)
+        self.assertIn("admission.StableSamples", observed)
+        self.assertNotIn('status = "passed"', observed)
+        self.assertNotIn("EncodedBytes", observed)
+        self.assertIn("synthetic_camera_frame_injected = false", observed)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(

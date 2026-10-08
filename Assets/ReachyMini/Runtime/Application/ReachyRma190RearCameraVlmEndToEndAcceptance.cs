@@ -97,6 +97,9 @@ namespace ReachyMini.AppState
         private const string ExpectedFixtureResponse =
             "rma190-rear-camera-fixture-observed";
         private static string currentStage = "not-started";
+        // A fault must not erase verified physical-frame evidence gathered
+        // earlier in this same acceptance invocation. No raw media is retained.
+        private Report? observedFrameEvidence;
 
         private IEnumerator Start()
         {
@@ -122,7 +125,8 @@ namespace ReachyMini.AppState
                         "an exception.");
                 report = Report.Failure(
                     exception.ToString(),
-                    currentStage);
+                    currentStage,
+                    observedFrameEvidence);
                 Debug.LogError(
                     "RMA-190 rear-camera/VLM end-to-end acceptance failed: " +
                     exception,
@@ -132,7 +136,8 @@ namespace ReachyMini.AppState
             {
                 report = Report.Failure(
                     "RMA-190 rear-camera/VLM acceptance was cancelled.",
-                    currentStage);
+                    currentStage,
+                    observedFrameEvidence);
             }
             else
             {
@@ -145,7 +150,7 @@ namespace ReachyMini.AppState
             Destroy(gameObject);
         }
 
-        private static async Task<Report> RunAsync()
+        private async Task<Report> RunAsync()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             using var timeout = new CancellationTokenSource(
@@ -349,8 +354,16 @@ namespace ReachyMini.AppState
                         frame,
                         descriptor.CameraId,
                         descriptor.SessionId);
+                    // Only a successfully validated physical frame contributes
+                    // camera/session/continuity evidence to a failed report.
+                    observedFrameEvidence = Report.ObservedFrame(
+                        descriptor,
+                        frame,
+                        fixture,
+                        admission);
 
                     SetStage("ask-visual-question-through-production-vlm");
+                    observedFrameEvidence.production_vlm_transport_and_encoder = true;
                     VisionLanguageResult result =
                         await perception.AnalyzeSceneAsync(
                             frame,
@@ -692,17 +705,16 @@ namespace ReachyMini.AppState
             public string vlm_admission_diagnostic = string.Empty;
             public string vlm_response = string.Empty;
 
-            public static Report Success(
+            // Capture only already validated camera and admission metadata.
+            // Never retain the image itself or claim a VLM result here.
+            public static Report ObservedFrame(
                 ReachyCameraTextureFrameDescriptor descriptor,
                 ReachyVisionFrame frame,
                 ReachyCameraCalibrationProfile fixture,
-                VlmAdmissionEvidence admission,
-                string response)
+                VlmAdmissionEvidence admission)
             {
                 return new Report
                 {
-                    status = "passed",
-                    stage = "completed",
                     device_model = SystemInfo.deviceModel,
                     android_api_level = ReadApiLevel(),
                     real_rear_camera =
@@ -724,40 +736,51 @@ namespace ReachyMini.AppState
                     coverage_fraction = frame.Coverage.Fraction,
                     external_vlm_fixture = true,
                     fixture_is_live_cloud_evidence = false,
-                    production_vlm_transport_and_encoder = true,
                     synthetic_camera_frame_injected = false,
                     raw_camera_payload_persisted = false,
                     stable_vlm_admission_samples =
                         admission.StableSamples,
                     vlm_admission_diagnostic =
                         admission.LastDiagnostic,
-                    vlm_response = response,
                 };
+            }
+
+            public static Report Success(
+                ReachyCameraTextureFrameDescriptor descriptor,
+                ReachyVisionFrame frame,
+                ReachyCameraCalibrationProfile fixture,
+                VlmAdmissionEvidence admission,
+                string response)
+            {
+                Report report = ObservedFrame(
+                    descriptor,
+                    frame,
+                    fixture,
+                    admission);
+                report.status = "passed";
+                report.stage = "completed";
+                report.production_vlm_transport_and_encoder = true;
+                report.vlm_response = response;
+                return report;
             }
 
             public static Report Failure(
                 string error,
-                string stage)
+                string stage,
+                Report? observedEvidence)
             {
-                return new Report
-                {
-                    status = "failed",
-                    error = Bound(error, 4096),
-                    stage = Bound(stage, 256),
-                    device_model = SystemInfo.deviceModel,
-                    android_api_level = TryReadApiLevel(),
-                    deterministic_calibration_fixture = true,
-                    measured_calibration_claimed = false,
-                    calibration_provenance =
-                        ReachyCameraCalibrationProvenance
-                            .UncalibratedEstimate.ToString(),
-                    external_vlm_fixture = true,
-                    fixture_is_live_cloud_evidence = false,
-                    production_vlm_transport_and_encoder = true,
-                    synthetic_camera_frame_injected = false,
-                    raw_camera_payload_persisted = false,
-                };
+                // Fields not observed remain false/zero/empty. In particular,
+                // a failure before a physical capture must not claim that a
+                // real rear camera or deterministic fixture was exercised.
+                Report report = observedEvidence ?? new Report();
+                report.status = "failed";
+                report.error = Bound(error, 4096);
+                report.stage = Bound(stage, 256);
+                report.device_model = SystemInfo.deviceModel;
+                report.android_api_level = TryReadApiLevel();
+                return report;
             }
+
         }
 
         private static int ReadApiLevel()
