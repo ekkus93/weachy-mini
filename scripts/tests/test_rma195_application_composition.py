@@ -57,6 +57,15 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("StringComparison.OrdinalIgnoreCase", policy)
         self.assertNotIn("return voices[0]", tts)
 
+    def test_speech_health_reports_partial_capability_and_setup_guidance(self) -> None:
+        speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
+        self.assertIn("At least one speech capability is available.", speech)
+        self.assertIn("Check individual ASR/TTS states", speech)
+        self.assertIn("explicit on-device ASR service", speech)
+        self.assertIn("requires Android API 31+", speech)
+        self.assertIn("and an offline TTS voice in device settings", speech)
+        self.assertNotIn("Microphone capture and speech playback are available.", speech)
+
     def test_live_asr_never_falls_back_to_potentially_network_backed_system_asr(self) -> None:
         asr = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
         self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", asr)

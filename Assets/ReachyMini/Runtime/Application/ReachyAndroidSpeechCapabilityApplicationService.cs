@@ -109,13 +109,16 @@ namespace ReachyMini.AppState
                 if (onDeviceAsr.IsAvailable || systemAsr.IsAvailable || offlineTts.IsAvailable)
                 {
                     SetReady(
-                        "Microphone capture and speech playback are available. " + message);
+                        "At least one speech capability is available. " +
+                        "Check individual ASR/TTS states before starting a turn. " + message);
                 }
                 else
                 {
                     SetDegraded(
                         "Microphone permission is granted, but no usable ASR or TTS " +
-                        "provider was found on this device. " + message);
+                        "provider was found on this device. Install or enable an " +
+                        "explicit on-device ASR service (requires Android API 31+) " +
+                        "and an offline TTS voice in device settings, then retry. " + message);
                 }
             }
             catch (OperationCanceledException)
