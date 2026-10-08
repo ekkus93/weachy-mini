@@ -272,21 +272,21 @@ namespace ReachyMini.Validation
 
             ReachyProviderServiceSnapshot providerSnapshot =
                 provider.ProviderSnapshot;
-            if (providerSnapshot.State !=
+            if (providerSnapshot.ExecutionState !=
                     ReachyProviderServiceExecutionState.Ready ||
                 !string.Equals(
-                    providerSnapshot.ModelId,
+                    providerSnapshot.ActiveModelId,
                     manifest.Identity.ModelId,
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "The shipping local LLM did not finish the turn with the " +
                     "selected model ready: state=" +
-                    providerSnapshot.State + " model=" +
-                    providerSnapshot.ModelId + ".");
+                    providerSnapshot.ExecutionState + " model=" +
+                    providerSnapshot.ActiveModelId + ".");
             }
 
-            report.local_model_id = providerSnapshot.ModelId;
+            report.local_model_id = providerSnapshot.ActiveModelId;
             report.behavior_revision_after = behavior.Snapshot.Revision;
             if (report.behavior_revision_after <=
                 report.behavior_revision_before)
