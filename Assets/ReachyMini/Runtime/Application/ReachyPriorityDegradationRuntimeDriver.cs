@@ -127,8 +127,10 @@ namespace ReachyMini.AppState
             unityTarget =
                 new ReachyUnityPriorityDegradationTarget();
 
+            int currentTargetFrameRate =
+                ReachyRuntimeThermalPolicy.CaptureCurrentPacing().TargetFrameRate;
             int nominalRenderFps =
-                Application.targetFrameRate >= 45 ? 60 : 30;
+                currentTargetFrameRate >= 45 ? 60 : 30;
             var coordinator =
                 new ReachyPriorityDegradationCoordinator(
                     new ReachyPriorityDegradationPolicy(nominalRenderFps),
