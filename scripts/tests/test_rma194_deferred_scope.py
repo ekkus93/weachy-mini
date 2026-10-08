@@ -21,15 +21,15 @@ FORBIDDEN_PACKAGES = {
     "com.unity.xr.interaction.toolkit",
 }
 FORBIDDEN_SYMBOLS = re.compile(
-    r"\\b(?:ARSession|ARPlaneManager|AROcclusionManager|ARCameraManager|"
+    r"\b(?:ARSession|ARPlaneManager|AROcclusionManager|ARCameraManager|"
     r"ARAnchorManager|ARTrackedImageManager|ARCore|DepthReprojection|"
     r"SceneReconstruction|ObserverOrbitController|ObserverPanController|"
-    r"ObserverZoomController|VlaPolicy|VlaController)\\b"
+    r"ObserverZoomController|VlaPolicy|VlaController)\b"
 )
 FORBIDDEN_IMPORTS = re.compile(
-    r"(?m)^\\s*(?:using|import)\\s+"
-    r"(?:UnityEngine\\.XR\\.ARFoundation|Google\\.ARCore|"
-    r"com\\.google\\.ar\\.core)\\b"
+    r"(?m)^\s*(?:using|import)\s+"
+    r"(?:UnityEngine\.XR\.ARFoundation|Google\.ARCore|"
+    r"com\.google\.ar\.core)\b"
 )
 
 
@@ -49,8 +49,8 @@ class Rma194DeferredProductionScope(unittest.TestCase):
                 if path.suffix.lower() not in {".cs", ".java", ".kt"}:
                     continue
                 source = path.read_text(encoding="utf-8")
-                source = re.sub(r"(?m)^\\s*//.*$", "", source)
-                source = re.sub(r"/\\*.*?\\*/", "", source, flags=re.DOTALL)
+                source = re.sub(r"(?m)^\s*//.*$", "", source)
+                source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
                 if FORBIDDEN_SYMBOLS.search(source) or FORBIDDEN_IMPORTS.search(
                     source
                 ):
