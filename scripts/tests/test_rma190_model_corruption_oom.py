@@ -17,11 +17,14 @@ def read(path: Path) -> str:
 
 
 class Rma190ModelCorruptionOomContracts(unittest.TestCase):
-    def test_authoritative_rma190_row_stays_open_until_exact_evidence(self) -> None:
+    def test_authoritative_rma190_row_has_exact_acceptance_evidence(self) -> None:
         todo = read(TODO)
         spec = read(SPEC)
         item = "Model corruption/OOM."
-        self.assertIn(f"- [ ] {item}", todo)
+        self.assertIn(f"- [x] {item}", todo)
+        self.assertNotIn(f"- [ ] {item}", todo)
+        for marker in ("37759478803", "6f3019c4c9e8a8c963161267defaff71a966a658", "11541646432"):
+            self.assertIn(marker, todo)
         self.assertIn("Model corruption/OOM", spec)
         self.assertIn("Local-model package/provider integration", spec)
 
