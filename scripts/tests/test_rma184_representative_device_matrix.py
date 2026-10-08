@@ -46,8 +46,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
     def test_a54_speech_readiness_supersedes_old_probe_without_release_claim(self) -> None:
         data = json.loads(MATRIX.read_text(encoding="utf-8"))
         a54 = next(
-            entry for entry in data["representative_devices"]
-            if entry["id"] == "samsung-sm-a546e"
+            entry for entry in data["representative_devices"] if entry["id"] == "samsung-sm-a546e"
         )
         self.assertIn("rma125_a54_physical_service_revalidation", a54["on_device_asr"])
         self.assertIn("non_network_voice_available_per_rma125", a54["offline_tts"])
