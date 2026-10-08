@@ -87,7 +87,9 @@ def main() -> int:
         "claiming A54 service-capability probes as a real network-disabled spoken conversation",
         "RMA-125 blocker",
     )
-    require(blocker, "Use the connected physical Samsung A54", "RMA-125 blocker")
+    require(blocker, "Run that manual workflow while a person is physically present at the A54", "RMA-125 blocker")
+    require(blocker, "ReachyRma190OfflineSpeechEndToEndAcceptance", "RMA-125 blocker")
+    require(blocker, "never\ninjects a transcript", "RMA-125 blocker")
 
     require(workflow, "scripts/tests/test_rma125_a54_speech_revalidation.py", "RMA-125 workflow")
     require(

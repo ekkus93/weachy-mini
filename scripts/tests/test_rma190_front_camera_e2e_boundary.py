@@ -62,7 +62,7 @@ class Rma190FrontCameraEvidenceBoundaryTests(unittest.TestCase):
             "37605466118",
             "11475530644",
             "859aa4ed9fc04030e5056511d027af83e0baa85a",
-            "The remaining two roadmap scenarios remain open",
+            "The remaining two roadmap scenarios have dedicated end-to-end harnesses",
         ):
             self.assertIn(evidence, spec)
         self.assertIn("Tranche 3 harness implemented; physical evidence pending", spec)
