@@ -3511,3 +3511,15 @@ These items are intentionally deferred and must receive separate specifications/
 
 ---
 
+# Completion record
+
+When the TODO is complete, add:
+
+- final release commit/tag;
+- tested device matrix;
+- MuJoCo and Reachy source revisions;
+- selected local model and hash;
+- fidelity/calibration level;
+- known limitations;
+- links to validation and performance reports;
+- confirmation that every file referenced by the final handoff exists at the stated repository path.
