@@ -35,9 +35,7 @@ FORBIDDEN_IMPORTS = re.compile(
 
 class Rma194DeferredProductionScope(unittest.TestCase):
     def test_shipping_package_dependencies_exclude_ar_xr(self) -> None:
-        manifest = json.loads(
-            (ROOT / "Packages/manifest.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((ROOT / "Packages/manifest.json").read_text(encoding="utf-8"))
         dependencies = set(manifest["dependencies"])
         self.assertFalse(dependencies & FORBIDDEN_PACKAGES)
 
@@ -51,9 +49,7 @@ class Rma194DeferredProductionScope(unittest.TestCase):
                 source = path.read_text(encoding="utf-8")
                 source = re.sub(r"(?m)^\s*//.*$", "", source)
                 source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
-                if FORBIDDEN_SYMBOLS.search(source) or FORBIDDEN_IMPORTS.search(
-                    source
-                ):
+                if FORBIDDEN_SYMBOLS.search(source) or FORBIDDEN_IMPORTS.search(source):
                     findings.append(str(path.relative_to(ROOT)))
         self.assertEqual([], findings, "Deferred production entry points detected")
 
