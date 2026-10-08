@@ -163,6 +163,33 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             self.assertIn("ConfigureAwait(true)", critical_path)
             self.assertNotIn("ConfigureAwait(false)", critical_path)
 
+    def test_android_vlm_transport_diagnostics_retain_only_exception_types(self) -> None:
+        source = (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Core/Perception/"
+            / "ReachyOpenAiVisionHttpTransport.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("catch (OperationCanceledException)", source)
+        self.assertIn(
+            "catch (Exception exception) when (exception is not OutOfMemoryException)",
+            source,
+        )
+        self.assertIn('"transport-exception-types"', source)
+        self.assertIn("DescribeTransportExceptionTypes(exception)", source)
+        self.assertIn("current = current.InnerException", source)
+        self.assertIn("depth < 4", source)
+        self.assertIn("Math.Min(name.Length, 64)", source)
+        self.assertIn("types.Append(safe ? character : '_')", source)
+        diagnostic = source[
+            source.index("private static string DescribeTransportExceptionTypes(") :
+            source.index("public void Dispose()", source.index(
+                "private static string DescribeTransportExceptionTypes("
+            ))
+        ]
+        self.assertNotIn(".Message", diagnostic)
+        self.assertNotIn(".ToString()", diagnostic)
+        self.assertNotIn(".StackTrace", diagnostic)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(

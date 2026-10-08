@@ -149,11 +149,36 @@ namespace ReachyMini.Perception
                     explicitlyAuthorizeNonIdempotentRetry: false,
                     idempotencyKey: null);
 
-                ReachyHttpTransportResult result = await transport.SendAsync(
-                        transportRequest,
-                        eventSink: null,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                ReachyHttpTransportResult result;
+                try
+                {
+                    result = await transport.SendAsync(
+                            transportRequest,
+                            eventSink: null,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Preserve the existing explicit cancellation outcome.
+                    throw;
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException)
+                {
+                    // Android/Unity HTTP failures can wrap the useful underlying
+                    // exception in a generic Exception. Do not leak the exception
+                    // message, request URL, headers, image bytes, or stack trace.
+                    return OpenAiVisionTransportResult.Failure(
+                        OpenAiVisionTransportStatus.Unavailable,
+                        new OpenAiVisionProviderError(
+                            OpenAiVisionProviderErrorCategory.Transport,
+                            "transport-exception-types",
+                            null,
+                            null,
+                            "VLM HTTP transport exception types: " +
+                                DescribeTransportExceptionTypes(exception)),
+                        requiresTransportReset: true);
+                }
                 if (!result.Succeeded)
                 {
                     return FailureFromTransport(result);
@@ -233,6 +258,41 @@ namespace ReachyMini.Perception
                     Array.Clear(borrowedResponseBody, 0, borrowedResponseBody.Length);
                 }
             }
+        }
+
+        // Type names are stable non-media diagnostics. Sanitization and depth
+        // limits prevent even an unusual custom exception name from becoming
+        // an unbounded diagnostic field. Exception messages are never read.
+        private static string DescribeTransportExceptionTypes(Exception exception)
+        {
+            var types = new StringBuilder(160);
+            int depth = 0;
+            for (Exception? current = exception;
+                 current != null && depth < 4;
+                 current = current.InnerException, ++depth)
+            {
+                if (depth > 0)
+                {
+                    types.Append(" > ");
+                }
+
+                string name = current.GetType().Name;
+                int limit = Math.Min(name.Length, 64);
+                for (int index = 0; index < limit; ++index)
+                {
+                    char character = name[index];
+                    bool safe = (character >= 'A' && character <= 'Z') ||
+                        (character >= 'a' && character <= 'z') ||
+                        (character >= '0' && character <= '9') ||
+                        character == '_';
+                    types.Append(safe ? character : '_');
+                }
+                if (limit == 0)
+                {
+                    types.Append("Unknown");
+                }
+            }
+            return types.ToString();
         }
 
         public void Dispose()
