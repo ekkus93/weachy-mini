@@ -17,7 +17,10 @@ checks three concrete, executable boundaries:
 2. The shipping `ReachyMainScreenBootstrap` explicitly rejects a camera whose
    framing is not `fixed_front_three_quarter` or whose
    `AcceptsUserNavigation` is true; the production application composition
-   retains the fixed presentation-camera requirement.
+   retains the fixed presentation-camera requirement. Existing shell reuse is
+   checked only *after* both authoritative runtime and fixed-camera validation;
+   the permanent contract asserts that ordering so a preexisting main-screen
+   component cannot bypass the safety boundary.
 3. A repository-wide scan of shipping Unity runtime C# rejects known AR/XR
    namespace imports and AR/depth/scene component creation/activation paths.
 

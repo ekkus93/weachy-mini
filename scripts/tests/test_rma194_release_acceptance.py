@@ -125,6 +125,18 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn('"fixed-presentation-camera"', composition)
         self.assertNotIn("ARSession", bootstrap)
         self.assertNotIn("ARSession", composition)
+        # An existing screen must not bypass the same camera/runtime policy.
+        # Guard the ordering, not just the presence of the safety checks.
+        self.assertLess(
+            bootstrap.index("if (cameraMetadata == null ||"),
+            bootstrap.index("ReachyMainScreen? existing ="),
+            "Reusing an existing shell must not bypass fixed-camera validation",
+        )
+        self.assertLess(
+            bootstrap.index("if (runtime == null)"),
+            bootstrap.index("ReachyMainScreen? existing ="),
+            "Reusing an existing shell must not bypass authoritative runtime validation",
+        )
 
     def test_shipping_runtime_has_no_deferred_ar_depth_or_scene_entrypoints(self) -> None:
         # Scan shipping C# code, not merely the release guide. Level 1

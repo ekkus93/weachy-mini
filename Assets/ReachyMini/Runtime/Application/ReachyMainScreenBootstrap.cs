@@ -62,14 +62,6 @@ namespace ReachyMini.AppState
                 throw new ArgumentNullException(nameof(camera));
             }
 
-            ReachyMainScreen? existing =
-                root.GetComponentInChildren<ReachyMainScreen>(true);
-            if (existing != null)
-            {
-                fault = string.Empty;
-                return true;
-            }
-
             ReachyProductionAuthoritativeRuntime runtime =
                 root.GetComponent<ReachyProductionAuthoritativeRuntime>();
             ReachyPresentationCamera cameraMetadata =
@@ -90,6 +82,14 @@ namespace ReachyMini.AppState
                 fault =
                     "The tagged main camera is not the fixed non-navigable Reachy presentation camera.";
                 return false;
+            }
+
+            ReachyMainScreen? existing =
+                root.GetComponentInChildren<ReachyMainScreen>(true);
+            if (existing != null)
+            {
+                fault = string.Empty;
+                return true;
             }
 
             GameObject shellObject = new GameObject(ShellObjectName);
