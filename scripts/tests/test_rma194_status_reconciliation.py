@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 STATUS = ROOT / "docs/RMA_194_RELEASE_ACCEPTANCE_STATUS_2026-09-28.md"
-SCENARIO = re.compile(r"^- \\[([x ])\\] (.+)$", re.MULTILINE)
+SCENARIO = re.compile(r"^- \[([x ])\] (.+)$", re.MULTILINE)
 BULLET = re.compile(r"^- (.+)$", re.MULTILINE)
 
 
@@ -47,7 +47,7 @@ class Rma194StatusReconciliationTests(unittest.TestCase):
         open_text = snapshot.split(
             "The following scenarios remain open until their own end-to-end evidence passes:",
             1,
-        )[1].split("\\n\\n", 1)[0]
+        )[1].split("\n\n", 1)[0]
         self.assertEqual(checked, set(BULLET.findall(accepted_text)))
         self.assertEqual(open_items, set(BULLET.findall(open_text)))
         self.assertFalse(checked & open_items)
