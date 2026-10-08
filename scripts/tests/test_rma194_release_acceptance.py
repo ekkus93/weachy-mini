@@ -104,6 +104,14 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             deferred_packages.intersection(dependencies),
             "Deferred AR/XR packages must not enter the shipping Unity manifest",
         )
+        self.assertFalse(
+            [
+                name
+                for name in dependencies
+                if name.startswith("com.unity.xr.") or name == "com.unity.modules.xr"
+            ],
+            "Any Unity XR package, including future packages, is deferred",
+        )
 
     def test_shipping_bootstrap_rejects_movable_presentation_camera(self) -> None:
         app = ROOT / "Assets/ReachyMini/Runtime/Application"
@@ -126,6 +134,16 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         sources = sorted(root.rglob("*.cs"))
         self.assertTrue(sources, "Shipping runtime C# sources must be present")
         forbidden = (
+            re.compile(
+                r"\b(?:UnityEngine\.XR\.(?:ARFoundation|ARSubsystems|Interaction|OpenXR)"
+                r"|Google\.ARCore)\b"
+            ),
+            re.compile(
+                r"\b(?:AddComponent|GetComponent|FindAnyObjectByType)"
+                r"\s*\(\s*typeof\s*\(\s*(?:ARSession|AROcclusionManager|ARPlaneManager"
+                r"|ARAnchorManager|ARCameraManager|XRDepthSubsystem|XRMeshSubsystem)"
+                r"\s*\)\s*\)"
+            ),
             re.compile(
                 r"(?m)^\s*using\s+"
                 r"(?:UnityEngine\.XR\.(?:ARFoundation|ARSubsystems|Interaction|OpenXR)"
