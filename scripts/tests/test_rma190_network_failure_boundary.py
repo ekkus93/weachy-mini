@@ -13,13 +13,22 @@ VALIDATION = ROOT / "docs/validation/RMA_190_NETWORK_FAILURE_MODES_LOCAL_VALIDAT
 
 
 class Rma190NetworkFailureBoundaryTests(unittest.TestCase):
-    def test_network_failure_row_remains_open(self) -> None:
+    def test_network_failure_row_closes_only_with_dedicated_acceptance(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         item = "Network loss, rate limit, malformed response, and cancellation."
-        self.assertIn(f"- [ ] {item}", todo)
-        self.assertNotIn(f"- [x] {item}", todo)
+        self.assertIn(f"- [x] {item}", todo)
+        self.assertNotIn(f"- [ ] {item}", todo)
+        for evidence in (
+            "RMA-190 Provider End-to-End Acceptance",
+            "37757168563",
+            "b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b",
+            "11540502224",
+            "fixture endpoints are explicitly labeled as fixtures",
+            "without silent provider substitution",
+        ):
+            self.assertIn(evidence, todo)
 
-    def test_status_does_not_claim_provider_success_or_checkbox_closure(self) -> None:
+    def test_historical_status_remains_explicitly_non_acceptance_evidence(self) -> None:
         status = STATUS.read_text(encoding="utf-8")
         validation = VALIDATION.read_text(encoding="utf-8")
         for token in (

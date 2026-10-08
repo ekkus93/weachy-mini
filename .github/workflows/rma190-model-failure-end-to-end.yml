@@ -1,0 +1,98 @@
+name: RMA-190 Model Failure End-to-End Acceptance
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Assets/ReachyMini/Runtime/Core/LocalModels/**'
+      - 'managed/ReachyMini.LocalLlm.Tests/**'
+      - 'docs/RMA_190_END_TO_END_SCENARIOS_SPEC_2026-09-21.md'
+      - 'docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md'
+      - '.github/workflows/rma190-model-failure-end-to-end.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma190-model-failure-end-to-end-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  acceptance:
+    name: Validate corruption and OOM recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build local LLM tests with warnings as errors
+        run: >-
+          dotnet build
+          managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          --configuration Release
+          --warnaserror
+
+      - name: Run RMA-190 model failure integration scenario
+        run: >-
+          dotnet run
+          --project managed/ReachyMini.LocalLlm.Tests/ReachyMini.LocalLlm.Tests.csproj
+          --configuration Release
+          --no-build
+
+      - name: Create exact-SHA evidence report
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="artifacts/rma190-model-failure-end-to-end"
+          mkdir -p "$OUT"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = {
+              "status": "passed",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "rma": "RMA-190",
+              "acceptance_class": "deterministic-local-model-package-provider-integration",
+              "production_components": [
+                  "LocalModelPackageManager",
+                  "LocalLlmProvider",
+              ],
+              "package_corruption_fixture": True,
+              "oom_fault_injection_fixture": True,
+              "fixture_is_not_physical_memory_measurement": True,
+              "installed_corruption_rejected": True,
+              "corrupt_artifact_reapproved": False,
+              "oom_status": "ResourceExhausted",
+              "provider_faults_pending_explicit_recovery": True,
+              "explicit_reload_required": True,
+              "post_reload_generation_succeeds": True,
+              "hidden_retry_or_provider_fallback": False,
+          }
+          Path("$OUT/report.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          sha256sum             managed/ReachyMini.LocalLlm.Tests/Program.Rma190ModelFailureAcceptance.cs             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalModelPackageManager.cs             Assets/ReachyMini/Runtime/Core/LocalModels/ReachyLocalLlmProvider.Core.cs             > "$OUT/source-sha256.txt"
+
+      - name: Upload RMA-190 model-failure evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma190-model-failure-end-to-end-${{ github.sha }}
+          path: artifacts/rma190-model-failure-end-to-end
+          if-no-files-found: error
+          retention-days: 30

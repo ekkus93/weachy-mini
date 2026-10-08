@@ -62,7 +62,7 @@ class Rma190FrontCameraEvidenceBoundaryTests(unittest.TestCase):
             "37605466118",
             "11475530644",
             "859aa4ed9fc04030e5056511d027af83e0baa85a",
-            "The remaining six roadmap scenarios remain open",
+            "The remaining four roadmap scenarios remain open",
         ):
             self.assertIn(evidence, spec)
         self.assertNotIn("physical evidence pending", spec)

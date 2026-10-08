@@ -29,6 +29,7 @@ internal static partial class Program
         await TestFailedCancelDoesNotRetryAsync().ConfigureAwait(false);
         await TestPollExceptionCleanupAsync().ConfigureAwait(false);
         await TestMetricsExceptionStillReleasesAsync().ConfigureAwait(false);
+        await TestRma190ModelFailureScenarioAsync().ConfigureAwait(false);
         await TestOutOfMemoryBeforeNativeHandleAsync().ConfigureAwait(false);
         await TestOutOfMemoryAfterNativeStartAsync().ConfigureAwait(false);
         await TestOutOfMemoryCleanupFailureFaultsAsync().ConfigureAwait(false);
