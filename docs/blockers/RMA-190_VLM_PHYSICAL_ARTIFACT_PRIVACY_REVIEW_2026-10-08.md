@@ -1,13 +1,12 @@
 # RMA-190 rear-camera/VLM physical artifact privacy review
 
-**Status: remediation required; no new physical acceptance claimed
-(2026-10-08).** This review concerns the test runner's exported diagnostics,
+**Status: source privacy hardening committed; physical requalification and diagnostic parser correction still open (2026-10-08).** This review concerns the test runner's exported diagnostics,
 not the shipping VLM encoder or a proven disclosure of actual camera content.
 
 ## Observed repository behavior
 
-`scripts/run_rma190_rear_camera_vlm_end_to_end_android.sh` currently
-collects `adb logcat -d -v threadtime` without an app-PID filter,
+Before source hardening, `scripts/run_rma190_rear_camera_vlm_end_to_end_android.sh`
+collected `adb logcat -d -v threadtime` without an app-PID filter,
 `dumpsys media.camera`, `dumpsys activity activities`, and
 `adb exec-out screencap -p` into its report directory. The physical
 RMA-190 GitHub Actions workflow uploads that report directory as an artifact.
@@ -37,11 +36,34 @@ already provide the intended machine-readable pass/fail evidence.
    dumps. Validate the exact source head in hosted CI and, when available,
    requalify the shipping physical VLM scenario on the Android device.
 
-The source-edit attempts for this runner were rejected by the available
-write-safety checks. After those ambiguous outcomes, `master` was inspected
-and no runner mutation was observed. This is not a source-code test failure
-or a reason to fabricate physical evidence. The privacy hardening remains
-unimplemented until a permitted source write can be qualified.
+## Implementation and exact-head qualification
+
+Commit `235c0267509fb16029143e7a7a0f848586b16154` removed screenshot,
+global camera/activity dumps, and global log clearing from the physical
+runner. It introduced PID- and device-start-time-scoped logcat filtering,
+bounded stage/resource-event output, and filtered app package metadata.
+`scripts/tests/test_rma190_vlm_artifact_privacy.py` now runs in the
+permanent release-review workflow. Commits `60685390b12042440280f021e42702c457224fc5`
+and `dfde460f31db3e1f7b2d5306fe006fa72892ceac` reconciled the
+existing RMA-190 physical-runner contract and Ruff formatting.
+
+On exact head `dfde460f31db3e1f7b2d5306fe006fa72892ceac`,
+release-review run `37860776077` and RMA-173 run `37860776036`
+passed. Hosted CI and physical device validation were still pending when
+this record was written. The earlier RMA-190 physical workflow
+`37860425710` failed at an outdated static assertion, before the
+device test; this was corrected in the subsequent commit.
+
+**Remaining parser defect:** the inline Python diagnostic filter in the
+runner currently contains doubled backslashes in the regular-expression
+word boundaries and newline separators. That causes stage messages to
+be missed and can render resource transitions without real line breaks.
+This is a diagnostic-quality defect, not evidence of a private-media leak.
+Two attempts to commit a corrected runner body were blocked by write-safety
+checks; inspection confirmed `master` did not move after those attempts.
+Correct the inline parser, add a functional fixture test for its emitted
+lines, and rerun exact-head hosted and physical validation. Do not
+misrepresent a static privacy contract pass as physical VLM acceptance.
 
 **Acceptance boundary:** do not close the remaining RMA-190 rear-camera/VLM
 scenario or infer release privacy acceptance from this review document.
