@@ -12,10 +12,15 @@ STATUS = ROOT / "docs/validation/RMA_184_A54_PROFILE_SUMMARY_STATUS_2026-09-28.m
 
 
 class Rma184ProfileSummaryStatusTests(unittest.TestCase):
-    def test_todo_keeps_profile_publication_and_release_report_open(self) -> None:
+    def test_todo_closes_measured_profile_publication_but_not_device_release_gates(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
+        self.assertIn("- [x] Publish measured default profiles.", todo)
+        self.assertNotIn("- [ ] Publish measured default profiles.", todo)
+        self.assertIn("RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md", todo)
         for open_item in (
-            "- [ ] Publish measured default profiles.",
+            "- [ ] Long-running tests do not accumulate unbounded memory or state lag.",
+            "- [ ] Thermal degradation follows the documented priority order.",
+            "- [ ] Supported devices meet the defined simulation and interaction targets.",
             "- [ ] Representative-device performance report exists.",
         ):
             self.assertIn(open_item, todo)
