@@ -3341,7 +3341,7 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-Eight scenarios are accepted across their required execution classes; the
+Nine scenarios are accepted across their required execution classes; the two
 remaining scenarios stay open until their own end-to-end evidence passes.
 
 **Tranche 1 completion evidence (2026-09-30):** physical Android workflow
@@ -3420,7 +3420,18 @@ does not close RMA-135 or RMA-184.
 - [x] Permission denial/revocation.
 - [x] Network loss, rate limit, malformed response, and cancellation.
 - [x] Model corruption/OOM.
-- [ ] Solver fault and controlled reset.
+**Solver-fault completion evidence (2026-10-08):** exact-head hosted CI run
+`37760354266` passed on `405711d5dd0d03253959742dcf66a957012ad0a8`, including
+the native-backed managed contract lane with `REACHY_MANAGED_NATIVE_TESTS=1`.
+`Program.Rma190SolverFaultControlledResetTests.cs` injects a one-shot typed
+`NumericFailure` through the existing native test backend, proves the production
+`ReachySimulationWorker` retains the fault and rejects a hidden in-place reset,
+then recreates the native handle, performs an explicit `NeutralAwake` reset, and
+requires finite authoritative simulation progress with no retained fault. The
+fault trigger is an explicitly labeled deterministic test fixture; this scenario
+claims solver fault/recovery integration only, not a physical-device measurement.
+
+- [x] Solver fault and controlled reset.
 
 ## RMA-191 — Complete privacy and security review
 

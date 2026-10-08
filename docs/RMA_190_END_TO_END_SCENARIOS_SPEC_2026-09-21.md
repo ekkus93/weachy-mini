@@ -53,7 +53,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
 | Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Model corruption/OOM | Local-model package/provider integration | Passed: run `37759478803`, SHA `6f3019c4...` |
-| Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Open |
+| Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Passed: run `37760354266`, SHA `405711d5...` |
 
 ## 4. Tranche 1 contract
 
@@ -159,6 +159,14 @@ provider, explicit reload, and successful post-reload validated generation with
 no hidden retry or provider fallback. The fixture is deliberately not represented
 as a physical memory-pressure or performance measurement.
 
-The remaining three roadmap scenarios remain open until their own end-to-end harnesses
+The solver-fault/controlled-reset scenario is closed by exact-head hosted CI run
+`37760354266` on `405711d5dd0d03253959742dcf66a957012ad0a8`. The managed CI lane
+builds the test-only native interop library, sets `REACHY_MANAGED_NATIVE_TESTS=1`,
+and executes the one-shot typed numeric failure through `ReachySimulationWorker`.
+The scenario proves retained fail-closed fault state, rejection of a hidden in-place
+reset, explicit handle recreation plus neutral reset, and resumed finite authoritative
+progress without claiming physical-device evidence.
+
+The remaining two roadmap scenarios remain open until their own end-to-end harnesses
 exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is supporting
 evidence but is not substituted for the remaining RMA-190 scenario results.

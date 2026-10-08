@@ -31,13 +31,16 @@ def read(path: Path) -> str:
 
 
 class Rma190SolverFaultResetContracts(unittest.TestCase):
-    def test_authoritative_rma190_row_stays_open_until_exact_evidence(self) -> None:
+    def test_authoritative_rma190_row_records_exact_completion_evidence(self) -> None:
         todo = read(TODO)
         spec = read(SPEC)
         item = "Solver fault and controlled reset."
-        self.assertIn(f"- [ ] {item}", todo)
+        self.assertIn(f"- [x] {item}", todo)
         self.assertIn("Solver fault and controlled reset", spec)
         self.assertIn("Native-backed worker + application/runtime recovery", spec)
+        self.assertIn("37760354266", todo)
+        self.assertIn("405711d5dd0d03253959742dcf66a957012ad0a8", todo)
+        self.assertIn("37760354266", spec)
 
     def test_controlled_reset_discards_commands_and_republishes_authoritative_zero_state(
         self,
