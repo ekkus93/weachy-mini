@@ -69,9 +69,9 @@ namespace ReachyMini.AppState
 
             try
             {
-                CurrentDecision =
+                ReachyPriorityDegradationDecision decision =
                     priorityRuntime!.CaptureAndApply();
-                ReachyPriorityDegradationDecision decision = CurrentDecision;
+                CurrentDecision = decision;
                 bool levelChanged = lastReportedLevel != decision.Level;
                 bool criticalReasonChanged =
                     decision.Level == ReachyPriorityDegradationLevel.Critical &&
