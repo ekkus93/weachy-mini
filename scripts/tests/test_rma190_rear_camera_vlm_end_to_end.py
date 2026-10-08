@@ -39,7 +39,8 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("measured_calibration_claimed = false", source)
         self.assertIn("external_vlm_fixture = true", source)
         self.assertIn("fixture_is_live_cloud_evidence = false", source)
-        self.assertIn("not a measured device calibration", source)
+        self.assertIn("not a measured device ", source)
+        self.assertIn('"calibration."', source)
 
     def test_runner_uses_local_fixture_without_persisting_camera_payload(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
