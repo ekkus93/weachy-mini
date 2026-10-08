@@ -48,7 +48,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Deterministic gesture replay | Physical Android / production target sink + authoritative state | Passed: run `36806841674`, SHA `1c741bce...` |
 | Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Passed: run `37605466118`, SHA `859aa4ed...` |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
-| Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
+| Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Tranche 3 harness implemented; physical evidence pending |
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
 | Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Passed: run `37757168563`, SHA `b9f4d739...` |
@@ -126,7 +126,37 @@ stale frame, or alternate provider path. The scenario passed in physical Android
 workflow `37605466032` on exact SHA
 `859aa4ed9fc04030e5056511d027af83e0baa85a` on a pinned physical Android device.
 
-## 7. Completion policy
+## 7. Tranche 3 rear-camera visual contract
+
+`ReachyRma190RearVisualEndToEndAcceptance` runs only when launched with
+`reachy_rma190_rear_visual_e2e_acceptance`. It uses the shipping Android
+camera acquisition, texture bridge, perception service, authoritative runtime,
+and optional `ICloudVlmProviderCapability`.
+
+A pass requires a real rear CameraX session and an observation-eligible
+`TransformedReachyEye` frame with a validity mask whose camera/session and
+authoritative-continuity identity match the active physical session. The
+scenario reuses the tranche-2 deterministic `UncalibratedEstimate` fixture
+machinery with rear-camera facing and no selfie mirroring; it never claims the
+fixture is a measured calibration and restores the prior durable calibration
+set and camera session in cleanup.
+
+The harness asks the fixed question, "What is visible in this rear-camera
+scene? Answer briefly." through the shipping optional VLM capability using the
+captured real frame. A provider result of `Succeeded` must contain non-empty
+text. `Unavailable` is also an acceptable scenario outcome because VLM is an
+optional provider and the application must work without cloud credentials.
+Any other VLM status (timeout, provider failure, malformed/contract failure,
+invalid frame, or cancellation) fails closed. No cloud credential or synthetic
+camera frame is injected by the acceptance harness.
+
+The dedicated physical workflow intentionally omits artifact upload so an
+external GitHub artifact-storage quota cannot prevent the A54 validation from
+running; the runner validates the machine-readable report and prints the
+validated JSON into the job log. The roadmap checkbox remains open until this
+harness passes on a physical Android device.
+
+## 8. Completion policy
 
 The first three RMA-190 roadmap checkboxes are closed by physical Android run
 `36806841674` on exact implementation SHA
