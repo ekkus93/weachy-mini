@@ -85,3 +85,7 @@ Only after those checks pass should the RMA-125 implementation and offline-speec
 Use the connected physical Samsung A54 on the `weachy-mini-android-device` self-hosted runner to add/run the application-level RMA-125 offline conversation acceptance. Reuse the existing RMA-121/RMA-123 production providers and the RMA-125 focus coordinator; do not add a test-only transcript or a network-capable fallback.
 
 If the explicit recognizer, language model, or exact-locale offline voice becomes unavailable, preserve the resulting setup-required evidence and configure/install the required local service/model/voice; do not change providers automatically.
+
+## A54 reconnected regression evidence — 2026-10-08
+
+On exact `master` SHA `709c01ddadc78b21246a00ae54dcbd8c0e3892fe`, `Local Unity Android Validation` run `37720761063` passed physical device pinning and the RMA-195 application-composition acceptance after the A54 was reconnected. This confirms the device is available again for subsequent RMA-125 acceptance work. The run did not exercise a real network-disabled human ASR utterance through offline TTS with the required audio-focus sequence, so it does not close any of the three open RMA-125 acceptance checkboxes. The next experiment remains the dedicated shipping-path spoken-turn acceptance above.
