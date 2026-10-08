@@ -173,7 +173,6 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             "Deferred AR/XR/depth/scene components cannot be enabled in shipping runtime",
         )
 
-
     def test_model_fidelity_audit_is_uncalibrated_geometric_baseline(self) -> None:
         audit = json.loads(read(ROOT / "models/reachy-mini/model-parameter-audit.json"))
         fidelity = audit["fidelity"]
@@ -187,9 +186,7 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertFalse(diagnostics["calibrated"])
 
     def test_shipping_fidelity_defaults_do_not_claim_physical_calibration(self) -> None:
-        settings = read(
-            ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs"
-        )
+        settings = read(ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs")
         metadata = read(ROOT / "Assets/ReachyMini/Runtime/Core/ProjectMetadata.cs")
         self.assertIn('"Uncalibrated"', settings)
         self.assertIn("ReachySimulationFidelity.Standard", settings)
