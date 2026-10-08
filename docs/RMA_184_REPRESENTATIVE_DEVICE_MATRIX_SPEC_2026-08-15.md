@@ -2,7 +2,7 @@
 
 **Task:** RMA-184 — Representative-device matrix  
 **Date:** 2026-08-15  
-**Status:** In progress — repository qualification tooling complete; mid/high physical long-run evidence pending
+**Status:** In progress — measured default render/physics profiles published; representative physical long-run evidence pending
 
 ## Purpose
 
@@ -21,6 +21,25 @@ The authoritative machine-readable registry is `models/reachy-mini/android-devic
 All classes retain the existing RMA-133 minimum local decode gate of 1 token/s. A representative long run is at least 1,800 seconds. Authoritative physics p95 must stay at or below the fixed 2 ms timestep, and accumulated simulation-state lag may grow by no more than one 2 ms timestep over the post-warmup observation window.
 
 The render p95 ceiling is the RMA-181 nominal-to-`RenderReduced` boundary: 1.15 times the nominal frame budget. This yields 38.333 ms for a 30 FPS default and 19.167 ms for a 60 FPS default. Crossing that boundary is visible degradation pressure, not a qualifying nominal result.
+
+### Published physical default-profile measurements
+
+Physical Samsung A54 workflow run `36187273962` (job `108243676196`,
+workflow head `7ee2e211d1405e4e9aa294a1dde4041cf8bcee3e`, source baseline
+`b188ce3b18635d24da79cb762e245c52e361ab5e`) completed the existing
+RMA-180 acceptance at both default frame targets. The published measurements
+are:
+
+| Target | Duration | Unity render p95 | Native physics p95 | Qualification scope |
+|---|---:|---:|---:|---|
+| 30 FPS | 300.0421124 s | 33.43089669942856 ms | 0.5869 ms | Measured default profile; below the mid-class render/physics ceilings |
+| 60 FPS | 300.0041515 s | 33.32940116524696 ms | 0.6415000000000001 ms | Measured 60 FPS profile on the A54; **not** high-class device qualification and above the 19.167 ms high-class nominal render ceiling |
+
+The full percentile/sample tables are in
+`docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md`.
+Publishing these measured defaults does not substitute for the required
+1,800-second integrated run, local-LLM throughput, state-lag, thermal-order, or
+representative-device support gates.
 
 ## Support classification
 
@@ -95,4 +114,4 @@ Physics correctness and audio interaction remain protected invariants. A device 
 
 The LG-H872 has reusable physical evidence for camera behavior and RMA-133 local-LLM thermal/throughput behavior, including the documented warm-run degradation. That evidence is sufficient to seed the low-class default, but it is not a substitute for an RMA-184 30-minute integrated post-warmup run.
 
-Mid/high entries are deliberately marked `pending_measurement`. RMA-184 must not be marked complete until the representative physical runs populate runtime RAM/API/speech availability and demonstrate the long-run qualification gates. Repository/unit/static validation proves the policy and tooling; it does not fabricate those physical measurements.
+The 30 FPS and 60 FPS render/physics default profiles are now published from the physical A54 capture above. Integrated qualification remains `pending_measurement`: the A54 still needs its 1,800-second mid-class run and fresh support classification, while the OnePlus/Pixel high-class devices still need their own runtime probes and representative long-run qualification. The A54 60 FPS profile is an explicitly nonrepresentative measurement for the high-class device gate. RMA-184 must not be marked complete until those physical long-run/support criteria pass. Repository/unit/static validation proves the policy and tooling; it does not fabricate those measurements.

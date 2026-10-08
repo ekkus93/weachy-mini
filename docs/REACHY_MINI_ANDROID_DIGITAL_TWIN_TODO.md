@@ -2849,9 +2849,9 @@ Order of preservation:
 - [x] Define at least low, mid, and high performance Android test classes.
 - [x] Record SoC, Android version, RAM, graphics API, camera capability, and speech-service availability.
 - [x] Establish supported/unsupported criteria.
-- [ ] Publish measured default profiles.
+- [x] Publish measured default profiles.
 
-**Note (2026-08-22):** the three items above are implemented and tested (`ReachyRma184RepresentativeDeviceMatrix.cs`'s `Low`/`Mid`/`High` classes, `ReachyRma184RepresentativeDeviceProbe.cs`'s SoC/API/RAM/graphics/camera/speech metadata capture, `ReachyDeviceSupportStatus` fail-closed criteria in `models/reachy-mini/android-device-matrix.json`'s `support_policy` — see `scripts/tests/test_rma184_representative_device_matrix.py`). This ticket deliberately carries no ticket-complete status line, and the remaining item plus all acceptance criteria below stay unchecked: `docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15.md` records mid/high default profiles as `pending_measurement` pending physical long-run evidence, and `scripts/tests/test_rma184_representative_device_matrix.py::test_roadmap_keeps_physical_qualification_open` asserts this doc keeps physical qualification open — do not check the items below or add a ticket-complete status line here without updating that test.
+**Note (2026-10-08):** the class definitions, metadata probe, and fail-closed support criteria remain implemented and tested. The measured default-profile publication is now reconciled from physical Samsung A54 run `36187273962` (job `108243676196`, workflow head `7ee2e211d1405e4e9aa294a1dde4041cf8bcee3e`, source baseline `b188ce3b18635d24da79cb762e245c52e361ab5e`), which captured complete 300-second 30 FPS and 60 FPS RMA-180 profiles; the exact values and scope are published in `docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md` and the matrix. This closes only profile publication. The 1,800-second integrated long-run, thermal-order, and supported-device qualification criteria below remain open; the 60 FPS A54 capture is explicitly not high-class device qualification.
 
 **Acceptance criteria**
 

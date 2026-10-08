@@ -4,7 +4,7 @@
 
 This note records successful physical Samsung A54 performance-profile capture work used to advance RMA-184 representative-device release evidence.
 
-It is evidence that the current `master` application source can build, install, and complete the existing RMA-180 performance acceptance on the attached Samsung A54 while collecting both 30 FPS and 60 FPS default profile data.
+It is evidence that source baseline `b188ce3b18635d24da79cb762e245c52e361ab5e` built, installed, and completed the existing RMA-180 performance acceptance on the attached Samsung A54 while collecting both 30 FPS and 60 FPS default profile data. Later RMA-180 changes only centralized frame-pacing ownership in `ReachyRuntimeThermalPolicy` and hardened stale-report cleanup; this record remains historical measured-profile evidence, not exact-head long-run qualification.
 
 ## Physical pass run
 
@@ -88,6 +88,6 @@ Ralph failure extraction captured the following summary status:
 
 ## Closure boundary
 
-This evidence publishes the measured default-profile values captured from the A54 RMA-180/RMA-184 acceptance path. It supports closing the RMA-184 `Publish measured default profiles` requirement once this evidence is merged and the authoritative TODO is reconciled on `master`.
+This evidence publishes the measured default-profile values captured from the A54 RMA-180/RMA-184 acceptance path. It closes only the RMA-184 `Publish measured default profiles` requirement after this file and the authoritative TODO are reconciled on `master`; it does not close any representative-device long-run acceptance criterion.
 
 The unavailable camera, local-LLM, audio, and network workload rows are explicit non-exercised measurements from this default-profile session, not hidden success claims for those workloads. Separate scenario-specific physical runs remain responsible for those subsystem gates.

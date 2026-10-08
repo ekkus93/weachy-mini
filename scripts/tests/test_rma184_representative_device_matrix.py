@@ -13,6 +13,7 @@ SPEC = ROOT / "docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15.md"
 VALIDATION = ROOT / (
     "docs/validation/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_LOCAL_VALIDATION_2026-08-15.md"
 )
+PROFILE_EVIDENCE = ROOT / "docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md"
 PROGRAM = ROOT / "managed/ReachyMini.Core.Tests/Program.cs"
 MANAGED = ROOT / ("managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs")
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
@@ -138,6 +139,26 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ):
             self.assertIn(token, managed)
 
+    def test_measured_default_profiles_are_published_without_long_run_claim(self) -> None:
+        data = json.loads(MATRIX.read_text(encoding="utf-8"))
+        mid = next(
+            entry for entry in data["default_profiles"] if entry["performance_class"] == "mid"
+        )
+        high = next(
+            entry for entry in data["default_profiles"] if entry["performance_class"] == "high"
+        )
+        self.assertEqual(mid["measured_profile"]["run_id"], 36187273962)
+        self.assertTrue(mid["measured_profile"]["representative_for_class"])
+        self.assertEqual(high["measured_profile"]["run_id"], 36187273962)
+        self.assertFalse(high["measured_profile"]["representative_for_class"])
+        self.assertGreater(
+            high["measured_profile"]["render_p95_ms"],
+            high["maximum_render_p95_ms"],
+        )
+        evidence = PROFILE_EVIDENCE.read_text(encoding="utf-8")
+        self.assertIn("run id: `36187273962`", evidence)
+        self.assertIn("not close any representative-device long-run", evidence)
+
     def test_docs_do_not_claim_unrun_physical_qualification(self) -> None:
         spec = SPEC.read_text(encoding="utf-8")
         validation = VALIDATION.read_text(encoding="utf-8")
@@ -155,7 +176,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         end = todo.index("# Phase 20", start)
         block = todo[start:end]
         self.assertNotIn("**Status:** Complete", block)
-        self.assertIn("- [ ] Publish measured default profiles.", block)
+        self.assertIn("- [x] Publish measured default profiles.", block)
         for gate in [
             "- [ ] Long-running tests do not accumulate unbounded memory or state lag.",
             "- [ ] Thermal degradation follows the documented priority order.",

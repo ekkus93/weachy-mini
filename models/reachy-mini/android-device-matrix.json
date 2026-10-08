@@ -3,9 +3,9 @@
   "contract_id": "rma184_representative_device_matrix_v1",
   "measurement_policy": {
     "minimum_long_run_seconds": 1800,
-    "maximum_physics_p95_ms": 2.0,
+    "maximum_physics_p95_ms": 2,
     "maximum_state_lag_growth_seconds": 0.002,
-    "minimum_local_llm_decode_tokens_per_second": 1.0,
+    "minimum_local_llm_decode_tokens_per_second": 1,
     "thermal_degradation_contract": "rma181_priority_degradation_v1",
     "memory_growth_is_post_warmup_final_minus_initial": true
   },
@@ -38,7 +38,19 @@
       "maximum_render_p95_ms": 38.33333333333333,
       "local_llm_profile": "Balanced",
       "maximum_memory_growth_bytes": 201326592,
-      "publication_status": "initial_default_physical_long_run_pending"
+      "publication_status": "measured_default_profile_published_integrated_long_run_pending",
+      "measured_profile": {
+        "device_id": "samsung-sm-a546e",
+        "source_baseline_sha": "b188ce3b18635d24da79cb762e245c52e361ab5e",
+        "workflow_head_sha": "7ee2e211d1405e4e9aa294a1dde4041cf8bcee3e",
+        "run_id": 36187273962,
+        "target_fps": 30,
+        "duration_seconds": 300.0421124,
+        "render_p95_ms": 33.43089669942856,
+        "physics_p95_ms": 0.5869,
+        "representative_for_class": true,
+        "qualification_scope": "render_and_physics_default_profile_only"
+      }
     },
     {
       "performance_class": "high",
@@ -46,7 +58,19 @@
       "maximum_render_p95_ms": 19.166666666666664,
       "local_llm_profile": "Performance",
       "maximum_memory_growth_bytes": 268435456,
-      "publication_status": "initial_default_physical_long_run_pending"
+      "publication_status": "measured_60fps_profile_published_high_device_long_run_pending",
+      "measured_profile": {
+        "device_id": "samsung-sm-a546e",
+        "source_baseline_sha": "b188ce3b18635d24da79cb762e245c52e361ab5e",
+        "workflow_head_sha": "7ee2e211d1405e4e9aa294a1dde4041cf8bcee3e",
+        "run_id": 36187273962,
+        "target_fps": 60,
+        "duration_seconds": 300.0041515,
+        "render_p95_ms": 33.32940116524696,
+        "physics_p95_ms": 0.6415000000000001,
+        "representative_for_class": false,
+        "qualification_scope": "render_and_physics_profile_publication_only"
+      }
     }
   ],
   "representative_devices": [
@@ -58,7 +82,9 @@
       "soc": "Qualcomm Snapdragon 821",
       "android_version": "8.0.0",
       "android_api": 26,
-      "ram_configuration_gib": [4],
+      "ram_configuration_gib": [
+        4
+      ],
       "ram_observation_status": "device_family_spec_and_existing_physical_evidence",
       "graphics_api": "Vulkan",
       "gpu": "Adreno 530",
@@ -82,7 +108,10 @@
       "soc": "Samsung Exynos 1380",
       "android_version": "16",
       "android_api": 36,
-      "ram_configuration_gib": [6, 8],
+      "ram_configuration_gib": [
+        6,
+        8
+      ],
       "ram_observation_status": "6gib_variant_measured_via_rma184_device_probe_8gib_unverified",
       "graphics_api": "Vulkan",
       "gpu": "Mali-G68 MP5",
@@ -90,12 +119,13 @@
       "on_device_asr": "available_per_rma125_a54_physical_service_revalidation_2026_09_30",
       "offline_tts": "installed_non_network_voice_available_per_rma125_revalidation_audible_conversation_pending",
       "support_status": "supported_with_limitations",
-      "measurement_status": "partial_rma184_probe_and_rma125_service_readiness_evidence",
+      "measurement_status": "partial_rma184_probe_default_profiles_and_rma125_service_readiness_evidence",
       "evidence": [
         "docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md",
         "docs/validation/RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md",
         "docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md",
-        "docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md"
+        "docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md",
+        "docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md"
       ]
     },
     {
@@ -106,7 +136,10 @@
       "soc": "Qualcomm Snapdragon 8 Gen 2",
       "android_version": "15",
       "android_api": null,
-      "ram_configuration_gib": [8, 16],
+      "ram_configuration_gib": [
+        8,
+        16
+      ],
       "ram_observation_status": "runtime_probe_required_for_installed_variant",
       "graphics_api": "Vulkan",
       "gpu": "Adreno 740",
@@ -125,7 +158,9 @@
       "soc": "Google Tensor G2",
       "android_version": "14",
       "android_api": null,
-      "ram_configuration_gib": [12],
+      "ram_configuration_gib": [
+        12
+      ],
       "ram_observation_status": "device_family_spec_runtime_probe_required",
       "graphics_api": "Vulkan",
       "gpu": "Mali-G710 MP7",
