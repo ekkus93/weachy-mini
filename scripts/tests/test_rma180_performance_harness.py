@@ -114,8 +114,8 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
             runner.index('if ! "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}"; then'),
         )
         self.assertLess(
-            runner.index('RMA180_PROFILE_SECONDS must be between 10 and 3600.'),
-            runner.index('TIMEOUT_SECONDS=$((PROFILE_SECONDS * 2 + 180))'),
+            runner.index("RMA180_PROFILE_SECONDS must be between 10 and 3600."),
+            runner.index("TIMEOUT_SECONDS=$((PROFILE_SECONDS * 2 + 180))"),
         )
 
     def test_managed_contract_is_registered(self) -> None:
