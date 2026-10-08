@@ -3,7 +3,7 @@
 **RMA:** 125  
 **Status:** Hardware/API prerequisite cleared on A54; network-disabled spoken-conversation acceptance still open  
 **Recorded:** 2026-08-07  
-**Updated:** 2026-09-30
+**Updated:** 2026-10-08
 
 ## Summary
 
@@ -82,7 +82,23 @@ Only after those checks pass should the RMA-125 implementation and offline-speec
 
 ## Next experiment
 
-Use the connected physical Samsung A54 on the `weachy-mini-android-device` self-hosted runner to add/run the application-level RMA-125 offline conversation acceptance. Reuse the existing RMA-121/RMA-123 production providers and the RMA-125 focus coordinator; do not add a test-only transcript or a network-capable fallback.
+The application-level spoken-turn harness is now implemented as
+`ReachyRma190OfflineSpeechEndToEndAcceptance`,
+`scripts/run_rma190_offline_speech_end_to_end_android.sh`, and the manual
+`RMA-190 Offline Speech End-to-End Android Acceptance` workflow. It installs
+the exact RMA-133-selected Qwen artifact through the production
+`LocalModelPackageManager`, selects the shipping on-device provider preferences,
+disables Wi-Fi/mobile data plus airplane mode at the device boundary, invokes
+the real `ReachyMainScreen.RequestMicrophone()` path, and requires a human
+utterance. The runner restores the prior network state unconditionally. It never
+injects a transcript, records microphone audio, or supplies cloud credentials.
+
+Run that manual workflow while a person is physically present at the A54 and
+speak the requested utterance. A successful spoken turn can establish the
+positive conversation leg, but the full RMA-125 blocker still also requires the
+representative interruption/route transition and missing-service/setup-guidance
+evidence listed above. Do not close the three authoritative RMA-125 acceptance
+checkboxes until all required physical evidence exists.
 
 If the explicit recognizer, language model, or exact-locale offline voice becomes unavailable, preserve the resulting setup-required evidence and configure/install the required local service/model/voice; do not change providers automatically.
 

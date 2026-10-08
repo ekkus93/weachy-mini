@@ -47,7 +47,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | MuJoCo full model load and neutral reset | Physical Android / production runtime | Passed: run `36806841674`, SHA `1c741bce...` |
 | Deterministic gesture replay | Physical Android / production target sink + authoritative state | Passed: run `36806841674`, SHA `1c741bce...` |
 | Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Passed: run `37605466118`, SHA `859aa4ed...` |
-| On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
+| On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Tranche 4 harness implemented; real human spoken-turn evidence pending |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Tranche 3 harness implemented; physical evidence pending |
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
@@ -156,7 +156,38 @@ running; the runner validates the machine-readable report and prints the
 validated JSON into the job log. The roadmap checkbox remains open until this
 harness passes on a physical Android device.
 
-## 8. Completion policy
+## 8. Tranche 4 offline spoken-turn contract
+
+`ReachyRma190OfflineSpeechEndToEndAcceptance` runs only from the manual
+`RMA-190 Offline Speech End-to-End Android Acceptance` workflow because a real
+human utterance is an acceptance prerequisite and must not be synthesized by CI.
+The runner stages the exact RMA-133-selected Qwen artifact, verifies its pinned
+size/SHA-256, disables device Wi-Fi and cellular data and enables airplane mode,
+then launches the shipping application. Prior network state is restored in
+unconditional cleanup.
+
+Inside the player, the harness uses the shipping application host and real main
+screen. It imports the selected model through `LocalModelPackageManager`,
+selects the on-device ASR/TTS/LLM preferences through the durable shipping
+settings store, and invokes `ReachyMainScreen.RequestMicrophone()`. The
+production conversation coordinator therefore owns the real sequence: explicit
+RMA-121 on-device ASR, local Qwen generation, validated behavior-intent dispatch,
+and RMA-123 exact offline TTS through the shared RMA-125 audio-focus stack.
+
+A pass requires observed
+`Listening -> Transcribing -> Thinking -> Speaking -> Idle` state progression,
+the selected local model remaining `Ready`, and the shipping behavior service
+advancing during the turn. Reports explicitly record that no synthetic speech,
+raw audio persistence, transcript persistence, system-ASR fallback, network-TTS
+fallback, or cloud credentials were used. No transcript text is written to the
+acceptance report.
+
+This tranche remains open until a physical run succeeds with a person speaking
+into the A54. RMA-125 additionally retains its interruption/route-transition and
+missing-service/setup-guidance physical requirements; one successful spoken turn
+does not by itself close those broader acceptance boxes.
+
+## 9. Completion policy
 
 The first three RMA-190 roadmap checkboxes are closed by physical Android run
 `36806841674` on exact implementation SHA
@@ -197,6 +228,5 @@ The scenario proves retained fail-closed fault state, rejection of a hidden in-p
 reset, explicit handle recreation plus neutral reset, and resumed finite authoritative
 progress without claiming physical-device evidence.
 
-The remaining two roadmap scenarios remain open until their own end-to-end harnesses
-exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is supporting
+The remaining two roadmap scenarios have dedicated end-to-end harnesses but remain open until their required physical runs pass. Existing lower-level RMA-090 through RMA-195 evidence is supporting
 evidence but is not substituted for the remaining RMA-190 scenario results.

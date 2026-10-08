@@ -12,6 +12,10 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
       - 'Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator*.cs'
       - 'scripts/tests/test_rma125_shipping_audio_focus.py'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma190OfflineSpeechEndToEndAcceptance.cs'
+      - 'scripts/run_rma190_offline_speech_end_to_end_android.sh'
+      - 'scripts/tests/test_rma190_offline_speech_end_to_end.py'
+      - '.github/workflows/rma190-offline-speech-end-to-end.yml'
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
@@ -32,6 +36,10 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
       - 'Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator*.cs'
       - 'scripts/tests/test_rma125_shipping_audio_focus.py'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyRma190OfflineSpeechEndToEndAcceptance.cs'
+      - 'scripts/run_rma190_offline_speech_end_to_end_android.sh'
+      - 'scripts/tests/test_rma190_offline_speech_end_to_end.py'
+      - '.github/workflows/rma190-offline-speech-end-to-end.yml'
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
@@ -67,3 +75,5 @@ jobs:
         run: python3 scripts/tests/test_rma125_a54_speech_revalidation.py
       - name: Verify shipping conversation uses the shared RMA-125 audio-focus stack
         run: python3 scripts/tests/test_rma125_shipping_audio_focus.py
+      - name: Verify physical spoken-turn harness stays truthful and manual
+        run: python3 scripts/tests/test_rma190_offline_speech_end_to_end.py
