@@ -59,7 +59,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
 
     def test_fixture_is_explicitly_non_cloud_and_non_calibration_evidence(self) -> None:
         source = ACCEPTANCE.read_text(encoding="utf-8")
-        self.assertIn("ReachyCameraCalibrationProvenance", source)
+        self.assertIn("fixture.Provenance.ToString()", source)
         self.assertIn("deterministic_calibration_fixture = true", source)
         self.assertIn("measured_calibration_claimed = false", source)
         self.assertIn("external_vlm_fixture = true", source)
