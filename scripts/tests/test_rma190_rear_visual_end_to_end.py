@@ -27,8 +27,9 @@ class Rma190RearVisualEndToEndContracts(unittest.TestCase):
         self.assertIn("string deviceModel = SystemInfo.deviceModel;", source)
         self.assertIn("int androidApiLevel = ReadApiLevel();", source)
         success_body = source[
-            source.index("public static Report Success("):
-            source.index("public static Report Failure(")
+            source.index("public static Report Success(") : source.index(
+                "public static Report Failure("
+            )
         ]
         self.assertIn("device_model = deviceModel", success_body)
         self.assertNotIn("device_model = SystemInfo.deviceModel", success_body)
