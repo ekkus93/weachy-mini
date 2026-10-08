@@ -111,6 +111,9 @@ namespace ReachyMini.AppState
                 ReachyApplicationHostBehaviour host =
                     shellObject.AddComponent<ReachyApplicationHostBehaviour>();
                 host.ConfigureCompositionProvider(provider);
+                ReachyPriorityDegradationRuntimeDriver priorityDegradation =
+                    shellObject.AddComponent<ReachyPriorityDegradationRuntimeDriver>();
+                priorityDegradation.Configure(runtime);
                 fault = string.Empty;
                 return true;
             }

@@ -5,6 +5,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.LocalModels;
+using ReachyMini.Performance;
 using ReachyMini.Providers;
 using ReachyMini.Rendering;
 using UnityEngine;
@@ -75,7 +76,8 @@ namespace ReachyMini.AppState
         ILocalLlmProviderCapability,
         ICloudLlmProviderCapability,
         IReachyProviderGovernorDiagnosticsSource,
-        IReachyApplicationInterruptionParticipant
+        IReachyApplicationInterruptionParticipant,
+        IReachyPriorityDegradationTarget
     {
         // Bounded patience for a resource-governor Suspended verdict, mirroring
         // ReachyRma135ResourceGovernorAcceptance's own retry loop: a single
@@ -214,6 +216,20 @@ namespace ReachyMini.AppState
                 interruptionPaused = false;
             }
             loadedProvider?.ResumeAfterApplicationInterruption();
+        }
+
+        public void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+
+            // This is the same governor used by shipping local generation.
+            // Applying policy here never loads a model and never creates a
+            // parallel test-only inference path.
+            EnsureGovernor().ApplyPriorityDegradation(decision);
         }
 
         public async Task<LocalLlmGovernedGenerationResult> GenerateAsync(

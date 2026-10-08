@@ -90,6 +90,54 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
         self.assertIn("ReachyPriorityDegradationSignals.FromResourceSnapshot", runtime)
         self.assertIn("coordinator.EvaluateAndApply(signals)", runtime)
 
+    def test_shipping_bootstrap_applies_policy_to_real_services(self) -> None:
+        bootstrap = (APP / "ReachyMainScreenBootstrap.cs").read_text()
+        runtime_driver = (APP / "ReachyPriorityDegradationRuntimeDriver.cs").read_text()
+        provider = (APP / "ReachyLocalLlmProviderApplicationService.cs").read_text()
+        perception = (APP / "ReachyAndroidPerceptionApplicationService.cs").read_text()
+        perception_driver = (APP / "ReachyAndroidPerceptionDriver.cs").read_text()
+        cloud_vlm = (
+            APP / "ReachyAndroidPerceptionApplicationService.CloudVlm.cs"
+        ).read_text()
+
+        self.assertIn(
+            "AddComponent<ReachyPriorityDegradationRuntimeDriver>()",
+            bootstrap,
+        )
+        self.assertIn("priorityDegradation.Configure(runtime)", bootstrap)
+        self.assertIn("ReachyPriorityDegradationRuntime", runtime_driver)
+        self.assertIn("ReachyAndroidLocalLlmResourceSignalSource", runtime_driver)
+        self.assertIn("ReachySimulationLocalLlmPhysicsBudgetSource", runtime_driver)
+        self.assertIn(
+            "host.GetRequiredService<IReachyProviderService>",
+            runtime_driver,
+        )
+        self.assertIn(
+            "host.GetRequiredService<IReachyPerceptionService>",
+            runtime_driver,
+        )
+        self.assertIn("IReachyPriorityDegradationTarget", provider)
+        self.assertIn(
+            "EnsureGovernor().ApplyPriorityDegradation(decision)",
+            provider,
+        )
+        self.assertIn("IReachyPriorityDegradationTarget", perception)
+        self.assertIn("driver?.ApplyPriorityDegradation(decision)", perception)
+        self.assertIn(
+            "tracker?.ApplyPriorityDegradation(decision)",
+            perception_driver,
+        )
+
+        load_definition = cloud_vlm.index(
+            "private async ValueTask<(IVisionLanguageProvider? provider, string detail)>"
+        )
+        load_block = cloud_vlm[load_definition:]
+        self.assertIn("!decision.VlmAllowed", load_block)
+        self.assertLess(
+            load_block.index("!decision.VlmAllowed"),
+            load_block.index("LoadCloudVlm()"),
+        )
+
     def test_managed_contracts_cover_llm_vlm_and_tracking(self) -> None:
         resource_tests = (ROOT / "managed/ReachyMini.ResourceGovernor.Tests/Program.cs").read_text()
         vlm_tests = (ROOT / "managed/ReachyMini.VlmScheduling.Tests/Program.cs").read_text()

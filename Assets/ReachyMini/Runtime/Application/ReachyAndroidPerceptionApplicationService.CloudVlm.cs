@@ -184,6 +184,15 @@ namespace ReachyMini.AppState
         private async ValueTask<(IVisionLanguageProvider? provider, string detail)>
             EnsureCloudVlmLoadedAsync(CancellationToken cancellationToken)
         {
+            var decision = priorityDegradationDecision;
+            if (decision != null && !decision.VlmAllowed)
+            {
+                return (
+                    null,
+                    "Cloud VLM analysis is suspended by the RMA-181 priority " +
+                    "degradation policy: " + decision.Diagnostic);
+            }
+
             lock (cloudVlmSync)
             {
                 if (cloudVlmProvider != null)

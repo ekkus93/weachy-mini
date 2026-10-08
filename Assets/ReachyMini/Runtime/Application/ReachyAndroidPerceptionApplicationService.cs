@@ -2,6 +2,7 @@
 
 using System;
 using ReachyMini.Perception;
+using ReachyMini.Performance;
 using ReachyMini.Rendering;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -34,13 +35,15 @@ namespace ReachyMini.AppState
         ReachyApplicationServiceBase,
         IReachyPerceptionService,
         ICloudVlmProviderCapability,
-        IReachyApplicationInterruptionParticipant
+        IReachyApplicationInterruptionParticipant,
+        IReachyPriorityDegradationTarget
     {
         private readonly ReachyProductionAuthoritativeRuntime runtime;
         private readonly ReachyCameraCalibrationPersistenceStore calibrations;
 
         private GameObject? driverObject;
         private ReachyAndroidPerceptionDriver? driver;
+        private ReachyPriorityDegradationDecision? priorityDegradationDecision;
 
         private ReachyPerceptionServiceSnapshot fallbackSnapshot =
             new ReachyPerceptionServiceSnapshot(
@@ -83,6 +86,11 @@ namespace ReachyMini.AppState
                 newDriverObject.AddComponent<ReachyAndroidPerceptionDriver>();
             newDriver.SnapshotChanged += OnDriverSnapshotChanged;
             newDriver.Configure(runtime, calibrations);
+            if (priorityDegradationDecision != null)
+            {
+                newDriver.ApplyPriorityDegradation(
+                    priorityDegradationDecision);
+            }
             driverObject = newDriverObject;
             driver = newDriver;
             SetReady("Perception tracking driver started.");
@@ -111,6 +119,18 @@ namespace ReachyMini.AppState
         public void ResumeAfterApplicationInterruption()
         {
             driver?.ResumeAfterApplicationInterruption();
+        }
+
+        public void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+
+            priorityDegradationDecision = decision;
+            driver?.ApplyPriorityDegradation(decision);
         }
 
         private void OnDriverSnapshotChanged(

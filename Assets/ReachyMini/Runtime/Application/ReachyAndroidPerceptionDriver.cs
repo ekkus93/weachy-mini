@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Interop;
 using ReachyMini.Perception;
+using ReachyMini.Performance;
 using ReachyMini.Rendering;
 using UnityEngine;
 
@@ -115,6 +116,19 @@ namespace ReachyMini.AppState
         public void ResumeAfterApplicationInterruption()
         {
             paused = false;
+        }
+
+        internal void ApplyPriorityDegradation(
+            ReachyPriorityDegradationDecision decision)
+        {
+            if (decision == null)
+            {
+                throw new ArgumentNullException(nameof(decision));
+            }
+
+            // Delegate to the exact tracker instance that consumes shipping
+            // camera frames; no shadow/test tracker is created.
+            tracker?.ApplyPriorityDegradation(decision);
         }
 
         // RMA-195 phase D (voice+visual grounding, 2026-08-22): an on-demand
