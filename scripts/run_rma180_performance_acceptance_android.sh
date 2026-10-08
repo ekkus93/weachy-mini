@@ -12,7 +12,6 @@ ADB_BIN="${ADB_BIN:-adb}"
 PACKAGE_NAME="com.ekkus.weachymini"
 REMOTE_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
 REMOTE_RESULT_PATH="${REMOTE_FILES_DIR}/rma180-performance-acceptance.json"
-TIMEOUT_SECONDS=$((PROFILE_SECONDS * 2 + 180))
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 
 [[ "${PROFILE_SECONDS}" =~ ^[0-9]+$ ]] || {
@@ -23,6 +22,7 @@ ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
   printf '%s\n' 'RMA180_PROFILE_SECONDS must be between 10 and 3600.' >&2
   exit 2
 }
+TIMEOUT_SECONDS=$((PROFILE_SECONDS * 2 + 180))
 [[ -f "${APK_PATH}" ]] || {
   printf 'RMA-180 APK is missing: %s\n' "${APK_PATH}" >&2
   exit 1
@@ -37,6 +37,8 @@ command -v python3 >/dev/null 2>&1 || {
 }
 
 mkdir -p "${REPORT_DIR}"
+# Do not retain a successful report from a previous failed invocation.
+rm -f -- "${REPORT_DIR}/rma180-performance-acceptance.json"
 "${ADB[@]}" get-state >/dev/null
 "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 
@@ -62,9 +64,17 @@ capture_state() {
 }
 
 capture_state before
-"${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}" >/dev/null 2>&1 || true
-"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+# A stale on-device report must never satisfy this invocation.
+if ! "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}"; then
+  printf "%s\n" "RMA-180 could not delete the previous device report." >&2
+  exit 1
+fi
+if ! "${ADB[@]}" shell test ! -f "${REMOTE_RESULT_PATH}"; then
+  printf "%s\n" "RMA-180 previous device report remains; refusing stale evidence." >&2
+  exit 1
+fi
+"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W \
   -n "${launch_component}" \
   -a android.intent.action.MAIN \

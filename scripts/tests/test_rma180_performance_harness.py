@@ -101,6 +101,23 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
         self.assertIn("dumpsys meminfo", runner)
         self.assertIn("dumpsys thermalservice", runner)
 
+    def test_android_acceptance_refuses_stale_reports_and_invalid_duration(self) -> None:
+        runner = (ROOT / "scripts/run_rma180_performance_acceptance_android.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('rm -f -- "${REPORT_DIR}/rma180-performance-acceptance.json"', runner)
+        self.assertIn('if ! "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}"; then', runner)
+        self.assertIn('if ! "${ADB[@]}" shell test ! -f "${REMOTE_RESULT_PATH}"; then', runner)
+        self.assertNotIn('shell rm -f "${REMOTE_RESULT_PATH}" >/dev/null 2>&1 || true', runner)
+        self.assertLess(
+            runner.index('shell am force-stop "${PACKAGE_NAME}"'),
+            runner.index('if ! "${ADB[@]}" shell rm -f "${REMOTE_RESULT_PATH}"; then'),
+        )
+        self.assertLess(
+            runner.index('RMA180_PROFILE_SECONDS must be between 10 and 3600.'),
+            runner.index('TIMEOUT_SECONDS=$((PROFILE_SECONDS * 2 + 180))'),
+        )
+
     def test_managed_contract_is_registered(self) -> None:
         program = (ROOT / "managed/ReachyMini.Core.Tests/Program.cs").read_text()
         tests = (
