@@ -28,6 +28,8 @@ namespace ReachyMini.AppState
         private double nextEvaluationTime;
         private bool configured;
         private bool configurationFaultReported;
+        private ReachyPriorityDegradationLevel? lastReportedLevel;
+        private ReachyPriorityDegradationReason lastReportedReasons;
 
         internal ReachyPriorityDegradationDecision? CurrentDecision { get; private set; }
 
@@ -69,6 +71,32 @@ namespace ReachyMini.AppState
             {
                 CurrentDecision =
                     priorityRuntime!.CaptureAndApply();
+                ReachyPriorityDegradationDecision decision = CurrentDecision;
+                bool levelChanged = lastReportedLevel != decision.Level;
+                bool criticalReasonChanged =
+                    decision.Level == ReachyPriorityDegradationLevel.Critical &&
+                    lastReportedReasons != decision.Reasons;
+                if (levelChanged || criticalReasonChanged)
+                {
+                    // Log only transitions, not every 500 ms sample. Preserve
+                    // the exact source sample and the fail-closed policy.
+                    ReachyPriorityDegradationSignals? sampled =
+                        priorityRuntime.LastSignals;
+                    if (sampled != null)
+                    {
+                        Debug.LogWarning(
+                            "RMA-181 sampled resource transition: " +
+                            decision.Diagnostic +
+                            " total_mem_bytes=" + sampled.TotalMemoryBytes +
+                            "; available_mem_bytes=" + sampled.AvailableMemoryBytes +
+                            "; low_mem_threshold_bytes=" + sampled.LowMemoryThresholdBytes +
+                            "; android_low_memory=" + sampled.SystemReportsLowMemory +
+                            "; thermal=" + sampled.ThermalStatus +
+                            "; physics_budget=" + sampled.PhysicsBudgetState + ".");
+                    }
+                }
+                lastReportedLevel = decision.Level;
+                lastReportedReasons = decision.Reasons;
             }
             catch (Exception exception)
             {

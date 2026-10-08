@@ -25,6 +25,10 @@ namespace ReachyMini.AppState
                 throw new ArgumentNullException(nameof(coordinator));
         }
 
+        // Exact sampled Android resource and authoritative physics inputs for
+        // transition diagnostics; never substitute a second, later sample.
+        public ReachyPriorityDegradationSignals? LastSignals { get; private set; }
+
         public ReachyPriorityDegradationDecision CaptureAndApply(
             double? recentRenderP95Milliseconds = null)
         {
@@ -34,7 +38,10 @@ namespace ReachyMini.AppState
                 ReachyPriorityDegradationSignals.FromResourceSnapshot(
                     resource,
                     recentRenderP95Milliseconds);
-            return coordinator.EvaluateAndApply(signals);
+            ReachyPriorityDegradationDecision decision =
+                coordinator.EvaluateAndApply(signals);
+            LastSignals = signals;
+            return decision;
         }
     }
 }
