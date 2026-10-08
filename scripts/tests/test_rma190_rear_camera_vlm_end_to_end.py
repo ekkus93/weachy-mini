@@ -132,11 +132,11 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             )
         ]
         capture_path = current_scene[: current_scene.index("finally")]
-        analyze_scene = cloud[
-            cloud.index("public async ValueTask<VisionLanguageResult> AnalyzeSceneAsync") : cloud.index(
-                "private void DisposeCloudVlm"
-            )
-        ]
+        analyze_scene_start = cloud.index(
+            "public async ValueTask<VisionLanguageResult> AnalyzeSceneAsync"
+        )
+        analyze_scene_end = cloud.index("private void DisposeCloudVlm")
+        analyze_scene = cloud[analyze_scene_start:analyze_scene_end]
         load_path = cloud[
             cloud.index("EnsureCloudVlmLoadedAsync") : cloud.index(
                 "private (IVisionLanguageProvider? provider, string detail) LoadCloudVlm"
