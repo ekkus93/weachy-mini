@@ -11,10 +11,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TRANSPORT = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionHttpTransport.cs"
-)
+TRANSPORT = ROOT / "Assets/ReachyMini/Runtime/Core/Perception/ReachyOpenAiVisionHttpTransport.cs"
 
 
 def case_body(source: str, category: str) -> str:
