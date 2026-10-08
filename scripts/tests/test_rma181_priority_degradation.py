@@ -96,9 +96,7 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
         provider = (APP / "ReachyLocalLlmProviderApplicationService.cs").read_text()
         perception = (APP / "ReachyAndroidPerceptionApplicationService.cs").read_text()
         perception_driver = (APP / "ReachyAndroidPerceptionDriver.cs").read_text()
-        cloud_vlm = (
-            APP / "ReachyAndroidPerceptionApplicationService.CloudVlm.cs"
-        ).read_text()
+        cloud_vlm = (APP / "ReachyAndroidPerceptionApplicationService.CloudVlm.cs").read_text()
 
         self.assertIn(
             "AddComponent<ReachyPriorityDegradationRuntimeDriver>()",

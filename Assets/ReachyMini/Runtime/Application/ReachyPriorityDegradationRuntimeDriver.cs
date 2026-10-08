@@ -3,6 +3,7 @@
 using System;
 using ReachyMini.LocalModels;
 using ReachyMini.Performance;
+using ReachyMini.Rendering;
 using UnityEngine;
 
 namespace ReachyMini.AppState
