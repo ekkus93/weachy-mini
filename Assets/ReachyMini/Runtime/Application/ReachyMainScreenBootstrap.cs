@@ -88,6 +88,16 @@ namespace ReachyMini.AppState
                 root.GetComponentInChildren<ReachyMainScreen>(true);
             if (existing != null)
             {
+                if (existing.PresentationCamera != camera ||
+                    existing.GetComponent<ReachyApplicationHostBehaviour>() == null ||
+                    existing.GetComponent<ReachySettingsApplicationCompositionProvider>() == null)
+                {
+                    fault =
+                        "The existing application shell is incomplete or is not bound " +
+                        "to the validated fixed presentation camera.";
+                    return false;
+                }
+
                 fault = string.Empty;
                 return true;
             }

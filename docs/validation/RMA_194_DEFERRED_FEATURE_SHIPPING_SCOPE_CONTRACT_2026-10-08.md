@@ -20,7 +20,9 @@ checks three concrete, executable boundaries:
    retains the fixed presentation-camera requirement. Existing shell reuse is
    checked only *after* both authoritative runtime and fixed-camera validation;
    the permanent contract asserts that ordering so a preexisting main-screen
-   component cannot bypass the safety boundary.
+   component cannot bypass the safety boundary. Reused shells must also retain
+   their original validated camera binding and required host/composition
+   components; incomplete or differently bound shells fail closed.
 3. A repository-wide scan of shipping Unity runtime C# rejects known AR/XR
    namespace imports and AR/depth/scene component creation/activation paths.
 

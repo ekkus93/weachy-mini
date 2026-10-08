@@ -125,6 +125,12 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn('"fixed-presentation-camera"', composition)
         self.assertNotIn("ARSession", bootstrap)
         self.assertNotIn("ARSession", composition)
+        self.assertIn("existing.PresentationCamera != camera", bootstrap)
+        self.assertIn("existing.GetComponent<ReachyApplicationHostBehaviour>() == null", bootstrap)
+        self.assertIn(
+            "existing.GetComponent<ReachySettingsApplicationCompositionProvider>() == null",
+            bootstrap,
+        )
         # An existing screen must not bypass the same camera/runtime policy.
         # Guard the ordering, not just the presence of the safety checks.
         self.assertLess(
