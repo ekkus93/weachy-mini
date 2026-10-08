@@ -82,7 +82,7 @@ jobs:
               "post_reload_generation_succeeds": True,
               "hidden_retry_or_provider_fallback": False,
           }
-          Path("$OUT/report.json").write_text(
+          Path("artifacts/rma190-model-failure-end-to-end/report.json").write_text(
               json.dumps(report, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )

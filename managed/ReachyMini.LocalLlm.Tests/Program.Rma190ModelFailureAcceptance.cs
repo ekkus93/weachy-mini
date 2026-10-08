@@ -162,7 +162,7 @@ internal static partial class Program
                 new LocalModelMemoryEstimate(1024L * 1024L, 1024, 128),
                 1),
             new LocalModelDeviceCompatibility(
-                new[] { "arm64-v8a" },
+                SupportedAbis,
                 26,
                 Array.Empty<string>(),
                 1024L * 1024L,
