@@ -93,6 +93,29 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn('tail -n 24', runner)
         self.assertIn('if (( exit_code != 0 )); then', runner)
 
+    def test_acceptance_waits_for_shipping_vlm_admission_before_fresh_capture(self) -> None:
+        source = ACCEPTANCE.read_text(encoding="utf-8")
+        for token in (
+            "ReachyPriorityDegradationRuntimeDriver",
+            "WaitForStableVlmAdmissionAsync",
+            "AdmissionObservationMilliseconds = 600",
+            "AdmissionTimeoutMilliseconds = 15_000",
+            "ReachyPriorityDegradationPolicy.RecoverySamplesRequired",
+            "driver.CurrentDecision",
+            "ReferenceEquals(decision, previousDecision)",
+            "decision.VlmAllowed && physicsSignalAvailable",
+            "PhysicsSignalUnavailable",
+            "stable_vlm_admission_samples",
+            "vlm_admission_diagnostic",
+        ):
+            self.assertIn(token, source)
+        wait_stage = source.index('SetStage("wait-production-vlm-admission")')
+        capture_stage = source.index('SetStage("capture-real-rear-transformed-frame")')
+        vlm_call = source.index("perception.AnalyzeSceneAsync(")
+        self.assertLess(wait_stage, capture_stage)
+        self.assertLess(capture_stage, vlm_call)
+        self.assertNotIn("priorityDegradation.CurrentDecision =", source)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(

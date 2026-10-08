@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.Interop;
 using ReachyMini.Perception;
+using ReachyMini.Performance;
 using ReachyMini.Providers;
 using ReachyMini.Rendering;
 using UnityEngine;
@@ -77,6 +78,10 @@ namespace ReachyMini.AppState
     {
         private const int OverallTimeoutMilliseconds = 130_000;
         private const int ReadyPollMilliseconds = 25;
+        private const int AdmissionObservationMilliseconds = 600;
+        private const int AdmissionTimeoutMilliseconds = 15_000;
+        private const int RequiredStableAdmissionSamples =
+            ReachyPriorityDegradationPolicy.RecoverySamplesRequired;
         private const string FixtureProfileId =
             "rma190-rear-camera-deterministic-fixture";
         private const string FixtureModelId = "rma190-vlm-fixture";
@@ -205,6 +210,11 @@ namespace ReachyMini.AppState
                     .WaitForObjectAsync<ReachyAndroidPerceptionDriver>(
                         cancellationToken,
                         "perception driver");
+            ReachyPriorityDegradationRuntimeDriver priorityDegradation =
+                await ReachyRma190CameraEndToEndAcceptance
+                    .WaitForObjectAsync<ReachyPriorityDegradationRuntimeDriver>(
+                        cancellationToken,
+                        "priority degradation runtime");
 
             IReachyApplicationInterruptionParticipant interruption =
                 perception as IReachyApplicationInterruptionParticipant ??
@@ -312,6 +322,16 @@ namespace ReachyMini.AppState
                 persistence.CameraCalibrations.State.ReplaceAll(
                     new[] { fixture });
 
+                SetStage("wait-production-vlm-admission");
+                VlmAdmissionEvidence admission =
+                    await WaitForStableVlmAdmissionAsync(
+                        priorityDegradation,
+                        cancellationToken);
+
+                // Admission evidence is intentionally gathered before this
+                // fresh capture. The production VLM service still performs
+                // its own fail-closed admission check later, so pressure
+                // returning after this point remains a visible failure.
                 SetStage("capture-real-rear-transformed-frame");
                 ReachyVisionFrame frame =
                     await ReachyRma190CameraEndToEndAcceptance
@@ -353,6 +373,7 @@ namespace ReachyMini.AppState
                         descriptor,
                         frame,
                         fixture,
+                        admission,
                         result.Text);
                 }
                 finally
@@ -480,6 +501,108 @@ namespace ReachyMini.AppState
             }
         }
 
+        private static async Task<VlmAdmissionEvidence>
+            WaitForStableVlmAdmissionAsync(
+                ReachyPriorityDegradationRuntimeDriver driver,
+                CancellationToken cancellationToken)
+        {
+            using var timeout =
+                CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken);
+            timeout.CancelAfter(AdmissionTimeoutMilliseconds);
+
+            ReachyPriorityDegradationDecision? previousDecision = null;
+            int consecutiveStableSamples = 0;
+            string lastDiagnostic =
+                "No production priority-degradation sample was observed.";
+
+            try
+            {
+                while (consecutiveStableSamples <
+                    RequiredStableAdmissionSamples)
+                {
+                    ReachyPriorityDegradationDecision decision =
+                        await WaitForNextPriorityDecisionAsync(
+                            driver,
+                            previousDecision,
+                            timeout.Token);
+                    previousDecision = decision;
+                    lastDiagnostic = decision.Diagnostic;
+
+                    bool physicsSignalAvailable =
+                        (decision.Reasons &
+                            ReachyPriorityDegradationReason
+                                .PhysicsSignalUnavailable) == 0;
+                    if (decision.VlmAllowed && physicsSignalAvailable)
+                    {
+                        ++consecutiveStableSamples;
+                    }
+                    else
+                    {
+                        consecutiveStableSamples = 0;
+                    }
+
+                    if (consecutiveStableSamples <
+                        RequiredStableAdmissionSamples)
+                    {
+                        await Task.Delay(
+                            AdmissionObservationMilliseconds,
+                            timeout.Token);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+                when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new InvalidOperationException(
+                    "Production VLM admission did not stabilize within " +
+                    AdmissionTimeoutMilliseconds + " ms; last decision: " +
+                    lastDiagnostic);
+            }
+
+            return new VlmAdmissionEvidence(
+                consecutiveStableSamples,
+                lastDiagnostic);
+        }
+
+        private static async Task<ReachyPriorityDegradationDecision>
+            WaitForNextPriorityDecisionAsync(
+                ReachyPriorityDegradationRuntimeDriver driver,
+                ReachyPriorityDegradationDecision? previousDecision,
+                CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                ReachyPriorityDegradationDecision? decision =
+                    driver.CurrentDecision;
+                if (decision != null &&
+                    !ReferenceEquals(decision, previousDecision))
+                {
+                    return decision;
+                }
+
+                await Task.Delay(
+                    ReadyPollMilliseconds,
+                    cancellationToken);
+            }
+        }
+
+        private readonly struct VlmAdmissionEvidence
+        {
+            public VlmAdmissionEvidence(
+                int stableSamples,
+                string lastDiagnostic)
+            {
+                StableSamples = stableSamples;
+                LastDiagnostic = lastDiagnostic;
+            }
+
+            public int StableSamples { get; }
+
+            public string LastDiagnostic { get; }
+        }
+
         private static void ValidateRearFrame(
             ReachyVisionFrame frame,
             string cameraId,
@@ -560,12 +683,15 @@ namespace ReachyMini.AppState
             public bool production_vlm_transport_and_encoder;
             public bool synthetic_camera_frame_injected;
             public bool raw_camera_payload_persisted;
+            public int stable_vlm_admission_samples;
+            public string vlm_admission_diagnostic = string.Empty;
             public string vlm_response = string.Empty;
 
             public static Report Success(
                 ReachyCameraTextureFrameDescriptor descriptor,
                 ReachyVisionFrame frame,
                 ReachyCameraCalibrationProfile fixture,
+                VlmAdmissionEvidence admission,
                 string response)
             {
                 return new Report
@@ -596,6 +722,10 @@ namespace ReachyMini.AppState
                     production_vlm_transport_and_encoder = true,
                     synthetic_camera_frame_injected = false,
                     raw_camera_payload_persisted = false,
+                    stable_vlm_admission_samples =
+                        admission.StableSamples,
+                    vlm_admission_diagnostic =
+                        admission.LastDiagnostic,
                     vlm_response = response,
                 };
             }
