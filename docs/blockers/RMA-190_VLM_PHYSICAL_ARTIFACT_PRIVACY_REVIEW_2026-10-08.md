@@ -1,0 +1,47 @@
+# RMA-190 rear-camera/VLM physical artifact privacy review
+
+**Status: remediation required; no new physical acceptance claimed
+(2026-10-08).** This review concerns the test runner's exported diagnostics,
+not the shipping VLM encoder or a proven disclosure of actual camera content.
+
+## Observed repository behavior
+
+`scripts/run_rma190_rear_camera_vlm_end_to_end_android.sh` currently
+collects `adb logcat -d -v threadtime` without an app-PID filter,
+`dumpsys media.camera`, `dumpsys activity activities`, and
+`adb exec-out screencap -p` into its report directory. The physical
+RMA-190 GitHub Actions workflow uploads that report directory as an artifact.
+
+The screenshot could include a live camera preview. Full-device logcat,
+camera-service dumps, and activity dumps may contain information about other
+applications on the phone. These are **potential** privacy exposures, not
+proof that a particular artifact contains raw camera imagery or credentials.
+The structured acceptance report and sanitized fixture-request metadata
+already provide the intended machine-readable pass/fail evidence.
+
+## Required source remediation
+
+1. Do not collect or upload a device screenshot in the VLM camera scenario.
+   A screenshot is not required to prove the shipping transformed-frame path.
+2. Replace full-device logcat with bounded, current-invocation diagnostics
+   scoped to the shipping app PID and allowlisted RMA-190 stage/RMA-181
+   resource-transition messages. If app PID or start time is unavailable,
+   omit logcat rather than falling back to a global capture.
+3. Avoid `adb logcat -c`, which clears the phone owner's global log buffer.
+   Do not export full-device camera-service or activity inventories.
+4. Retain the structured app report, app-scoped package metadata, APK/report
+   hashes, `adb reverse` state, and sanitized fixture request metadata.
+   Never persist the camera image, raw HTTP body, or authorization value.
+5. Add a permanent regression contract asserting the physical runner does
+   not invoke `screencap`, unfiltered `logcat`, or global camera/activity
+   dumps. Validate the exact source head in hosted CI and, when available,
+   requalify the shipping physical VLM scenario on the Android device.
+
+The source-edit attempts for this runner were rejected by the available
+write-safety checks. After those ambiguous outcomes, `master` was inspected
+and no runner mutation was observed. This is not a source-code test failure
+or a reason to fabricate physical evidence. The privacy hardening remains
+unimplemented until a permitted source write can be qualified.
+
+**Acceptance boundary:** do not close the remaining RMA-190 rear-camera/VLM
+scenario or infer release privacy acceptance from this review document.
