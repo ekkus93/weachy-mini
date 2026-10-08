@@ -8,6 +8,8 @@ end-to-end, privacy, license, documentation, and release criteria.
 
 from __future__ import annotations
 
+import json
+import re
 import unittest
 from pathlib import Path
 
@@ -88,6 +90,70 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn("named physical calibration profile", status)
         self.assertIn("held-out physical evidence", status)
 
+
+    def test_deferred_ar_xr_packages_are_not_in_shipping_unity_dependencies(self) -> None:
+        dependencies = json.loads(read(ROOT / "Packages/manifest.json"))["dependencies"]
+        deferred_packages = {
+            "com.unity.xr.arfoundation",
+            "com.unity.xr.arsubsystems",
+            "com.unity.xr.arcore",
+            "com.unity.xr.arkit",
+            "com.unity.xr.openxr",
+            "com.unity.xr.interaction.toolkit",
+        }
+        self.assertFalse(
+            deferred_packages.intersection(dependencies),
+            "Deferred AR/XR packages must not enter the shipping Unity manifest",
+        )
+
+    def test_shipping_bootstrap_rejects_movable_presentation_camera(self) -> None:
+        app = ROOT / "Assets/ReachyMini/Runtime/Application"
+        bootstrap = read(app / "ReachyMainScreenBootstrap.cs")
+        composition = read(app / "ReachySettingsApplicationCompositionProvider.cs")
+        self.assertIn('"fixed_front_three_quarter"', bootstrap)
+        self.assertIn("cameraMetadata.AcceptsUserNavigation", bootstrap)
+        self.assertIn("ReachyProductionAuthoritativeRuntime", bootstrap)
+        self.assertIn("ReachySettingsApplicationCompositionProvider", bootstrap)
+        self.assertIn("requires the fixed presentation camera", composition)
+        self.assertIn('"fixed-presentation-camera"', composition)
+        self.assertNotIn("ARSession", bootstrap)
+        self.assertNotIn("ARSession", composition)
+
+    def test_shipping_runtime_has_no_deferred_ar_depth_or_scene_entrypoints(self) -> None:
+        # Scan shipping C# code, not merely the release guide. Level 1
+        # reprojection is intentionally allowed; it is not depth reconstruction.
+        root = ROOT / "Assets/ReachyMini/Runtime"
+        self.assertTrue(root.is_dir())
+        sources = sorted(root.rglob("*.cs"))
+        self.assertTrue(sources, "Shipping runtime C# sources must be present")
+        forbidden = (
+            re.compile(
+                r"(?m)^\s*using\s+"
+                r"(?:UnityEngine\.XR\.(?:ARFoundation|ARSubsystems|Interaction|OpenXR)"
+                r"|Google\.ARCore)(?:\.\w+)*\s*;"
+            ),
+            re.compile(
+                r"\b(?:AddComponent|GetComponent|FindAnyObjectByType)"
+                r"\s*<\s*(?:ARSession|AROcclusionManager|ARPlaneManager"
+                r"|ARAnchorManager|ARCameraManager|XRDepthSubsystem"
+                r"|XRMeshSubsystem)\s*>"
+            ),
+            re.compile(
+                r"\bnew\s+(?:ARSession|AROcclusionManager|ARPlaneManager"
+                r"|ARAnchorManager|ARCameraManager|XRDepthSubsystem"
+                r"|XRMeshSubsystem)\s*\("
+            ),
+        )
+        violations = [
+            f"{source.relative_to(ROOT)}: {pattern.pattern}"
+            for source in sources
+            for pattern in forbidden
+            if pattern.search(read(source))
+        ]
+        self.assertEqual(
+            [], violations,
+            "Deferred AR/XR/depth/scene components cannot be enabled in shipping runtime",
+        )
 
 if __name__ == "__main__":
     unittest.main()

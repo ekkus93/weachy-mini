@@ -91,6 +91,14 @@ A compiler error, test failure, lint/formatting failure, merge conflict, or impl
 
 ## Deferred-feature boundary
 
+A permanent shipping-source regression tripwire is documented in
+`docs/validation/RMA_194_DEFERRED_FEATURE_SHIPPING_SCOPE_CONTRACT_2026-10-08.md`.
+It checks Unity package dependencies, the fixed non-navigable presentation
+camera bootstrap, and known AR/XR/depth/scene runtime activation patterns.
+This is source-level prevention, not a completed release-candidate audit;
+the corresponding authoritative TODO checkbox remains open.
+
+
 The initial release must not half-enable deferred future milestones. Level 2 depth reprojection, Level 3 scene reconstruction, AR placement, movable observer camera, and Reachy-specific VLA or learned social-motion policy remain future milestones and must not be labeled as active release features.
 
 The correct behavior for missing deferred capability is an explicit unavailable, unsupported, or deferred state. The app must not provide a hidden fallback path that treats Level 1 reprojection as depth-aware, substitutes stale camera content, labels nominal dynamics as calibrated physical behavior, or silently promotes cloud/provider paths across a privacy boundary.
