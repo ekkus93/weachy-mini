@@ -23,7 +23,11 @@ class Rma190ModelCorruptionOomContracts(unittest.TestCase):
         item = "Model corruption/OOM."
         self.assertIn(f"- [x] {item}", todo)
         self.assertNotIn(f"- [ ] {item}", todo)
-        for marker in ("37759478803", "6f3019c4c9e8a8c963161267defaff71a966a658", "11541646432"):
+        for marker in (
+            "37759478803",
+            "6f3019c4c9e8a8c963161267defaff71a966a658",
+            "11541646432",
+        ):
             self.assertIn(marker, todo)
         self.assertIn("Model corruption/OOM", spec)
         self.assertIn("Local-model package/provider integration", spec)
