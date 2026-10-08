@@ -22,6 +22,8 @@ android {
     sourceSets {
         main {
             manifest.srcFile 'AndroidManifest.xml'
+            // Unity copies this .androidlib with resources at its root, not src/main/res.
+            res.srcDirs = ['res']
         }
     }
 }

@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -61,6 +64,49 @@ class Rma190VlmArtifactPrivacyTests(unittest.TestCase):
         self.assertRegex(
             source,
             re.compile(r'dumpsys package "\$\{PACKAGE_NAME\}".*?grep -E', re.S),
+        )
+
+
+    def test_diagnostic_filter_emits_bounded_lines_without_private_payloads(self) -> None:
+        """Execute the shipping inline filter, not a separately copied algorithm."""
+        source = self.source.split("python3 -c '\n", 1)[1].split(
+            "\n' \"\${REPORT_DIR}/resource-transitions.txt\"", 1
+        )[0]
+        raw_logs = (
+            "10-08 16:01:01.000 123 456 I Unity: RMA-190 stage started prompt=SECRET_PROMPT\n"
+            "10-08 16:01:02.000 123 456 I Unity: RMA-181 sampled resource transition: "
+            "mode=degraded, reason=low_memory\n"
+            "10-08 16:01:03.000 123 456 I Unity: RMA-190 stage completed url=SECRET_URL\n"
+            "10-08 16:01:04.000 123 456 I Unity: unrelated camera image SECRET_IMAGE\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            transitions = Path(directory) / "resource-transitions.txt"
+            result = subprocess.run(
+                [sys.executable, "-c", source, str(transitions)],
+                input=raw_logs,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(
+                "RMA-190 stage: started\nRMA-190 stage: completed\n",
+                result.stdout,
+            )
+            self.assertEqual(
+                "RMA-181 sampled resource transition: mode=degraded, reason=low_memory\n",
+                transitions.read_text(encoding="utf-8"),
+            )
+            self.assertNotIn("SECRET", result.stdout + transitions.read_text())
+
+    def test_android_library_packages_loopback_network_security_xml(self) -> None:
+        plugin = ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib"
+        gradle = (plugin / "build.gradle").read_text(encoding="utf-8")
+        self.assertIn("manifest.srcFile 'AndroidManifest.xml'", gradle)
+        self.assertIn("res.srcDirs = ['res']", gradle)
+        manifest = (plugin / "AndroidManifest.xml").read_text(encoding="utf-8")
+        self.assertIn("@xml/reachy_provider_network_security", manifest)
+        self.assertTrue(
+            (plugin / "res/xml/reachy_provider_network_security.xml").is_file()
         )
 
 

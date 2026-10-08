@@ -206,17 +206,17 @@ from collections import deque
 
 events = deque(maxlen=48)
 transitions = deque(maxlen=24)
-statuses = re.compile(r"\\b(started|completed|passed|failed|unavailable|faulted|cancelled)\\b", re.I)
-resource = re.compile(r"RMA-181 sampled resource transition: ([A-Za-z0-9_.,:;=+ /()\\-]{1,160})")
+statuses = re.compile(r"\b(started|completed|passed|failed|unavailable|faulted|cancelled)\b", re.I)
+resource = re.compile(r"RMA-181 sampled resource transition: ([A-Za-z0-9_.,:;=+ /()\-]{1,160})")
 for line in sys.stdin:
     if match := resource.search(line):
         transitions.append("RMA-181 sampled resource transition: " + match.group(1).strip())
     elif "RMA-190" in line and (status := statuses.search(line)):
         # Do not persist arbitrary log text, prompts, URLs or camera data.
         events.append("RMA-190 stage: " + status.group(1).lower())
-sys.stdout.write("\\n".join(events) + ("\\n" if events else ""))
+sys.stdout.write("\n".join(events) + ("\n" if events else ""))
 with open(sys.argv[1], "w", encoding="utf-8") as out:
-    out.write("\\n".join(transitions) + ("\\n" if transitions else ""))
+    out.write("\n".join(transitions) + ("\n" if transitions else ""))
 ' "${REPORT_DIR}/resource-transitions.txt" > "${REPORT_DIR}/logcat.txt" || true
     fi
     # Package metadata is scoped to this app and filtered to version fields.
