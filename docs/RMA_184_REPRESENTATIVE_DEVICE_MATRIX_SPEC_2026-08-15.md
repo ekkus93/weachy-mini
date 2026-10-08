@@ -63,6 +63,8 @@ Family RAM configurations in the registry are discovery aids, not substitutes fo
 
 The probe does not perform speech recognition or synthesize audible content; it checks provider availability only. Positive end-to-end speech acceptance remains owned by the speech tasks and Phase 20 scenarios.
 
+The `Local Unity Android Validation` physical lane now captures this report after the other shipping-device acceptance stages, and uploads it when the probe succeeds. The probe is deliberately non-gating so an unavailable camera/speech service or temporary probe failure cannot invalidate otherwise successful camera/Unity qualification. A report is metadata and support-classification evidence only; it is **not** a measured default profile, 1,800-second long run, spoken offline conversation, or release acceptance.
+
 ## Long-run qualification
 
 `ReachyRepresentativeDeviceQualificationPolicy` accepts normalized RMA-184 observations and fails closed when any of these are violated:

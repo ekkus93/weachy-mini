@@ -476,6 +476,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Capture RMA-184 physical device capabilities (non-gating)
+        id: rma184_device_probe
+        if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
+        continue-on-error: true
+        shell: bash
+        env:
+          ANDROID_SERIAL: ${{ env.REACHY_ANDROID_SERIAL }}
+          RMA184_OUTPUT: ${{ runner.temp }}/rma184-device-probe/rma184-device-probe.json
+        run: bash scripts/run_rma184_device_probe_android.sh
+
+      - name: Upload RMA-184 physical device capability report
+        if: ${{ always() && steps.rma184_device_probe.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: rma184-device-probe-${{ github.sha }}
+          path: ${{ runner.temp }}/rma184-device-probe
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload ARM64 API-26 device APK
         if: ${{ success() && (github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device) }}
         uses: actions/upload-artifact@v4
