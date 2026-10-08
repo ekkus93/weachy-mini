@@ -193,6 +193,25 @@ capture_diagnostics()
     "${ADB[@]}" shell dumpsys media.camera         > "${REPORT_DIR}/camera.txt" || true
     "${ADB[@]}" shell dumpsys activity activities         > "${REPORT_DIR}/activity.txt" || true
     read_report > "${REPORT_DIR}/device-report.json" || true
+    # Record bounded, non-media pressure telemetry for diagnosing physical
+    # RMA-181 VLM admission failures without changing the fail-closed policy.
+    python3 - "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/resource-transitions.txt" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+pattern = re.compile(r"RMA-181 sampled resource transition: [^\\r\\n]*")
+log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+transitions = [
+    match.group(0)[:1024]
+    for line in log.splitlines()
+    if (match := pattern.search(line))
+]
+Path(sys.argv[2]).write_text(
+    "\\n".join(transitions[-24:]) + ("\\n" if transitions else ""),
+    encoding="utf-8",
+)
+PY
     "${ADB[@]}" exec-out screencap -p         > "${REPORT_DIR}/device-screen-final.png" || true
 }
 
@@ -201,6 +220,10 @@ cleanup()
     local exit_code=$?
     trap - EXIT
     capture_diagnostics
+    if (( exit_code != 0 )); then
+        printf 'Bounded RMA-181 resource transitions from the physical device:\\n' >&2
+        tail -n 24 "${REPORT_DIR}/resource-transitions.txt" >&2 || true
+    fi
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
     "${ADB[@]}" reverse --remove "tcp:${FIXTURE_PORT}" >/dev/null 2>&1 || true
     if [[ -n "${FIXTURE_PID}" ]]; then

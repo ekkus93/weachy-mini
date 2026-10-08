@@ -85,6 +85,14 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("sampled.AvailableMemoryBytes", driver)
         self.assertIn("sampled.PhysicsBudgetState", driver)
 
+    def test_failed_physical_run_surfaces_bounded_resource_signals(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        self.assertIn('resource-transitions.txt', runner)
+        self.assertIn('RMA-181 sampled resource transition:', runner)
+        self.assertIn('transitions[-24:]', runner)
+        self.assertIn('tail -n 24', runner)
+        self.assertIn('if (( exit_code != 0 )); then', runner)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(
