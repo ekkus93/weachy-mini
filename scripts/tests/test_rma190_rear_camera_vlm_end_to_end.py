@@ -93,6 +93,23 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("tail -n 24", runner)
         self.assertIn("if (( exit_code != 0 )); then", runner)
 
+    def test_failed_vlm_request_exposes_only_allowlisted_fixture_metadata(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("Sanitized RMA-190 VLM fixture request metadata:", runner)
+        self.assertIn("safe_fields = (", runner)
+        for token in (
+            '"request_count"',
+            '"body_bytes"',
+            '"contains_jpeg_data_uri"',
+            '"authorization_header_present"',
+            '"raw_request_persisted"',
+            '"authorization_value_persisted"',
+        ):
+            self.assertIn(token, runner)
+        self.assertIn("No VLM fixture POST was recorded", runner)
+        self.assertNotIn("print(metadata", runner)
+        self.assertNotIn("print(body", runner)
+
     def test_acceptance_waits_for_shipping_vlm_admission_before_fresh_capture(self) -> None:
         source = ACCEPTANCE.read_text(encoding="utf-8")
         for token in (

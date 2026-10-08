@@ -223,6 +223,31 @@ cleanup()
     if (( exit_code != 0 )); then
         printf 'Bounded RMA-181 resource transitions from the physical device:\n' >&2
         tail -n 24 "${REPORT_DIR}/resource-transitions.txt" >&2 || true
+        if [[ -s "${FIXTURE_META}" ]]; then
+            printf 'Sanitized RMA-190 VLM fixture request metadata:\n' >&2
+            python3 - "${FIXTURE_META}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+metadata = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+safe_fields = (
+    "request_count",
+    "path",
+    "body_bytes",
+    "valid_json",
+    "contains_jpeg_data_uri",
+    "contains_expected_prompt",
+    "authorization_header_present",
+    "raw_request_persisted",
+    "authorization_value_persisted",
+)
+print(json.dumps({key: metadata.get(key) for key in safe_fields}, sort_keys=True),
+      file=sys.stderr)
+PY
+        else
+            printf 'No VLM fixture POST was recorded; inspect adb-reverse.txt and fixture-server.log in the artifact.\n' >&2
+        fi
     fi
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
     "${ADB[@]}" reverse --remove "tcp:${FIXTURE_PORT}" >/dev/null 2>&1 || true
