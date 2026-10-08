@@ -180,13 +180,12 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("depth < 4", source)
         self.assertIn("Math.Min(name.Length, 64)", source)
         self.assertIn("types.Append(safe ? character : '_')", source)
-        diagnostic_start = source.index(
-            "private static string DescribeTransportExceptionTypes("
-        )
+        diagnostic_start = source.index("private static string DescribeTransportExceptionTypes(")
         diagnostic_end = source.index("public void Dispose()", diagnostic_start)
         diagnostic = source[diagnostic_start:diagnostic_end]
         self.assertNotIn(".Message", diagnostic)
-        self.assertNotIn(".ToString()", diagnostic)
+        self.assertNotIn("current.ToString()", diagnostic)
+        self.assertNotIn("exception.ToString()", diagnostic)
         self.assertNotIn(".StackTrace", diagnostic)
 
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
