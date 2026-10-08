@@ -174,5 +174,38 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         )
 
 
+    def test_model_fidelity_audit_is_uncalibrated_geometric_baseline(self) -> None:
+        audit = json.loads(read(ROOT / "models/reachy-mini/model-parameter-audit.json"))
+        fidelity = audit["fidelity"]
+        diagnostics = audit["diagnostics"]
+        self.assertEqual("upstream_geometric_baseline", fidelity["profile_id"])
+        self.assertEqual("geometric_baseline", fidelity["classification"])
+        self.assertFalse(fidelity["calibrated"])
+        self.assertFalse(fidelity["may_be_labeled_calibrated"])
+        self.assertEqual("uncalibrated_upstream_baseline", fidelity["diagnostics_status"])
+        self.assertEqual("geometric_baseline", diagnostics["classification"])
+        self.assertFalse(diagnostics["calibrated"])
+
+    def test_shipping_fidelity_defaults_do_not_claim_physical_calibration(self) -> None:
+        settings = read(
+            ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsState.cs"
+        )
+        metadata = read(ROOT / "Assets/ReachyMini/Runtime/Core/ProjectMetadata.cs")
+        self.assertIn('"Uncalibrated"', settings)
+        self.assertIn("ReachySimulationFidelity.Standard", settings)
+        self.assertIn(
+            "public const SimulationFidelity InitialFidelity = SimulationFidelity.Unavailable;",
+            metadata,
+        )
+
+    def test_release_status_has_no_premature_fidelity_promotion(self) -> None:
+        status = read(STATUS)
+        self.assertIn("No final release label is assigned", status)
+        self.assertIn("No calibrated twin label is allowed", status)
+        self.assertIn("held-out physical evidence", status)
+        self.assertIn("No final release tag", status)
+
+
+
 if __name__ == "__main__":
     unittest.main()

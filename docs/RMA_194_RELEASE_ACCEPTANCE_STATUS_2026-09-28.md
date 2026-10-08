@@ -115,6 +115,16 @@ The initial release must not half-enable deferred future milestones. Level 2 dep
 
 The correct behavior for missing deferred capability is an explicit unavailable, unsupported, or deferred state. The app must not provide a hidden fallback path that treats Level 1 reprojection as depth-aware, substitutes stale camera content, labels nominal dynamics as calibrated physical behavior, or silently promotes cloud/provider paths across a privacy boundary.
 
+## Permanent fidelity-evidence regression contract
+
+The RMA-194 release-acceptance test now reads the model-parameter audit and
+shipping settings/metadata defaults. It rejects a model audit promoted above
+the uncalibrated upstream geometric baseline, an optimistic calibrated
+fidelity default, or a release-status claim of physical calibration without
+the separately required held-out evidence. This is a static drift guard,
+not a device measurement or final release label. The release-acceptance
+checkboxes remain open pending the release-candidate audit and physical gates.
+
 ## Release labeling rule
 
 No calibrated twin label is allowed without a named physical calibration profile and held-out physical evidence. No final release label is assigned by this document. A future release candidate must choose one of the documented labels — geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin — strictly according to the evidence actually accepted at that candidate head.
