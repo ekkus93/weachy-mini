@@ -69,9 +69,7 @@ class Rma184ProbeFreshnessTests(unittest.TestCase):
             adb.write_text(FAKE_ADB, encoding="utf-8")
             adb.chmod(0o755)
             remote = root / "device-report.json"
-            remote.write_text(
-                '{"schema_version": 1, "status": "passed"}', encoding="utf-8"
-            )
+            remote.write_text('{"schema_version": 1, "status": "passed"}', encoding="utf-8")
             output = root / "report.json"
             output.write_text("old local evidence", encoding="utf-8")
             env = {
