@@ -55,3 +55,6 @@ jobs:
 
       - name: Run RMA-194 release-status contract
         run: python3 scripts/tests/test_rma194_release_acceptance.py
+
+      - name: Verify release status tracks authoritative RMA-190 scenarios
+        run: python3 scripts/tests/test_rma194_status_reconciliation.py
