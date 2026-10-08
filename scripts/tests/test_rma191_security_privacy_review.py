@@ -164,8 +164,9 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         self.assertTrue(
             all(child.attrib.get("includeSubdomains", "false") == "false" for child in allow)
         )
-        self.assertNotIn("debug-overrides", read(plugin / "res/xml/reachy_provider_network_security.xml"))
-        self.assertNotIn("trust-anchors", read(plugin / "res/xml/reachy_provider_network_security.xml"))
+        network_xml = read(plugin / "res/xml/reachy_provider_network_security.xml")
+        self.assertNotIn("debug-overrides", network_xml)
+        self.assertNotIn("trust-anchors", network_xml)
 
     def test_cloud_bound_audio_image_and_text_are_disclosed_in_visible_settings(self) -> None:
         selection = read(PROVIDER_SELECTION)

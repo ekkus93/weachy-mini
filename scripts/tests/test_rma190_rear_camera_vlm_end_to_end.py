@@ -17,7 +17,10 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
     ) -> None:
         network_dir = ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib"
         manifest = (network_dir / "AndroidManifest.xml").read_text(encoding="utf-8")
-        self.assertIn('android:networkSecurityConfig="@xml/reachy_provider_network_security"', manifest)
+        self.assertIn(
+            'android:networkSecurityConfig="@xml/reachy_provider_network_security"',
+            manifest,
+        )
         policy = ET.parse(network_dir / "res/xml/reachy_provider_network_security.xml").getroot()
         base = policy.find("base-config")
         self.assertIsNotNone(base)
