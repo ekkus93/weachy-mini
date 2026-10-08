@@ -12,7 +12,7 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 class Rma002TwoMachineBuildEvidenceTests(unittest.TestCase):
-    def test_validation_note_records_exact_head_and_runs(self) -> None:
+    def test_validation_note_records_same_host_and_open_gate(self) -> None:
         text = DOC.read_text(encoding="utf-8")
         for token in (
             "5ca67f7ac79f7bfadae3b4712dcac78ceaecdcb9",
@@ -23,11 +23,23 @@ class Rma002TwoMachineBuildEvidenceTests(unittest.TestCase):
             "37710449531",
             "37711532523",
             "37711532388",
-            "supersedes the older",
-            "second independently",
+            "same physical host",
+            "RMA-002 must remain open",
+            "113094904513",
+            "113095216424",
             "does not close any of the remaining release-gated physical rows",
         ):
             self.assertIn(token, text)
+
+    def test_authoritative_two_machine_gate_stays_open(self) -> None:
+        todo = (ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "- [ ] Two clean developer environments can build the same minimal "
+            "Android application.",
+            todo,
+        )
 
     def test_both_physical_workflows_have_build_and_verify_steps(self) -> None:
         workflow_text = "\n".join(

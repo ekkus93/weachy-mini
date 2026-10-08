@@ -1,4 +1,4 @@
-# RMA-002 two-machine Unity/Android build validation — 2026-10-07
+# RMA-002 same-host Unity/Android build evidence — 2026-10-07
 
 ## Source head
 
@@ -8,11 +8,10 @@
 
 ## Purpose
 
-This note records current exact-head evidence for the RMA-002 acceptance
-criterion that two clean developer environments can build the same Android
-application from the pinned toolchain. The evidence supersedes the older
-`docs/IMPLEMENTATION_STATUS.md` statement that a second independently
-provisioned Unity/Android machine remained required.
+These two successful workflows ran on the **same physical host, `kawa`**.
+They do **not** satisfy the RMA-002 requirement for two clean developer
+environments. The historical second-machine blocker in
+`docs/IMPLEMENTATION_STATUS.md` remains valid.
 
 The authoritative checklist is still
 `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md`. This note is evidence for a
@@ -21,14 +20,20 @@ performance, local-LLM thermal, offline-speech, or RMA-190 scenario closure.
 
 ## Exact-head build evidence
 
-Two independently scheduled self-hosted validation lanes built and verified the
-same ARM64 API-26 Unity Android application on exact source head
+Two separately scheduled workflows on the same self-hosted runner `kawa`
+built and verified the ARM64 API-26 Unity Android application on exact head
 `5ca67f7ac79f7bfadae3b4712dcac78ceaecdcb9`.
 
 | Workflow | Run | Result | Relevant build evidence |
 | --- | ---: | --- | --- |
 | `Local Unity Android Validation` | `37710449442` | passed | Resolved pinned Unity/Android installations, generated the Reachy Unity presentation, staged the production MuJoCo runtime, ran Unity tests, built the ARM64 API-26 device APK, verified the APK, pinned a physical Android device, and completed the device acceptance sequence. |
 | `Local Unity Android Device Validation No Artifacts` | `37710449563` | passed | Resolved pinned Unity/Android installations, generated the Reachy Unity presentation, staged the production MuJoCo runtime, ran Unity tests, built the ARM64 API-26 device APK, verified the APK, pinned the A54 device, and completed the no-artifacts physical validation path. |
+
+Both job logs identify the same runner and machine: job `113094904513`
+(`Local Unity Android Validation`) reports `runner_name=kawa` and
+`host=kawa`; job `113095216424` (`No Artifacts`) reports
+`Runner name: 'kawa'` and `Machine name: 'kawa'`. Two workflows on
+one machine are not two independent developer environments.
 
 Both workflows ran after hosted CI run `37710449497`, release-review run
 `37710449527`, and RMA-173 run `37710449531` passed on the same source head.
@@ -42,9 +47,11 @@ these lanes build the production Android application, not only a scaffold. They
 also enforce the pinned Unity editor, Android build support, Android SDK, and
 project-generated runtime assets before building the APK.
 
-RMA-002 should therefore no longer be blocked by the historical
-single-Unity-machine limitation. Future checklist reconciliation may close the
-RMA-002 acceptance row once the authoritative TODO can be edited safely.
+**RMA-002 must remain open.** A second distinct, cleanly provisioned
+developer environment must build and verify the same application at an exact
+source SHA. Preserve machine identities, toolchain versions, and build
+results for both environments before closing the authoritative checkbox.
+Repeating a build on `kawa` does not meet the acceptance criterion.
 
 ## Non-overclaiming boundary
 
