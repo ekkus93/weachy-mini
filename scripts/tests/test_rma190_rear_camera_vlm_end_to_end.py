@@ -114,7 +114,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         runner = RUNNER.read_text(encoding="utf-8")
         self.assertIn("resource-transitions.txt", runner)
         self.assertIn("RMA-181 sampled resource transition:", runner)
-        self.assertIn("transitions[-24:]", runner)
+        self.assertIn("deque(maxlen=24)", runner)
         self.assertIn("tail -n 24", runner)
         self.assertIn("if (( exit_code != 0 )); then", runner)
 
