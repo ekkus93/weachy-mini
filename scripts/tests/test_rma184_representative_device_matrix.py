@@ -114,9 +114,9 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         self.assertIn("rma184-device-probe.json", runner)
 
     def test_physical_lane_collects_non_gating_capability_evidence(self) -> None:
-        workflow = (
-            ROOT / ".github/workflows/local-unity-android-validation.yml"
-        ).read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/local-unity-android-validation.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("bash scripts/run_rma184_device_probe_android.sh", workflow)
         self.assertIn("name: rma184-device-probe-${{ github.sha }}", workflow)
         self.assertIn("steps.rma184_device_probe.outcome == 'success'", workflow)
