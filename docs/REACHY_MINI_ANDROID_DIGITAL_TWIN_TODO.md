@@ -3341,8 +3341,9 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-Five scenarios are now physically accepted; the remaining scenarios stay open
-until their own end-to-end evidence passes.
+Five scenarios are physically accepted and two deterministic provider-integration
+scenarios are accepted; the remaining scenarios stay open until their own
+end-to-end evidence passes.
 
 **Tranche 1 completion evidence (2026-09-30):** physical Android workflow
 `RMA-190 Core End-to-End Android Acceptance` run `36806841674` passed on
@@ -3381,15 +3382,30 @@ exact-head RMA-190 core run `37720761019` and no-artifacts run `37720761051`
 failed at physical-device pinning while the A54 was disconnected; neither
 run establishes a source regression or a successful scenario rerun.
 
+**Provider-integration completion evidence (2026-10-08):** exact-head workflow
+`RMA-190 Provider End-to-End Acceptance` run `37757168563` passed on
+`b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b`. Artifact `11540502224`
+(`rma190-provider-end-to-end-b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b`)
+records a deterministic-provider-integration acceptance run through the real
+`OpenAiResponsesLlmProvider`, `OpenAiChatCompletionsLlmProvider`,
+`ReachySharedHttpTransport`, and behavior-intent validator, while the same
+managed harness validates workload-scoped settings/fallback isolation. The
+fixture endpoints are explicitly labeled as fixtures rather than live-cloud
+evidence. The run proves independent cloud-provider configuration/execution and
+fail-closed network loss, rate-limit, malformed-response, and cancellation
+behavior without silent provider substitution. This closes those two RMA-190
+scenario checkboxes; it does not close rear-camera/VLM, physical speech, local
+model-failure, or solver-fault scenarios.
+
 - [x] Offline launch with no network.
 - [x] MuJoCo full model load and neutral reset.
 - [x] Deterministic gesture replay.
 - [x] Front camera -> head rotation -> transformed Reachy-eye frame.
 - [ ] On-device ASR -> local LLM -> behavior -> offline TTS.
 - [ ] Rear-camera visual question with optional VLM.
-- [ ] Independent cloud provider combinations.
+- [x] Independent cloud provider combinations.
 - [x] Permission denial/revocation.
-- [ ] Network loss, rate limit, malformed response, and cancellation.
+- [x] Network loss, rate limit, malformed response, and cancellation.
 - [ ] Model corruption/OOM.
 - [ ] Solver fault and controlled reset.
 

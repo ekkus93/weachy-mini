@@ -49,9 +49,9 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Front camera -> head rotation -> transformed Reachy-eye frame | Physical Android / real camera + calibration/warp | Passed: run `37605466118`, SHA `859aa4ed...` |
 | On-device ASR -> local LLM -> behavior -> offline TTS | Physical Android / live conversation turn | Open; explicit on-device ASR physical preflight currently blocks the SM-A546E path |
 | Rear-camera visual question with optional VLM | Physical Android / real frame + VLM | Open |
-| Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Open |
+| Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
-| Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Open |
+| Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Model corruption/OOM | Local-model package/provider integration | Open |
 | Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Open |
 
@@ -140,7 +140,15 @@ The front-camera transformed-frame checkbox is closed by physical Android run
 `11475530644`. The permission denial/revocation checkbox is closed by physical
 Android run `37605466032` on the same exact SHA.
 
-The remaining six roadmap scenarios remain open until their own end-to-end
-harnesses exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is
-supporting evidence but is not substituted for the remaining RMA-190 scenario
-results.
+The independent cloud-provider-combination and network-loss/rate-limit/malformed-
+response/cancellation scenarios are closed by deterministic-provider-integration
+workflow run `37757168563` on exact SHA
+`b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b`, with artifact `11540502224`.
+The harness uses the production OpenAI-compatible adapters, shared bounded HTTP
+transport, behavior-intent validation, settings isolation, and fallback policy.
+Its endpoints are explicit deterministic fixtures, which this specification permits
+for provider integration; the evidence does not claim a successful live-cloud call.
+
+The remaining four roadmap scenarios remain open until their own end-to-end harnesses
+exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is supporting
+evidence but is not substituted for the remaining RMA-190 scenario results.
