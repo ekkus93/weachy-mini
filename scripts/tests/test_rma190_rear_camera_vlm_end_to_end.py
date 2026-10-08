@@ -98,9 +98,9 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         for token in (
             "ReachyPriorityDegradationRuntimeDriver",
             "WaitForStableVlmAdmissionAsync",
-            "AdmissionObservationMilliseconds = 600",
-            "AdmissionTimeoutMilliseconds = 15_000",
-            "ReachyPriorityDegradationPolicy.RecoverySamplesRequired",
+            "AdmissionObservationMilliseconds = 100",
+            "AdmissionTimeoutMilliseconds = 60_000",
+            "RequiredStableAdmissionSamples = 1",
             "driver.CurrentDecision",
             "ReferenceEquals(decision, previousDecision)",
             "decision.VlmAllowed && physicsSignalAvailable",

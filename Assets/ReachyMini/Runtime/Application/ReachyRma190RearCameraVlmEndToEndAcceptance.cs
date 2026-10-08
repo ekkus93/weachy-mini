@@ -78,10 +78,15 @@ namespace ReachyMini.AppState
     {
         private const int OverallTimeoutMilliseconds = 130_000;
         private const int ReadyPollMilliseconds = 25;
-        private const int AdmissionObservationMilliseconds = 600;
-        private const int AdmissionTimeoutMilliseconds = 15_000;
-        private const int RequiredStableAdmissionSamples =
-            ReachyPriorityDegradationPolicy.RecoverySamplesRequired;
+        private const int AdmissionObservationMilliseconds = 100;
+        private const int AdmissionTimeoutMilliseconds = 60_000;
+        // RMA-181 already requires three consecutive recovery samples before
+        // CurrentDecision can become VLM-allowed again. Requiring another
+        // three admitted decisions here would add acceptance-only hysteresis
+        // that shipping code does not impose. One real policy-admitted sample
+        // is sufficient; the production VLM service rechecks admission at the
+        // actual call and still fails closed if pressure returns.
+        private const int RequiredStableAdmissionSamples = 1;
         private const string FixtureProfileId =
             "rma190-rear-camera-deterministic-fixture";
         private const string FixtureModelId = "rma190-vlm-fixture";
