@@ -48,7 +48,8 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
             "zero-step/`JOB_NOT_FOUND` infrastructure failures",
             "Full RMA-125/RMA-190 spoken-turn evidence remains missing",
             "RMA-002 still requires second independently provisioned Unity/Android build evidence",
-            "RMA-184 still needs detailed measured default profiles",
+            "RMA-184 has published measured A54 30/60 FPS default profiles",
+            "the 1,800-second integrated long-run, thermal-order",
             "RMA-194 license row still needs final release-candidate packaging/release audit",
         ):
             self.assertIn(token, status)
