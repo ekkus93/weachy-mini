@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -135,6 +136,36 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
             "LOCAL DEVELOPMENT ONLY",
         ):
             self.assertIn(token, config)
+
+    def test_android_network_security_config_allows_only_explicit_loopback_cleartext(
+        self,
+    ) -> None:
+        plugin = ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib"
+        manifest = ET.parse(plugin / "AndroidManifest.xml").getroot()
+        application = manifest.find("application")
+        self.assertIsNotNone(application)
+        android_ns = "{http://schemas.android.com/apk/res/android}"
+        self.assertEqual(
+            "@xml/reachy_provider_network_security",
+            application.attrib.get(android_ns + "networkSecurityConfig"),
+        )
+        policy = ET.parse(plugin / "res/xml/reachy_provider_network_security.xml").getroot()
+        self.assertEqual("network-security-config", policy.tag)
+        self.assertEqual(["base-config", "domain-config"], [child.tag for child in policy])
+        base, allow = list(policy)
+        self.assertEqual("false", base.attrib.get("cleartextTrafficPermitted"))
+        self.assertEqual([], list(base), "Do not override system TLS trust anchors")
+        self.assertEqual("true", allow.attrib.get("cleartextTrafficPermitted"))
+        self.assertEqual(["domain", "domain"], [child.tag for child in allow])
+        self.assertEqual(
+            {"localhost", "127.0.0.1"},
+            {child.text for child in allow},
+        )
+        self.assertTrue(
+            all(child.attrib.get("includeSubdomains", "false") == "false" for child in allow)
+        )
+        self.assertNotIn("debug-overrides", read(plugin / "res/xml/reachy_provider_network_security.xml"))
+        self.assertNotIn("trust-anchors", read(plugin / "res/xml/reachy_provider_network_security.xml"))
 
     def test_cloud_bound_audio_image_and_text_are_disclosed_in_visible_settings(self) -> None:
         selection = read(PROVIDER_SELECTION)

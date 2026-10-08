@@ -156,6 +156,14 @@ running; the runner validates the machine-readable report and prints the
 validated JSON into the job log. The roadmap checkbox remains open until this
 harness passes on a physical Android device.
 
+### Android loopback-network policy (RMA-190 VLM transport remediation)
+
+Physical A54 run `37842094321` (SHA `97ae8c976d5f183652acbb796bee9cd291dbdf7c`) built and launched the production APK and selected a physical rear camera, but the production VLM request failed as a bare HTTP `Exception` before the local fixture received a POST. That result is **failure**, not physical acceptance; the exception type alone cannot establish the cause.
+
+Android 9+ normally forbids cleartext HTTP. The checked-in Android provider-security plug-in now declares a `networkSecurityConfig` with global cleartext denied and a *host-only* exception for `localhost` and `127.0.0.1`, needed for the explicitly labeled `adb reverse` fixture. It does not grant arbitrary LAN or Internet cleartext, change TLS trust anchors, or bypass the RMA-140 explicit development-mode profile, Keystore, and provider authorization gates. A production HTTPS endpoint continues to use HTTPS. This is a candidate OS-policy remediation, **not** proof of successful VLM transport until the shipping APK passes physical acceptance.
+
+The RMA-191 privacy/security and RMA-190 source contracts assert the manifest wiring and restrictive XML policy. The physical workflow now pins an actual Android device *before* expensive production APK generation so a disconnected device fails visibly and quickly instead of wasting Unity build resources. The runner still uses the shipping VLM transport and real camera, with an explicitly labeled fixture response.
+
 ## 8. Tranche 4 offline spoken-turn contract
 
 `ReachyRma190OfflineSpeechEndToEndAcceptance` runs only from the manual

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -11,6 +12,27 @@ TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
 class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
+    def test_android_vlm_fixture_loopback_has_explicit_narrow_network_permission(
+        self,
+    ) -> None:
+        network_dir = ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib"
+        manifest = (network_dir / "AndroidManifest.xml").read_text(encoding="utf-8")
+        self.assertIn('android:networkSecurityConfig="@xml/reachy_provider_network_security"', manifest)
+        policy = ET.parse(network_dir / "res/xml/reachy_provider_network_security.xml").getroot()
+        base = policy.find("base-config")
+        self.assertIsNotNone(base)
+        self.assertEqual("false", base.attrib.get("cleartextTrafficPermitted"))
+        allow = policy.find("domain-config")
+        self.assertIsNotNone(allow)
+        self.assertEqual("true", allow.attrib.get("cleartextTrafficPermitted"))
+        self.assertEqual(
+            {"localhost", "127.0.0.1"}, {item.text for item in allow.findall("domain")}
+        )
+        self.assertLess(
+            WORKFLOW.read_text(encoding="utf-8").index("Pin one physical Android device"),
+            WORKFLOW.read_text(encoding="utf-8").index("Build ARM64 API-26 device APK"),
+        )
+
     def test_acceptance_uses_shipping_rear_camera_and_production_vlm(self) -> None:
         source = ACCEPTANCE.read_text(encoding="utf-8")
         for token in (

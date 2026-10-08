@@ -11,6 +11,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyCloudVlmCredentialCoordinator.cs'
       - 'Assets/ReachyMini/Runtime/Core/Perception/**'
       - 'Assets/ReachyMini/Runtime/Core/Providers/**'
+      - 'Assets/Plugins/Android/ReachyProviderSecurity.androidlib/**'
       - 'Assets/ReachyMini/Runtime/Rendering/**'
       - 'native/reachy_sim/**'
       - 'models/reachy-mini/**'
@@ -121,28 +122,6 @@ jobs:
           fi
           "$android_sdk_root/platform-tools/adb" version
 
-      - name: Prepare generated Reachy Unity presentation
-        shell: bash
-        env:
-          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/prepare_reachy_unity_presentation.sh
-
-      - name: Stage production MuJoCo runtime for Unity Android
-        shell: bash
-        env:
-          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/stage_reachy_unity_android_runtime.sh
-
-      - name: Build ARM64 API-26 device APK
-        shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
-
-      - name: Verify ARM64 API-26 device APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
-
       - name: Pin one physical Android device
         shell: bash
         env:
@@ -191,6 +170,28 @@ jobs:
           adb -s "$serial" wait-for-device
           printf 'REACHY_ANDROID_SERIAL=%s\n' "$serial" >> "$GITHUB_ENV"
           printf 'pinned_android_serial=%s\n' "$serial"
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Verify ARM64 API-26 device APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
       - name: Run RMA-190 rear-camera/VLM end-to-end acceptance
         id: rma190_rear_vlm
