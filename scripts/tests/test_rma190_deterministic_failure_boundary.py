@@ -14,23 +14,27 @@ STATUS = ROOT / "docs/validation/RMA_190_DETERMINISTIC_FAILURE_ACCEPTANCE_STATUS
 class Rma190DeterministicFailureBoundaryTests(unittest.TestCase):
     def test_failure_rows_track_exact_acceptance_evidence(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
-        accepted = "Network loss, rate limit, malformed response, and cancellation."
-        self.assertIn(f"- [x] {accepted}", todo)
-        self.assertNotIn(f"- [ ] {accepted}", todo)
+        for accepted in (
+            "Network loss, rate limit, malformed response, and cancellation.",
+            "Model corruption/OOM.",
+        ):
+            self.assertIn(f"- [x] {accepted}", todo)
+            self.assertNotIn(f"- [ ] {accepted}", todo)
         for evidence in (
             "RMA-190 Provider End-to-End Acceptance",
             "37757168563",
             "b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b",
             "11540502224",
+            "RMA-190 Model Failure End-to-End Acceptance",
+            "37759478803",
+            "6f3019c4c9e8a8c963161267defaff71a966a658",
+            "11541646432",
         ):
             self.assertIn(evidence, todo)
 
-        for item in (
-            "Model corruption/OOM.",
-            "Solver fault and controlled reset.",
-        ):
-            self.assertIn(f"- [ ] {item}", todo)
-            self.assertNotIn(f"- [x] {item}", todo)
+        item = "Solver fault and controlled reset."
+        self.assertIn(f"- [ ] {item}", todo)
+        self.assertNotIn(f"- [x] {item}", todo)
 
     def test_status_names_redacted_source_and_no_success_claim(self) -> None:
         status = STATUS.read_text(encoding="utf-8")

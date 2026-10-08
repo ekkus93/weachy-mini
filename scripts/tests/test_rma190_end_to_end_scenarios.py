@@ -78,6 +78,7 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
             "Independent cloud provider combinations.",
             "Permission denial/revocation.",
             "Network loss, rate limit, malformed response, and cancellation.",
+            "Model corruption/OOM.",
         ):
             self.assertIn(f"- [x] {item}", section)
             self.assertNotIn(f"- [ ] {item}", section)
@@ -85,7 +86,6 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         for item in (
             "On-device ASR -> local LLM -> behavior -> offline TTS.",
             "Rear-camera visual question with optional VLM.",
-            "Model corruption/OOM.",
             "Solver fault and controlled reset.",
         ):
             self.assertIn(f"- [ ] {item}", section)
@@ -99,6 +99,9 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("37757168563", section)
         self.assertIn("b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b", section)
         self.assertIn("11540502224", section)
+        self.assertIn("37759478803", section)
+        self.assertIn("6f3019c4c9e8a8c963161267defaff71a966a658", section)
+        self.assertIn("11541646432", section)
         self.assertNotIn("**Status:** Complete", section)
 
 

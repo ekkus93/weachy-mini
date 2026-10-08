@@ -52,7 +52,7 @@ reported as a blocker rather than replaced by system/cloud recognition.
 | Independent cloud provider combinations | Deterministic provider integration + optional physical endpoint | Passed: run `37757168563`, SHA `b9f4d739...` |
 | Permission denial/revocation | Physical Android + deterministic application-state assertions | Passed: run `37605466032`, SHA `859aa4ed...` |
 | Network loss, rate limit, malformed response, cancellation | Deterministic HTTP/provider integration + physical cancellation where needed | Passed: run `37757168563`, SHA `b9f4d739...` |
-| Model corruption/OOM | Local-model package/provider integration | Open |
+| Model corruption/OOM | Local-model package/provider integration | Passed: run `37759478803`, SHA `6f3019c4...` |
 | Solver fault and controlled reset | Native-backed worker + application/runtime recovery | Open |
 
 ## 4. Tranche 1 contract
@@ -149,6 +149,16 @@ transport, behavior-intent validation, settings isolation, and fallback policy.
 Its endpoints are explicit deterministic fixtures, which this specification permits
 for provider integration; the evidence does not claim a successful live-cloud call.
 
-The remaining four roadmap scenarios remain open until their own end-to-end harnesses
+The model-corruption/OOM scenario is closed by deterministic local-model
+package/provider integration workflow run `37759478803` on exact SHA
+`6f3019c4c9e8a8c963161267defaff71a966a658`, with artifact `11541646432`.
+The same acceptance process crosses the production package manager and
+`LocalLlmProvider`: installed corruption is revalidated and rejected, and
+deterministic OOM fault injection produces typed resource exhaustion, a faulted
+provider, explicit reload, and successful post-reload validated generation with
+no hidden retry or provider fallback. The fixture is deliberately not represented
+as a physical memory-pressure or performance measurement.
+
+The remaining three roadmap scenarios remain open until their own end-to-end harnesses
 exist and pass. Existing lower-level RMA-090 through RMA-195 evidence is supporting
 evidence but is not substituted for the remaining RMA-190 scenario results.

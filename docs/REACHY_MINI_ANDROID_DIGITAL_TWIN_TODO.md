@@ -3341,9 +3341,8 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-Five scenarios are physically accepted and two deterministic provider-integration
-scenarios are accepted; the remaining scenarios stay open until their own
-end-to-end evidence passes.
+Eight scenarios are accepted across their required execution classes; the
+remaining scenarios stay open until their own end-to-end evidence passes.
 
 **Tranche 1 completion evidence (2026-09-30):** physical Android workflow
 `RMA-190 Core End-to-End Android Acceptance` run `36806841674` passed on
@@ -3377,7 +3376,7 @@ application composition, and authoritative rendering acceptance. Uploaded
 evidence includes RMA-090 artifact `11525538889`, RMA-091 `11526157660`,
 RMA-092 `11526064322`, RMA-195 `11525828594`, and authoritative rendering
 `11525529374`. This is regression evidence for those shipping subsystems,
-**not** acceptance evidence for the six unchecked scenarios below. Earlier
+**not** acceptance evidence for the remaining unchecked scenarios below. Earlier
 exact-head RMA-190 core run `37720761019` and no-artifacts run `37720761051`
 failed at physical-device pinning while the A54 was disconnected; neither
 run establishes a source regression or a successful scenario rerun.
@@ -3397,6 +3396,20 @@ behavior without silent provider substitution. This closes those two RMA-190
 scenario checkboxes; it does not close rear-camera/VLM, physical speech, local
 model-failure, or solver-fault scenarios.
 
+**Local-model failure completion evidence (2026-10-08):** exact-head workflow
+`RMA-190 Model Failure End-to-End Acceptance` run `37759478803` passed on
+`6f3019c4c9e8a8c963161267defaff71a966a658`. Artifact `11541646432`
+(`rma190-model-failure-end-to-end-6f3019c4c9e8a8c963161267defaff71a966a658`)
+records one deterministic integration scenario spanning the production
+`LocalModelPackageManager` and `LocalLlmProvider`. It proves that an installed
+artifact corrupted after approval is rejected with `InstalledArtifactCorrupt`
+and never re-issued as an approved artifact; a deterministic OOM fault is surfaced
+as `ResourceExhausted`, faults the provider without hidden retry/fallback, and
+requires an explicit reload before a subsequent validated behavior-intent
+generation succeeds. The package payload and OOM trigger are explicitly labeled
+fixtures and are **not** physical memory or performance measurements; this evidence
+does not close RMA-135 or RMA-184.
+
 - [x] Offline launch with no network.
 - [x] MuJoCo full model load and neutral reset.
 - [x] Deterministic gesture replay.
@@ -3406,7 +3419,7 @@ model-failure, or solver-fault scenarios.
 - [x] Independent cloud provider combinations.
 - [x] Permission denial/revocation.
 - [x] Network loss, rate limit, malformed response, and cancellation.
-- [ ] Model corruption/OOM.
+- [x] Model corruption/OOM.
 - [ ] Solver fault and controlled reset.
 
 ## RMA-191 — Complete privacy and security review
@@ -3498,15 +3511,3 @@ These items are intentionally deferred and must receive separate specifications/
 
 ---
 
-# Completion record
-
-When the TODO is complete, add:
-
-- final release commit/tag;
-- tested device matrix;
-- MuJoCo and Reachy source revisions;
-- selected local model and hash;
-- fidelity/calibration level;
-- known limitations;
-- links to validation and performance reports;
-- confirmation that every file referenced by the final handoff exists at the stated repository path.

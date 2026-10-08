@@ -44,12 +44,12 @@ The authoritative TODO records these accepted scenarios:
 - Independent cloud provider combinations.
 - Permission denial/revocation.
 - Network loss, rate limit, malformed response, and cancellation.
+- Model corruption/OOM.
 
 The following scenarios remain open until their own end-to-end evidence passes:
 
 - On-device ASR -> local LLM -> behavior -> offline TTS.
 - Rear-camera visual question with optional VLM.
-- Model corruption/OOM.
 - Solver fault and controlled reset.
 
 Physical core/camera/permission evidence and the deterministic provider-integration
@@ -57,8 +57,10 @@ evidence are cited in the authoritative RMA-190 section. Provider run `377571685
 passed on `b9f4d7397630f6f6392f2dee9bf586ab1bb68f7b`, using explicitly labeled
 fixture endpoints rather than live cloud credentials. Model-failure fixture
 integration run `37759478803` passed on
-`6f3019c4c9e8a8c963161267defaff71a966a658` with artifact `11541646432`;
-that scenario remains unchecked pending authoritative acceptance reconciliation.
+`6f3019c4c9e8a8c963161267defaff71a966a658` with artifact `11541646432`.
+The authoritative RMA-190 section closes that scenario using explicitly labeled
+deterministic package/OOM fixtures; this is not physical memory or performance
+evidence and does not close RMA-135 or RMA-184.
 
 ## Current exact-head evidence on `master`
 
@@ -81,7 +83,7 @@ The current release gate remains blocked by these evidence gaps:
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
 4. RMA-184 still needs detailed measured default profiles and representative-device target reconciliation.
-5. RMA-190: rear-camera/VLM, model-corruption/OOM, and solver-fault/reset scenarios remain open; provider-combination and network/rate-limit/malformed/cancellation scenarios have accepted deterministic integration evidence.
+5. RMA-190: rear-camera/VLM and solver-fault/reset scenarios remain open; provider-combination, network/rate-limit/malformed/cancellation, and model-corruption/OOM scenarios have accepted deterministic integration evidence.
 6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
 
 Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.

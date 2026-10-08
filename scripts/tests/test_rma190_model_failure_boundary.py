@@ -19,10 +19,18 @@ def read(path: Path) -> str:
 
 
 class Rma190ModelFailureBoundaryTests(unittest.TestCase):
-    def test_todo_keeps_model_corruption_oom_open(self) -> None:
+    def test_todo_closes_model_corruption_oom_only_with_exact_acceptance(self) -> None:
         todo = read(TODO)
-        self.assertIn("- [ ] Model corruption/OOM.", todo)
-        self.assertNotIn("- [x] Model corruption/OOM.", todo)
+        self.assertIn("- [x] Model corruption/OOM.", todo)
+        self.assertNotIn("- [ ] Model corruption/OOM.", todo)
+        for evidence in (
+            "RMA-190 Model Failure End-to-End Acceptance",
+            "37759478803",
+            "6f3019c4c9e8a8c963161267defaff71a966a658",
+            "11541646432",
+            "not** physical memory or performance measurements",
+        ):
+            self.assertIn(evidence, todo)
 
     def test_consolidation_records_redacted_source_boundary_without_success_claim(self) -> None:
         source = read(CONSOLIDATION)
