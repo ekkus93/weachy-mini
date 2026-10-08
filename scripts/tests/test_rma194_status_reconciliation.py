@@ -44,10 +44,14 @@ class Rma194StatusReconciliationTests(unittest.TestCase):
             "The authoritative TODO records these accepted scenarios:",
             "The following scenarios remain open until their own end-to-end evidence passes:",
         )
-        open_text = snapshot.split(
-            "The following scenarios remain open until their own end-to-end evidence passes:",
-            1,
-        )[1].lstrip("\n").split("\n\n", 1)[0]
+        open_text = (
+            snapshot.split(
+                "The following scenarios remain open until their own end-to-end evidence passes:",
+                1,
+            )[1]
+            .lstrip("\n")
+            .split("\n\n", 1)[0]
+        )
         self.assertEqual(checked, set(BULLET.findall(accepted_text)))
         self.assertEqual(open_items, set(BULLET.findall(open_text)))
         self.assertFalse(checked & open_items)
