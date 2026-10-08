@@ -41,6 +41,9 @@ jobs:
       - name: Run RMA-195 fail-closed composition contract
         run: python3 scripts/tests/test_rma195_application_composition.py
 
+      - name: Enforce RMA-190 physical VLM artifact privacy
+        run: python3 scripts/tests/test_rma190_vlm_artifact_privacy.py
+
       - name: Run canonical RMA-191 security/privacy contract
         run: python3 scripts/tests/test_rma191_security_privacy_review.py
 

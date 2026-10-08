@@ -16,6 +16,7 @@ FIXTURE_PORT="${RMA190_REAR_VLM_FIXTURE_PORT:-18765}"
 FIXTURE_META="${REPORT_DIR}/fixture-metadata.json"
 FIXTURE_SCRIPT="${REPORT_DIR}/fixture-server.py"
 FIXTURE_PID=""
+LOG_START=""
 
 [[ -s "${APK_PATH}" ]] || {
     printf 'Unity device APK is missing: %s\n' "${APK_PATH}" >&2
@@ -188,31 +189,41 @@ read_report()
 
 capture_diagnostics()
 {
-    "${ADB[@]}" logcat -d -v threadtime         > "${REPORT_DIR}/logcat.txt" || true
-    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}"         > "${REPORT_DIR}/package.txt" || true
-    "${ADB[@]}" shell dumpsys media.camera         > "${REPORT_DIR}/camera.txt" || true
-    "${ADB[@]}" shell dumpsys activity activities         > "${REPORT_DIR}/activity.txt" || true
-    read_report > "${REPORT_DIR}/device-report.json" || true
-    # Record bounded, non-media pressure telemetry for diagnosing physical
-    # RMA-181 VLM admission failures without changing the fail-closed policy.
-    python3 - "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/resource-transitions.txt" <<'PY'
-from pathlib import Path
+    # This scenario handles private camera frames. Export only app-scoped,
+    # bounded, allowlisted events from the current invocation. Never write
+    # raw logcat to disk, and never capture the device display or global
+    # camera/activity inventories.
+    : > "${REPORT_DIR}/logcat.txt"
+    : > "${REPORT_DIR}/resource-transitions.txt"
+    local app_pid=""
+    app_pid="$("${ADB[@]}" shell pidof "${PACKAGE_NAME}" 2>/dev/null | tr -d '\r' | awk '{print $1}' || true)"
+    if [[ "${app_pid}" =~ ^[0-9]+$ && -n "${LOG_START:-}" ]]; then
+        "${ADB[@]}" logcat -d -v threadtime --pid="${app_pid}" -T "${LOG_START}" 2>/dev/null |
+            python3 -c '
 import re
 import sys
+from collections import deque
 
-pattern = re.compile(r"RMA-181 sampled resource transition: [^\r\n]*")
-log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
-transitions = [
-    match.group(0)[:1024]
-    for line in log.splitlines()
-    if (match := pattern.search(line))
-]
-Path(sys.argv[2]).write_text(
-    "\n".join(transitions[-24:]) + ("\n" if transitions else ""),
-    encoding="utf-8",
-)
-PY
-    "${ADB[@]}" exec-out screencap -p         > "${REPORT_DIR}/device-screen-final.png" || true
+events = deque(maxlen=48)
+transitions = deque(maxlen=24)
+statuses = re.compile(r"\\b(started|completed|passed|failed|unavailable|faulted|cancelled)\\b", re.I)
+resource = re.compile(r"RMA-181 sampled resource transition: ([A-Za-z0-9_.,:;=+ /()\\-]{1,160})")
+for line in sys.stdin:
+    if match := resource.search(line):
+        transitions.append("RMA-181 sampled resource transition: " + match.group(1).strip())
+    elif "RMA-190" in line and (status := statuses.search(line)):
+        # Do not persist arbitrary log text, prompts, URLs or camera data.
+        events.append("RMA-190 stage: " + status.group(1).lower())
+sys.stdout.write("\\n".join(events) + ("\\n" if events else ""))
+with open(sys.argv[1], "w", encoding="utf-8") as out:
+    out.write("\\n".join(transitions) + ("\\n" if transitions else ""))
+' "${REPORT_DIR}/resource-transitions.txt" > "${REPORT_DIR}/logcat.txt" || true
+    fi
+    # Package metadata is scoped to this app and filtered to version fields.
+    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" 2>/dev/null |
+        grep -E '^[[:space:]]*(versionCode=|versionName=|minSdk=|targetSdk=)' |
+        head -n 12 > "${REPORT_DIR}/package.txt" || true
+    read_report > "${REPORT_DIR}/device-report.json" || true
 }
 
 cleanup()
@@ -279,8 +290,9 @@ fi
 
 "${ADB[@]}" shell mkdir -p "${REMOTE_FILES_DIR}"
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp"
-"${ADB[@]}" logcat -c
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
+# Device-local timestamp, captured before launch; do not clear global logs.
+LOG_START="$("${ADB[@]}" shell date '+%m-%d %H:%M:%S.000' 2>/dev/null | tr -d '\r' || true)"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20     > "${REPORT_DIR}/prepare.txt"
 
 FIXTURE_URL="http://127.0.0.1:${FIXTURE_PORT}/"
