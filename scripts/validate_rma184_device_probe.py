@@ -56,8 +56,7 @@ def validate(report: object) -> dict[str, object]:
     if report["available_camera_count"] > report["camera_count"]:
         raise ValueError("available cameras exceed discovered cameras")
     if (
-        int(report["rear_camera_available"])
-        + int(report["front_camera_available"])
+        int(report["rear_camera_available"]) + int(report["front_camera_available"])
         > report["available_camera_count"]
     ):
         raise ValueError("camera-facing availability contradicts camera count")
@@ -66,8 +65,7 @@ def validate(report: object) -> dict[str, object]:
         report["android_api_level"] >= 26
         and report["system_memory_mib"] >= 3072
         and report["logical_processor_count"] >= 4
-        and report["graphics_api"].casefold()
-        in {"vulkan", "opengles3", "opengl es 3"}
+        and report["graphics_api"].casefold() in {"vulkan", "opengles3", "opengl es 3"}
         and report["rear_camera_available"]
     )
     full_offline = (
@@ -79,7 +77,9 @@ def validate(report: object) -> dict[str, object]:
     expected = (
         "Unsupported"
         if not core_supported
-        else "Supported" if full_offline else "SupportedWithLimitations"
+        else "Supported"
+        if full_offline
+        else "SupportedWithLimitations"
     )
     if report["support_status"] != expected:
         raise ValueError(
