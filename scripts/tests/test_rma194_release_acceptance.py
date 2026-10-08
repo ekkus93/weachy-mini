@@ -206,6 +206,5 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn("No final release tag", status)
 
 
-
 if __name__ == "__main__":
     unittest.main()
