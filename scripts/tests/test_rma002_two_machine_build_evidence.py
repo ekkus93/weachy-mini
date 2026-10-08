@@ -8,12 +8,7 @@ import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DOC = (
-    ROOT
-    / "docs"
-    / "validation"
-    / "RMA_002_TWO_MACHINE_ANDROID_BUILD_VALIDATION_2026-10-07.md"
-)
+DOC = ROOT / "docs" / "validation" / "RMA_002_TWO_MACHINE_ANDROID_BUILD_VALIDATION_2026-10-07.md"
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 
@@ -37,8 +32,7 @@ class Rma002TwoMachineBuildEvidenceTests(unittest.TestCase):
 
     def test_both_physical_workflows_have_build_and_verify_steps(self) -> None:
         workflow_text = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in sorted(WORKFLOWS.glob("*.yml"))
+            path.read_text(encoding="utf-8") for path in sorted(WORKFLOWS.glob("*.yml"))
         )
         for token in (
             "Local Unity Android Validation",
