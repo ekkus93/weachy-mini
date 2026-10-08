@@ -32,9 +32,7 @@ class Rma002TwoMachineBuildEvidenceTests(unittest.TestCase):
             self.assertIn(token, text)
 
     def test_authoritative_two_machine_gate_stays_open(self) -> None:
-        todo = (ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md").read_text(
-            encoding="utf-8"
-        )
+        todo = (ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md").read_text(encoding="utf-8")
         self.assertIn(
             "- [ ] Two clean developer environments can build the same minimal "
             "Android application.",
