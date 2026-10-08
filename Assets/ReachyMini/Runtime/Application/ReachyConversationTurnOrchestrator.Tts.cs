@@ -32,101 +32,80 @@ namespace ReachyMini.AppState
             public static TtsTurnResult Failure(string detail) => new TtsTurnResult(false, detail);
         }
 
-        // Fully self-contained, mirroring RunAsrAsync: resolves, uses, and
-        // disposes its own TTS provider instance for this one turn.
-        // Transitions the conversation state machine from PreparingSpeech
-        // (voice selection) into Speaking (playback) internally, matching
-        // how RunAsrAsync transitions Listening -> Transcribing internally.
+        // The provider is the TTS leg of the same per-turn
+        // ReachyAndroidSpeechAudioStack used for ASR. Its
+        // AudioCoordinatedTtsProvider shares the exact audio-focus
+        // coordinator with listening, so speaking cannot acquire focus until
+        // the ASR terminal event has been exposed after listening release.
         private async Task<TtsTurnResult> RunTtsAsync(
+            ITtsProvider provider,
             string speech,
             ReachyConversationOperation preparingSpeech)
         {
+            if (provider == null)
+            {
+                throw new ArgumentNullException(nameof(provider));
+            }
             if (Application.platform != RuntimePlatform.Android)
             {
                 return TtsTurnResult.Failure("Speech playback requires an Android device.");
             }
 
-            ITtsProvider? provider = await ResolveTtsProviderAsync(
-                    preparingSpeech.CancellationToken)
+            SpeechProviderAvailability availability = await provider
+                .CheckAvailabilityAsync(preparingSpeech.CancellationToken)
                 .ConfigureAwait(true);
-            if (provider == null)
+            if (!availability.IsAvailable)
             {
-                return TtsTurnResult.Failure("No usable text-to-speech provider is available.");
+                return TtsTurnResult.Failure(availability.Diagnostic);
             }
 
-            try
-            {
-                IReadOnlyList<TtsVoice> voices = await provider
-                    .GetVoicesAsync(preparingSpeech.CancellationToken)
-                    .ConfigureAwait(true);
-                TtsVoice? voice = ReachyTtsVoiceSelectionPolicy.SelectExactOfflineVoice(
-                    voices,
-                    TtsLanguageTag);
-                if (voice == null)
-                {
-                    return TtsTurnResult.Failure(
-                        "No text-to-speech voice is available on this device.");
-                }
-
-                ReachyConversationOperation speaking =
-                    conversation.MarkSpeechPrepared(preparingSpeech);
-                stateStore.SetInteraction(ReachyInteractionState.Speaking, "Speaking.");
-
-                SpeechProviderSelection selection = new SpeechProviderSelection(
-                    provider.Descriptor);
-                SpeechOperationContext context = new SpeechOperationContext(
-                    NextRequestId("tts"),
-                    selection.Current,
-                    TtsTimeout);
-                TtsRequest request = new TtsRequest(context, speech, voice.VoiceId);
-
-                // See RunAsrAsync's comment: no explicit .ConfigureAwait()
-                // on this async-enumerable iteration -- plain `await
-                // foreach` already defaults to continuing on the captured
-                // (Unity main-thread) context.
-                await foreach (TtsEvent ttsEvent in provider.SpeakAsync(
-                    request,
-                    speaking.CancellationToken))
-                {
-                    switch (ttsEvent.Kind)
-                    {
-                        case TtsEventKind.Completed:
-                            conversation.MarkSpeechComplete(speaking);
-                            return TtsTurnResult.Success();
-                        case TtsEventKind.Cancelled:
-                            return TtsTurnResult.Failure("Speech playback was cancelled.");
-                        case TtsEventKind.Failed:
-                            return TtsTurnResult.Failure(
-                                ttsEvent.Error?.Diagnostic ?? "Speech playback failed.");
-                        default:
-                            continue;
-                    }
-                }
-
-                return TtsTurnResult.Failure("Speech playback ended without completing.");
-            }
-            finally
-            {
-                await provider.DisposeAsync().ConfigureAwait(true);
-            }
-        }
-
-        private static async Task<ITtsProvider?> ResolveTtsProviderAsync(
-            CancellationToken cancellationToken)
-        {
-            ITtsProvider offline = ReachyAndroidOfflineTtsProviderFactory.Create(
-                "conversation-turn-offline-tts", TtsLanguageTag);
-            SpeechProviderAvailability availability = await offline
-                .CheckAvailabilityAsync(cancellationToken)
+            IReadOnlyList<TtsVoice> voices = await provider
+                .GetVoicesAsync(preparingSpeech.CancellationToken)
                 .ConfigureAwait(true);
-            if (availability.IsAvailable)
+            TtsVoice? voice = ReachyTtsVoiceSelectionPolicy.SelectExactOfflineVoice(
+                voices,
+                TtsLanguageTag);
+            if (voice == null)
             {
-                return offline;
+                return TtsTurnResult.Failure(
+                    "No installed exact-locale offline text-to-speech voice is available.");
             }
-            await offline.DisposeAsync().ConfigureAwait(true);
 
-            return null;
+            ReachyConversationOperation speaking =
+                conversation.MarkSpeechPrepared(preparingSpeech);
+            stateStore.SetInteraction(ReachyInteractionState.Speaking, "Speaking.");
+
+            SpeechProviderSelection selection = new SpeechProviderSelection(
+                provider.Descriptor);
+            SpeechOperationContext context = new SpeechOperationContext(
+                NextRequestId("tts"),
+                selection.Current,
+                TtsTimeout);
+            TtsRequest request = new TtsRequest(context, speech, voice.VoiceId);
+
+            // AudioCoordinatedTtsProvider withholds Completed until the
+            // speaking focus lease has been released.
+            await foreach (TtsEvent ttsEvent in provider.SpeakAsync(
+                request,
+                speaking.CancellationToken))
+            {
+                switch (ttsEvent.Kind)
+                {
+                    case TtsEventKind.Completed:
+                        conversation.MarkSpeechComplete(speaking);
+                        return TtsTurnResult.Success();
+                    case TtsEventKind.Cancelled:
+                        return TtsTurnResult.Failure("Speech playback was cancelled.");
+                    case TtsEventKind.Failed:
+                        return TtsTurnResult.Failure(
+                            ttsEvent.Error?.Diagnostic ?? "Speech playback failed.");
+                    default:
+                        continue;
+                }
+            }
+
+            return TtsTurnResult.Failure(
+                "Speech playback ended without completing.");
         }
-
     }
 }

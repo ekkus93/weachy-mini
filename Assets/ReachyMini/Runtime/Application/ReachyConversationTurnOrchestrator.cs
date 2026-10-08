@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ReachyMini.Behavior;
 using ReachyMini.Conversation;
 using ReachyMini.Providers;
+using ReachyMini.Speech;
 using UnityEngine;
 
 namespace ReachyMini.AppState
@@ -151,7 +152,17 @@ namespace ReachyMini.AppState
 
         private async Task RunTurnAsync(string requestId, ReachyConversationOperation listening)
         {
-            AsrTurnResult asrResult = await RunAsrAsync(listening, listening.CancellationToken)
+            await using ReachyAndroidSpeechAudioStack speechStack =
+                await ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync(
+                    "conversation-turn-on-device-asr",
+                    "conversation-turn-offline-tts",
+                    AsrLanguageTag,
+                    AsrTimeout).ConfigureAwait(true);
+
+            AsrTurnResult asrResult = await RunAsrAsync(
+                    speechStack.Asr,
+                    listening,
+                    listening.CancellationToken)
                 .ConfigureAwait(true);
             if (!asrResult.Succeeded || string.IsNullOrWhiteSpace(asrResult.Transcript))
             {
@@ -211,7 +222,10 @@ namespace ReachyMini.AppState
                 return;
             }
 
-            TtsTurnResult ttsResult = await RunTtsAsync(speech, preparingSpeech)
+            TtsTurnResult ttsResult = await RunTtsAsync(
+                    speechStack.Tts,
+                    speech,
+                    preparingSpeech)
                 .ConfigureAwait(true);
             if (!ttsResult.Succeeded)
             {

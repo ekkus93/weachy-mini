@@ -66,16 +66,23 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("and an offline TTS voice in device settings", speech)
         self.assertNotIn("Microphone capture and speech playback are available.", speech)
 
-    def test_live_asr_never_falls_back_to_potentially_network_backed_system_asr(self) -> None:
+    def test_live_speech_uses_one_shared_offline_audio_focus_stack(self) -> None:
+        orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         asr = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
-        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", asr)
-        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory.Create", asr)
-        self.assertIn("return null;", asr)
-
-    def test_live_tts_never_falls_back_to_network_voice(self) -> None:
         tts = read(APP / "ReachyConversationTurnOrchestrator.Tts.cs")
-        self.assertIn("ReachyAndroidOfflineTtsProviderFactory.Create", tts)
-        self.assertNotIn("ReachyAndroidSystemTtsProviderFactory.Create", tts)
+        stack = read(APP / "ReachyAndroidSpeechAudioStack.cs")
+        self.assertIn("ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync", orchestrator)
+        self.assertIn("RunAsrAsync(\n                    speechStack.Asr", orchestrator)
+        self.assertIn("RunTtsAsync(\n                    speechStack.Tts", orchestrator)
+        self.assertIn("new SpeechAudioFocusCoordinator(", stack)
+        self.assertIn("new AudioCoordinatedAsrProvider(", stack)
+        self.assertIn("new AudioCoordinatedTtsProvider(", stack)
+        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", stack)
+        self.assertIn("ReachyAndroidOfflineTtsProviderFactory.Create", stack)
+        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory.Create", stack)
+        self.assertNotIn("ReachyAndroidSystemTtsProviderFactory.Create", stack)
+        self.assertNotIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", asr)
+        self.assertNotIn("ReachyAndroidOfflineTtsProviderFactory.Create", tts)
         self.assertIn("SelectExactOfflineVoice", tts)
 
     def test_llm_execution_does_not_cross_provider_boundary_on_failure(self) -> None:

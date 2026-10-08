@@ -50,17 +50,20 @@ namespace ReachyMini.AppState
                 new AsrTurnResult(false, string.Empty, detail, transcribing);
         }
 
-        // Fully self-contained: resolves, uses, and disposes its own ASR
-        // provider instance for this one turn. The shipping conversation
-        // path is deliberately on-device-only: an unavailable or failed
-        // on-device recognizer must not cross the privacy boundary into the
-        // potentially network-backed Android system recognizer. System ASR
-        // remains an explicit provider option elsewhere, never an automatic
-        // fallback from this path.
+        // The provider is the ASR leg of one per-turn
+        // ReachyAndroidSpeechAudioStack. The stack wraps the explicit
+        // on-device recognizer in AudioCoordinatedAsrProvider and shares one
+        // SpeechAudioFocusCoordinator with the TTS leg. No system/network ASR
+        // fallback is resolved here.
         private async Task<AsrTurnResult> RunAsrAsync(
+            IAsrProvider provider,
             ReachyConversationOperation listening,
             CancellationToken cancellationToken)
         {
+            if (provider == null)
+            {
+                throw new ArgumentNullException(nameof(provider));
+            }
             if (Application.platform != RuntimePlatform.Android)
             {
                 return AsrTurnResult.Failure(
@@ -68,105 +71,69 @@ namespace ReachyMini.AppState
                     null);
             }
 
-            IAsrProvider? provider =
-                await ResolveAsrProviderAsync(cancellationToken).ConfigureAwait(true);
-            if (provider == null)
+            AsrOptions options = new AsrOptions(
+                AsrLanguageTag,
+                requestPartialResults: false);
+            SpeechProviderAvailability availability = await provider
+                .CheckAvailabilityAsync(options, cancellationToken)
+                .ConfigureAwait(true);
+            if (!availability.IsAvailable)
             {
                 return AsrTurnResult.Failure(
-                    "No usable on-device or system speech-recognition provider is available.",
+                    availability.Diagnostic,
                     null);
             }
 
-            try
+            SpeechProviderSelection selection = new SpeechProviderSelection(
+                provider.Descriptor);
+            SpeechOperationContext context = new SpeechOperationContext(
+                NextRequestId("asr"),
+                selection.Current,
+                AsrTimeout);
+            AsrRequest request = new AsrRequest(context, options);
+
+            // Plain await foreach preserves Unity's captured synchronization
+            // context. AudioCoordinatedAsrProvider withholds its terminal
+            // event until the listening focus lease has been released.
+            ReachyConversationOperation? transcribing = null;
+            await foreach (AsrEvent asrEvent in provider.RecognizeAsync(
+                request,
+                cancellationToken))
             {
-                SpeechProviderSelection selection = new SpeechProviderSelection(
-                    provider.Descriptor);
-                SpeechOperationContext context = new SpeechOperationContext(
-                    NextRequestId("asr"),
-                    selection.Current,
-                    AsrTimeout);
-                AsrRequest request = new AsrRequest(
-                    context,
-                    new AsrOptions(AsrLanguageTag, requestPartialResults: false));
-
-                // No .ConfigureAwait() call on this async-enumerable
-                // iteration: plain `await foreach` already defaults to
-                // continuing on the captured context (the Unity main-thread
-                // SynchronizationContext), the same behavior
-                // .ConfigureAwait(true) would request explicitly -- kept
-                // implicit here since IAsyncEnumerable<T>.ConfigureAwait is
-                // an extension method whose availability under Unity's API
-                // compatibility profile could not be verified locally.
-                ReachyConversationOperation? transcribing = null;
-                await foreach (AsrEvent asrEvent in provider.RecognizeAsync(
-                    request,
-                    cancellationToken))
+                if (transcribing == null)
                 {
-                    if (transcribing == null)
-                    {
-                        transcribing = conversation.MarkListeningComplete(listening);
-                        stateStore.SetInteraction(
-                            ReachyInteractionState.Transcribing,
-                            "Transcribing speech.");
-                    }
-
-                    switch (asrEvent.Kind)
-                    {
-                        case AsrEventKind.FinalResult:
-                            // transcribing is provably non-null here: this
-                            // switch only runs after the if-block above has
-                            // either just set it or found it already set.
-                            return AsrTurnResult.Success(
-                                asrEvent.Transcript ?? string.Empty,
-                                transcribing!);
-                        case AsrEventKind.NoMatch:
-                            return AsrTurnResult.Failure(
-                                "No speech was recognized.",
-                                transcribing);
-                        case AsrEventKind.Cancelled:
-                            return AsrTurnResult.Failure(
-                                "Speech recognition was cancelled.",
-                                transcribing);
-                        case AsrEventKind.Failed:
-                            return AsrTurnResult.Failure(
-                                asrEvent.Error?.Diagnostic ?? "Speech recognition failed.",
-                                transcribing);
-                        default:
-                            continue;
-                    }
+                    transcribing = conversation.MarkListeningComplete(listening);
+                    stateStore.SetInteraction(
+                        ReachyInteractionState.Transcribing,
+                        "Transcribing speech.");
                 }
 
-                return AsrTurnResult.Failure(
-                    "Speech recognition ended without a final result.",
-                    transcribing);
+                switch (asrEvent.Kind)
+                {
+                    case AsrEventKind.FinalResult:
+                        return AsrTurnResult.Success(
+                            asrEvent.Transcript ?? string.Empty,
+                            transcribing!);
+                    case AsrEventKind.NoMatch:
+                        return AsrTurnResult.Failure(
+                            "No speech was recognized.",
+                            transcribing);
+                    case AsrEventKind.Cancelled:
+                        return AsrTurnResult.Failure(
+                            "Speech recognition was cancelled.",
+                            transcribing);
+                    case AsrEventKind.Failed:
+                        return AsrTurnResult.Failure(
+                            asrEvent.Error?.Diagnostic ?? "Speech recognition failed.",
+                            transcribing);
+                    default:
+                        continue;
+                }
             }
-            finally
-            {
-                await provider.DisposeAsync().ConfigureAwait(true);
-            }
-        }
 
-        private static async Task<IAsrProvider?> ResolveAsrProviderAsync(
-            CancellationToken cancellationToken)
-        {
-            AsrOptions probeOptions = new AsrOptions(AsrLanguageTag, requestPartialResults: false);
-
-            IAsrProvider onDevice = ReachyAndroidOnDeviceAsrProviderFactory.Create(
-                "conversation-turn-on-device-asr", AsrLanguageTag, AsrTimeout);
-            SpeechProviderAvailability onDeviceAvailability = await onDevice
-                .CheckAvailabilityAsync(probeOptions, cancellationToken)
-                .ConfigureAwait(true);
-            if (onDeviceAvailability.IsAvailable)
-            {
-                return onDevice;
-            }
-            await onDevice.DisposeAsync().ConfigureAwait(true);
-
-            // Fail closed. Android system ASR is explicitly documented as
-            // potentially network-backed, so it may only be selected through
-            // an explicit provider choice; it is never a fallback for an
-            // unavailable on-device recognizer.
-            return null;
+            return AsrTurnResult.Failure(
+                "Speech recognition ended without a final result.",
+                transcribing);
         }
     }
 }

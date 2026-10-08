@@ -10,6 +10,8 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs.meta'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator*.cs'
+      - 'scripts/tests/test_rma125_shipping_audio_focus.py'
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
@@ -28,6 +30,8 @@ on:
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioFocusPlatform.cs.meta'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs.meta'
+      - 'Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator*.cs'
+      - 'scripts/tests/test_rma125_shipping_audio_focus.py'
       - 'Assets/Plugins/Android/ReachyOnDeviceAsr.androidlib/**'
       - 'android-plugin/**'
       - 'managed/ReachyMini.SpeechAudioFocus.Tests/**'
@@ -61,3 +65,5 @@ jobs:
         run: bash scripts/test_rma125_speech_device_preflight.sh
       - name: Run A54 speech revalidation contract
         run: python3 scripts/tests/test_rma125_a54_speech_revalidation.py
+      - name: Verify shipping conversation uses the shared RMA-125 audio-focus stack
+        run: python3 scripts/tests/test_rma125_shipping_audio_focus.py

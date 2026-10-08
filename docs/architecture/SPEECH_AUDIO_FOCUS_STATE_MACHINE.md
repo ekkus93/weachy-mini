@@ -116,3 +116,23 @@ RMA-121 already fails visibly when explicit on-device recognition, permission, l
 The permanent RMA-125 deterministic suite verifies the coordinator and decorators without a device. Hosted Android CI compiles the Java bridge with Java 17 `-Xlint:all -Werror` and Android lint warnings-as-errors through the existing `android-plugin` source set.
 
 Those gates can prove state-machine semantics, packaging, API/lint compatibility, and no-fallback source contracts. They cannot prove audible synthesis or live recognition on a particular handset. The TODO's offline-speech acceptance remains open until a physical device with installed services demonstrates RMA-121 recognition followed by RMA-123 speech with networking disabled and records visible setup guidance for unavailable services.
+
+## Shipping conversation integration — 2026-10-08
+
+The live RMA-195 conversation path now creates exactly one
+`ReachyAndroidSpeechAudioStack` per turn and passes that stack's coordinated ASR
+and TTS legs through `ReachyConversationTurnOrchestrator`. This closes the
+previous integration gap where the orchestrator constructed RMA-121 and RMA-123
+providers independently and therefore bypassed the RMA-125 focus coordinator.
+
+The production turn now inherits the coordinator's ordering contract: the ASR
+terminal result is not exposed until the listening lease is released, and TTS
+cannot acquire speaking focus before that release. TTS completion is likewise
+withheld until speaking focus has been released. The shared stack remains
+fail-closed and contains no RMA-122 system-ASR or RMA-124 network-TTS fallback.
+`scripts/tests/test_rma125_shipping_audio_focus.py` and the RMA-195
+application-composition contract prevent the shipping path from drifting back to
+direct uncoordinated provider construction.
+
+This is production-wiring evidence, not the still-required physical
+network-disabled spoken-turn evidence.
