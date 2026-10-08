@@ -25,6 +25,36 @@ def section(text: str, start: str, end: str) -> str:
 
 
 class Rma194StatusReconciliationTests(unittest.TestCase):
+    def test_rma184_profile_publication_is_reconciled_without_physical_overclaim(
+        self,
+    ) -> None:
+        todo = TODO.read_text(encoding="utf-8")
+        status = STATUS.read_text(encoding="utf-8")
+        rma184 = section(todo, "## RMA-184", "## RMA-195")
+        self.assertIn("- [x] Publish measured default profiles.", rma184)
+        self.assertIn("36187273962", rma184)
+        self.assertIn("36187273962", status)
+        self.assertIn("RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md", status)
+        self.assertNotIn("measured default-profile publication remains pending", status)
+        for missing_qualification in (
+            "1,800-second integrated long-run",
+            "thermal degradation order",
+            "representative supported-device",
+        ):
+            self.assertIn(missing_qualification, status)
+        self.assertIn(
+            "- [ ] Long-running tests do not accumulate unbounded memory or state lag.",
+            rma184,
+        )
+        self.assertIn(
+            "- [ ] Thermal degradation follows the documented priority order.",
+            rma184,
+        )
+        self.assertIn(
+            "- [ ] Supported devices meet the defined simulation and interaction targets.",
+            rma184,
+        )
+
     def test_rma190_scenario_status_matches_authoritative_todo(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         status = STATUS.read_text(encoding="utf-8")

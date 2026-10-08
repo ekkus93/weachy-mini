@@ -29,8 +29,8 @@ The authoritative TODO has been reconciled beyond the original 2026-09-28 status
 | RMA-194 item | Current evidence/status | Blocker before checkbox closure |
 | --- | --- | --- |
 | Android on-device ASR and offline TTS work where installed. | Open. RMA-121/RMA-123/RMA-125 source and provider contracts exist; the full spoken-turn proof remains open. | Non-fabricated physical ASR -> local LLM -> behavior -> offline TTS evidence with suitable installed Android on-device ASR and exact offline TTS services. |
-| Selected benchmark-backed local LLM works without blocking physics. | Open. RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically, and current exact-head RMA-134/RMA-135 validation is queued. | Exact-head physical validation and representative-device profile reconciliation for the release candidate. |
-| Representative-device performance report exists. | Open. RMA-184 defines low/mid/high classes and captures the required metadata, but measured default-profile publication remains pending. | Complete the remaining physical representative-device measurements and target reconciliation. |
+| Selected benchmark-backed local LLM works without blocking physics. | Open. RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically, but later RMA-134/RMA-135 workflow-run successes skipped physical acceptance because their input-change guards did not require a device rerun. | Exact-head physical validation and representative-device profile reconciliation for the release candidate. |
+| Representative-device performance report exists. | Open. RMA-184 defines low/mid/high classes and publishes measured 300-second A54 30/60 FPS default profiles from physical run `36187273962` (`docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md`). Camera, local LLM, audio, and network workloads were not exercised in those profile captures. | Qualify 1,800-second integrated long-run stability, thermal degradation order, and representative supported-device simulation/interaction targets; the A54 default-profile capture alone does not meet these gates. |
 
 ## RMA-190 status snapshot
 
@@ -68,7 +68,7 @@ resumed finite authoritative progress without claiming physical-device evidence.
 
 ## Current exact-head evidence on `master`
 
-Current `master` before this status-only reconciliation was `e618c6adb7109d37e5f736df3a7796fc46d2f1c6` (`RMA-190: format model failure guard`). At that head:
+Historical verified source baseline (not current `master`): `e618c6adb7109d37e5f736df3a7796fc46d2f1c6` (`RMA-190: format model failure guard`). At that earlier head:
 
 - `CI` run `37676348629` passed.
 - `Local Unity Android Validation` run `37676348632` passed.
@@ -77,7 +77,7 @@ Current `master` before this status-only reconciliation was `e618c6adb7109d37e5f
 - `Publish Hosted CI Status` run `37676548144` passed.
 - `Publish Local Unity Validation Status` run `37679004837` passed.
 
-The conservative CI outcome for that head remains pending while physical/self-hosted validations continue or wait in queue. Pending or queued physical validations are not source-code failures and are not evidence for closing additional physical/performance rows.
+Later source head `97ae8c976d5f183652acbb796bee9cd291dbdf7c` passed exact-head hosted CI `37842094416`, release-review contracts `37842094313`, and silent-failure regression `37842094334`. Physical RMA-190 rear-camera/VLM acceptance `37842094321` was still queued at the time of this reconciliation; none of these hosted passes establish new physical acceptance. The historical baseline above is not a claim of current-master SHA after this documentation change. Pending or queued physical validations are not source-code failures and are not evidence for closing additional physical/performance rows.
 
 ## Current open release blockers
 
@@ -86,7 +86,7 @@ The current release gate remains blocked by these evidence gaps:
 1. RMA-002 still requires second independently provisioned Unity/Android build evidence.
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
-4. RMA-184 still needs detailed measured default profiles and representative-device target reconciliation.
+4. RMA-184 has published measured A54 30/60 FPS default profiles (physical run `36187273962`); the 1,800-second integrated long-run, thermal-order, and representative-device supported-target acceptance remain open. The measured profiles do not cover camera/LLM/audio/network integration.
 5. RMA-190: rear-camera/VLM remains open pending its physical shipping-path run; solver-fault/reset, provider-combination, network/rate-limit/malformed/cancellation, and model-corruption/OOM scenarios have accepted integration evidence.
 6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
 
