@@ -33,8 +33,10 @@ class Rma190DeterministicFailureBoundaryTests(unittest.TestCase):
             self.assertIn(evidence, todo)
 
         item = "Solver fault and controlled reset."
-        self.assertIn(f"- [ ] {item}", todo)
-        self.assertNotIn(f"- [x] {item}", todo)
+        self.assertIn(f"- [x] {item}", todo)
+        self.assertNotIn(f"- [ ] {item}", todo)
+        self.assertIn("37760354266", todo)
+        self.assertIn("405711d5dd0d03253959742dcf66a957012ad0a8", todo)
 
     def test_status_names_redacted_source_and_no_success_claim(self) -> None:
         status = STATUS.read_text(encoding="utf-8")
