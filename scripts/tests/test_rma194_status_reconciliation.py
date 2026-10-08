@@ -47,7 +47,7 @@ class Rma194StatusReconciliationTests(unittest.TestCase):
         open_text = snapshot.split(
             "The following scenarios remain open until their own end-to-end evidence passes:",
             1,
-        )[1].split("\n\n", 1)[0]
+        )[1].lstrip("\n").split("\n\n", 1)[0]
         self.assertEqual(checked, set(BULLET.findall(accepted_text)))
         self.assertEqual(open_items, set(BULLET.findall(open_text)))
         self.assertFalse(checked & open_items)
