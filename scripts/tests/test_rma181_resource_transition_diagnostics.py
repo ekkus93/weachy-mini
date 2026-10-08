@@ -5,14 +5,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CORE = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Core/Application/ReachyPriorityDegradationRuntime.cs"
-)
-DRIVER = (
-    ROOT
-    / "Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver.cs"
-)
+CORE = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachyPriorityDegradationRuntime.cs"
+DRIVER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver.cs"
 
 
 class Rma181ResourceTransitionEvidence(unittest.TestCase):
