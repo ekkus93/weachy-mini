@@ -76,6 +76,15 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             workflow,
         )
 
+    def test_resource_pressure_keeps_production_vlm_fail_closed(self) -> None:
+        cloud_path = APP / "ReachyAndroidPerceptionApplicationService.CloudVlm.cs"
+        cloud = cloud_path.read_text()
+        driver = (APP / "ReachyPriorityDegradationRuntimeDriver.cs").read_text()
+        self.assertIn("!decision.VlmAllowed", cloud)
+        self.assertIn("priorityRuntime.LastSignals", driver)
+        self.assertIn("sampled.AvailableMemoryBytes", driver)
+        self.assertIn("sampled.PhysicsBudgetState", driver)
+
     def test_todo_stays_open_until_physical_run_passes(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(
