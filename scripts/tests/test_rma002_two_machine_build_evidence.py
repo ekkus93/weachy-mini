@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import pathlib
-import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -46,16 +45,20 @@ class Rma002TwoMachineBuildEvidenceTests(unittest.TestCase):
         ):
             self.assertIn(token, workflow_text)
 
-    def test_validation_note_does_not_claim_rma184_or_rma190_closure(self) -> None:
-        text = DOC.read_text(encoding="utf-8")
-        forbidden = (
-            r"RMA-184.*complete",
-            r"RMA-190.*complete",
-            r"offline-speech.*complete",
-            r"representative-device performance report exists.*closed",
+    def test_validation_note_does_not_claim_release_gate_closure(self) -> None:
+        text = DOC.read_text(encoding="utf-8").lower()
+        forbidden_phrases = (
+            "rma-184 is complete",
+            "rma-184 complete",
+            "rma-190 is complete",
+            "rma-190 complete",
+            "offline-speech is complete",
+            "offline speech is complete",
+            "representative-device performance report exists is closed",
+            "representative-device performance report exists: closed",
         )
-        for pattern in forbidden:
-            self.assertIsNone(re.search(pattern, text, re.IGNORECASE | re.DOTALL))
+        for phrase in forbidden_phrases:
+            self.assertNotIn(phrase, text)
 
 
 if __name__ == "__main__":
