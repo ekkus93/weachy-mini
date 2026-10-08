@@ -33,6 +33,8 @@ RMA082 = ROOT / "managed/ReachyMini.Application.Tests/Rma082SettingsStateTests.c
 SETTINGS_ENUMS = ROOT / "Assets/ReachyMini/Runtime/Core/Application/ReachySettingsEnums.cs"
 ASR_TURN = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator.Asr.cs"
 TTS_TURN = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator.Tts.cs"
+SPEECH_STACK = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyAndroidSpeechAudioStack.cs"
+ORCHESTRATOR = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyConversationTurnOrchestrator.cs"
 RMA170 = ROOT / "managed/ReachyMini.Core.Tests/Rma170StructuredDiagnosticsContractTests.cs"
 RMA172 = ROOT / "managed/ReachyMini.Core.Tests/Rma172DiagnosticBundleExportContractTests.cs"
 RMA162 = ROOT / "managed/ReachyMini.Application.Tests/Rma162PrivateMediaRetentionTests.cs"
@@ -142,6 +144,8 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         settings_enums = read(SETTINGS_ENUMS)
         asr_turn = read(ASR_TURN)
         tts_turn = read(TTS_TURN)
+        speech_stack = read(SPEECH_STACK)
+        orchestrator = read(ORCHESTRATOR)
         self.assertIn("public bool SendsDataOffDevice", selection)
         self.assertIn("ReachyProviderExecution.AndroidService", selection)
         self.assertIn("ReachyProviderExecution.Cloud", selection)
@@ -152,10 +156,17 @@ class Rma191SecurityPrivacyReview(unittest.TestCase):
         self.assertIn("Enabling cloud VLM sends camera frames", ui)
         self.assertIn("AUTHORIZE CLOUD LLM", ui)
         self.assertIn("AUTHORIZE CLOUD VLM", ui)
-        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory", asr_turn)
-        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory", asr_turn)
-        self.assertNotIn("OpenAi", asr_turn)
-        self.assertIn("ReachyAndroidOfflineTtsProviderFactory", tts_turn)
+        self.assertIn(
+            "ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync",
+            orchestrator,
+        )
+        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory", speech_stack)
+        self.assertNotIn("ReachyAndroidSystemAsrProviderFactory", speech_stack)
+        self.assertNotIn("OpenAi", speech_stack)
+        self.assertIn("ReachyAndroidOfflineTtsProviderFactory", speech_stack)
+        self.assertNotIn("ReachyAndroidSystemTtsProviderFactory", speech_stack)
+        self.assertNotIn("ReachyAndroidOnDeviceAsrProviderFactory", asr_turn)
+        self.assertNotIn("ReachyAndroidOfflineTtsProviderFactory", tts_turn)
         self.assertIn("SelectExactOfflineVoice", tts_turn)
         self.assertNotIn("OpenAi", tts_turn)
         for kind in ("Asr", "Tts", "Llm", "Vlm"):

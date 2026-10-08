@@ -71,7 +71,10 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         asr = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
         tts = read(APP / "ReachyConversationTurnOrchestrator.Tts.cs")
         stack = read(APP / "ReachyAndroidSpeechAudioStack.cs")
-        self.assertIn("ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync", orchestrator)
+        self.assertIn(
+            "ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync",
+            orchestrator,
+        )
         self.assertIn("RunAsrAsync(\n                    speechStack.Asr", orchestrator)
         self.assertIn("RunTtsAsync(\n                    speechStack.Tts", orchestrator)
         self.assertIn("new SpeechAudioFocusCoordinator(", stack)
