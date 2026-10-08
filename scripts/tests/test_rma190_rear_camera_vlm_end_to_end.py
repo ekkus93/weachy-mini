@@ -213,6 +213,24 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertNotIn("exception.ToString()", diagnostic)
         self.assertNotIn(".StackTrace", diagnostic)
 
+    def test_fixture_policy_preflight_checks_actual_android_policy_before_camera(
+        self,
+    ) -> None:
+        source = ACCEPTANCE.read_text(encoding="utf-8")
+        self.assertIn("android.security.NetworkSecurityPolicy", source)
+        self.assertIn('"isCleartextTrafficPermitted"', source)
+        self.assertIn('"127.0.0.1"', source)
+        self.assertIn('"localhost"', source)
+        self.assertIn("!string.IsNullOrEmpty(fixtureUri.UserInfo)", source)
+        self.assertIn("!string.IsNullOrEmpty(fixtureUri.Query)", source)
+        self.assertIn("!string.IsNullOrEmpty(fixtureUri.Fragment)", source)
+        self.assertIn("Local cleartext has not been authorized.", source)
+        self.assertLess(
+            source.index('SetStage("verify-android-loopback-cleartext-policy")'),
+            source.index('SetStage("wait-shipping-host")'),
+        )
+        self.assertIn("RequireLoopbackCleartextPolicy(fixtureBaseUrl)", source)
+
     def test_failed_vlm_transport_preserves_only_validated_physical_frame_evidence(
         self,
     ) -> None:

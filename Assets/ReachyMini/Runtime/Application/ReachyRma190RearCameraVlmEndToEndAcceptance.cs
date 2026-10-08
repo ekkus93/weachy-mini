@@ -168,6 +168,9 @@ namespace ReachyMini.AppState
                     "supplied fixture base URL.");
             }
 
+            SetStage("verify-android-loopback-cleartext-policy");
+            RequireLoopbackCleartextPolicy(fixtureBaseUrl);
+
             SetStage("wait-shipping-host");
             ReachyApplicationHostBehaviour hostBehaviour =
                 await ReachyRma190CameraEndToEndAcceptance
@@ -649,6 +652,70 @@ namespace ReachyMini.AppState
                     "The transformed frame does not belong to the active " +
                     "real rear-camera session and authoritative state.");
             }
+        }
+
+        // The fixture is never a general-purpose provider endpoint. Check the
+        // platform security policy independently of the application's RMA-140
+        // provider-profile gate, so a dropped Android manifest resource fails
+        // explicitly before the costly real-camera acceptance workload.
+        private static void RequireLoopbackCleartextPolicy(
+            string fixtureBaseUrl)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (!Uri.TryCreate(
+                    fixtureBaseUrl,
+                    UriKind.Absolute,
+                    out Uri? fixtureUri) ||
+                !string.Equals(
+                    fixtureUri.Scheme,
+                    Uri.UriSchemeHttp,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !(string.Equals(
+                    fixtureUri.Host,
+                    "localhost",
+                    StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(
+                    fixtureUri.Host,
+                    "127.0.0.1",
+                    StringComparison.Ordinal)) ||
+                !string.IsNullOrEmpty(fixtureUri.UserInfo) ||
+                !string.IsNullOrEmpty(fixtureUri.Query) ||
+                !string.IsNullOrEmpty(fixtureUri.Fragment))
+            {
+                throw new InvalidOperationException(
+                    "RMA-190 requires an explicitly configured HTTP loopback " +
+                    "fixture, with no credentials, query, or fragment.");
+            }
+
+            bool permitted;
+            try
+            {
+                using var policyClass = new AndroidJavaClass(
+                    "android.security.NetworkSecurityPolicy");
+                using AndroidJavaObject policy =
+                    policyClass.CallStatic<AndroidJavaObject>("getInstance");
+                permitted = policy.Call<bool>(
+                    "isCleartextTrafficPermitted",
+                    fixtureUri.Host);
+            }
+            catch (AndroidJavaException)
+            {
+                throw new InvalidOperationException(
+                    "Android network-security policy could not be queried. " +
+                    "Local cleartext has not been authorized.");
+            }
+
+            if (!permitted)
+            {
+                throw new InvalidOperationException(
+                    "Android network-security policy forbids HTTP to the " +
+                    "explicit loopback fixture. Verify that the packaged APK " +
+                    "contains the restricted RMA-190 network-security resource.");
+            }
+#else
+            throw new PlatformNotSupportedException(
+                "RMA-190 loopback policy preflight requires an Android player.");
+#endif
         }
 
         private static string ReadStringLaunchExtra(string name)
