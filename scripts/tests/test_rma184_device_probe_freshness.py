@@ -41,7 +41,10 @@ FAKE_ADB = textwrap.dedent(
     elif args[:4] == ["shell", "test", "!", "-f"]:
         sys.exit(0 if not remote.is_file() else 1)
     elif args[:3] == ["shell", "am", "start"]:
-        if mode in ("fresh", "limited", "forged_support", "missing_soc", "wrong_type", "bad_camera_counts"):
+        if mode in (
+            "fresh", "limited", "forged_support",
+            "missing_soc", "wrong_type", "bad_camera_counts",
+        ):
             report = {
                 "schema_version": 1, "status": "passed", "error": "",
                 "manufacturer": "samsung", "model": "SM-A546E",
@@ -54,7 +57,9 @@ FAKE_ADB = textwrap.dedent(
                 "front_camera_available": True,
                 "on_device_asr": "Available", "offline_tts": "Available",
                 "support_status": "Supported",
-                "support_diagnostic": "Core runtime and full offline speech interaction are supported.",
+                "support_diagnostic": (
+                    "Core runtime and full offline speech interaction are supported."
+                ),
             }
             if mode in ("limited", "forged_support"):
                 report["on_device_asr"] = "Faulted"
