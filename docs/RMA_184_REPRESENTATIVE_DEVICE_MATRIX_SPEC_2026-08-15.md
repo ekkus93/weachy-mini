@@ -34,14 +34,14 @@ Core runtime support requires all of the following:
 
 A device that meets the core floor but lacks the front camera, explicit API-31 on-device ASR, or offline TTS is `SupportedWithLimitations`. This preserves the Android API-26 deployment floor while making the offline-speech limitation explicit. `Supported` means the core floor plus front camera, explicit on-device ASR, and offline TTS are all available. Missing a core requirement is `Unsupported`.
 
-The classification is capability-based. Marketing model names never override a failing runtime probe.
+The classification is capability-based. Marketing model names never override a failing runtime probe. The matrix retains the conservative SM-A546E `supported_with_limitations` snapshot until a fresh RMA-184 support-policy probe reconciles the newer RMA-125 speech-service readiness; service availability alone is not the RMA-125 spoken end-to-end acceptance or an RMA-184 long-run qualification.
 
 ## Representative devices
 
 The registry currently carries four device-family entries so every class has a concrete target and the high class has a second implementation family:
 
 - LGE LG-H872 — low/boundary class, existing physical camera and local-LLM evidence; API 26 necessarily lacks the API-31 explicit on-device ASR path.
-- Samsung SM-A546E — mid class; runtime RMA-184 metadata/long-run qualification still required.
+- Samsung SM-A546E — mid class; runtime metadata was captured in the 2026-08-17 RMA-184 probe. The 2026-09-30 RMA-125 shipping-path physical revalidation subsequently established explicit on-device ASR readiness and an installed non-network TTS voice, superseding the older probe-only `Faulted` ASR observation. A fresh RMA-184 support-policy classification, real network-disabled spoken conversation, and the 1,800-second integrated long run remain unqualified.
 - OnePlus 11 5G — high class; runtime RMA-184 metadata/long-run qualification still required.
 - Google Pixel 7 Pro — second high-class implementation family; runtime RMA-184 metadata/long-run qualification still required.
 

@@ -87,13 +87,14 @@
       "graphics_api": "Vulkan",
       "gpu": "Mali-G68 MP5",
       "camera_capability": "rear_and_front_camera_paths_physically_validated",
-      "on_device_asr": "explicit_api_available_but_runtime_probe_faulted_unexplained",
-      "offline_tts": "available_per_runtime_probe_audible_acceptance_pending",
+      "on_device_asr": "available_per_rma125_a54_physical_service_revalidation_2026_09_30",
+      "offline_tts": "installed_non_network_voice_available_per_rma125_revalidation_audible_conversation_pending",
       "support_status": "supported_with_limitations",
-      "measurement_status": "partial_rma184_device_probe_evidence",
+      "measurement_status": "partial_rma184_probe_and_rma125_service_readiness_evidence",
       "evidence": [
         "docs/validation/RMA_184_SM_A546E_CAMERA_HAL_FINDING_2026-08-16.md",
         "docs/validation/RMA_184_SM_A546E_DEVICE_PROBE_VALIDATION_2026-08-17.md",
+        "docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md",
         "docs/validation/RMA_135_SM_A546E_THERMAL_FINDING_2026-08-17.md"
       ]
     },

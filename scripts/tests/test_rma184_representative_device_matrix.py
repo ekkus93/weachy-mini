@@ -43,6 +43,30 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             ):
                 self.assertIn(key, entry)
 
+    def test_a54_speech_readiness_supersedes_old_probe_without_release_claim(self) -> None:
+        data = json.loads(MATRIX.read_text(encoding="utf-8"))
+        a54 = next(
+            entry for entry in data["representative_devices"]
+            if entry["id"] == "samsung-sm-a546e"
+        )
+        self.assertIn("rma125_a54_physical_service_revalidation", a54["on_device_asr"])
+        self.assertIn("non_network_voice_available_per_rma125", a54["offline_tts"])
+        self.assertIn(
+            "docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md",
+            a54["evidence"],
+        )
+        self.assertEqual(a54["support_status"], "supported_with_limitations")
+        self.assertTrue(a54["measurement_status"].startswith("partial"))
+        todo = TODO.read_text(encoding="utf-8")
+        self.assertIn(
+            "- [ ] On a device with installed services, the user can converse "
+            "using Android on-device ASR and offline TTS with networking disabled.",
+            todo,
+        )
+        spec = SPEC.read_text(encoding="utf-8")
+        self.assertIn("fresh RMA-184 support-policy", spec)
+        self.assertIn("1,800-second integrated long run remain unqualified", spec)
+
     def test_support_and_long_run_gates_are_fail_closed(self) -> None:
         source = CORE.read_text(encoding="utf-8")
         for token in (
