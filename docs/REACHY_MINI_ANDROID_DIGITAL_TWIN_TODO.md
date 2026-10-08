@@ -2211,7 +2211,19 @@ public interface ITtsProvider : IAsyncDisposable
 - [ ] Missing services produce visible setup guidance.
 - [ ] No audio is sent to a cloud provider unless explicitly selected.
 
-**Status:** Genuinely open (not stale). `docs/validation/RMA_125_SPEECH_AUDIO_FOCUS_VALIDATION_2026-08-07.md`'s "Physical offline-speech acceptance blocker" section states RMA-125 is not closed until a device with suitable installed Android services demonstrates the offline conversation path with networking disabled; the current physical test phone (API 26) cannot run RMA-121's API-31 on-device recognizer. The code/contract level is otherwise fully evidenced above (no cloud references in the offline ASR/TTS paths; explicit rejection of `OpenAI`/`http(s)://` in the RMA-121/123 source contracts) but this block is deliberately left for physical-device proof.
+**Status:** Genuinely open. The historical LG-H872/API-26 device blocker is
+superseded by A54/SM-A546E API-31+ service-readiness evidence:
+`docs/validation/RMA_125_A54_SPEECH_CAPABILITY_REVALIDATION_2026-09-30.md`
+records exact-head physical run `36752801658`, which established explicit
+on-device ASR availability and an installed non-network offline TTS voice.
+The A54 was reconnected and passed the shipping application-composition
+regression in run `37720761063` on `709c01ddadc78b21246a00ae54dcbd8c0e3892fe`.
+Neither run proves a real human utterance with networking disabled, listening-
+to-speaking audio-focus handoff, audible offline response, interruption, and
+missing-service guidance. These three acceptance checkboxes remain open until
+that physical evidence exists. See
+`docs/blockers/RMA-125_PHYSICAL_OFFLINE_SPEECH_BLOCKER.md` for the exact
+remaining sequence. Source contracts prohibit silent network fallback.
 
 ---
 
@@ -3353,6 +3365,21 @@ contains the captured acceptance report. On the same exact head,
 `RMA-190 Permission Denial and Revocation Android Acceptance` run
 `37605466032` passed its production permission-denial/revocation scenario on
 a pinned physical Android device.
+
+**A54 physical regression (2026-10-08; no new RMA-190 scenario closure):**
+`Local Unity Android Validation` run `37720761063` passed on exact
+`709c01ddadc78b21246a00ae54dcbd8c0e3892fe` after the A54 was reconnected.
+It built and verified the shipping ARM64 API-26 APK, pinned the physical
+Android device, and passed RMA-090 discovery, RMA-091 acquisition, RMA-092
+texture, RMA-111 tracking, RMA-154 visual servo, RMA-022 lifecycle, RMA-195
+application composition, and authoritative rendering acceptance. Uploaded
+evidence includes RMA-090 artifact `11525538889`, RMA-091 `11526157660`,
+RMA-092 `11526064322`, RMA-195 `11525828594`, and authoritative rendering
+`11525529374`. This is regression evidence for those shipping subsystems,
+**not** acceptance evidence for the six unchecked scenarios below. Earlier
+exact-head RMA-190 core run `37720761019` and no-artifacts run `37720761051`
+failed at physical-device pinning while the A54 was disconnected; neither
+run establishes a source regression or a successful scenario rerun.
 
 - [x] Offline launch with no network.
 - [x] MuJoCo full model load and neutral reset.
