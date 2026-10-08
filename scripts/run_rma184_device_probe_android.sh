@@ -51,25 +51,4 @@ fi
 
 mkdir -p "$(dirname "${output}")"
 "${adb_cmd[@]}" pull "${remote}" "${output}" >/dev/null
-python3 - "${output}" <<'PY'
-from pathlib import Path
-import json
-import sys
-path = Path(sys.argv[1])
-data = json.loads(path.read_text(encoding="utf-8"))
-if data.get("schema_version") != 1 or data.get("status") != "passed":
-    raise SystemExit(f"RMA-184 probe failed: {data.get('error', 'unknown')}")
-for key in (
-    "model", "soc", "operating_system", "android_api_level",
-    "system_memory_mib", "graphics_api", "camera_permission",
-    "on_device_asr", "offline_tts", "support_status",
-):
-    if key not in data:
-        raise SystemExit(f"RMA-184 probe missing {key}")
-print(
-    "RMA-184 device probe passed: "
-    f"{data['model']} api={data['android_api_level']} "
-    f"ram_mib={data['system_memory_mib']} graphics={data['graphics_api']} "
-    f"support={data['support_status']}"
-)
-PY
+python3 "$(dirname "$0")/validate_rma184_device_probe.py" "${output}"

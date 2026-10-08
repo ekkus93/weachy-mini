@@ -41,15 +41,32 @@ FAKE_ADB = textwrap.dedent(
     elif args[:4] == ["shell", "test", "!", "-f"]:
         sys.exit(0 if not remote.is_file() else 1)
     elif args[:3] == ["shell", "am", "start"]:
-        if mode == "fresh":
-            remote.write_text(json.dumps({
-                "schema_version": 1, "status": "passed", "model": "SM-A546E",
-                "soc": "Exynos", "operating_system": "Android",
+        if mode in ("fresh", "limited", "forged_support", "missing_soc", "wrong_type", "bad_camera_counts"):
+            report = {
+                "schema_version": 1, "status": "passed", "error": "",
+                "manufacturer": "samsung", "model": "SM-A546E",
+                "soc": "Exynos", "processor": "ARMv8",
+                "logical_processor_count": 8, "operating_system": "Android",
                 "android_api_level": 36, "system_memory_mib": 5426,
-                "graphics_api": "Vulkan", "camera_permission": "Granted",
+                "graphics_api": "Vulkan", "graphics_device": "Mali-G68",
+                "camera_permission": "Granted", "camera_count": 4,
+                "available_camera_count": 4, "rear_camera_available": True,
+                "front_camera_available": True,
                 "on_device_asr": "Available", "offline_tts": "Available",
                 "support_status": "Supported",
-            }), encoding="utf-8")
+                "support_diagnostic": "Core runtime and full offline speech interaction are supported.",
+            }
+            if mode in ("limited", "forged_support"):
+                report["on_device_asr"] = "Faulted"
+                if mode == "limited":
+                    report["support_status"] = "SupportedWithLimitations"
+            if mode == "missing_soc":
+                del report["soc"]
+            if mode == "wrong_type":
+                report["system_memory_mib"] = "5426"
+            if mode == "bad_camera_counts":
+                report["available_camera_count"] = 5
+            remote.write_text(json.dumps(report), encoding="utf-8")
     elif args[:3] == ["shell", "test", "-f"]:
         sys.exit(0 if remote.is_file() else 1)
     elif args[:1] == ["pull"]:
@@ -96,6 +113,32 @@ class Rma184ProbeFreshnessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(exists)
         self.assertIn("probe passed", result.stdout)
+
+    def test_accepts_faulted_asr_only_with_limited_support(self) -> None:
+        result, exists = self.run_probe("limited")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(exists)
+        self.assertIn("SupportedWithLimitations", result.stdout)
+
+    def test_rejects_forged_full_support(self) -> None:
+        result, _ = self.run_probe("forged_support")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("support_status contradicts", result.stderr)
+
+    def test_rejects_missing_identity(self) -> None:
+        result, _ = self.run_probe("missing_soc")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("soc must be", result.stderr)
+
+    def test_rejects_non_numeric_memory(self) -> None:
+        result, _ = self.run_probe("wrong_type")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("system_memory_mib must be", result.stderr)
+
+    def test_rejects_impossible_camera_counts(self) -> None:
+        result, _ = self.run_probe("bad_camera_counts")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("available cameras exceed", result.stderr)
 
     def test_refuses_failed_stale_report_removal(self) -> None:
         result, exists = self.run_probe("remove_error")
