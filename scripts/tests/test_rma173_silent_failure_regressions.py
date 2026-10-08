@@ -30,7 +30,10 @@ class Rma173SilentFailureRegressionTests(unittest.TestCase):
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         asr_turn = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
         stack = read(APP / "ReachyAndroidSpeechAudioStack.cs")
-        self.assertIn("ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync", orchestrator)
+        self.assertIn(
+            "ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync",
+            orchestrator,
+        )
         self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create", stack)
         self.assertNotIn("ReachyAndroidSystemAsrProviderFactory.Create", stack)
         self.assertNotIn("OpenAi", stack)
@@ -42,7 +45,10 @@ class Rma173SilentFailureRegressionTests(unittest.TestCase):
         tts_turn = read(APP / "ReachyConversationTurnOrchestrator.Tts.cs")
         stack = read(APP / "ReachyAndroidSpeechAudioStack.cs")
         policy = read(CORE / "Speech/ReachyTtsVoiceSelectionPolicy.cs")
-        self.assertIn("ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync", orchestrator)
+        self.assertIn(
+            "ReachyAndroidSpeechAudioStackFactory.CreateOfflineDefaultAsync",
+            orchestrator,
+        )
         self.assertIn("ReachyAndroidOfflineTtsProviderFactory.Create", stack)
         self.assertNotIn("ReachyAndroidSystemTtsProviderFactory.Create", stack)
         self.assertNotIn("OpenAi", stack)
