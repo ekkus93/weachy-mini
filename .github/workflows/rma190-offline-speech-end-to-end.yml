@@ -1,0 +1,153 @@
+name: RMA-190 Offline Speech End-to-End Android Acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rma190-offline-speech-end-to-end-android
+  cancel-in-progress: false
+
+jobs:
+  physical:
+    name: RMA-190 real spoken turn on Android
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - weachy-mini-android-device
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate spoken-turn source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma190_offline_speech_end_to_end.py
+          bash -n scripts/run_rma190_offline_speech_end_to_end_android.sh
+          python3 scripts/check_docs_links.py
+
+      - name: Resolve local Unity and Android installations
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+          [[ -n "${project_version}" ]] || {
+            printf '%s\n' 'Could not read the pinned Unity version.' >&2
+            exit 1
+          }
+
+          unity_editor="${UNITY_EDITOR:-}"
+          if [[ -z "${unity_editor}" ]]; then
+            for candidate in               "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity"               "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity"               "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity"               "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity"               "/opt/unity/editors/${project_version}/Editor/Unity"; do
+              if [[ -x "${candidate}" ]]; then
+                unity_editor="${candidate}"
+                break
+              fi
+            done
+          fi
+          [[ -x "${unity_editor}" ]] || {
+            printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+            exit 1
+          }
+
+          android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+          [[ -x "${android_sdk_root}/platform-tools/adb" ]] || {
+            printf 'Android SDK platform-tools were not found under %s.\n'               "${android_sdk_root}" >&2
+            exit 1
+          }
+
+          {
+            printf 'UNITY_EDITOR=%s\n' "${unity_editor}"
+            printf 'ANDROID_SDK_ROOT=%s\n' "${android_sdk_root}"
+            printf 'ANDROID_HOME=%s\n' "${android_sdk_root}"
+          } >> "${GITHUB_ENV}"
+          printf '%s\n' "${android_sdk_root}/platform-tools" >> "${GITHUB_PATH}"
+
+          version_output="$("${unity_editor}" -version -batchmode -quit 2>&1)"
+          printf '%s\n' "${version_output}"
+          [[ "${version_output}" == *"${project_version}"* ]] || {
+            printf 'Unity executable does not match pinned version %s.\n'               "${project_version}" >&2
+            exit 1
+          }
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Pin one physical API-31+ Android device
+        shell: bash
+        env:
+          REACHY_PHYSICAL_DEVICE_SERIAL: ${{ vars.REACHY_PHYSICAL_DEVICE_SERIAL }}
+        run: |
+          set -euo pipefail
+          mapfile -t serials < <(
+            adb devices |
+              awk 'NR > 1 && $2 == "device" && $1 !~ /^emulator-/ {print $1}'
+          )
+          accepted=()
+          for serial in "${serials[@]}"; do
+            abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
+            sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
+            if [[ "${abi}" == "arm64-v8a" &&
+                  "${sdk}" =~ ^[0-9]+$ ]] &&
+                (( sdk >= 31 )); then
+              accepted+=("${serial}")
+            fi
+          done
+
+          serial_override="${REACHY_PHYSICAL_DEVICE_SERIAL:-}"
+          if [[ -n "${serial_override}" ]]; then
+            found=false
+            for candidate in "${accepted[@]}"; do
+              if [[ "${candidate}" == "${serial_override}" ]]; then
+                found=true
+                break
+              fi
+            done
+            [[ "${found}" == true ]] || {
+              printf 'Pinned device %s is not an eligible connected API-31+ device.\n'                 "${serial_override}" >&2
+              adb devices -l >&2
+              exit 1
+            }
+            serial="${serial_override}"
+          elif (( ${#accepted[@]} == 1 )); then
+            serial="${accepted[0]}"
+          else
+            printf 'Expected one eligible physical API-31+ device; found %s.\n'               "${#accepted[@]}" >&2
+            adb devices -l >&2
+            exit 1
+          fi
+
+          printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
+          printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Run real network-disabled spoken-turn acceptance
+        shell: bash
+        env:
+          RMA190_OFFLINE_SPEECH_REPORT_DIR: ${{ runner.temp }}/rma190-offline-speech-report
+        run: bash scripts/run_rma190_offline_speech_end_to_end_android.sh
