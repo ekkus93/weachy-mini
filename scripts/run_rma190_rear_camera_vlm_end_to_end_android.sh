@@ -200,7 +200,7 @@ from pathlib import Path
 import re
 import sys
 
-pattern = re.compile(r"RMA-181 sampled resource transition: [^\\r\\n]*")
+pattern = re.compile(r"RMA-181 sampled resource transition: [^\r\n]*")
 log = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
 transitions = [
     match.group(0)[:1024]
@@ -208,7 +208,7 @@ transitions = [
     if (match := pattern.search(line))
 ]
 Path(sys.argv[2]).write_text(
-    "\\n".join(transitions[-24:]) + ("\\n" if transitions else ""),
+    "\n".join(transitions[-24:]) + ("\n" if transitions else ""),
     encoding="utf-8",
 )
 PY
@@ -221,7 +221,7 @@ cleanup()
     trap - EXIT
     capture_diagnostics
     if (( exit_code != 0 )); then
-        printf 'Bounded RMA-181 resource transitions from the physical device:\\n' >&2
+        printf 'Bounded RMA-181 resource transitions from the physical device:\n' >&2
         tail -n 24 "${REPORT_DIR}/resource-transitions.txt" >&2 || true
     fi
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
