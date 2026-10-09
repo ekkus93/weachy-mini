@@ -14,6 +14,7 @@ namespace ReachyMini.Core.Tests
             SupportPolicySeparatesCoreAndFullOfflineSupport();
             LongRunQualificationAcceptsBoundedRepresentativeEvidence();
             LongRunQualificationRejectsAccumulatingPressure();
+            LongRunQualificationRejectsMissingPhysicalSignals();
         }
 
         private static void PublishedProfilesAreDeterministic()
@@ -112,6 +113,29 @@ namespace ReachyMini.Core.Tests
                         thermalDegradationOrderValid: false));
             Equal(false, result.Passed, "accumulating low-device evidence");
             Equal(7, result.Failures.Count, "all qualification failures visible");
+        }
+
+        private static void LongRunQualificationRejectsMissingPhysicalSignals()
+        {
+            ReachyRepresentativeDeviceQualificationResult result =
+                ReachyRepresentativeDeviceQualificationPolicy.Evaluate(
+                    ReachyAndroidPerformanceClass.Mid,
+                    new ReachyRepresentativeDeviceQualificationObservation(
+                        durationSeconds: 1800.0,
+                        renderP95Milliseconds: 0.0,
+                        physicsP95Milliseconds: 0.0,
+                        initialUnityAllocatedMemoryBytes: 0L,
+                        finalUnityAllocatedMemoryBytes: 0L,
+                        initialStateLagSeconds: 0.0,
+                        finalStateLagSeconds: 0.0,
+                        localLlmDecodeTokensPerSecond: 2.0,
+                        thermalDegradationOrderValid: true));
+            Equal(false, result.Passed, "unmeasured physical workloads cannot pass");
+            Equal(1, result.Failures.Count, "missing measurement failure");
+            Equal(
+                "required_physical_measurements_missing",
+                result.Failures[0],
+                "missing measurement diagnostic");
         }
 
         private static ReachyRepresentativeDeviceCapabilities Capabilities(

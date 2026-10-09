@@ -352,6 +352,16 @@ namespace ReachyMini.Performance
             {
                 failures.Add("long_run_shorter_than_1800_seconds");
             }
+            // Zero timing/memory values are not valid proof of a production
+            // Unity+MuJoCo measurement. Never let a missing workload silently
+            // pass qualification just because zero lies below a ceiling.
+            if (observation.RenderP95Milliseconds <= 0.0 ||
+                observation.PhysicsP95Milliseconds <= 0.0 ||
+                observation.InitialUnityAllocatedMemoryBytes <= 0L ||
+                observation.FinalUnityAllocatedMemoryBytes <= 0L)
+            {
+                failures.Add("required_physical_measurements_missing");
+            }
             if (observation.RenderP95Milliseconds > profile.MaximumRenderP95Milliseconds)
             {
                 failures.Add("render_p95_exceeds_profile_budget");
