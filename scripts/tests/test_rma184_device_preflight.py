@@ -44,7 +44,6 @@ class Rma184DevicePreflightTests(unittest.TestCase):
         self.assertIn("inputs.install_physical_device", build)
         self.assertIn("scripts/build_unity_android.sh device-feasibility", build)
 
-
     def test_no_artifacts_device_is_pinned_before_apk_build(self) -> None:
         source = NO_ARTIFACTS.read_text(encoding="utf-8")
         self.assertLess(source.index("- name: Run Unity tests"), source.index("- name: Pin one"))
@@ -68,6 +67,7 @@ class Rma184DevicePreflightTests(unittest.TestCase):
             "REACHY_ANDROID_SERIAL",
         ):
             self.assertIn(token, pin)
+
 
 if __name__ == "__main__":
     unittest.main()
