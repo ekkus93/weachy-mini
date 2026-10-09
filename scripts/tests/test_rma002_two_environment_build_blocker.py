@@ -14,14 +14,12 @@ BLOCKER = ROOT / "docs/validation/RMA_002_TWO_ENVIRONMENT_BUILD_EVIDENCE_BLOCKER
 class Rma002TwoEnvironmentBuildBlockerTests(unittest.TestCase):
     def test_todo_keeps_two_environment_acceptance_open(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
-        self.assertIn(
-            "- [ ] Two clean developer environments can build the same minimal Android application.",
-            todo,
+        criterion = (
+            "Two clean developer environments can build the same minimal "
+            "Android application."
         )
-        self.assertNotIn(
-            "- [x] Two clean developer environments can build the same minimal Android application.",
-            todo,
-        )
+        self.assertIn(f"- [ ] {criterion}", todo)
+        self.assertNotIn(f"- [x] {criterion}", todo)
 
     def test_blocker_document_defines_evidence_without_closure_claim(self) -> None:
         blocker = BLOCKER.read_text(encoding="utf-8")
