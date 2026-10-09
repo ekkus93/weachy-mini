@@ -135,8 +135,10 @@ class Rma194DeferredFeatureAndFidelityGate(unittest.TestCase):
             metadata,
         )
         self.assertNotIn(
-            ("public const SimulationFidelity InitialFidelity = "
-             "SimulationFidelity.UnitCalibratedTwin;"),
+            (
+                "public const SimulationFidelity InitialFidelity = "
+                "SimulationFidelity.UnitCalibratedTwin;"
+            ),
             metadata,
         )
         self.assertNotIn(
