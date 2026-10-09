@@ -256,18 +256,6 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Build ARM64 API-26 device APK
-        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
-        shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
-
-      - name: Verify ARM64 API-26 device APK
-        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
-
       - name: Pin one physical Android device
         if: ${{ github.event_name == 'push' || inputs.install_physical_device }}
         shell: bash
@@ -321,6 +309,18 @@ jobs:
           fi
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Build ARM64 API-26 device APK
+        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Verify ARM64 API-26 device APK
+        if: ${{ github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
       - name: Install and run RMA-090 camera discovery acceptance
         id: camera_discovery_acceptance

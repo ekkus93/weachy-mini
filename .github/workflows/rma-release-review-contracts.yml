@@ -23,6 +23,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Guard RMA-184 physical-device preflight ordering
+        run: python3 scripts/tests/test_rma184_device_preflight.py
+
       - name: Guard RMA-002 two-clean-environment evidence boundary
         run: python3 scripts/tests/test_rma002_two_environment_build_blocker.py
 
