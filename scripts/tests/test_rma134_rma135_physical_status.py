@@ -15,9 +15,9 @@ class PhysicalStatusTests(unittest.TestCase):
     def test_rma135_baseline_requires_actual_evidence(self) -> None:
         text = WORKFLOWS[1].read_text(encoding="utf-8")
         self.assertIn("--json databaseId", text)
-        self.assertIn('/actions/runs/${run_id}/artifacts', text)
+        self.assertIn("/actions/runs/${run_id}/artifacts", text)
         self.assertIn("select(.expired == false)", text)
-        self.assertIn('rma135-resource-governor-android-', text)
+        self.assertIn("rma135-resource-governor-android-", text)
         self.assertIn('[[ "${candidate}" =~ ^[0-9a-f]{40}$', text)
         self.assertIn('git merge-base --is-ancestor "${candidate}" "${SHA}"', text)
         self.assertNotIn("--json headSha", text)
