@@ -74,6 +74,13 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertNotIn("\n  push:", workflow)
         self.assertIn("weachy-mini-android-device", workflow)
         self.assertIn("run_rma190_offline_speech_end_to_end_android.sh", workflow)
+        pin = workflow.index("- name: Pin one physical API-31+ Android device")
+        prepare = workflow.index("- name: Prepare generated Reachy Unity presentation")
+        build = workflow.index("- name: Build ARM64 API-26 device APK")
+        self.assertLess(pin, prepare)
+        self.assertLess(pin, build)
+        self.assertIn("adb devices", workflow)
+        self.assertIn("sdk >= 31", workflow)
         self.assertNotIn("upload-artifact", workflow)
 
     def test_authoritative_acceptance_remains_open_until_real_run(self) -> None:

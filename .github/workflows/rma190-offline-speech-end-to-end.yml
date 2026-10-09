@@ -83,22 +83,6 @@ jobs:
             exit 1
           }
 
-      - name: Prepare generated Reachy Unity presentation
-        shell: bash
-        env:
-          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/prepare_reachy_unity_presentation.sh
-
-      - name: Stage production MuJoCo runtime for Unity Android
-        shell: bash
-        env:
-          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
-        run: bash scripts/stage_reachy_unity_android_runtime.sh
-
-      - name: Build ARM64 API-26 device APK
-        shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
-
       - name: Pin one physical API-31+ Android device
         shell: bash
         env:
@@ -145,6 +129,22 @@ jobs:
 
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Prepare generated Reachy Unity presentation
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/prepare_reachy_unity_presentation.sh
+
+      - name: Stage production MuJoCo runtime for Unity Android
+        shell: bash
+        env:
+          REACHY_UNITY_WORK_ROOT: ${{ runner.temp }}/reachy-unity-presentation
+        run: bash scripts/stage_reachy_unity_android_runtime.sh
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
 
       - name: Run real network-disabled spoken-turn acceptance
         shell: bash
