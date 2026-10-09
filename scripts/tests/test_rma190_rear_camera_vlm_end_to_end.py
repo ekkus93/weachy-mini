@@ -307,12 +307,14 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertNotIn("EncodedBytes", observed)
         self.assertIn("synthetic_camera_frame_injected = false", observed)
 
-    def test_todo_stays_open_until_physical_run_passes(self) -> None:
+    def test_todo_closes_only_with_exact_physical_vlm_evidence(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
-        self.assertIn(
-            "- [ ] Rear-camera visual question with optional VLM.",
-            todo,
-        )
+        self.assertIn("- [x] Rear-camera visual question with optional VLM.", todo)
+        self.assertIn("37994546094", todo)
+        self.assertIn("3895bb93f5faef7fef1169ffeb747a4347f88c21", todo)
+        self.assertIn("11648195872", todo)
+        self.assertIn("not** a live-cloud provider test", todo)
+        self.assertIn("- [ ] On-device ASR -> local LLM -> behavior -> offline TTS.", todo)
 
 
 if __name__ == "__main__":

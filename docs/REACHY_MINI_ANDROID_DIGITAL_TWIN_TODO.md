@@ -3341,8 +3341,8 @@ documented device-specific acceptance gaps.
 ## RMA-190 — Build automated end-to-end scenarios
 
 **Status:** In progress. The former RMA-195 composition blocker is closed.
-Nine scenarios are accepted across their required execution classes; the two
-remaining scenarios stay open until their own end-to-end evidence passes.
+Ten scenarios are accepted across their required execution classes; the
+remaining spoken-turn scenario stays open until its end-to-end evidence passes.
 
 **Tranche 1 completion evidence (2026-09-30):** physical Android workflow
 `RMA-190 Core End-to-End Android Acceptance` run `36806841674` passed on
@@ -3410,12 +3410,32 @@ generation succeeds. The package payload and OOM trigger are explicitly labeled
 fixtures and are **not** physical memory or performance measurements; this evidence
 does not close RMA-135 or RMA-184.
 
+**Rear-camera/VLM physical completion evidence (2026-10-09):** exact-head
+`RMA-190 Rear Camera VLM End-to-End Android Acceptance` run `37994546094`
+passed on implementation SHA `3895bb93f5faef7fef1169ffeb747a4347f88c21`
+(job `114037107333`); artifact `11648195872`
+(`rma190-rear-camera-vlm-end-to-end-3895bb93f5faef7fef1169ffeb747a4347f88c21`)
+was uploaded with SHA-256 `0631940a8066e69c118b2c723efb5a8098714940413c6318cbf611a6be4d55a6`.
+The Samsung SM-A546E (Android API 36) captured a **real rear-camera**
+frame (`source_sequence=86`) and transformed it into an observation-eligible
+Reachy-eye frame (`authoritative_sequence=8844`, valid coverage about 97.73%).
+The shipping perception/VLM provider, image encoder, Android Keystore
+credential path, privacy authorization, and HTTP transport sent one valid
+JPEG-containing visual-question request with a bearer authorization header
+to an explicit `adb reverse` loopback *fixture*, which returned the expected
+response. Neither raw camera media nor the authorization value was persisted.
+The calibration was an explicitly labeled deterministic uncalibrated fixture;
+this run is **not** a live-cloud provider test, measured camera calibration,
+or a representative-device performance qualification. The previously observed
+Unity-context/credential-header transport failure was resolved by the source
+change at the accepted implementation SHA. The spoken-turn scenario remains open.
+
 - [x] Offline launch with no network.
 - [x] MuJoCo full model load and neutral reset.
 - [x] Deterministic gesture replay.
 - [x] Front camera -> head rotation -> transformed Reachy-eye frame.
 - [ ] On-device ASR -> local LLM -> behavior -> offline TTS.
-- [ ] Rear-camera visual question with optional VLM.
+- [x] Rear-camera visual question with optional VLM.
 - [x] Independent cloud provider combinations.
 - [x] Permission denial/revocation.
 - [x] Network loss, rate limit, malformed response, and cancellation.

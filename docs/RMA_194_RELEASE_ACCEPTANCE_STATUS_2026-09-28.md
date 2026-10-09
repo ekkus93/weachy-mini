@@ -55,6 +55,7 @@ The authoritative TODO records these accepted scenarios:
 - MuJoCo full model load and neutral reset.
 - Deterministic gesture replay.
 - Front camera -> head rotation -> transformed Reachy-eye frame.
+- Rear-camera visual question with optional VLM.
 - Independent cloud provider combinations.
 - Permission denial/revocation.
 - Network loss, rate limit, malformed response, and cancellation.
@@ -64,7 +65,6 @@ The authoritative TODO records these accepted scenarios:
 The following scenarios remain open until their own end-to-end evidence passes:
 
 - On-device ASR -> local LLM -> behavior -> offline TTS.
-- Rear-camera visual question with optional VLM.
 
 Physical core/camera/permission evidence and the deterministic provider-integration
 evidence are cited in the authoritative RMA-190 section. Provider run `37757168563`
@@ -79,6 +79,16 @@ integration is also accepted from exact-head CI run `37760354266` on
 `405711d5dd0d03253959742dcf66a957012ad0a8`; that managed/native fixture proves
 fail-closed worker fault retention, explicit handle recreation, neutral reset, and
 resumed finite authoritative progress without claiming physical-device evidence.
+
+Rear-camera/VLM physical end-to-end acceptance passed on exact implementation
+SHA `3895bb93f5faef7fef1169ffeb747a4347f88c21`: run `37994546094`,
+job `114037107333`, uploaded artifact `11648195872` (zip SHA-256
+`0631940a8066e69c118b2c723efb5a8098714940413c6318cbf611a6be4d55a6`).
+The Samsung SM-A546E exercised the real rear camera, authoritative transformed
+eye frame, shipping VLM image encoder, secure credential path, and production
+HTTP transport against an explicitly identified loopback fixture. This is not
+live-cloud, measured calibration, or performance evidence. The one remaining
+RMA-190 scenario is the offline spoken turn.
 
 ## Current exact-head evidence on `master`
 
@@ -101,7 +111,7 @@ The current release gate remains blocked by these evidence gaps:
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
 4. RMA-184 has published measured A54 30/60 FPS default profiles (physical run `36187273962`); the 1,800-second integrated long-run, thermal-order, and representative-device supported-target acceptance remain open. The measured profiles do not cover camera/LLM/audio/network integration.
-5. RMA-190: rear-camera/VLM remains open pending its physical shipping-path run; solver-fault/reset, provider-combination, network/rate-limit/malformed/cancellation, and model-corruption/OOM scenarios have accepted integration evidence.
+5. RMA-190: rear-camera/VLM physical shipping-path acceptance is closed by run `37994546094`; the remaining open scenario is the real offline ASR -> local LLM -> behavior -> TTS spoken turn (also required by RMA-125).
 6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
 
 Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
