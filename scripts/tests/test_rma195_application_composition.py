@@ -37,6 +37,15 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
             "capability.TryExecuteIntent(intent, out string intentDiagnostic)", orchestrator
         )
 
+    def test_rma135_workflow_does_not_hash_removed_composition(self) -> None:
+        workflow = read(ROOT / ".github/workflows/rma135-resource-thermal-governor.yml")
+        self.assertNotIn("ReachyProductionApplicationCompositionProvider.cs", workflow)
+        self.assertEqual(
+            3,
+            workflow.count("ReachySettingsApplicationCompositionProvider.cs"),
+        )
+
+
     def test_legacy_gesture_mapper_is_only_non_capability_fallback(self) -> None:
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         capability_branch = orchestrator.index("if (capability != null)")

@@ -12,7 +12,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs'
@@ -43,7 +43,7 @@ on:
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs'
       - 'Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs'
-      - 'Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs'
+      - 'Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs'
       - 'Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs'
@@ -168,7 +168,7 @@ jobs:
             Assets/ReachyMini/Runtime/Core/Application/ReachySimulationLocalLlmPhysicsBudgetSource.cs \
             Assets/ReachyMini/Runtime/Core/Application/ReachyProviderGovernorDiagnostics.cs \
             Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs \
-            Assets/ReachyMini/Runtime/Application/ReachyProductionApplicationCompositionProvider.cs \
+            Assets/ReachyMini/Runtime/Application/ReachySettingsApplicationCompositionProvider.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs \
             Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs \
