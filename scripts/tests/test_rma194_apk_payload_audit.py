@@ -55,9 +55,7 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
         self.assertIn("Deferred AR/XR payload", result.stderr)
 
     def test_rejects_arcore_manifest(self) -> None:
-        result = self.run_fixture(
-            {"AndroidManifest.xml": "com.google.ar.core".encode("utf-16le")}
-        )
+        result = self.run_fixture({"AndroidManifest.xml": "com.google.ar.core".encode("utf-16le")})
         self.assertNotEqual(0, result.returncode)
         self.assertIn("manifest declaration", result.stderr)
 

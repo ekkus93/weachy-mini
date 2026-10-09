@@ -38,12 +38,7 @@ def inspect_apk(path: Path) -> dict[str, object]:
         for entry in entries:
             name = entry.filename
             folded = name.casefold()
-            if (
-                name.startswith("/")
-                or "\\" in name
-                or ".." in name.split("/")
-                or folded in names
-            ):
+            if name.startswith("/") or "\\" in name or ".." in name.split("/") or folded in names:
                 raise ValueError("APK contains unsafe or duplicate entry names")
             names.add(folded)
             if any(token in folded for token in FORBIDDEN_FILES):
@@ -55,16 +50,12 @@ def inspect_apk(path: Path) -> dict[str, object]:
             raise ValueError("APK manifest exceeds audit limit")
         manifest = apk.read("AndroidManifest.xml")
         for token in FORBIDDEN_MANIFEST:
-            if (
-                token.encode("utf-8") in manifest
-                or token.encode("utf-16le") in manifest
-            ):
+            if token.encode("utf-8") in manifest or token.encode("utf-16le") in manifest:
                 raise ValueError(f"Deferred AR/XR manifest declaration: {token}")
         native = [
             entry.filename
             for entry in entries
-            if entry.filename.startswith("lib/arm64-v8a/")
-            and entry.filename.endswith(".so")
+            if entry.filename.startswith("lib/arm64-v8a/") and entry.filename.endswith(".so")
         ]
         if not native:
             raise ValueError("APK lacks ARM64 native libraries")
