@@ -58,5 +58,24 @@ device test; this was corrected in the subsequent commit.
 
 **Exact-head source qualification:** `e7d7002c7bd24a9e9e6410674b957472b3ac218b` passed hosted CI run `37862578060`, RMA Release Review Contracts `37862578133`, and RMA-173 regressions `37862578016`. The two physical Android workflows on that head, `37862578147` (Local Unity Android Validation) and `37862578120` (No Artifacts), failed when the pinned Samsung A54 was absent from `adb devices`. These results are hardware-availability failures; they are not parser, packaging, or physical-camera acceptance evidence. The Unity Android build completed in the No Artifacts lane before device pinning. Re-run the physical RMA-190 scenario on the device when connected and retain only the sanitized scoped evidence.
 
+## Current device requalification status — 2026-10-08
+
+On exact source SHA `f57184efa7afda0e26904c9549ebbbb3175fa86a`,
+hosted CI `37873906378`, release-review `37873906423`, and
+RMA-173 regressions `37873906349` passed, including the permanent
+sanitized-diagnostic parser/privacy contract. The `Local Unity Android
+Validation` workflow `37873906455` passed Unity tests and the native
+runtime staging steps, then failed during ADB pinning. The no-artifacts
+device workflow `37873906339` similarly failed at the pinned-device
+preflight before APK construction. These are physical-device availability
+failures, not a shipping VLM test or camera acceptance result.
+
+The new workflow ordering makes an absent device fail before the expensive
+APK build while preserving the source/Unity tests and fail-closed device
+identity policy. After the Samsung A54 is connected and authorized again,
+run the dedicated shipping rear-camera/VLM end-to-end acceptance and
+collect only the scoped/sanitized artifact set. Until that succeeds, its
+RMA-190 scenario checkbox remains open.
+
 **Acceptance boundary:** do not close the remaining RMA-190 rear-camera/VLM
 scenario or infer release privacy acceptance from this review document.

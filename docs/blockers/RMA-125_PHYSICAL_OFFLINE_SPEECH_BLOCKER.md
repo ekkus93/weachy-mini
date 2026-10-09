@@ -105,3 +105,23 @@ If the explicit recognizer, language model, or exact-locale offline voice become
 ## A54 reconnected regression evidence — 2026-10-08
 
 On exact `master` SHA `709c01ddadc78b21246a00ae54dcbd8c0e3892fe`, `Local Unity Android Validation` run `37720761063` passed physical device pinning and the RMA-195 application-composition acceptance after the A54 was reconnected. This confirms the device is available again for subsequent RMA-125 acceptance work. The run did not exercise a real network-disabled human ASR utterance through offline TTS with the required audio-focus sequence, so it does not close any of the three open RMA-125 acceptance checkboxes. The next experiment remains the dedicated shipping-path spoken-turn acceptance above.
+
+## Current device-availability blocker — 2026-10-08
+
+At exact source head `f57184efa7afda0e26904c9549ebbbb3175fa86a`,
+`Local Unity Android Validation` run `37873906455` passed
+Unity edit/play test execution and production MuJoCo staging, then failed
+at `Pin one physical Android device`. The companion no-artifacts physical
+workflow `37873906339` failed at its device pinning step. The pinned
+Samsung A54 was not enumerated as an approved, connected ADB device.
+Neither failure is evidence of a regression in shipping ASR/TTS or
+a failed human utterance; neither is positive offline-speech acceptance.
+Hosted CI `37873906378`, release-review contracts `37873906423`,
+and RMA-173 regressions `37873906349` all passed on that exact head.
+
+The no-artifacts lane now pins the phone before its APK build, and the
+standard Unity lane pins it after independent Unity tests but before
+its APK build. Source and non-device validation can continue without
+the phone. When ADB authorization/connection is restored, run the
+already documented real-user network-disabled speech acceptance sequence;
+a capability probe alone still does not close this item.
