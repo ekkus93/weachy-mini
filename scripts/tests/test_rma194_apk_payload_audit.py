@@ -44,6 +44,14 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
         self.assertEqual("passed", report["status"])
         self.assertEqual(64, len(report["apk_sha256"]))
 
+    def test_device_build_audits_packaged_apk_after_unity(self) -> None:
+        build = (SCRIPT.parent / "build_unity_android.sh").read_text(encoding="utf-8")
+        audit_call = 'python3 "${ROOT_DIR}/scripts/verify_rma194_release_apk.py"'
+        self.assertIn('if [[ "${MODE}" == "device-feasibility" ]]; then', build)
+        self.assertIn(audit_call, build)
+        self.assertIn('"${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk"', build)
+        self.assertLess(build.index('-executeMethod "${METHOD}"'), build.index(audit_call))
+
     def test_rejects_arcore_library(self) -> None:
         result = self.run_fixture({"lib/arm64-v8a/libarcore_sdk_c.so": b"bad"})
         self.assertNotEqual(0, result.returncode)

@@ -255,3 +255,11 @@ fi
     -projectPath "${ROOT_DIR}" \
     -executeMethod "${METHOD}" \
     -logFile -
+
+# Audit the exact packaged APK before any device install or artifact upload.
+# This is shared by both physical Android workflows; a missing or unsafe
+# package must fail closed rather than pass the preceding Unity build step.
+if [[ "${MODE}" == "device-feasibility" ]]; then
+    python3 "${ROOT_DIR}/scripts/verify_rma194_release_apk.py" \
+        "${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk"
+fi
