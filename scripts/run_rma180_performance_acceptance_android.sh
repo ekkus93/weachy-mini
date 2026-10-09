@@ -38,7 +38,7 @@ command -v python3 >/dev/null 2>&1 || {
 
 mkdir -p "${REPORT_DIR}"
 # Do not retain a successful report from a previous failed invocation.
-rm -f -- "${REPORT_DIR}/rma180-performance-acceptance.json"
+rm -f -- "${REPORT_DIR}/rma180-performance-acceptance.json" "${REPORT_DIR}/logcat.txt"
 "${ADB[@]}" get-state >/dev/null
 "${ADB[@]}" install -r "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 
@@ -74,7 +74,6 @@ if ! "${ADB[@]}" shell test ! -f "${REMOTE_RESULT_PATH}"; then
   printf "%s\n" "RMA-180 previous device report remains; refusing stale evidence." >&2
   exit 1
 fi
-"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W \
   -n "${launch_component}" \
   -a android.intent.action.MAIN \
@@ -107,8 +106,7 @@ while true; do
 done
 
 capture_state after
-timeout 20s "${ADB[@]}" logcat -d -v threadtime \
-  > "${REPORT_DIR}/logcat.txt" 2>&1 || true
+# Preserve only structured performance and scoped resource evidence, not device-wide logs.
 
 python3 - "${REPORT_DIR}/rma180-performance-acceptance.json" <<'PY'
 import json

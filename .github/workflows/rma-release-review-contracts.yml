@@ -53,6 +53,9 @@ jobs:
       - name: Run canonical RMA-191 security/privacy contract
         run: python3 scripts/tests/test_rma191_security_privacy_review.py
 
+      - name: Guard RMA-180 physical performance artifact privacy
+        run: python3 scripts/tests/test_rma180_artifact_privacy.py
+
       - name: Run RMA-191 compatibility guard
         run: python3 scripts/tests/test_rma191_security_review.py
 
