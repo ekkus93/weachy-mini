@@ -22,6 +22,24 @@ class PhysicalStatusTests(unittest.TestCase):
         self.assertIn('git merge-base --is-ancestor "${candidate}" "${SHA}"', text)
         self.assertNotIn("--json headSha", text)
 
+    def test_rma135_hashed_paths_are_real_files(self) -> None:
+        source = (
+            ROOT / ".github/workflows/rma135-resource-thermal-governor.yml"
+        ).read_text(encoding="utf-8")
+        section = source.split("- name: Create exact-SHA evidence", 1)[1]
+        section = section.split('> "$OUT/source-sha256.txt"', 1)[0]
+        paths = [
+            line.strip().removesuffix("\\").strip()
+            for line in section.splitlines()
+            if line.strip().startswith(
+                ("Assets/", "managed/", "scripts/", "docs/", ".github/")
+            )
+        ]
+        self.assertGreaterEqual(len(paths), 25, "RMA-135 evidence sources truncated")
+        self.assertEqual(len(paths), len(set(paths)), "duplicate evidence paths")
+        missing = [path for path in paths if not (ROOT / path).is_file()]
+        self.assertEqual([], missing, "RMA-135 evidence includes missing files")
+
     def test_skip_never_marks_physical_accepted(self) -> None:
         for workflow in WORKFLOWS:
             with self.subTest(workflow=workflow.name):
