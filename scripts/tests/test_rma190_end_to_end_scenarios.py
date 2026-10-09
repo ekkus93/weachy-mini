@@ -75,6 +75,7 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
 
         for item in (
             "Front camera -> head rotation -> transformed Reachy-eye frame.",
+            "Rear-camera visual question with optional VLM.",
             "Independent cloud provider combinations.",
             "Permission denial/revocation.",
             "Network loss, rate limit, malformed response, and cancellation.",
@@ -86,7 +87,6 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
 
         for item in (
             "On-device ASR -> local LLM -> behavior -> offline TTS.",
-            "Rear-camera visual question with optional VLM.",
         ):
             self.assertIn(f"- [ ] {item}", section)
             self.assertNotIn(f"- [x] {item}", section)
@@ -102,6 +102,10 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("37759478803", section)
         self.assertIn("6f3019c4c9e8a8c963161267defaff71a966a658", section)
         self.assertIn("11541646432", section)
+        self.assertIn("37994546094", section)
+        self.assertIn("3895bb93f5faef7fef1169ffeb747a4347f88c21", section)
+        self.assertIn("11648195872", section)
+        self.assertIn("**not** a live-cloud provider test", section)
         self.assertIn("37760354266", section)
         self.assertIn("405711d5dd0d03253959742dcf66a957012ad0a8", section)
         self.assertNotIn("**Status:** Complete", section)
