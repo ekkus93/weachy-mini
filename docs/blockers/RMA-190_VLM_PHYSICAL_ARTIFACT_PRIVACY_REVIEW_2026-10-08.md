@@ -1,6 +1,6 @@
 # RMA-190 rear-camera/VLM physical artifact privacy review
 
-**Status: source privacy hardening committed; physical requalification and diagnostic parser correction still open (2026-10-08).** This review concerns the test runner's exported diagnostics,
+**Status (2026-10-08): source privacy hardening and diagnostic parser regression qualification passed on current `master`; physical rear-camera/VLM acceptance remains open because the Android device was disconnected.** This review concerns the test runner's exported diagnostics,
 not the shipping VLM encoder or a proven disclosure of actual camera content.
 
 ## Observed repository behavior
@@ -54,16 +54,9 @@ this record was written. The earlier RMA-190 physical workflow
 `37860425710` failed at an outdated static assertion, before the
 device test; this was corrected in the subsequent commit.
 
-**Remaining parser defect:** the inline Python diagnostic filter in the
-runner currently contains doubled backslashes in the regular-expression
-word boundaries and newline separators. That causes stage messages to
-be missed and can render resource transitions without real line breaks.
-This is a diagnostic-quality defect, not evidence of a private-media leak.
-Two attempts to commit a corrected runner body were blocked by write-safety
-checks; inspection confirmed `master` did not move after those attempts.
-Correct the inline parser, add a functional fixture test for its emitted
-lines, and rerun exact-head hosted and physical validation. Do not
-misrepresent a static privacy contract pass as physical VLM acceptance.
+**Parser defect resolved:** the stage/resource-transition escaping and newline defect was corrected in commit `1f8150f08b2946abaeef81c7c7367d3044c8e2fb`. The shipping inline Python filter is exercised (not replaced by a test-only implementation) by `scripts/tests/test_rma190_vlm_artifact_privacy.py`, which verifies bounded sanitized stage and resource-transition output without retaining raw private log lines. The Android library resource-packaging regression was repaired in `5c644c0b94f57cbc7472aa9180b1894eebf139a4`; Ruff formatting was reconciled in `e7d7002c7bd24a9e9e6410674b957472b3ac218b`.
+
+**Exact-head source qualification:** `e7d7002c7bd24a9e9e6410674b957472b3ac218b` passed hosted CI run `37862578060`, RMA Release Review Contracts `37862578133`, and RMA-173 regressions `37862578016`. The two physical Android workflows on that head, `37862578147` (Local Unity Android Validation) and `37862578120` (No Artifacts), failed when the pinned Samsung A54 was absent from `adb devices`. These results are hardware-availability failures; they are not parser, packaging, or physical-camera acceptance evidence. The Unity Android build completed in the No Artifacts lane before device pinning. Re-run the physical RMA-190 scenario on the device when connected and retain only the sanitized scoped evidence.
 
 **Acceptance boundary:** do not close the remaining RMA-190 rear-camera/VLM
 scenario or infer release privacy acceptance from this review document.
