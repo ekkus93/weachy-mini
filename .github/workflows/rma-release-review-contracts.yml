@@ -59,6 +59,9 @@ jobs:
       - name: Guard RMA-134/135 physical status and source-hash inventory
         run: python3 scripts/tests/test_rma134_rma135_physical_status.py
 
+      - name: Guard local-LLM physical evidence privacy
+        run: python3 scripts/tests/test_rma134_rma135_artifact_privacy.py
+
       - name: Run RMA-191 compatibility guard
         run: python3 scripts/tests/test_rma191_security_review.py
 

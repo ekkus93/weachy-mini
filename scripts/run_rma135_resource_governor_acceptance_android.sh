@@ -19,6 +19,11 @@ DEVICE_MATRIX_PATH="models/reachy-mini/android-device-matrix.json"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 
 mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
+# Clean up diagnostic leftovers from older runs. Device-wide logs and
+# inventories may contain unrelated private user data and are never evidence.
+rm -f -- "${REPORT_DIR}/adb-devices.txt" "${REPORT_DIR}/getprop.txt" \
+  "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/activity.txt" \
+  "${REPORT_DIR}/processes.txt"
 [[ -f "${APK_PATH}" ]] || { printf 'RMA-135 APK is missing: %s\n' "${APK_PATH}" >&2; exit 1; }
 command -v "${ADB_BIN}" >/dev/null 2>&1 || { printf 'adb unavailable: %s\n' "${ADB_BIN}" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'python3 is required.' >&2; exit 1; }
@@ -91,14 +96,10 @@ read_latest_checkpoint() {
 capture() {
   set +e
   timeout 10s "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
-  "${ADB_BIN}" devices -l > "${REPORT_DIR}/adb-devices.txt" 2>&1
-  timeout 10s "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
-  timeout 15s "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys meminfo "${PACKAGE_NAME}" > "${REPORT_DIR}/meminfo.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys thermalservice > "${REPORT_DIR}/thermalservice.txt" 2>&1
-  timeout 15s "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt" 2>&1
   timeout 10s "${ADB[@]}" shell pidof "${PACKAGE_NAME}" > "${REPORT_DIR}/pidof.txt" 2>&1
   timeout 10s "${ADB[@]}" shell \
     "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \
@@ -233,7 +234,6 @@ printf '%s\n' "${remote}" > "${REPORT_DIR}/model-device-verification.txt"
   exit 1
 }
 
-"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W \
   -n "${launch_component}" \
   -a android.intent.action.MAIN \

@@ -17,6 +17,11 @@ TIMEOUT_SECONDS="${RMA134_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
 DEVICE_MATRIX_PATH="models/reachy-mini/android-device-matrix.json"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
+# Clean up diagnostic leftovers from older runs. Device-wide logs and
+# inventories may contain unrelated private user data and are never evidence.
+rm -f -- "${REPORT_DIR}/adb-devices.txt" "${REPORT_DIR}/getprop.txt" \
+  "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/activity.txt" \
+  "${REPORT_DIR}/processes.txt"
 
 [[ -f "${APK_PATH}" ]] || { printf 'RMA-134 APK is missing: %s\n' "${APK_PATH}" >&2; exit 1; }
 command -v "${ADB_BIN}" >/dev/null 2>&1 || { printf 'adb unavailable: %s\n' "${ADB_BIN}" >&2; exit 1; }
@@ -62,15 +67,10 @@ read_latest_checkpoint() {
 capture() {
   set +e
   timeout 10s "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
-  "${ADB_BIN}" devices -l > "${REPORT_DIR}/adb-devices.txt" 2>&1
-  timeout 10s "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" 2>&1
-  timeout 15s "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
-  timeout 15s "${ADB[@]}" shell dumpsys activity activities > "${REPORT_DIR}/activity.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys meminfo "${PACKAGE_NAME}" > "${REPORT_DIR}/meminfo.txt" 2>&1
   timeout 10s "${ADB[@]}" shell pidof "${PACKAGE_NAME}" > "${REPORT_DIR}/pidof.txt" 2>&1
-  timeout 10s "${ADB[@]}" shell ps -A > "${REPORT_DIR}/processes.txt" 2>&1
   timeout 10s "${ADB[@]}" shell \
     "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \
     | tr -d '\r' > "${REPORT_DIR}/checkpoint-files.txt" 2>&1
@@ -154,7 +154,6 @@ timeout --signal=TERM --kill-after=15s 240s "${ADB[@]}" push "${MODEL_CACHE_PATH
 remote="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL_PATH}'; toybox stat -c '%s' '${REMOTE_MODEL_PATH}'" | tr -d '\r')"; printf '%s\n' "${remote}" > "${REPORT_DIR}/model-device-verification.txt"
 [[ "$(printf '%s\n' "${remote}" | sed -n '1s/[[:space:]].*$//p')" == "${MODEL_SHA256}" && "$(printf '%s\n' "${remote}" | sed -n '2p')" == "${MODEL_BYTES}" ]] || { printf '%s\n' 'On-device selected model verification failed.' >&2; exit 1; }
 
-"${ADB[@]}" logcat -c >/dev/null 2>&1 || true
 "${ADB[@]}" shell am start -W -n "${launch_component}" -a android.intent.action.MAIN -c android.intent.category.LAUNCHER --ez reachy_rma134_acceptance true > "${REPORT_DIR}/launch.txt" 2>&1
 cat "${REPORT_DIR}/launch.txt"; grep -Eq '(^|[[:space:]])(Error:|Exception)' "${REPORT_DIR}/launch.txt" && { printf '%s\n' 'RMA-134 Unity launch reported an error.' >&2; exit 1; }
 
