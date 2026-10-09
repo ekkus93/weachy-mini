@@ -33,9 +33,7 @@ def rma194_acceptance_items() -> list[tuple[bool, str]]:
     section = section.split("# Future milestones", 1)[0]
     return [
         (flag == "x", item.strip())
-        for flag, item in re.findall(
-            r"^- \[([x ])\] (.+)$", section, flags=re.MULTILINE
-        )
+        for flag, item in re.findall(r"^- \[([x ])\] (.+)$", section, flags=re.MULTILINE)
     ]
 
 
@@ -46,13 +44,8 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
         self.assertEqual(3, len(acceptance), "RMA-194 acceptance criteria changed; audit")
         section = status.split("## Final acceptance criteria status", 1)[1]
         section = section.split("\n## ", 1)[0]
-        rows = re.findall(
-            r"^\| (.+?) \| (Open|Accepted)\. \|", section, flags=re.MULTILINE
-        )
-        expected = [
-            (item, "Accepted" if accepted else "Open")
-            for accepted, item in acceptance
-        ]
+        rows = re.findall(r"^\| (.+?) \| (Open|Accepted)\. \|", section, flags=re.MULTILINE)
+        expected = [(item, "Accepted" if accepted else "Open") for accepted, item in acceptance]
         self.assertEqual(expected, rows)
         if any(not accepted for accepted, _ in acceptance):
             self.assertIn("Release status: not accepted", status)
