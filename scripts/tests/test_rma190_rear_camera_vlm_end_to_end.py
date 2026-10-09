@@ -21,6 +21,12 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             'android:networkSecurityConfig="@xml/reachy_provider_network_security"',
             manifest,
         )
+        android_name = "{http://schemas.android.com/apk/res/android}name"
+        requested_permissions = {
+            permission.get(android_name)
+            for permission in ET.fromstring(manifest).findall("uses-permission")
+        }
+        self.assertIn("android.permission.INTERNET", requested_permissions)
         policy = ET.parse(network_dir / "res/xml/reachy_provider_network_security.xml").getroot()
         base = policy.find("base-config")
         self.assertIsNotNone(base)
@@ -92,6 +98,11 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("response.status != 200 or response.read(16)", runner)
         self.assertIn('grep -Fq "tcp:${FIXTURE_PORT} tcp:${FIXTURE_PORT}"', runner)
         self.assertIn("RMA-190 expected ADB reverse fixture mapping", runner)
+        self.assertIn('trap \'kill "${FIXTURE_PID}"', runner)
+        self.assertIn("android\\.permission\\.INTERNET: granted=true", runner)
+        self.assertLess(runner.index("FIXTURE_PID=\"$!\""), runner.index("/health"))
+        self.assertLess(runner.index('"${ADB[@]}" install -r -g'),
+                        runner.index("android\\.permission\\.INTERNET: granted=true"))
         self.assertLess(
             runner.index("build_opener(ProxyHandler({})).open("),
             runner.index('"${ADB[@]}" reverse "tcp:${FIXTURE_PORT}"'),

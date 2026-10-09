@@ -170,6 +170,8 @@ PY
 
 python3 -u "${FIXTURE_SCRIPT}" "${FIXTURE_PORT}" "${FIXTURE_META}"     > "${REPORT_DIR}/fixture-server.log" 2>&1 &
 FIXTURE_PID="$!"
+# Full cleanup is installed later; early failures must not orphan this server.
+trap 'kill "${FIXTURE_PID}" >/dev/null 2>&1 || true; wait "${FIXTURE_PID}" 2>/dev/null || true' EXIT
 sleep 1
 if ! kill -0 "${FIXTURE_PID}" 2>/dev/null; then
     printf 'RMA-190 VLM fixture server failed to start.\n' >&2
@@ -295,6 +297,15 @@ fi
 "${ADB[@]}" install -r -g "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"
 "${ADB[@]}" shell pm grant "${PACKAGE_NAME}" android.permission.CAMERA
+
+# The shipping HTTP transport requires Android INTERNET permission even when
+# its configured fixture endpoint is loopback and explicitly authorized.
+# Check the installed package rather than trusting source manifest merging.
+if ! "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" |
+    grep -E "android\\.permission\\.INTERNET: granted=true" >/dev/null; then
+    printf 'RMA-190 installed Android APK does not grant INTERNET permission.\n' >&2
+    exit 1
+fi
 
 LAUNCH_COMPONENT="$(
     "${ADB[@]}" shell cmd package resolve-activity --brief         -a android.intent.action.MAIN         -c android.intent.category.LAUNCHER         "${PACKAGE_NAME}" |
