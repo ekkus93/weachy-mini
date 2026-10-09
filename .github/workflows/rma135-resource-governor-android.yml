@@ -54,24 +54,34 @@ jobs:
           set -euo pipefail
           SHA="${{ github.event.workflow_run.head_sha }}"
           baseline=""
-          mapfile -t successful_heads < <(
+          # Green workflow_run jobs may have skipped every physical step.
+          # Only a successful run with a retained physical evidence artifact
+          # can serve as the baseline for a new source-scope comparison.
+          mapfile -t successful_run_ids < <(
             gh run list \
               --repo "${GITHUB_REPOSITORY}" \
               --workflow rma135-resource-governor-android.yml \
               --status success \
               --limit 50 \
-              --json headSha \
-              --jq '.[].headSha'
+              --json databaseId \
+              --jq '.[].databaseId'
           )
-          for candidate in "${successful_heads[@]}"; do
-            [[ -n "${candidate}" && "${candidate}" != "${SHA}" ]] || continue
-            if git cat-file -e "${candidate}^{commit}" 2>/dev/null && \
-               git merge-base --is-ancestor "${candidate}" "${SHA}"; then
-              baseline="${candidate}"
-              break
-            fi
+          for run_id in "${successful_run_ids[@]}"; do
+            mapfile -t artifact_names < <(
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+                --jq '.artifacts[] | select(.expired == false) | .name' 2>/dev/null || true
+            )
+            for artifact_name in "${artifact_names[@]}"; do
+              candidate="${artifact_name#rma135-resource-governor-android-}"
+              [[ "${candidate}" != "${artifact_name}" ]] || continue
+              [[ "${candidate}" =~ ^[0-9a-f]{40}$ && "${candidate}" != "${SHA}" ]] || continue
+              if git cat-file -e "${candidate}^{commit}" 2>/dev/null && \
+                 git merge-base --is-ancestor "${candidate}" "${SHA}"; then
+                baseline="${candidate}"
+                break 2
+              fi
+            done
           done
-
           if [[ -z "${baseline}" ]]; then
             changed="$(git diff-tree --root --no-commit-id --name-only -r "${SHA}")"
             relevant=true
