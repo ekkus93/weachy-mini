@@ -129,6 +129,30 @@ The initial release must not half-enable deferred future milestones. Level 2 dep
 
 The correct behavior for missing deferred capability is an explicit unavailable, unsupported, or deferred state. The app must not provide a hidden fallback path that treats Level 1 reprojection as depth-aware, substitutes stale camera content, labels nominal dynamics as calibrated physical behavior, or silently promotes cloud/provider paths across a privacy boundary.
 
+## Built-APK audit integration (2026-10-08)
+
+The shared production Android device-feasibility build script now removes its
+previous output APK before invoking Unity, then runs
+`scripts/verify_rma194_release_apk.py` against the newly built
+`Builds/Android/weachy-mini-device-arm64-api26.apk`. Both existing physical
+Android workflows invoke this shared script, so an absent, stale, malformed,
+or deferred AR/XR-containing APK fails before installation or artifact upload.
+The audit requires the ARM64 MuJoCo, Reachy simulation, and local-LLM runtime
+libraries and Unity data; synthetic positive/negative fixtures and build-script
+ordering contracts run in hosted CI.
+
+Implementation landed in commits `64bfe05371703f9e092954ca5f3ba4a628fb45c1`,
+`431e847b9fd7cd6cdbb6c7def5c49a7d8263798d`, and
+`bc1f384b30b8b9e0883f0e47e4a80353b6a80cd1`. On the latter exact head,
+hosted `CI` run `37882472371`, `RMA Release Review Contracts` run
+`37882472332`, and `RMA-173 Silent Failure Regressions` run `37882472297`
+passed. These prove source and fixture checks, **not** inspection of an actual
+release-candidate APK. Physical builds remain pending; earlier device workflows
+`37877892219` and `37877892200` could not pin the disconnected Android device
+(the `adb devices` inventory was empty). No RMA-194 acceptance checkbox is
+closed by this integration. The production-built APK must be inspected and
+its SHA-256 report retained once an Android build can run.
+
 ## Permanent fidelity-evidence regression contract
 
 The RMA-194 release-acceptance test now reads the model-parameter audit and

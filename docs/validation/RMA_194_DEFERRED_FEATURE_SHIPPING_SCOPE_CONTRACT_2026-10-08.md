@@ -48,3 +48,22 @@ claim physical acceptance, calibration, or a final release label.
 
 RMA-125 spoken offline interaction, RMA-184 representative-device
 measurements, and the remaining RMA-190 scenarios are unaffected.
+
+## Production APK inspection path (2026-10-08)
+
+`scripts/build_unity_android.sh device-feasibility` now deletes any previous
+APK before the Unity build and invokes `scripts/verify_rma194_release_apk.py`
+on the actual output before the caller may install or upload it. Both physical
+Android workflows use this shared build script. The verifier fails closed on
+unsafe archive paths, duplicate entries, known deferred AR/XR payloads or
+manifest declarations, missing Unity data, and missing or empty ARM64
+`libmujoco.so`, `libreachy_sim.so`, or `libreachy_llama.so`. On success it
+emits a JSON SHA-256 and entry-count report. Synthetic fixtures plus a
+build-script ordering contract are exercised by hosted CI.
+
+The source/fixture integration passed hosted CI `37882472371` on
+`bc1f384b30b8b9e0883f0e47e4a80353b6a80cd1`. This is **not** a claim
+that a real Android package was inspected or that RMA-194 release acceptance
+has passed. Earlier physical runs `37877892219` and `37877892200` failed
+before APK build because no pinned Android device was connected; subsequent
+physical runs remain unqualified until their own exact-head evidence passes.
