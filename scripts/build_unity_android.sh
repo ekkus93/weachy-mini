@@ -244,6 +244,12 @@ if [[ ! -x "${UNITY_LIMIT_WRAPPER}" ]]; then
     exit 1
 fi
 
+# Discard any previous APK before Unity runs. Otherwise an apparently successful
+# build could accidentally validate and publish a stale artifact.
+if [[ "${MODE}" == "device-feasibility" ]]; then
+    rm -f -- "${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk"
+fi
+
 "${ANDROID_LIMIT_WRAPPER}" \
     env \
     WEACHY_ANDROID_COMPILE_SDK_PACKAGE="${COMPILE_SDK_PACKAGE}" \

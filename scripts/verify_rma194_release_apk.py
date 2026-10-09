@@ -57,8 +57,14 @@ def inspect_apk(path: Path) -> dict[str, object]:
             for entry in entries
             if entry.filename.startswith("lib/arm64-v8a/") and entry.filename.endswith(".so")
         ]
-        if not native:
-            raise ValueError("APK lacks ARM64 native libraries")
+        required_native = {"libmujoco.so", "libreachy_sim.so", "libreachy_llama.so"}
+        observed_native = {Path(name).name for name in native}
+        missing_native = required_native - observed_native
+        for name in native:
+            if Path(name).name in required_native and apk.getinfo(name).file_size == 0:
+                raise ValueError(f"APK has empty required ARM64 runtime library: {name}")
+        if missing_native:
+            raise ValueError(f"APK lacks required ARM64 runtime libraries: {sorted(missing_native)}")
         if not any(name.startswith("assets/bin/data/") for name in names):
             raise ValueError("APK lacks Unity data payload")
     digest = hashlib.sha256()

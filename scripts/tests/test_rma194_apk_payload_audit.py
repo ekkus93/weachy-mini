@@ -22,7 +22,9 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
             apk = Path(directory) / "candidate.apk"
             entries = {
                 "AndroidManifest.xml": b"<manifest package='com.ekkus.weachymini'/>",
+                "lib/arm64-v8a/libmujoco.so": b"native-test-fixture",
                 "lib/arm64-v8a/libreachy_sim.so": b"native-test-fixture",
+                "lib/arm64-v8a/libreachy_llama.so": b"native-test-fixture",
                 "assets/bin/Data/globalgamemanagers": b"unity-test-fixture",
             }
             if extra:
@@ -50,7 +52,16 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
         self.assertIn('if [[ "${MODE}" == "device-feasibility" ]]; then', build)
         self.assertIn(audit_call, build)
         self.assertIn('"${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk"', build)
+        clean = 'rm -f -- "${ROOT_DIR}/Builds/Android/weachy-mini-device-arm64-api26.apk"'
+        self.assertIn(clean, build)
+        self.assertLess(build.index(clean), build.index('-executeMethod "${METHOD}"'))
         self.assertLess(build.index('-executeMethod "${METHOD}"'), build.index(audit_call))
+
+    def test_rejects_missing_production_runtime_library(self) -> None:
+        result = self.run_fixture({"lib/arm64-v8a/libreachy_sim.so": b""})
+        # An empty library is not a valid shipping runtime even if its name is present.
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("empty required ARM64 runtime", result.stderr)
 
     def test_rejects_arcore_library(self) -> None:
         result = self.run_fixture({"lib/arm64-v8a/libarcore_sdk_c.so": b"bad"})
