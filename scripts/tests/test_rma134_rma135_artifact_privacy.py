@@ -37,7 +37,10 @@ class Rma134Rma135EvidencePrivacyTests(unittest.TestCase):
                 ):
                     self.assertIn('"${REPORT_DIR}/' + old + '"', source)
                 self.assertIn('dumpsys meminfo "${PACKAGE_NAME}"', source)
-                self.assertIn('read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json"', source)
+                self.assertIn(
+                    'read_latest_checkpoint > "${REPORT_DIR}/checkpoint-latest.json"',
+                    source,
+                )
 
     def test_release_review_guards_both_physical_evidence_paths(self) -> None:
         workflow = RELEASE_REVIEW.read_text(encoding="utf-8")
