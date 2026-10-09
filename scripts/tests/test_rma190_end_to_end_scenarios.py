@@ -85,9 +85,7 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
             self.assertIn(f"- [x] {item}", section)
             self.assertNotIn(f"- [ ] {item}", section)
 
-        for item in (
-            "On-device ASR -> local LLM -> behavior -> offline TTS.",
-        ):
+        for item in ("On-device ASR -> local LLM -> behavior -> offline TTS.",):
             self.assertIn(f"- [ ] {item}", section)
             self.assertNotIn(f"- [x] {item}", section)
 
