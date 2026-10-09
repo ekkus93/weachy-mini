@@ -100,9 +100,11 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("RMA-190 expected ADB reverse fixture mapping", runner)
         self.assertIn('trap \'kill "${FIXTURE_PID}"', runner)
         self.assertIn("android\\.permission\\.INTERNET: granted=true", runner)
-        self.assertLess(runner.index("FIXTURE_PID=\"$!\""), runner.index("/health"))
-        self.assertLess(runner.index('"${ADB[@]}" install -r -g'),
-                        runner.index("android\\.permission\\.INTERNET: granted=true"))
+        self.assertLess(runner.index('FIXTURE_PID="$!"'), runner.index("/health"))
+        self.assertLess(
+            runner.index('"${ADB[@]}" install -r -g'),
+            runner.index("android\\.permission\\.INTERNET: granted=true"),
+        )
         self.assertLess(
             runner.index("build_opener(ProxyHandler({})).open("),
             runner.index('"${ADB[@]}" reverse "tcp:${FIXTURE_PORT}"'),
