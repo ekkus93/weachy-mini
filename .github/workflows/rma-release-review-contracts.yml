@@ -62,6 +62,9 @@ jobs:
       - name: Guard local-LLM physical evidence privacy
         run: python3 scripts/tests/test_rma134_rma135_artifact_privacy.py
 
+      - name: Guard RMA-190 core physical evidence privacy
+        run: python3 scripts/tests/test_rma190_end_to_end_scenarios.py
+
       - name: Run RMA-191 compatibility guard
         run: python3 scripts/tests/test_rma191_security_review.py
 

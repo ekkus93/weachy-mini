@@ -104,19 +104,10 @@ read_report()
 
 capture_diagnostics()
 {
-    "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" || true
-    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" \
-        > "${REPORT_DIR}/package.txt" || true
-    "${ADB[@]}" shell dumpsys activity activities \
-        > "${REPORT_DIR}/activity.txt" || true
-    "${ADB[@]}" shell dumpsys connectivity \
-        > "${REPORT_DIR}/connectivity.txt" || true
-    "${ADB[@]}" shell dumpsys wifi \
-        > "${REPORT_DIR}/wifi.txt" || true
-    "${ADB[@]}" shell getprop > "${REPORT_DIR}/getprop.txt" || true
+    # The structured shipping acceptance report is sufficient for an
+    # unprivileged, privacy-safe physical proof. Unrestricted device logs,
+    # system/network inventories and screenshots may contain private data.
     read_report > "${REPORT_DIR}/device-report.json" || true
-    "${ADB[@]}" exec-out screencap -p \
-        > "${REPORT_DIR}/device-screen-final.png" || true
 }
 
 cleanup()
@@ -153,12 +144,15 @@ fi
 "${ADB[@]}" shell svc wifi disable >/dev/null
 "${ADB[@]}" shell svc data disable >/dev/null
 sleep 2
-"${ADB[@]}" shell dumpsys connectivity \
-    > "${REPORT_DIR}/connectivity-before-launch.txt" || true
+# Only the two network-state flags relevant to this offline test are
+# captured; never dump connectivity details for unrelated device apps.
+{
+    printf 'wifi_on=%s\n' "$("${ADB[@]}" shell settings get global wifi_on | tr -d '\r')"
+    printf 'mobile_data=%s\n' "$("${ADB[@]}" shell settings get global mobile_data | tr -d '\r')"
+} > "${REPORT_DIR}/network-disabled.txt"
 
 "${ADB[@]}" shell mkdir -p "${REMOTE_FILES_DIR}"
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp"
-"${ADB[@]}" logcat -c
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}" \
     prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20 \

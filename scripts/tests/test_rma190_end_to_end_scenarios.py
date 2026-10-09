@@ -50,6 +50,25 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn('report["cloud_credentials_injected"] is False', runner)
         self.assertIn('report["local_model_injected"] is False', runner)
 
+    def test_core_evidence_is_private_and_scoped(self) -> None:
+        runner = read(RUNNER)
+        for forbidden in (
+            "logcat -d",
+            "logcat -c",
+            "dumpsys connectivity",
+            "dumpsys wifi",
+            "dumpsys activity activities",
+            "shell getprop >",
+            "screencap -p",
+        ):
+            self.assertNotIn(forbidden, runner)
+        self.assertIn('read_report > "${REPORT_DIR}/device-report.json"', runner)
+        self.assertIn('> "${REPORT_DIR}/network-disabled.txt"', runner)
+        self.assertIn("settings get global wifi_on", runner)
+        self.assertIn("settings get global mobile_data", runner)
+        self.assertIn('report["network_offline"] is True', runner)
+        self.assertIn('report["active_network_validated"] is False', runner)
+
     def test_dedicated_workflow_runs_core_rma190_independently(self) -> None:
         workflow = read(WORKFLOW)
         self.assertIn("name: RMA-190 Core End-to-End Android Acceptance", workflow)
