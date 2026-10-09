@@ -66,12 +66,9 @@ class Rma190VlmArtifactPrivacyTests(unittest.TestCase):
             re.compile(r'dumpsys package "\$\{PACKAGE_NAME\}".*?grep -E', re.S),
         )
 
-
     def test_diagnostic_filter_emits_bounded_lines_without_private_payloads(self) -> None:
         """Execute the shipping inline filter, not a separately copied algorithm."""
-        source = self.source.split("python3 -c '\n", 1)[1].split(
-            "\n' \"\${REPORT_DIR}/resource-transitions.txt\"", 1
-        )[0]
+        source = self.source.split("python3 -c '\n", 1)[1].split("\n' ", 1)[0]
         raw_logs = (
             "10-08 16:01:01.000 123 456 I Unity: RMA-190 stage started prompt=SECRET_PROMPT\n"
             "10-08 16:01:02.000 123 456 I Unity: RMA-181 sampled resource transition: "
