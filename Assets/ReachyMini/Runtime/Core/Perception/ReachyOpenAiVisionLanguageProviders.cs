@@ -128,11 +128,16 @@ namespace ReachyMini.Perception
                 RemoteVlmImageEncodingResult encoding;
                 try
                 {
+                    // The Unity encoder can yield while staging camera pixels.
+                    // Preserve the caller's synchronization context until the
+                    // transport has synchronously constructed its HTTP request:
+                    // Android Keystore credential retrieval uses Android JNI,
+                    // which must not be moved to an unattached worker thread.
                     encoding = await encoder.EncodeAsync(
                         new RemoteVlmImageEncodingRequest(
                             request.Frame,
                             configuration.ImagePolicy),
-                        cancellationToken).ConfigureAwait(false);
+                        cancellationToken).ConfigureAwait(true);
                 }
                 catch (OperationCanceledException)
                 {

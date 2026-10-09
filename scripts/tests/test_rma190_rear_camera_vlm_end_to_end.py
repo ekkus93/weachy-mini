@@ -225,6 +225,22 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             self.assertIn("ConfigureAwait(true)", critical_path)
             self.assertNotIn("ConfigureAwait(false)", critical_path)
 
+        # A caller must retain Unity's context *through* provider image staging.
+        # The production HTTP transport resolves Android Keystore credentials
+        # while constructing headers, before its first network await. Losing
+        # that context can send Android JNI work to an unattached pool thread.
+        provider = (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Core/Perception/"
+            / "ReachyOpenAiVisionLanguageProviders.cs"
+        ).read_text(encoding="utf-8")
+        start = provider.index("encoding = await encoder.EncodeAsync(")
+        end = provider.index("catch (OperationCanceledException)", start)
+        boundary = provider[start:end]
+        self.assertIn("cancellationToken).ConfigureAwait(true);", boundary)
+        self.assertNotIn("ConfigureAwait(false)", boundary)
+        self.assertLess(start, provider.index("transportResult = await transport.SendAsync("))
+
     def test_android_vlm_transport_diagnostics_retain_only_exception_types(self) -> None:
         source = (
             ROOT
