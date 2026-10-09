@@ -51,6 +51,23 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn('"transcript_persisted"', runner)
         self.assertIn('"raw_audio_persisted"', runner)
 
+    def test_human_speech_evidence_is_privacy_scoped(self) -> None:
+        runner = read(RUNNER)
+        source = read(APP / "ReachyRma190OfflineSpeechEndToEndAcceptance.cs")
+        self.assertNotIn("logcat -c", runner)
+        self.assertNotIn("logcat -d", runner)
+        self.assertNotIn("dumpsys audio", runner)
+        self.assertNotIn("dumpsys connectivity", runner)
+        self.assertNotIn("dumpsys package", runner)
+        self.assertIn('read_report > "${REPORT_DIR}/device-report.json"', runner)
+        self.assertIn("error = exception.GetType().Name", source)
+        self.assertNotIn("exception.ToString()", source)
+        self.assertNotIn("snapshot.Detail", source)
+        self.assertNotIn("final_detail", source)
+        self.assertIn("synthetic_speech_injected = false", source)
+        self.assertIn("transcript_persisted = false", source)
+        self.assertIn("raw_audio_persisted = false", source)
+
     def test_workflow_is_manual_physical_only(self) -> None:
         workflow = read(WORKFLOW)
         self.assertIn("workflow_dispatch:", workflow)

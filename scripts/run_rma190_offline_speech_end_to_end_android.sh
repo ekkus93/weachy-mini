@@ -143,10 +143,12 @@ read_report()
 
 capture_diagnostics()
 {
-    "${ADB[@]}" logcat -d -v threadtime > "${REPORT_DIR}/logcat.txt" || true
-    "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}"         > "${REPORT_DIR}/package.txt" || true
-    "${ADB[@]}" shell dumpsys audio         > "${REPORT_DIR}/audio.txt" || true
-    "${ADB[@]}" shell dumpsys connectivity         > "${REPORT_DIR}/connectivity.txt" || true
+    # Never persist unrestricted logcat, microphone/audio dumps, or system
+    # connectivity inventories. A real human utterance can appear in those
+    # outputs even when the app's structured report intentionally omits it.
+    # The shipping acceptance report contains only typed state and safe
+    # exception-class diagnostics; the separate network-disabled.txt and
+    # environment.txt already retain the relevant device/network evidence.
     read_report > "${REPORT_DIR}/device-report.json" || true
 }
 
@@ -237,7 +239,6 @@ if [[ "${AIRPLANE_NOW}" != "1" ||
     exit 1
 fi
 
-"${ADB[@]}" logcat -c
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20     > "${REPORT_DIR}/prepare.txt"
 "${ADB[@]}" shell am start -W     -n "${LAUNCH_COMPONENT}"     -a android.intent.action.MAIN     -c android.intent.category.LAUNCHER     --ez reachy_rma190_offline_speech_e2e_acceptance true     > "${REPORT_DIR}/launch.txt"

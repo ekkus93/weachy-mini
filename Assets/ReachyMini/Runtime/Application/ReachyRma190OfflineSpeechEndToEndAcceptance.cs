@@ -53,7 +53,6 @@ namespace ReachyMini.Validation
             public bool system_asr_fallback_used;
             public bool network_tts_fallback_used;
             public string final_interaction_state = string.Empty;
-            public string final_detail = string.Empty;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -95,7 +94,9 @@ namespace ReachyMini.Validation
                 var failure = new AcceptanceReport
                 {
                     status = "failed",
-                    error = Bound(exception.ToString(), 4096),
+                    // Never persist exception messages or stack traces: they may
+                    // include a private recognizer result or conversation text.
+                    error = exception.GetType().Name,
                     device_model = SystemInfo.deviceModel,
                     android_api_level = TryReadApiLevel(),
                 };
@@ -109,12 +110,12 @@ namespace ReachyMini.Validation
                 {
                     Debug.LogError(
                         "RMA-190 offline speech could not write its failure " +
-                        "report: " + reportException);
+                        "report (" + reportException.GetType().Name + ").");
                 }
 
                 Debug.LogError(
-                    "RMA-190 offline speech physical acceptance failed: " +
-                    exception);
+                    "RMA-190 offline speech physical acceptance failed (" +
+                    exception.GetType().Name + ").");
             }
         }
 
@@ -244,15 +245,13 @@ namespace ReachyMini.Validation
                     case ReachyInteractionState.Unavailable:
                         throw new InvalidOperationException(
                             "The shipping conversation failed closed in state " +
-                            snapshot.InteractionState + ": " +
-                            Bound(snapshot.Detail, 512));
+                            snapshot.InteractionState + ".");
                 }
 
                 if (report.observed_idle_after_speaking)
                 {
                     report.final_interaction_state =
                         snapshot.InteractionState.ToString();
-                    report.final_detail = Bound(snapshot.Detail, 512);
                     break;
                 }
 
@@ -479,18 +478,5 @@ namespace ReachyMini.Validation
             File.Move(temporary, path);
         }
 
-        private static string Bound(
-            string value,
-            int maximumCharacters)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return string.Empty;
-            }
-
-            return value.Length <= maximumCharacters
-                ? value
-                : value.Substring(0, maximumCharacters);
-        }
     }
 }
