@@ -302,7 +302,7 @@ fi
 # its configured fixture endpoint is loopback and explicitly authorized.
 # Check the installed package rather than trusting source manifest merging.
 if ! "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" |
-    grep -E "android\\.permission\\.INTERNET: granted=true" >/dev/null; then
+    grep -F "android.permission.INTERNET: granted=true" >/dev/null; then
     printf 'RMA-190 installed Android APK does not grant INTERNET permission.\n' >&2
     exit 1
 fi
