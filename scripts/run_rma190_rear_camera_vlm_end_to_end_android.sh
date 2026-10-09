@@ -177,6 +177,20 @@ if ! kill -0 "${FIXTURE_PID}" 2>/dev/null; then
     exit 1
 fi
 
+# A live process is not evidence that its local HTTP endpoint is ready.
+# Probe loopback with proxy settings disabled. No frames or credentials here.
+python3 - "${FIXTURE_PORT}" <<'PY'
+import sys
+from urllib.request import ProxyHandler, build_opener
+
+port = int(sys.argv[1])
+with build_opener(ProxyHandler({})).open(
+    f"http://127.0.0.1:{port}/health", timeout=3
+) as response:
+    if response.status != 200 or response.read(16) != b"ok\n":
+        raise SystemExit("RMA-190 local VLM fixture health check failed.")
+PY
+
 read_report()
 {
     local value
@@ -273,6 +287,10 @@ trap cleanup EXIT
 
 "${ADB[@]}" reverse "tcp:${FIXTURE_PORT}" "tcp:${FIXTURE_PORT}"
 "${ADB[@]}" reverse --list > "${REPORT_DIR}/adb-reverse.txt"
+if ! grep -Fq "tcp:${FIXTURE_PORT} tcp:${FIXTURE_PORT}" "${REPORT_DIR}/adb-reverse.txt"; then
+    printf 'RMA-190 expected ADB reverse fixture mapping was not installed.\n' >&2
+    exit 1
+fi
 
 "${ADB[@]}" install -r -g "${APK_PATH}" > "${REPORT_DIR}/install.txt"
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"

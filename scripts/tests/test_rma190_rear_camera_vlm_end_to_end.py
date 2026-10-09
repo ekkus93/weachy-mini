@@ -84,6 +84,19 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertNotIn('"request_body":', runner)
         self.assertNotIn('"authorization_value":', runner)
 
+    def test_fixture_health_and_adb_reverse_mapping_are_checked_before_launch(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        self.assertIn("from urllib.request import ProxyHandler, build_opener", runner)
+        self.assertIn("build_opener(ProxyHandler({})).open(", runner)
+        self.assertIn("/health", runner)
+        self.assertIn("response.status != 200 or response.read(16)", runner)
+        self.assertIn('grep -Fq "tcp:${FIXTURE_PORT} tcp:${FIXTURE_PORT}"', runner)
+        self.assertIn("RMA-190 expected ADB reverse fixture mapping", runner)
+        self.assertLess(runner.index("build_opener(ProxyHandler({})).open("),
+                        runner.index('"${ADB[@]}" reverse "tcp:${FIXTURE_PORT}"'))
+        self.assertLess(runner.index("RMA-190 expected ADB reverse fixture mapping"),
+                        runner.index('"${ADB[@]}" install -r -g'))
+
     def test_workflow_requires_physical_android_runner(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn(
