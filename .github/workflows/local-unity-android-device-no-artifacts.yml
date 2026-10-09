@@ -126,16 +126,6 @@ jobs:
           UNITY_TEST_RESULTS_DIR: ${{ runner.temp }}/unity-test-results
         run: bash scripts/run_unity_tests.sh
 
-      - name: Build ARM64 API-26 device APK
-        shell: bash
-        run: bash scripts/build_unity_android.sh device-feasibility
-
-      - name: Verify ARM64 API-26 device APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
-
       - name: Pin one physical Android device
         shell: bash
         env:
@@ -185,6 +175,16 @@ jobs:
           adb -s "${serial}" wait-for-device
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
+
+      - name: Build ARM64 API-26 device APK
+        shell: bash
+        run: bash scripts/build_unity_android.sh device-feasibility
+
+      - name: Verify ARM64 API-26 device APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s Builds/Android/weachy-mini-device-arm64-api26.apk
 
       - name: Install and run RMA-190 core end-to-end acceptance
         shell: bash
