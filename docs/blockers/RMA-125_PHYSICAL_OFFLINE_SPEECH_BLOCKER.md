@@ -125,3 +125,19 @@ its APK build. Source and non-device validation can continue without
 the phone. When ADB authorization/connection is restored, run the
 already documented real-user network-disabled speech acceptance sequence;
 a capability probe alone still does not close this item.
+## 2026-10-09 A54 reconnect and validation restart
+
+The operator reports that the Samsung A54 has been reconnected. This is a
+hardware-availability update, **not** an ADB-attested qualification result.
+At the exact current baseline `78014c0a6abd61cf19aa5b5bd299fcc40967ca5f`,
+`Local Unity Android Validation` run `37882634768` and its no-artifacts
+companion `37882634841` failed at physical-device pinning before the APK
+build/install and production acceptance stages. All hosted CI, release-review,
+and RMA-173 jobs at that same head passed. Ralph Bridge's existing-run rerun
+and configured validation-dispatch operations returned tool errors during the
+October 9 retry; neither unsuccessful request is evidence of a newly started
+physical-device run. The normal `master` push workflows remain the supported
+independent device-qualification path. Reinspect their exact source SHA, pinned
+ADB serial, APK-audit result, and device-acceptance artifacts after a fresh
+run before revising any checkbox. The network-disabled real-utterance and
+interruption/setup-guidance acceptance requirements above remain open.
