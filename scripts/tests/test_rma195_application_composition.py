@@ -45,7 +45,6 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
             workflow.count("ReachySettingsApplicationCompositionProvider.cs"),
         )
 
-
     def test_legacy_gesture_mapper_is_only_non_capability_fallback(self) -> None:
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         capability_branch = orchestrator.index("if (capability != null)")
