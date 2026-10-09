@@ -17,9 +17,15 @@ class Rma184DevicePreflightTests(unittest.TestCase):
 
     def test_physical_pin_runs_after_independent_unity_tests_before_apk_build(self) -> None:
         steps = self.workflow
-        self.assertLess(steps.index("- name: Run Unity tests"), steps.index("- name: Pin one physical"))
+        self.assertLess(
+            steps.index("- name: Run Unity tests"),
+            steps.index("- name: Pin one physical"),
+        )
         self.assertLess(steps.index("- name: Pin one physical"), steps.index("- name: Build ARM64"))
-        self.assertLess(steps.index("- name: Pin one physical"), steps.index("- name: Verify ARM64"))
+        self.assertLess(
+            steps.index("- name: Pin one physical"),
+            steps.index("- name: Verify ARM64"),
+        )
 
     def test_build_only_dispatch_does_not_require_connected_device(self) -> None:
         pin = self.workflow.split("- name: Pin one physical Android device", 1)[1]
