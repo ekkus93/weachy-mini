@@ -113,6 +113,35 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             "Any Unity XR package, including future packages, is deferred",
         )
 
+    def test_shipping_build_scenes_remain_fixed_and_no_deferred_components(self) -> None:
+        settings = read(ROOT / "ProjectSettings/EditorBuildSettings.asset")
+        scene_paths = [
+            line.strip().removeprefix("path: ")
+            for line in settings.splitlines()
+            if line.strip().startswith("path: ")
+        ]
+        self.assertEqual(["Assets/ReachyMini/Scenes/Bootstrap.unity"], scene_paths)
+        self.assertEqual(1, settings.count("- enabled: 1"))
+        self.assertEqual(0, settings.count("- enabled: 0"))
+        scene = read(ROOT / scene_paths[0])
+        for forbidden in (
+            "UnityEngine.XR",
+            "ARSession",
+            "ARPlaneManager",
+            "AROcclusionManager",
+            "ARAnchorManager",
+            "ARCameraManager",
+            "XRDepthSubsystem",
+            "XRMeshSubsystem",
+            "VLA",
+        ):
+            self.assertNotIn(forbidden, scene)
+
+        preparation = read(ROOT / "scripts/prepare_reachy_unity_presentation.sh")
+        self.assertIn("ReachyPresentationPipeline.BuildFromCommandLine", preparation)
+        self.assertIn("ReachyMiniPresentation.prefab", preparation)
+        self.assertIn("ReachyMiniPresentation.unity", preparation)
+
     def test_shipping_bootstrap_rejects_movable_presentation_camera(self) -> None:
         app = ROOT / "Assets/ReachyMini/Runtime/Application"
         bootstrap = read(app / "ReachyMainScreenBootstrap.cs")

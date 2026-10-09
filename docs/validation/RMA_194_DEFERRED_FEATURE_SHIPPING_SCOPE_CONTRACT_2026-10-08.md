@@ -10,7 +10,7 @@ observer camera, and VLA remain separate future milestones.
 ## Shipping-source guard
 
 The permanent `scripts/tests/test_rma194_release_acceptance.py` suite now
-checks three concrete, executable boundaries:
+checks four concrete, executable boundaries:
 
 1. The Unity package manifest does not introduce known AR Foundation, AR
    Subsystems, ARCore, ARKit, OpenXR, or XR Interaction packages.
@@ -25,6 +25,13 @@ checks three concrete, executable boundaries:
    components; incomplete or differently bound shells fail closed.
 3. A repository-wide scan of shipping Unity runtime C# rejects known AR/XR
    namespace imports and AR/depth/scene component creation/activation paths.
+
+4. The checked-in Unity build settings enable only the reviewed Bootstrap scene.
+   Its serialized YAML contains none of the known AR/XR/depth/scene/VLA
+   activation names, and the pinned presentation-generation command still
+   produces the named Reachy prefab and scene. This guards accidental
+   shipping-scene additions; generated build output still needs an actual
+   release-candidate inspection before final checkbox closure.
 
 The test runs in the standard static Python suite, including hosted CI and the
 RMA release-review contract workflow. It is a regression tripwire against
