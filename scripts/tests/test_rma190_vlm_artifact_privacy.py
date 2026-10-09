@@ -102,9 +102,7 @@ class Rma190VlmArtifactPrivacyTests(unittest.TestCase):
         self.assertIn("res.srcDirs = ['res']", gradle)
         manifest = (plugin / "AndroidManifest.xml").read_text(encoding="utf-8")
         self.assertIn("@xml/reachy_provider_network_security", manifest)
-        self.assertTrue(
-            (plugin / "res/xml/reachy_provider_network_security.xml").is_file()
-        )
+        self.assertTrue((plugin / "res/xml/reachy_provider_network_security.xml").is_file())
 
 
 if __name__ == "__main__":
