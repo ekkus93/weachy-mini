@@ -32,6 +32,20 @@ The authoritative TODO has been reconciled beyond the original 2026-09-28 status
 | Selected benchmark-backed local LLM works without blocking physics. | Open. RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically, but later RMA-134/RMA-135 workflow-run successes skipped physical acceptance because their input-change guards did not require a device rerun. | Exact-head physical validation and representative-device profile reconciliation for the release candidate. |
 | Representative-device performance report exists. | Open. RMA-184 defines low/mid/high classes and publishes measured 300-second A54 30/60 FPS default profiles from physical run `36187273962` (`docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md`). Camera, local LLM, audio, and network workloads were not exercised in those profile captures. | Qualify 1,800-second integrated long-run stability, thermal degradation order, and representative supported-device simulation/interaction targets; the A54 default-profile capture alone does not meet these gates. |
 
+## Final acceptance criteria status
+
+The three final acceptance criteria below are distinct from the individual
+RMA-194 release-checklist rows. This table is reconciled against the
+authoritative TODO by `scripts/tests/test_rma194_release_acceptance_status.py`.
+A static regression guard does not constitute an APK/release-candidate audit,
+and no unqualified criterion is promoted by this table.
+
+| RMA-194 acceptance criterion | State | Required closure evidence |
+| --- | --- | --- |
+| All incomplete items are either resolved or moved to an explicitly named later milestone with rationale. | Open. | Resolve the remaining RMA-002/125/135/184/190 evidence gaps or explicitly defer each under a named, approved milestone with rationale; reconcile the TODO. |
+| No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production. | Open. | Inspect the actual release-candidate source, shipping Bootstrap scene, Unity dependencies and built Android package at the candidate SHA; retain exact-head hosted static contracts and packaging evidence. |
+| The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence. | Open. | Select a final label only after release-candidate acceptance and match it to the model-fidelity audit, physical evidence and supported-device matrix; no calibrated claim without a named validated physical profile. |
+
 ## RMA-190 status snapshot
 
 RMA-190 remains **in progress**. The former RMA-195 composition blocker is closed.

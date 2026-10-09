@@ -26,7 +26,38 @@ def rma194_unchecked_items() -> list[str]:
     ]
 
 
+def rma194_acceptance_items() -> list[tuple[bool, str]]:
+    """Parse the separate final acceptance criteria, not the release checklist."""
+    todo = read(TODO)
+    section = todo.split("**Acceptance criteria — initial release gate**", 1)[1]
+    section = section.split("# Future milestones", 1)[0]
+    return [
+        (flag == "x", item.strip())
+        for flag, item in re.findall(
+            r"^- \[([x ])\] (.+)$", section, flags=re.MULTILINE
+        )
+    ]
+
+
 class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
+    def test_final_acceptance_status_table_matches_authoritative_todo(self) -> None:
+        status = read(STATUS)
+        acceptance = rma194_acceptance_items()
+        self.assertEqual(3, len(acceptance), "RMA-194 acceptance criteria changed; audit")
+        section = status.split("## Final acceptance criteria status", 1)[1]
+        section = section.split("\n## ", 1)[0]
+        rows = re.findall(
+            r"^\| (.+?) \| (Open|Accepted)\. \|", section, flags=re.MULTILINE
+        )
+        expected = [
+            (item, "Accepted" if accepted else "Open")
+            for accepted, item in acceptance
+        ]
+        self.assertEqual(expected, rows)
+        if any(not accepted for accepted, _ in acceptance):
+            self.assertIn("Release status: not accepted", status)
+            self.assertIn("No final release tag", status)
+
     def test_every_open_rma194_release_item_is_mapped(self) -> None:
         status = read(STATUS)
         missing = [item for item in rma194_unchecked_items() if item not in status]
