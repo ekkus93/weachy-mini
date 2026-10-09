@@ -214,17 +214,24 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         with:
           script: |
-            const relevant = process.env.RELEVANT === "true";
+            const scope = process.env.RELEVANT;
+            const relevant = scope === "true";
             const succeeded = process.env.JOB_STATUS === "success";
+            // Skipping all physical steps cannot qualify this source SHA.
+            const finalState = scope !== "true" && scope !== "false"
+              ? "error"
+              : !relevant ? "pending" : succeeded ? "success" : "failure";
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.payload.workflow_run.head_sha,
-              state: succeeded ? "success" : "failure",
+              state: finalState,
               context: "RMA-134 Local LLM Android",
-              description: relevant
-                ? (succeeded
+              description: scope !== "true" && scope !== "false"
+                ? "Source-scope check unavailable: physical evidence missing"
+                : !relevant
+                  ? "Physical acceptance skipped; exact-head evidence pending"
+                  : succeeded
                     ? "Physical local LLM provider acceptance passed"
-                    : "Physical local LLM provider acceptance failed")
-                : "No RMA-134 physical inputs changed; acceptance not required"
+                    : "Physical local LLM provider acceptance failed"
             });
