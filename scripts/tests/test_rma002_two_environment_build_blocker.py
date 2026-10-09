@@ -15,17 +15,11 @@ class Rma002TwoEnvironmentBuildBlockerTests(unittest.TestCase):
     def test_todo_keeps_two_environment_acceptance_open(self) -> None:
         todo = TODO.read_text(encoding="utf-8")
         self.assertIn(
-            (
-                "- [ ] Two clean developer environments can build the same "
-                "minimal Android application."
-            ),
+            "- [ ] Two clean developer environments can build the same minimal Android application.",
             todo,
         )
         self.assertNotIn(
-            (
-                "- [x] Two clean developer environments can build the same "
-                "minimal Android application."
-            ),
+            "- [x] Two clean developer environments can build the same minimal Android application.",
             todo,
         )
 
