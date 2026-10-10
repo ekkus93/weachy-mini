@@ -266,7 +266,8 @@ namespace ReachyMini.Performance
             double initialStateLagSeconds,
             double finalStateLagSeconds,
             double localLlmDecodeTokensPerSecond,
-            bool thermalDegradationOrderValid)
+            bool thermalDegradationOrderValid,
+            int minimumAppliedRenderFramesPerSecond = 0)
         {
             RequireFiniteNonNegative(durationSeconds, nameof(durationSeconds));
             RequireFiniteNonNegative(renderP95Milliseconds, nameof(renderP95Milliseconds));
@@ -284,6 +285,12 @@ namespace ReachyMini.Performance
             RequireFiniteNonNegative(
                 localLlmDecodeTokensPerSecond,
                 nameof(localLlmDecodeTokensPerSecond));
+            if (minimumAppliedRenderFramesPerSecond < 0 ||
+                minimumAppliedRenderFramesPerSecond > 240)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(minimumAppliedRenderFramesPerSecond));
+            }
 
             DurationSeconds = durationSeconds;
             RenderP95Milliseconds = renderP95Milliseconds;
@@ -294,6 +301,8 @@ namespace ReachyMini.Performance
             FinalStateLagSeconds = finalStateLagSeconds;
             LocalLlmDecodeTokensPerSecond = localLlmDecodeTokensPerSecond;
             ThermalDegradationOrderValid = thermalDegradationOrderValid;
+            MinimumAppliedRenderFramesPerSecond =
+                minimumAppliedRenderFramesPerSecond;
         }
 
         public double DurationSeconds { get; }
@@ -305,6 +314,7 @@ namespace ReachyMini.Performance
         public double FinalStateLagSeconds { get; }
         public double LocalLlmDecodeTokensPerSecond { get; }
         public bool ThermalDegradationOrderValid { get; }
+        public int MinimumAppliedRenderFramesPerSecond { get; }
 
         private static void RequireFiniteNonNegative(double value, string name)
         {
@@ -362,7 +372,28 @@ namespace ReachyMini.Performance
             {
                 failures.Add("required_physical_measurements_missing");
             }
-            if (observation.RenderP95Milliseconds > profile.MaximumRenderP95Milliseconds)
+            int renderBudgetFramesPerSecond =
+                profile.TargetFramesPerSecond;
+            if (observation.MinimumAppliedRenderFramesPerSecond > 0)
+            {
+                int observedTarget =
+                    observation.MinimumAppliedRenderFramesPerSecond;
+                if (!observation.ThermalDegradationOrderValid ||
+                    !IsAllowedAppliedRenderTarget(
+                        profile.TargetFramesPerSecond,
+                        observedTarget))
+                {
+                    failures.Add("degraded_render_budget_invalid");
+                }
+                else
+                {
+                    renderBudgetFramesPerSecond = observedTarget;
+                }
+            }
+            double maximumRenderP95Milliseconds =
+                (1000.0 / renderBudgetFramesPerSecond) * 1.15;
+            if (observation.RenderP95Milliseconds >
+                maximumRenderP95Milliseconds)
             {
                 failures.Add("render_p95_exceeds_profile_budget");
             }
@@ -401,6 +432,21 @@ namespace ReachyMini.Performance
             return new ReachyRepresentativeDeviceQualificationResult(
                 performanceClass,
                 failures);
+        }
+
+        private static bool IsAllowedAppliedRenderTarget(
+            int nominalFramesPerSecond,
+            int appliedFramesPerSecond)
+        {
+            if (appliedFramesPerSecond == nominalFramesPerSecond ||
+                appliedFramesPerSecond == 15)
+            {
+                return true;
+            }
+            return nominalFramesPerSecond == 30
+                ? appliedFramesPerSecond == 20
+                : nominalFramesPerSecond == 60 &&
+                    appliedFramesPerSecond == 30;
         }
     }
 }

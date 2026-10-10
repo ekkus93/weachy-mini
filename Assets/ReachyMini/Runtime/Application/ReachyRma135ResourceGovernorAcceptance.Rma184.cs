@@ -114,6 +114,8 @@ namespace ReachyMini.Validation
                 double maximumDecodeTokensPerSecond = 0.0;
                 ReachyPriorityDegradationLevel maximumObservedLevel =
                     ReachyPriorityDegradationLevel.Nominal;
+                int minimumAppliedRenderFramesPerSecond =
+                    profile.TargetFramesPerSecond;
                 bool thermalOrderValid = true;
 
                 while (Time.realtimeSinceStartupAsDouble < deadline)
@@ -125,6 +127,9 @@ namespace ReachyMini.Validation
                     if (decision != null && sampledSignals != null)
                     {
                         ++decisionSamples;
+                        minimumAppliedRenderFramesPerSecond = Math.Min(
+                            minimumAppliedRenderFramesPerSecond,
+                            decision.TargetRenderFps);
                         if (decision.Level > maximumObservedLevel)
                         {
                             maximumObservedLevel = decision.Level;
@@ -276,7 +281,8 @@ namespace ReachyMini.Validation
                         initialTiming.AccumulatedLagSeconds,
                         finalTiming.AccumulatedLagSeconds,
                         decodeFloor,
-                        physicalThermalOrderValid);
+                        physicalThermalOrderValid,
+                        minimumAppliedRenderFramesPerSecond);
                 ReachyRepresentativeDeviceQualificationResult
                     qualification =
                         ReachyRepresentativeDeviceQualificationPolicy
@@ -299,6 +305,11 @@ namespace ReachyMini.Validation
                         performanceClass.ToString(),
                     target_fps =
                         profile.TargetFramesPerSecond,
+                    minimum_applied_render_fps =
+                        minimumAppliedRenderFramesPerSecond,
+                    qualified_render_p95_budget_ms =
+                        (1000.0 /
+                         minimumAppliedRenderFramesPerSecond) * 1.15,
                     requested_duration_seconds =
                         requestedSeconds,
                     measured_duration_seconds =
@@ -691,6 +702,8 @@ namespace ReachyMini.Validation
         public string operating_system = string.Empty;
         public string performance_class = string.Empty;
         public int target_fps;
+        public int minimum_applied_render_fps;
+        public double qualified_render_p95_budget_ms;
         public int requested_duration_seconds;
         public double measured_duration_seconds;
         public double render_p95_ms;

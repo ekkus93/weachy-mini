@@ -460,9 +460,20 @@ assert report["qualification_passed"] is True, report
 assert report["qualification_failures"] == "", report
 assert report["performance_class"] == class_names[performance_class], report
 assert report["target_fps"] == target_fps[performance_class], report
+minimum_applied_fps = report["minimum_applied_render_fps"]
+allowed_targets = {30: {30, 20, 15}, 60: {60, 30, 15}}
+assert minimum_applied_fps in allowed_targets[report["target_fps"]], report
+expected_render_budget = (1000.0 / minimum_applied_fps) * 1.15
+assert math.isclose(
+    report["qualified_render_p95_budget_ms"],
+    expected_render_budget,
+    rel_tol=1e-9,
+    abs_tol=1e-9,
+), report
 assert report["requested_duration_seconds"] == requested, report
 assert report["measured_duration_seconds"] >= requested, report
 assert math.isfinite(report["render_p95_ms"]) and report["render_p95_ms"] > 0.0, report
+assert report["render_p95_ms"] <= report["qualified_render_p95_budget_ms"], report
 assert math.isfinite(report["physics_p95_ms"]) and 0.0 < report["physics_p95_ms"] <= 2.0, report
 assert report["initial_unity_allocated_memory_bytes"] > 0, report
 assert report["final_unity_allocated_memory_bytes"] > 0, report

@@ -2881,7 +2881,10 @@ are exposed read-only for qualification so the run can bind thermal input to the
 actual applied decision. The physical workflow requests a 1,800-second mid-class
 run, captures a fresh support-policy probe, verifies render/physics p95, memory
 growth, authoritative state-lag growth, local-LLM decode throughput, and observed
-thermal-degradation ordering, and can rebuild the exact checked-out SHA when
+thermal-degradation ordering. Render p95 is judged against the lowest actually
+applied, policy-valid RMA-181 frame target when thermal degradation is observed;
+physics, memory, state-lag, LLM-throughput, and degradation-order limits are not
+relaxed. The lane can rebuild the exact checked-out SHA when
 GitHub artifact transport is unavailable. Artifact upload is non-blocking; the
 device acceptance itself remains blocking. These three criteria intentionally
 remain unchecked until that exact-head physical run passes; implementation/static

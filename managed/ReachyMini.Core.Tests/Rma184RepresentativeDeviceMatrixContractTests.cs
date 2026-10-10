@@ -13,6 +13,8 @@ namespace ReachyMini.Core.Tests
             PublishedProfilesAreDeterministic();
             SupportPolicySeparatesCoreAndFullOfflineSupport();
             LongRunQualificationAcceptsBoundedRepresentativeEvidence();
+            LongRunQualificationAcceptsValidatedThermalRenderReduction();
+            LongRunQualificationRejectsUnvalidatedRenderReduction();
             LongRunQualificationRejectsAccumulatingPressure();
             LongRunQualificationRejectsMissingPhysicalSignals();
         }
@@ -94,6 +96,46 @@ namespace ReachyMini.Core.Tests
                         localLlmDecodeTokensPerSecond: 2.0,
                         thermalDegradationOrderValid: true));
             Equal(true, result.Passed, "bounded high-device evidence");
+        }
+
+        private static void LongRunQualificationAcceptsValidatedThermalRenderReduction()
+        {
+            ReachyRepresentativeDeviceQualificationResult result =
+                ReachyRepresentativeDeviceQualificationPolicy.Evaluate(
+                    ReachyAndroidPerformanceClass.Mid,
+                    new ReachyRepresentativeDeviceQualificationObservation(
+                        durationSeconds: 1800.0,
+                        renderP95Milliseconds: 70.0,
+                        physicsP95Milliseconds: 1.5,
+                        initialUnityAllocatedMemoryBytes: 700L * 1024L * 1024L,
+                        finalUnityAllocatedMemoryBytes: 760L * 1024L * 1024L,
+                        initialStateLagSeconds: 0.001,
+                        finalStateLagSeconds: 0.0015,
+                        localLlmDecodeTokensPerSecond: 2.0,
+                        thermalDegradationOrderValid: true,
+                        minimumAppliedRenderFramesPerSecond: 15));
+            Equal(true, result.Passed, "validated thermal render reduction");
+        }
+
+        private static void LongRunQualificationRejectsUnvalidatedRenderReduction()
+        {
+            ReachyRepresentativeDeviceQualificationResult result =
+                ReachyRepresentativeDeviceQualificationPolicy.Evaluate(
+                    ReachyAndroidPerformanceClass.Mid,
+                    new ReachyRepresentativeDeviceQualificationObservation(
+                        durationSeconds: 1800.0,
+                        renderP95Milliseconds: 70.0,
+                        physicsP95Milliseconds: 1.5,
+                        initialUnityAllocatedMemoryBytes: 700L * 1024L * 1024L,
+                        finalUnityAllocatedMemoryBytes: 760L * 1024L * 1024L,
+                        initialStateLagSeconds: 0.001,
+                        finalStateLagSeconds: 0.0015,
+                        localLlmDecodeTokensPerSecond: 2.0,
+                        thermalDegradationOrderValid: false,
+                        minimumAppliedRenderFramesPerSecond: 15));
+            Equal(false, result.Passed, "unvalidated render reduction");
+            Equal(true, result.Failures.Contains("degraded_render_budget_invalid"),
+                "unvalidated adaptive render budget diagnostic");
         }
 
         private static void LongRunQualificationRejectsAccumulatingPressure()

@@ -128,6 +128,14 @@ jobs:
           printf 'host=%s\n' "$(hostname)"
           printf 'workspace=%s\n' "${GITHUB_WORKSPACE}"
 
+      - name: Run RMA-194 deferred-feature and fidelity source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma194_deferred_feature_and_fidelity_gate.py
+          python3 scripts/tests/test_rma194_release_acceptance.py
+          python3 scripts/tests/test_rma194_release_acceptance_status.py
+
       - name: Resolve local Unity and Android installations
         shell: bash
         run: |

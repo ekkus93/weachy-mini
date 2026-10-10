@@ -83,6 +83,8 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "explicit_on_device_asr_requires_api_31",
             "long_run_shorter_than_1800_seconds",
             "render_p95_exceeds_profile_budget",
+            "degraded_render_budget_invalid",
+            "MinimumAppliedRenderFramesPerSecond",
             "physics_p95_exceeds_2ms_timestep",
             "unity_memory_growth_exceeds_profile_budget",
             "simulation_state_lag_accumulates",
@@ -204,6 +206,8 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "initial_state_lag_seconds",
             "final_state_lag_seconds",
             "thermal_degradation_order_valid",
+            "minimum_applied_render_fps",
+            "qualified_render_p95_budget_ms",
             "report_contains_prompt_or_response_content = false",
         ):
             self.assertIn(token, soak)
@@ -246,6 +250,8 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "reachy_rma184_performance_class",
             "rma184-representative-device-long-run.json",
             'report["measured_duration_seconds"] >= requested',
+            'minimum_applied_fps = report["minimum_applied_render_fps"]',
+            'report["render_p95_ms"] <= report["qualified_render_p95_budget_ms"]',
             'report["state_lag_growth_seconds"] <= 0.002',
             'report["minimum_local_llm_decode_tokens_per_second"] >= 1.0',
             'report["thermal_degradation_order_valid"] is True',
