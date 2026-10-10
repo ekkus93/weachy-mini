@@ -200,7 +200,6 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "ReachyProductionAuthoritativeRuntime",
             "ReachyPriorityDegradationRuntimeDriver",
             "degradation.CurrentSignals",
-            "ReachyRepresentativeDeviceQualificationPolicy.Evaluate",
             "successful_local_llm_generations",
             "minimum_local_llm_decode_tokens_per_second",
             "initial_state_lag_seconds",
@@ -208,21 +207,18 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "thermal_degradation_order_valid",
             "minimum_applied_render_fps",
             "qualified_render_p95_budget_ms",
-            "report_contains_prompt_or_response_content = false",
         ):
             self.assertIn(token, soak)
-        self.assertIn(
-            "thermalPressureSamples > 0 && nonNominalDecisionSamples > 0",
-            soak,
-        )
-        self.assertIn(
-            "LocalLlmGovernedGenerationStatus.ResourceSuspendedBeforeStart",
-            soak,
-        )
-        self.assertIn(
-            "LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration",
-            soak,
-        )
+        # C# formatter may wrap qualified calls, enumerators and assignments
+        # across lines. Assert the semantic tokens without coupling to layout.
+        for pattern in (
+            r"ReachyRepresentativeDeviceQualificationPolicy\s*\.\s*Evaluate\s*\(",
+            r"thermalPressureSamples\s*>\s*0\s*&&\s*nonNominalDecisionSamples\s*>\s*0",
+            r"LocalLlmGovernedGenerationStatus\s*\.\s*ResourceSuspendedBeforeStart",
+            r"LocalLlmGovernedGenerationStatus\s*\.\s*ResourceCancelledDuringGeneration",
+            r"report_contains_prompt_or_response_content\s*=\s*false",
+        ):
+            self.assertRegex(soak, pattern)
         self.assertNotIn("ReachySimSession.Create", soak)
 
         driver = DEGRADATION_DRIVER.read_text(encoding="utf-8")
@@ -335,7 +331,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "run_rma184_device_probe_android.sh",
             "Run physical RMA-135 and RMA-184 long-run acceptance",
             "RMA184_LONG_RUN_SECONDS: '1800'",
-            "RMA184_PERFORMANCE_CLASS: '1'",
+            "RMA184_PERFORMANCE_CLASS: 'auto'",
             "RMA135_ACCEPTANCE_TIMEOUT_SECONDS: '3300'",
             "Upload RMA-135/RMA-184 physical evidence",
             "continue-on-error: true",
