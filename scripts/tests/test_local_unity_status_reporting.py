@@ -38,8 +38,34 @@ class LocalUnityStatusReportingContracts(unittest.TestCase):
                 self.assertIn("curl --fail-with-body", block)
                 self.assertIn("Commit-status publication failed", block)
 
-        self.assertIn("continue-on-error: true", workflow)
-        self.assertIn("Upload RMA-090 camera discovery evidence", workflow)
+        upload_blocks = [
+            block
+            for block in workflow.split("\n      - name: ")[1:]
+            if "uses: actions/upload-artifact@v4" in block
+        ]
+        self.assertGreaterEqual(len(upload_blocks), 10)
+        for block in upload_blocks:
+            with self.subTest(step=block.splitlines()[0]):
+                self.assertIn("continue-on-error: true", block)
+
+        for name in (
+            "Pin one physical Android device",
+            "Build ARM64 API-26 device APK",
+            "Verify ARM64 API-26 device APK",
+            "Install and run RMA-090 camera discovery acceptance",
+            "Install and run RMA-091 camera acquisition acceptance",
+            "Install and run RMA-092 camera texture acceptance",
+            "Install and run RMA-111 lightweight tracking acceptance",
+            "Install and run RMA-154 visual-servo acceptance",
+            "Install and run RMA-022 lifecycle acceptance",
+            "Install and run RMA-195 application-composition acceptance",
+            "Install and run authoritative rendering acceptance",
+        ):
+            with self.subTest(acceptance=name):
+                self.assertNotIn(
+                    "continue-on-error: true",
+                    workflow_step(workflow, name),
+                )
 
 
 if __name__ == "__main__":

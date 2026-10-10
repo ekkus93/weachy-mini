@@ -208,6 +208,7 @@ jobs:
 
       - name: Upload RMA-190 core end-to-end evidence
         if: ${{ always() && steps.rma190_core.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma190-core-end-to-end-report-${{ github.sha }}

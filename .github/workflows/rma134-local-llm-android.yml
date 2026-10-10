@@ -147,7 +147,7 @@ jobs:
           printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
           printf 'pinned_android_serial=%s\n' "${serial}"
 
-      - name: Download exact-SHA Unity Android artifacts
+      - name: Acquire exact-SHA Unity Android APK
         if: steps.scope.outputs.relevant == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -155,19 +155,72 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/rma134-source-run
-          mkdir -p artifacts/rma134-source-run
-          gh run download "${SOURCE_RUN_ID}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --dir artifacts/rma134-source-run
-          mapfile -t apks < <(find artifacts/rma134-source-run -type f -name 'weachy-mini-device-arm64-api26.apk' -print)
-          if (( ${#apks[@]} != 1 )); then
-            printf 'Expected exactly one exact-SHA ARM64/API-26 APK artifact; found %s.\n' "${#apks[@]}" >&2
-            find artifacts/rma134-source-run -maxdepth 4 -type f -print >&2 || true
-            exit 1
+          rm -rf artifacts/rma134-source-run artifacts/android
+          mkdir -p artifacts/rma134-source-run artifacts/android
+
+          download_ok=false
+          if gh run download "${SOURCE_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --dir artifacts/rma134-source-run; then
+            mapfile -t apks < <(
+              find artifacts/rma134-source-run -type f \
+                -name 'weachy-mini-device-arm64-api26.apk' -print
+            )
+            if (( ${#apks[@]} == 1 )); then
+              cp -- "${apks[0]}" artifacts/android/weachy-mini-device-arm64-api26.apk
+              download_ok=true
+            elif (( ${#apks[@]} > 1 )); then
+              printf 'Refusing ambiguous source-run APK inventory: %s files.\n' "${#apks[@]}" >&2
+              exit 1
+            fi
           fi
-          mkdir -p artifacts/android
-          cp -- "${apks[0]}" artifacts/android/weachy-mini-device-arm64-api26.apk
+
+          if [[ "${download_ok}" != true ]]; then
+            printf '::warning title=Exact-SHA APK artifact unavailable::Rebuilding the checked-out exact source SHA locally because artifact transport is unavailable.\n'
+            project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+            [[ -n "${project_version}" ]] || {
+              printf '%s\n' 'Could not read the pinned Unity version.' >&2
+              exit 1
+            }
+            unity_editor="${UNITY_EDITOR:-}"
+            if [[ -n "${unity_editor}" && ! -x "${unity_editor}" ]]; then
+              printf 'Configured UNITY_EDITOR is not executable: %s\n' "${unity_editor}" >&2
+              exit 1
+            fi
+            if [[ -z "${unity_editor}" ]]; then
+              for candidate in \
+                "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+                "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
+                "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+                "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+                "/opt/unity/editors/${project_version}/Editor/Unity"; do
+                if [[ -x "${candidate}" ]]; then
+                  unity_editor="${candidate}"
+                  break
+                fi
+              done
+            fi
+            [[ -n "${unity_editor}" && -x "${unity_editor}" ]] || {
+              printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+              exit 1
+            }
+            android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+            [[ -x "${android_sdk_root}/platform-tools/adb" ]] || {
+              printf 'Android SDK platform-tools unavailable under %s.\n' "${android_sdk_root}" >&2
+              exit 1
+            }
+            export UNITY_EDITOR="${unity_editor}"
+            export ANDROID_SDK_ROOT="${android_sdk_root}"
+            export ANDROID_HOME="${android_sdk_root}"
+            export REACHY_UNITY_WORK_ROOT="${RUNNER_TEMP}/reachy-unity-presentation"
+            bash scripts/prepare_reachy_unity_presentation.sh
+            bash scripts/stage_reachy_unity_android_runtime.sh
+            bash scripts/build_unity_android.sh device-feasibility
+            test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+            cp -- Builds/Android/weachy-mini-device-arm64-api26.apk \
+              artifacts/android/weachy-mini-device-arm64-api26.apk
+          fi
+
           sha256sum artifacts/android/weachy-mini-device-arm64-api26.apk \
             > artifacts/android/weachy-mini-device-arm64-api26.apk.sha256
 
@@ -199,6 +252,7 @@ jobs:
 
       - name: Upload RMA-134 physical evidence
         if: always() && steps.scope.outputs.relevant == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma134-local-llm-android-${{ github.event.workflow_run.head_sha }}

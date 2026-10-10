@@ -23,13 +23,13 @@ The authoritative TODO has been reconciled beyond the original 2026-09-28 status
 | No silent provider, privacy, calibration, or kinematic fallbacks remain. | Checked after exact-head RMA-173 and release-review gates proved fail-closed provider/camera/solver/calibration behavior and security/privacy boundaries. | New optional provider, camera, calibration, or animation paths must preserve explicit unavailable/degraded/faulted outcomes. |
 | Diagnostics identify active fidelity, providers, and failures. | Checked with RMA-170/RMA-171/RMA-172 diagnostics and release-review contracts. | Release candidates still need an audit that active runtime state is what diagnostics report. |
 | Licenses and attribution are complete. | Checked after RMA-012/RMA-192 reconciled the repository inventory, in-app notices, Reachy attribution/share-alike obligations, no-endorsement disclosure, and selected-model presentation. | Final packaging must still include the reconciled notice set; detailed rows are not reconstructed from redacted output, and partial reconstruction from redacted inventory output is not acceptable. |
+| Selected benchmark-backed local LLM works without blocking physics. | Checked from exact-head physical RMA-134 run `37731000395` on `33332e81498dc174181cc00fce916f68bb14f9a3`: the shipping harness verified the selected Qwen3 0.6B artifact, offline generation, and finite physics p95 at or below the 2 ms budget. | This narrow row does not claim sustained thermal or 1,800-second representative-device performance; those remain RMA-184 gates. |
 
 ## Current unchecked RMA-194 rows
 
 | RMA-194 item | Current evidence/status | Blocker before checkbox closure |
 | --- | --- | --- |
 | Android on-device ASR and offline TTS work where installed. | Open. RMA-121/RMA-123/RMA-125 source and provider contracts exist; the full spoken-turn proof remains open. | Non-fabricated physical ASR -> local LLM -> behavior -> offline TTS evidence with suitable installed Android on-device ASR and exact offline TTS services. |
-| Selected benchmark-backed local LLM works without blocking physics. | Open. RMA-133 selected Qwen3-0.6B; RMA-134/RMA-135 local runtime/governor evidence exists historically, but later RMA-134/RMA-135 workflow-run successes skipped physical acceptance because their input-change guards did not require a device rerun. | Exact-head physical validation and representative-device profile reconciliation for the release candidate. |
 | Representative-device performance report exists. | Open. RMA-184 defines low/mid/high classes and publishes measured 300-second A54 30/60 FPS default profiles from physical run `36187273962` (`docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2026-09-25.md`). Camera, local LLM, audio, and network workloads were not exercised in those profile captures. | Qualify 1,800-second integrated long-run stability, thermal degradation order, and representative supported-device simulation/interaction targets; the A54 default-profile capture alone does not meet these gates. |
 
 ## Final acceptance criteria status
@@ -42,7 +42,7 @@ and no unqualified criterion is promoted by this table.
 
 | RMA-194 acceptance criterion | State | Required closure evidence |
 | --- | --- | --- |
-| All incomplete items are either resolved or moved to an explicitly named later milestone with rationale. | Open. | Resolve the remaining RMA-002/125/135/184/190 evidence gaps or explicitly defer each under a named, approved milestone with rationale; reconcile the TODO. |
+| All incomplete items are either resolved or moved to an explicitly named later milestone with rationale. | Open. | Resolve the remaining RMA-002/125/184/190 evidence gaps or explicitly defer each under a named, approved milestone with rationale; reconcile the TODO. |
 | No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production. | Open. | Inspect the actual release-candidate source, shipping Bootstrap scene, Unity dependencies and built Android package at the candidate SHA; retain exact-head hosted static contracts and packaging evidence. |
 | The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence. | Open. | Select a final label only after release-candidate acceptance and match it to the model-fidelity audit, physical evidence and supported-device matrix; no calibrated claim without a named validated physical profile. |
 
@@ -109,10 +109,9 @@ The current release gate remains blocked by these evidence gaps:
 
 1. RMA-002 still requires second independently provisioned Unity/Android build evidence.
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
-3. RMA-134 / RMA-135 / RMA-194: local-LLM physical timing/governor evidence must be current for the release-candidate head.
-4. RMA-184 has published measured A54 30/60 FPS default profiles (physical run `36187273962`); the 1,800-second integrated long-run, thermal-order, and representative-device supported-target acceptance remain open. The measured profiles do not cover camera/LLM/audio/network integration.
-5. RMA-190: rear-camera/VLM physical shipping-path acceptance is closed by run `37994546094`; the remaining open scenario is the real offline ASR -> local LLM -> behavior -> TTS spoken turn (also required by RMA-125).
-6. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
+3. RMA-184 has published measured A54 30/60 FPS default profiles (physical run `36187273962`); the 1,800-second integrated long-run, thermal-order, and representative-device supported-target acceptance remain open. The measured profiles do not cover camera/LLM/audio/network integration.
+4. RMA-190: rear-camera/VLM physical shipping-path acceptance is closed by run `37994546094`; the remaining open scenario is the real offline ASR -> local LLM -> behavior -> TTS spoken turn (also required by RMA-125).
+5. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
 
 Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
 

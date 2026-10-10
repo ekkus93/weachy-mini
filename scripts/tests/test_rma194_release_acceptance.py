@@ -36,7 +36,6 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         todo = read(TODO)
         for open_item in (
             "- [ ] Android on-device ASR and offline TTS work where installed.",
-            "- [ ] Selected benchmark-backed local LLM works without blocking physics.",
             "- [ ] Representative-device performance report exists.",
             "- [ ] All incomplete items are either resolved or moved to an "
             "explicitly named later milestone with rationale.",
@@ -55,6 +54,7 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             "- [x] MuJoCo is authoritative and stable.",
             "- [x] Full closed-loop Reachy model is rendered from native state.",
             "- [x] Level 1 camera reprojection passes reference tests.",
+            "- [x] Selected benchmark-backed local LLM works without blocking physics.",
             "- [x] OpenAI and compatible providers are independently configurable.",
             "- [x] Behavior planner validates all AI output.",
             "- [x] No silent provider, privacy, calibration, or kinematic fallbacks remain.",

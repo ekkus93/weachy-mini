@@ -2389,8 +2389,18 @@ acceptance criteria remain genuinely open per the thermal finding below, not sta
 
 **Acceptance criteria — local LLM portion**
 
-- [ ] The selected local model loads and produces a validated intent offline on a representative phone.
-- [ ] Physics timing remains within the defined budget during generation.
+- [x] The selected local model loads and produces a validated intent offline on a representative phone.
+- [x] Physics timing remains within the defined budget during generation.
+
+**Physical acceptance reconciliation (2026-10-09):** exact-head RMA-134 physical
+run `37731000395` (job `113159851173`) passed on
+`33332e81498dc174181cc00fce916f68bb14f9a3`. The shipping acceptance runner
+verified the selected Qwen3 0.6B Q4_K_M artifact and produced validated offline
+intent generations while authoritative physics recorded finite p95 timing at or
+below the 2 ms budget. See
+`docs/validation/RMA_135_CURRENT_HEAD_LOCAL_LLM_PHYSICS_EVIDENCE_2026-10-08.md`.
+This closes these two narrow RMA-135 criteria only; sustained thermal/long-run
+representative-device qualification remains owned by RMA-184.
 - [x] Model failure is recoverable without restarting the app -- `LocalLlmProvider.ReloadAsync`
       performs in-process unload/reload recovery without an app restart
       (`ReachyLocalLlmProvider.Core.cs:131-277`), proven by
@@ -2398,8 +2408,11 @@ acceptance criteria remain genuinely open per the thermal finding below, not sta
       (fault -> explicit reload -> successful second generation) and
       `Program.ReloadAndDisposeTests.cs`.
 
-**Open finding (2026-08-17)** — physical acceptance on the SM-A546E (mid class) is
-currently blocked by a genuine device thermal characteristic, not a governor bug: the
+**Sustained thermal finding (2026-08-17)** — the SM-A546E (mid class) remains
+limited under sustained combined physics + local-LLM load by a genuine device
+thermal characteristic, not a governor bug. This does not reopen the two narrow
+RMA-135 acceptance criteria above; sustained representative-device thermal and
+long-run qualification remains an RMA-184/RMA-194 performance gate: the
 combined MuJoCo physics + local-LLM workload alone drives the SoC into light thermal
 throttling within roughly 15 seconds, even from a measured-cool start, so post-recovery
 generation retries keep hitting real, sustained deadline misses. See
@@ -3509,7 +3522,7 @@ release guide to cover every topic below and remain linked from the README.
 - [x] Full closed-loop Reachy model is rendered from native state.
 - [x] Level 1 camera reprojection passes reference tests.
 - [ ] Android on-device ASR and offline TTS work where installed.
-- [ ] Selected benchmark-backed local LLM works without blocking physics.
+- [x] Selected benchmark-backed local LLM works without blocking physics.
 - [x] OpenAI and compatible providers are independently configurable.
 - [x] Behavior planner validates all AI output.
 - [x] No silent provider, privacy, calibration, or kinematic fallbacks remain.
@@ -3517,7 +3530,7 @@ release guide to cover every topic below and remain linked from the README.
 - [ ] Representative-device performance report exists.
 - [x] Licenses and attribution are complete.
 
-**Release-gate reconciliation (2026-10-07):** the MuJoCo-authority (`RMA-032/060-065`), closed-loop native-state render (`RMA-051/052`), and Level 1 reprojection (`docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md`) gates retain their earlier evidence. Offline launch is now physically accepted by RMA-190 tranche 1. Independent OpenAI-compatible configuration is established by RMA-140 through RMA-143; behavior-intent validation is enforced by RMA-150/RMA-151 and the shipping RMA-195 composition; the permanent RMA-173 silent-failure workflow proves fail-closed provider/camera/solver/calibration behavior; diagnostics are implemented and exercised by the provider/governor/application contracts; and RMA-012/RMA-192 plus the release-review contracts reconcile licenses and attribution. Exact-head release-review and RMA-173 runs `37667597203` and `37667597119` passed on `0ba951e80b6bb1d0259fee2f682d406ae6f38d23`. The remaining unchecked release items are genuine physical/performance gaps: RMA-125 offline speech, RMA-135 local-LLM physics timing, and RMA-184 representative-device performance.
+**Release-gate reconciliation (2026-10-07):** the MuJoCo-authority (`RMA-032/060-065`), closed-loop native-state render (`RMA-051/052`), and Level 1 reprojection (`docs/validation/RMA_104_REPROJECTION_TEST_SUITE_VALIDATION_2026-08-05.md`) gates retain their earlier evidence. Offline launch is now physically accepted by RMA-190 tranche 1. Independent OpenAI-compatible configuration is established by RMA-140 through RMA-143; behavior-intent validation is enforced by RMA-150/RMA-151 and the shipping RMA-195 composition; the permanent RMA-173 silent-failure workflow proves fail-closed provider/camera/solver/calibration behavior; diagnostics are implemented and exercised by the provider/governor/application contracts; and RMA-012/RMA-192 plus the release-review contracts reconcile licenses and attribution. Exact-head release-review and RMA-173 runs `37667597203` and `37667597119` passed on `0ba951e80b6bb1d0259fee2f682d406ae6f38d23`. The selected benchmark-backed local-LLM row is accepted from exact-head physical RMA-134 run `37731000395` on `33332e81498dc174181cc00fce916f68bb14f9a3`, which verified offline selected-model generation and physics p95 within the 2 ms budget. The remaining unchecked release items are genuine physical/performance gaps: RMA-125 offline speech and RMA-184 representative-device performance.
 
 **Acceptance criteria — initial release gate**
 

@@ -118,17 +118,71 @@ def capture(apk: Path, machine: str, provisioning: str) -> dict:
     }
 
 
+def _bounded_label(value: object, field: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value
+    ):
+        raise ValueError(f"{field} must be a bounded non-secret label.")
+    return value
+
+
+def _sha256(value: object, field: str) -> str:
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
+        raise ValueError(f"{field} must be a lowercase SHA-256 digest.")
+    return value
+
+
+def validate_record(record: object) -> dict:
+    if not isinstance(record, dict):
+        raise ValueError("Build evidence record must be a JSON object.")
+    if record.get("schema") != SCHEMA:
+        raise ValueError("Unrecognized evidence schema.")
+    _bounded_label(record.get("machine"), "machine")
+    _bounded_label(record.get("provisioning"), "provisioning")
+
+    source_sha = record.get("source_sha")
+    if not isinstance(source_sha, str) or not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+        raise ValueError("source_sha must be an exact lowercase Git SHA.")
+    if record.get("clean_checkout") is not True:
+        raise ValueError("A build was not captured from a clean checkout.")
+    if record.get("installed_toolchain_verified") is not True:
+        raise ValueError("A build lacks installed-toolchain verification.")
+
+    lock_path = ROOT / "toolchain.lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if _sha256(record.get("toolchain_sha256"), "toolchain_sha256") != digest(lock_path):
+        raise ValueError("Build evidence does not match the current toolchain manifest.")
+    if record.get("unity_version") != lock["unity"]["editor_version"]:
+        raise ValueError("Build evidence Unity version does not match the current pin.")
+    _sha256(record.get("apk_sha256"), "apk_sha256")
+
+    badging = record.get("badging")
+    if not isinstance(badging, dict):
+        raise ValueError("Build evidence badging must be an object.")
+    if badging.get("package") != "com.ekkus.weachymini":
+        raise ValueError("Build evidence package does not match the shipping application.")
+    if badging.get("min_sdk") != lock["android"]["unity_device_feasibility_min_sdk"]:
+        raise ValueError("Build evidence minSdkVersion does not match the toolchain pin.")
+    if badging.get("target_sdk") != lock["android"]["target_sdk"]:
+        raise ValueError("Build evidence targetSdkVersion does not match the toolchain pin.")
+
+    libs = record.get("native_libraries")
+    if not isinstance(libs, dict) or not REQUIRED.issubset(libs):
+        raise ValueError("A build omits required production libraries.")
+    for name, library_hash in libs.items():
+        if not isinstance(name, str) or not re.fullmatch(
+            r"lib/arm64-v8a/[^/]+\.so", name
+        ):
+            raise ValueError(
+                "Build evidence contains a non-ARM64 or malformed native library path."
+            )
+        _sha256(library_hash, f"native_libraries[{name}]")
+    return record
+
+
 def compare(first: dict, second: dict) -> dict:
-    for record in (first, second):
-        if record.get("schema") != SCHEMA:
-            raise ValueError("Unrecognized evidence schema.")
-        if record.get("clean_checkout") is not True:
-            raise ValueError("A build was not captured from a clean checkout.")
-        if record.get("installed_toolchain_verified") is not True:
-            raise ValueError("A build lacks installed-toolchain verification.")
-        libs = record.get("native_libraries")
-        if not isinstance(libs, dict) or not REQUIRED.issubset(libs):
-            raise ValueError("A build omits required production libraries.")
+    first = validate_record(first)
+    second = validate_record(second)
     if first["machine"] == second["machine"]:
         raise ValueError("Two builds cannot use the same machine label.")
     if first["provisioning"] == second["provisioning"]:

@@ -76,6 +76,12 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertIn("build_unity_android.sh device-feasibility", workflow)
         self.assertIn("run_rma190_core_end_to_end_android.sh", workflow)
         self.assertIn("rma190-core-end-to-end-report-${{ github.sha }}", workflow)
+        upload = workflow.split("- name: Upload RMA-190 core end-to-end evidence", 1)[1]
+        upload_header = upload.split("uses: actions/upload-artifact@v4", 1)[0]
+        self.assertIn("continue-on-error: true", upload_header)
+        acceptance = workflow.split("- name: Run RMA-190 core end-to-end acceptance", 1)[1]
+        acceptance = acceptance.split("- name: Upload RMA-190 core end-to-end evidence", 1)[0]
+        self.assertNotIn("continue-on-error: true", acceptance)
         self.assertNotIn("RMA-195", workflow)
 
     def test_roadmap_reconciles_core_evidence_and_keeps_remaining_open(self) -> None:

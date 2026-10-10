@@ -29,6 +29,12 @@ jobs:
       - name: Guard RMA-002 two-clean-environment evidence boundary
         run: python3 scripts/tests/test_rma002_two_environment_build_blocker.py
 
+      - name: Validate RMA-002 independent-build evidence comparator
+        run: python3 scripts/tests/test_rma002_independent_build_evidence.py
+
+      - name: Guard Local Unity artifact-transport resilience
+        run: python3 scripts/tests/test_local_unity_status_reporting.py
+
       - name: Run RMA-012 in-app license contract
         run: python3 scripts/tests/test_rma012_licenses.py
 

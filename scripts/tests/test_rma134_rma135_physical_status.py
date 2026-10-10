@@ -22,6 +22,16 @@ class PhysicalStatusTests(unittest.TestCase):
         self.assertIn('git merge-base --is-ancestor "${candidate}" "${SHA}"', text)
         self.assertNotIn("--json headSha", text)
 
+    def test_rma134_can_rebuild_when_artifact_transport_is_unavailable(self) -> None:
+        text = WORKFLOWS[0].read_text(encoding="utf-8")
+        self.assertIn("Exact-SHA APK artifact unavailable", text)
+        self.assertIn("prepare_reachy_unity_presentation.sh", text)
+        self.assertIn("stage_reachy_unity_android_runtime.sh", text)
+        self.assertIn("build_unity_android.sh device-feasibility", text)
+        upload = text.split("- name: Upload RMA-134 physical evidence", 1)[1]
+        upload_header = upload.split("uses: actions/upload-artifact@v4", 1)[0]
+        self.assertIn("continue-on-error: true", upload_header)
+
     def test_rma135_hashed_paths_are_real_files(self) -> None:
         source = (
             ROOT / ".github/workflows/rma135-resource-thermal-governor.yml"

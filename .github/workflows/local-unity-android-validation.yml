@@ -384,6 +384,7 @@ jobs:
 
       - name: Upload RMA-092 camera texture evidence
         if: ${{ always() && steps.camera_texture_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma092-camera-texture-report-${{ github.sha }}
@@ -401,6 +402,7 @@ jobs:
 
       - name: Upload RMA-111 lightweight tracking evidence
         if: ${{ always() && steps.lightweight_tracking_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma111-lightweight-tracking-report-${{ github.sha }}
@@ -418,6 +420,7 @@ jobs:
 
       - name: Upload RMA-154 visual-servo evidence
         if: ${{ always() && steps.visual_servo_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma154-visual-servo-report-${{ github.sha }}
@@ -435,6 +438,7 @@ jobs:
 
       - name: Upload RMA-022 lifecycle evidence
         if: ${{ always() && steps.lifecycle_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: unity-lifecycle-device-report-${{ github.sha }}
@@ -452,6 +456,7 @@ jobs:
 
       - name: Upload RMA-195 application-composition evidence
         if: ${{ always() && steps.rma195_composition_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma195-application-composition-report-${{ github.sha }}
@@ -469,6 +474,7 @@ jobs:
 
       - name: Upload authoritative rendering evidence
         if: ${{ always() && steps.physical_acceptance.outcome != 'skipped' }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: unity-authoritative-device-report-${{ github.sha }}
@@ -498,6 +504,7 @@ jobs:
 
       - name: Upload ARM64 API-26 device APK
         if: ${{ success() && (github.event_name == 'push' || inputs.build_device_apk || inputs.install_physical_device) }}
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: local-unity-device-apk-${{ github.sha }}

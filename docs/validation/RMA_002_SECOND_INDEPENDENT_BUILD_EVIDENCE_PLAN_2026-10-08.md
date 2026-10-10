@@ -40,10 +40,14 @@ machine, does not meet the authoritative RMA-002 acceptance criterion.
      --output build/rma002-comparison.json
    ```
 
-   The comparator checks the exact source SHA, pinned toolchain,
-   application identity/SDK levels, and production ARM64 library inventory.
-   It separately reports byte identity and deliberately does **not**
-   attest that the two machines were independently provisioned.
+   The comparator revalidates each record against the checked-in toolchain
+   manifest before comparison: exact source SHA shape, bounded non-secret
+   machine/provisioning labels, pinned Unity/toolchain identity, shipping
+   package/minimum/target SDK values, APK digest shape, and production-only
+   ARM64 native-library paths and SHA-256 values. It then checks structural
+   agreement between the two records. It separately reports byte identity and
+   deliberately does **not** attest that the two machines were independently
+   provisioned; operator verification remains mandatory.
 6. Record the exact build SHA, runner/provisioning provenance, exit status,
    Android package identity, minimum/target SDK, native-library inventory,
    APK SHA-256, and CI/build-log reference for **each** independent machine.
