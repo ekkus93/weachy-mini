@@ -16,7 +16,7 @@ REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma135-qwen3-0.6b-q4_k_m.gguf"
 REMOTE_CHECKPOINT_GLOB="${REMOTE_FILES_DIR}/rma135-resource-governor-checkpoint-*.json"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
 RMA184_LONG_RUN_SECONDS="${RMA184_LONG_RUN_SECONDS:-0}"
-RMA184_PERFORMANCE_CLASS="${RMA184_PERFORMANCE_CLASS:-1}"
+RMA184_PERFORMANCE_CLASS="${RMA184_PERFORMANCE_CLASS:-auto}"
 [[ "${RMA184_LONG_RUN_SECONDS}" =~ ^[0-9]+$ ]] || {
   printf '%s\n' 'RMA184_LONG_RUN_SECONDS must be an integer.' >&2
   exit 2
@@ -25,8 +25,8 @@ if (( RMA184_LONG_RUN_SECONDS != 0 && (RMA184_LONG_RUN_SECONDS < 1800 || RMA184_
   printf '%s\n' 'RMA184_LONG_RUN_SECONDS must be 0 or between 1800 and 3600.' >&2
   exit 2
 fi
-[[ "${RMA184_PERFORMANCE_CLASS}" =~ ^[0-2]$ ]] || {
-  printf '%s\n' 'RMA184_PERFORMANCE_CLASS must be 0 (low), 1 (mid), or 2 (high).' >&2
+[[ "${RMA184_PERFORMANCE_CLASS}" == "auto" || "${RMA184_PERFORMANCE_CLASS}" =~ ^[0-2]$ ]] || {
+  printf '%s\n' 'RMA184_PERFORMANCE_CLASS must be auto, 0 (low), 1 (mid), or 2 (high).' >&2
   exit 2
 }
 if [[ -n "${RMA135_ACCEPTANCE_TIMEOUT_SECONDS:-}" ]]; then
@@ -206,9 +206,21 @@ fi
   printf '%s\n' 'Emulator evidence refused.' >&2
   exit 1
 }
+# The physical model, not a fixed workflow default or operator guess, selects
+# the low/mid/high qualification budget. Refuse mismatched explicit overrides.
+expected_performance_class="$(python3 scripts/rma184_select_performance_class.py \
+  --matrix "${DEVICE_MATRIX_PATH}" --model "${model}")"
+if [[ "${RMA184_PERFORMANCE_CLASS}" == "auto" ]]; then
+  RMA184_PERFORMANCE_CLASS="${expected_performance_class}"
+elif [[ "${RMA184_PERFORMANCE_CLASS}" != "${expected_performance_class}" ]]; then
+  printf 'RMA-184 class mismatch for model %s: requested %s, matrix requires %s.\n' \
+    "${model}" "${RMA184_PERFORMANCE_CLASS}" "${expected_performance_class}" >&2
+  exit 1
+fi
 printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' \
   "${DEVICE_SERIAL}" "${model}" "${abi}" "${sdk}" "${hardware}" \
   > "${REPORT_DIR}/device.txt"
+printf 'rma184_performance_class=%s\n' "${RMA184_PERFORMANCE_CLASS}" >> "${REPORT_DIR}/device.txt"
 
 APK_SHA256="$(sha256sum "${APK_PATH}" | awk '{print $1}')"
 printf '%s  %s\n' "${APK_SHA256}" "${APK_PATH}" > "${REPORT_DIR}/apk-sha256.txt"

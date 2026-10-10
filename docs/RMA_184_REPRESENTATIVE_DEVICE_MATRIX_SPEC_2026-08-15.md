@@ -96,6 +96,13 @@ The `Local Unity Android Validation` physical lane now captures this report afte
 6. measured local-LLM decode falls below 1 token/s;
 7. observed thermal transitions do not follow RMA-181's ordered degradation ladder.
 
+The RMA-135 physical soak selects its low/mid/high performance profile from the
+*connected physical device model* using `scripts/rma184_select_performance_class.py`
+and the authoritative matrix. It rejects an explicit mismatched performance-class
+override instead of measuring a low/high device against mid-class budgets, and
+records the resolved class in its sanitized device evidence. This is qualification
+tooling, **not** evidence that any physical long run has passed.
+
 RMA-180 already bounds retained timing/resource samples, so long characterization runs cannot grow the telemetry reservoir without limit. RMA-184 adds the final-vs-initial qualification gates; it does not change RMA-180 storage behavior.
 
 ## Thermal contract

@@ -285,7 +285,7 @@ jobs:
         shell: bash
         env:
           RMA184_LONG_RUN_SECONDS: '1800'
-          RMA184_PERFORMANCE_CLASS: '1'
+          RMA184_PERFORMANCE_CLASS: 'auto'
           RMA135_ACCEPTANCE_TIMEOUT_SECONDS: '3300'
         run: |
           set -euo pipefail

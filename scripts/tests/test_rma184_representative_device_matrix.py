@@ -259,6 +259,55 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ):
             self.assertIn(token, runner)
 
+    def test_integrated_soak_uses_physical_model_class_not_fixed_mid_class(self) -> None:
+        matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+        selector = ROOT / "scripts/rma184_select_performance_class.py"
+        class_indices = {"low": "0", "mid": "1", "high": "2"}
+        for device in matrix["representative_devices"]:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(selector),
+                    "--matrix",
+                    str(MATRIX),
+                    "--model",
+                    device["model"],
+                ],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(
+                result.stdout.strip(),
+                class_indices[device["performance_class"]],
+            )
+        unregistered = subprocess.run(
+            [
+                sys.executable,
+                str(selector),
+                "--matrix",
+                str(MATRIX),
+                "--model",
+                "Unknown Device",
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(unregistered.returncode, 2)
+        self.assertIn("expected exactly one", unregistered.stderr)
+
+        runner = RMA135_RUNNER.read_text(encoding="utf-8")
+        self.assertIn('RMA184_PERFORMANCE_CLASS="${RMA184_PERFORMANCE_CLASS:-auto}"', runner)
+        self.assertIn("scripts/rma184_select_performance_class.py", runner)
+        self.assertIn('RMA184_PERFORMANCE_CLASS="${expected_performance_class}"', runner)
+        self.assertIn('"${RMA184_PERFORMANCE_CLASS}" != "${expected_performance_class}"', runner)
+        self.assertIn("rma184_performance_class=%s", runner)
+        workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("RMA184_PERFORMANCE_CLASS: 'auto'", workflow)
+        self.assertNotIn("RMA184_PERFORMANCE_CLASS: '1'", workflow)
+
     def test_physical_workflow_runs_probe_soak_and_survives_artifact_quota(self) -> None:
         workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
         for token in (
