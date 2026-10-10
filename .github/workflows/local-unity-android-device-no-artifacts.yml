@@ -46,6 +46,13 @@ jobs:
         shell: bash
         run: python3 scripts/tests/test_rma193_documentation_contract.py
 
+      - name: Run RMA-194 shipping-source and fidelity release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma194_release_acceptance.py
+          python3 scripts/tests/test_rma194_deferred_feature_and_fidelity_gate.py
+
       - name: Run RMA-125 A54 speech revalidation contract
         shell: bash
         run: python3 scripts/tests/test_rma125_a54_speech_revalidation.py

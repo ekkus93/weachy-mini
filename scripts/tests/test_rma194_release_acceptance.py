@@ -66,6 +66,33 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         self.assertIn("RMA-051/052", todo)
         self.assertIn("RMA_104_REPROJECTION_TEST_SUITE_VALIDATION", todo)
 
+    def test_self_hosted_release_gates_precede_device_dependency(self) -> None:
+        workflow = read(
+            ROOT / ".github/workflows/local-unity-android-device-no-artifacts.yml"
+        )
+        gate = workflow.index(
+            "- name: Run RMA-194 shipping-source and fidelity release gates"
+        )
+        self.assertLess(
+            workflow.index("- name: Check out repository"), gate
+        )
+        self.assertLess(
+            workflow.index("- name: Set up Python"), gate
+        )
+        self.assertLess(
+            gate, workflow.index("- name: Pin one physical Android device"),
+            "Source/fidelity gates must run even when the A54 is disconnected",
+        )
+        gate_body = workflow[gate:workflow.index("- name: Run RMA-125", gate)]
+        self.assertIn(
+            "python3 scripts/tests/test_rma194_release_acceptance.py", gate_body
+        )
+        self.assertIn(
+            "python3 scripts/tests/test_rma194_deferred_feature_and_fidelity_gate.py",
+            gate_body,
+        )
+        self.assertIn("set -euo pipefail", gate_body)
+
     def test_deferred_future_features_remain_out_of_release_scope(self) -> None:
         todo = read(TODO)
         guide = read(GUIDE)
