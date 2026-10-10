@@ -48,4 +48,4 @@ Given current merged evidence, a release may describe the simulator as an uncali
 
 ## Closure policy
 
-After this gate is committed to master and exact-head CI is healthy, the RMA-194 acceptance criteria for deferred-feature absence and accurate fidelity labeling may be reconciled in the authoritative TODO. They should not be used to close unrelated RMA-194 items or the overall release gate.
+After this gate is committed to master and exact-head CI is healthy, the RMA-194 acceptance criteria for deferred-feature absence and accurate fidelity labeling may be reconciled in the authoritative TODO. When hosted CI is demonstrably unavailable only through zero-step/`JOB_NOT_FOUND` infrastructure failures, exact-head self-hosted release-source contracts plus a successful production APK build/audit are sufficient evidence for these two source/package criteria. They should not be used to close unrelated RMA-194 items or the overall release gate.

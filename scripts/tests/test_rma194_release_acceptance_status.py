@@ -74,7 +74,7 @@ class Rma194ReleaseAcceptanceStatusContracts(unittest.TestCase):
             "RMA-002 still requires second independently provisioned Unity/Android build evidence",
             "RMA-184 has published measured A54 30/60 FPS default profiles",
             "the 1,800-second integrated long-run, thermal-order",
-            "RMA-194 license row still needs final release-candidate packaging/release audit",
+            "RMA-194 overall release acceptance remains open",
         ):
             self.assertIn(token, status)
 

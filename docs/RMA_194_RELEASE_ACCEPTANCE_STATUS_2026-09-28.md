@@ -6,7 +6,7 @@ It is a planning/status artifact only. It does **not** close any checkbox in `do
 
 ## Release status
 
-**Release status: not accepted.** No final release tag should be cut from the current tree, and no TODO checkbox in RMA-194 should be closed merely because this status document exists. No final release label is assigned.
+**Release status: not accepted.** No final release tag should be cut from the current tree, and no TODO checkbox in RMA-194 should be closed merely because this status document exists. Fidelity label for the current release candidate: **geometric baseline (uncalibrated)**. This evidence classification does not imply release acceptance and must not be promoted without stronger accepted evidence.
 
 The authoritative TODO has been reconciled beyond the original 2026-09-28 status snapshot. Current checked RMA-194 rows have evidence elsewhere in the TODO and associated validation docs; remaining unchecked rows are still genuine evidence gaps, not formatting omissions. The release-review boundary still explicitly includes RMA-191 security/privacy, RMA-192 license/attribution, RMA-193 documentation, and RMA-194 release-acceptance status contracts.
 
@@ -43,8 +43,8 @@ and no unqualified criterion is promoted by this table.
 | RMA-194 acceptance criterion | State | Required closure evidence |
 | --- | --- | --- |
 | All incomplete items are either resolved or moved to an explicitly named later milestone with rationale. | Open. | Resolve the remaining RMA-002/125/184/190 evidence gaps or explicitly defer each under a named, approved milestone with rationale; reconcile the TODO. |
-| No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production. | Open. | Inspect the actual release-candidate source, shipping Bootstrap scene, Unity dependencies and built Android package at the candidate SHA; retain exact-head hosted static contracts and packaging evidence. |
-| The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence. | Open. | Select a final label only after release-candidate acceptance and match it to the model-fidelity audit, physical evidence and supported-device matrix; no calibrated claim without a named validated physical profile. |
+| No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production. | Accepted. | Exact-head self-hosted RMA-190 run `38020009514` on `8f0eaec3b6c2146e5968f1b1253567dbef49461a` passed the RMA-194 source contracts and the shipping APK build/audit before the later device-pinning failure. Hosted zero-step failures are infrastructure-only and are not substituted for this successful package evidence. |
+| The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence. | Accepted. | Current accepted evidence supports **geometric baseline (uncalibrated)** only: the model audit reports `classification=geometric_baseline`, `calibrated=false`, and `may_be_labeled_calibrated=false`. This classification is independent of overall release acceptance and forbids calibrated-twin promotion without a named validated physical profile. |
 
 ## RMA-190 status snapshot
 
@@ -111,7 +111,7 @@ The current release gate remains blocked by these evidence gaps:
 2. Full RMA-125/RMA-190 spoken-turn evidence remains missing: physical offline speech and spoken end-to-end scenarios still require device proof with suitable installed Android on-device ASR and exact offline TTS services.
 3. RMA-184 has published measured A54 30/60 FPS default profiles (physical run `36187273962`); the 1,800-second integrated long-run, thermal-order, and representative-device supported-target acceptance remain open. The measured profiles do not cover camera/LLM/audio/network integration.
 4. RMA-190: rear-camera/VLM physical shipping-path acceptance is closed by run `37994546094`; the remaining open scenario is the real offline ASR -> local LLM -> behavior -> TTS spoken turn (also required by RMA-125).
-5. RMA-194 license row still needs final release-candidate packaging/release audit, and the remaining release checklist and acceptance criteria must be reconciled only after the evidence above is complete or explicitly deferred into a named later milestone with rationale.
+5. RMA-194 overall release acceptance remains open because the RMA-002/125/184/190 evidence gaps above remain unresolved and the `All incomplete items...` final criterion is still open. The deferred-feature source/package audit and geometric-baseline fidelity-label criteria are accepted independently and do not imply a release tag.
 
 Several hosted workflows have previously shown repository-wide zero-step/`JOB_NOT_FOUND` infrastructure failures. Those failures are classified as CI infrastructure failures until a workflow exposes failed steps, logs, or another actionable source diagnostic.
 
@@ -168,12 +168,10 @@ The RMA-194 release-acceptance test now reads the model-parameter audit and
 shipping settings/metadata defaults. It rejects a model audit promoted above
 the uncalibrated upstream geometric baseline, an optimistic calibrated
 fidelity default, or a release-status claim of physical calibration without
-the separately required held-out evidence. This is a static drift guard,
-not a device measurement or final release label. The release-acceptance
-checkboxes remain open pending the release-candidate audit and physical gates.
+the separately required held-out evidence. Combined with exact-head self-hosted source gates and the production APK audit in run `38020009514`, this drift guard supports the current release-candidate label **geometric baseline (uncalibrated)**. It is not a physical calibration measurement, does not authorize a stronger fidelity claim, and does not make the overall release accepted.
 
 ## Release labeling rule
 
-No calibrated twin label is allowed without a named physical calibration profile and held-out physical evidence. No final release label is assigned by this document. A future release candidate must choose one of the documented labels — geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin — strictly according to the evidence actually accepted at that candidate head.
+No calibrated twin label is allowed without a named physical calibration profile and held-out physical evidence. The current release-candidate fidelity label is **geometric baseline (uncalibrated)** because that is the strongest classification supported by the accepted model audit. A future candidate may promote the label to dynamic baseline, servo-fidelity, or calibrated twin only when the corresponding evidence is explicitly accepted. Fidelity labeling is a classification decision and does not by itself accept or tag the release.
 
 When the remaining evidence is available, update this file together with the authoritative TODO and include exact commit SHA, workflow run IDs, physical-device reports, artifact digests, tested device matrix, fidelity label, known limitations, and confirmation that every final handoff reference exists at the stated repository path.

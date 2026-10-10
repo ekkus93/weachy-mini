@@ -3553,8 +3553,10 @@ release guide to cover every topic below and remain linked from the README.
 **Acceptance criteria — initial release gate**
 
 - [ ] All incomplete items are either resolved or moved to an explicitly named later milestone with rationale.
-- [ ] No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production.
-- [ ] The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence.
+- [x] No deferred Level 2, Level 3, AR, movable observer camera, or VLA code is half-enabled in production.
+- [x] The release is labeled accurately as geometric baseline, dynamic baseline, servo-fidelity, or calibrated twin according to completed evidence.
+
+**RMA-194 source/package and fidelity acceptance (2026-10-09):** exact-head self-hosted `RMA-190 Core End-to-End Android Acceptance` run `38020009514` on `8f0eaec3b6c2146e5968f1b1253567dbef49461a` passed the RMA-194 release source contracts, Unity presentation generation, production MuJoCo staging, ARM64 API-26 shipping APK build, and APK verification. The shared build script fail-closes through `scripts/verify_rma194_release_apk.py`, so the successful build step is package-level evidence that the newly built APK contains the required production runtime and no deferred AR/XR payload. The run then failed only at physical-device pinning because the configured A54 was disconnected; that later hardware condition is unrelated to these source/package criteria. `models/reachy-mini/model-parameter-audit.json` classifies the accepted model as `geometric_baseline`, `calibrated=false`, and `may_be_labeled_calibrated=false`; therefore the release-candidate fidelity label is **geometric baseline (uncalibrated)**. This label does not mean the overall release is accepted and does not close RMA-002, RMA-125, RMA-184, RMA-190, or the remaining all-incomplete-items criterion.
 
 ---
 

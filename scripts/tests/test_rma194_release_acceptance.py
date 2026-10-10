@@ -28,7 +28,11 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
         status = read(STATUS)
         self.assertIn("Release status: not accepted", status)
         self.assertIn("No final release tag", status)
-        self.assertIn("No final release label is assigned", status)
+        self.assertIn(
+            "Fidelity label for the current release candidate: "
+            "**geometric baseline (uncalibrated)**",
+            status,
+        )
         for token in ("RMA-125", "RMA-184", "RMA-190", "RMA-191", "RMA-192", "RMA-193"):
             self.assertIn(token, status)
 
@@ -39,13 +43,25 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             "- [ ] Representative-device performance report exists.",
             "- [ ] All incomplete items are either resolved or moved to an "
             "explicitly named later milestone with rationale.",
-            "- [ ] No deferred Level 2, Level 3, AR, movable observer camera, "
-            "or VLA code is half-enabled in production.",
-            "- [ ] The release is labeled accurately as geometric baseline, "
-            "dynamic baseline, servo-fidelity, or calibrated twin according to "
-            "completed evidence.",
         ):
             self.assertIn(open_item, todo)
+
+    def test_authoritative_todo_accepts_exact_head_source_and_fidelity_criteria(self) -> None:
+        todo = read(TODO)
+        self.assertIn(
+            "- [x] No deferred Level 2, Level 3, AR, movable observer camera, "
+            "or VLA code is half-enabled in production.",
+            todo,
+        )
+        self.assertIn(
+            "- [x] The release is labeled accurately as geometric baseline, "
+            "dynamic baseline, servo-fidelity, or calibrated twin according to "
+            "completed evidence.",
+            todo,
+        )
+        self.assertIn("38020009514", todo)
+        self.assertIn("8f0eaec3b6c2146e5968f1b1253567dbef49461a", todo)
+        self.assertIn("geometric baseline (uncalibrated)", todo)
 
     def test_authoritative_todo_preserves_evidenced_checked_items(self) -> None:
         todo = read(TODO)
@@ -269,12 +285,17 @@ class Rma194ReleaseAcceptanceTests(unittest.TestCase):
             metadata,
         )
 
-    def test_release_status_has_no_premature_fidelity_promotion(self) -> None:
+    def test_release_status_selects_only_the_evidence_backed_fidelity_label(self) -> None:
         status = read(STATUS)
-        self.assertIn("No final release label is assigned", status)
+        self.assertIn(
+            "current release-candidate fidelity label is "
+            "**geometric baseline (uncalibrated)**",
+            status,
+        )
         self.assertIn("No calibrated twin label is allowed", status)
         self.assertIn("held-out physical evidence", status)
         self.assertIn("No final release tag", status)
+        self.assertIn("Release status: not accepted", status)
 
 
 if __name__ == "__main__":
