@@ -2872,6 +2872,21 @@ Order of preservation:
 - [ ] Thermal degradation follows the documented priority order.
 - [ ] Supported devices meet the defined simulation and interaction targets.
 
+**Integrated physical-qualification implementation (2026-10-09):** the existing
+RMA-135 production Android acceptance now has an opt-in RMA-184 soak that uses
+the shipping `ReachyProductionAuthoritativeRuntime`, selected RMA-133 local model,
+governed generation coordinator, bounded `ReachyPerformanceTelemetry`, and the
+shipping RMA-181 priority-degradation driver. The exact sampled RMA-181 signals
+are exposed read-only for qualification so the run can bind thermal input to the
+actual applied decision. The physical workflow requests a 1,800-second mid-class
+run, captures a fresh support-policy probe, verifies render/physics p95, memory
+growth, authoritative state-lag growth, local-LLM decode throughput, and observed
+thermal-degradation ordering, and can rebuild the exact checked-out SHA when
+GitHub artifact transport is unavailable. Artifact upload is non-blocking; the
+device acceptance itself remains blocking. These three criteria intentionally
+remain unchecked until that exact-head physical run passes; implementation/static
+contracts are not substituted for measured device evidence.
+
 ---
 
 # Phase 20 — End-to-end validation and release gate

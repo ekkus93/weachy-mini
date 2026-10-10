@@ -23,7 +23,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'master'
     runs-on: [self-hosted, linux, x64, weachy-mini-android-device]
-    timeout-minutes: 30
+    timeout-minutes: 75
 
     steps:
       - name: Publish pending status
@@ -89,7 +89,7 @@ jobs:
           else
             changed="$(git diff --name-only "${baseline}..${SHA}")"
             scope_base="${baseline}"
-            if printf '%s\n' "${changed}" | grep -Eq '^((Assets/ReachyMini/Runtime/Core/LocalModels/(LocalLlmResourceGovernor|LocalLlmGovernedGenerationCoordinator|ReachyLocalLlmProvider|ReachyLocalLlmContracts)\.cs)|(Assets/ReachyMini/Runtime/Core/Application/(ReachyLocalLlmPhysicsBudgetTracker|ReachySimulationLocalLlmPhysicsBudgetSource)\.cs)|(Assets/ReachyMini/Runtime/Application/(ReachyAndroidLocalLlmResourceSignalSource|ReachyRma135ResourceGovernorAcceptance(\.[A-Za-z]+)?|Rma135Acceptance(TestDoubles|ReportModels))\.cs)|(Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker\.cs)|(Assets/ReachyMini/Runtime/Interop/(NativeReachyLlama|ReachyLlamaNativeTypes|ReachyMiniInteropAssemblyInfo|ReachySimAuthoritativeStateReader)\.cs)|(scripts/(run_rma135_resource_governor_acceptance_android\.sh|tests/test_rma135_android_acceptance_contracts\.py))|(benchmarks/rma133/(system_prompt-v4\.txt|behavior-output-v1\.gbnf|candidates-v6\.json))|(models/manifests/qwen3-0\.6b-q4-k-m\.local-llm\.json)|(docs/(RMA_135_RESOURCE_THERMAL_GOVERNOR_(SPEC|TODO)_2026-08-10\.md|validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_.*\.md))|(.github/workflows/rma135-(resource-thermal-governor|resource-governor-android)\.yml))'; then
+            if printf '%s\n' "${changed}" | grep -Eq '^((Assets/ReachyMini/Runtime/Core/LocalModels/(LocalLlmResourceGovernor|LocalLlmGovernedGenerationCoordinator|ReachyLocalLlmProvider|ReachyLocalLlmContracts)\.cs)|(Assets/ReachyMini/Runtime/Core/Application/(ReachyLocalLlmPhysicsBudgetTracker|ReachySimulationLocalLlmPhysicsBudgetSource)\.cs)|(Assets/ReachyMini/Runtime/Application/(ReachyAndroidLocalLlmResourceSignalSource|ReachyRma135ResourceGovernorAcceptance(\.[A-Za-z]+)?|Rma135Acceptance(TestDoubles|ReportModels))\.cs)|(Assets/ReachyMini/Runtime/Simulation/ReachySimulationWorker\.cs)|(Assets/ReachyMini/Runtime/Interop/(NativeReachyLlama|ReachyLlamaNativeTypes|ReachyMiniInteropAssemblyInfo|ReachySimAuthoritativeStateReader)\.cs)|(scripts/(run_rma135_resource_governor_acceptance_android\.sh|tests/test_rma135_android_acceptance_contracts\.py))|(benchmarks/rma133/(system_prompt-v4\.txt|behavior-output-v1\.gbnf|candidates-v6\.json))|(models/manifests/qwen3-0\.6b-q4-k-m\.local-llm\.json)|(docs/(RMA_135_RESOURCE_THERMAL_GOVERNOR_(SPEC|TODO)_2026-08-10\.md|validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_.*\.md))|(.github/workflows/rma135-(resource-thermal-governor|resource-governor-android)\.yml)|(Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver\.cs)|(Assets/ReachyMini/Runtime/Core/Performance/Reachy(Performance|RepresentativeDevice).*\.cs)|(scripts/(run_rma184_device_probe_android\.sh|tests/test_rma184_representative_device_matrix\.py))|(models/reachy-mini/android-device-matrix\.json)|(docs/RMA_184_REPRESENTATIVE_DEVICE_MATRIX_SPEC_2026-08-15\.md))'; then
               relevant=true
             else
               relevant=false
@@ -192,7 +192,7 @@ jobs:
           printf 'REACHY_ANDROID_SERIAL=%s\n' "${serial}" >> "${GITHUB_ENV}"
           printf 'ADB_BIN=%s\n' "${adb_bin}" >> "${GITHUB_ENV}"
 
-      - name: Download exact-SHA Unity Android artifacts
+      - name: Acquire exact-SHA Unity Android APK
         if: steps.scope.outputs.relevant == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -200,29 +200,93 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf artifacts/rma135-source-run
-          mkdir -p artifacts/rma135-source-run
-          gh run download "${SOURCE_RUN_ID}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --dir artifacts/rma135-source-run
-          mapfile -t apks < <(
-            find artifacts/rma135-source-run \
-              -type f -name 'weachy-mini-device-arm64-api26.apk' -print
-          )
-          if (( ${#apks[@]} != 1 )); then
-            printf 'Expected exactly one exact-SHA ARM64/API-26 APK artifact; found %s.\n' \
-              "${#apks[@]}" >&2
-            find artifacts/rma135-source-run -maxdepth 4 -type f -print >&2 || true
-            exit 1
+          rm -rf artifacts/rma135-source-run artifacts/android
+          mkdir -p artifacts/rma135-source-run artifacts/android
+
+          download_ok=false
+          if gh run download "${SOURCE_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --dir artifacts/rma135-source-run; then
+            mapfile -t apks < <(
+              find artifacts/rma135-source-run -type f \
+                -name 'weachy-mini-device-arm64-api26.apk' -print
+            )
+            if (( ${#apks[@]} == 1 )); then
+              cp -- "${apks[0]}" artifacts/android/weachy-mini-device-arm64-api26.apk
+              download_ok=true
+            elif (( ${#apks[@]} > 1 )); then
+              printf 'Refusing ambiguous source-run APK inventory: %s files.\n' "${#apks[@]}" >&2
+              exit 1
+            fi
           fi
-          mkdir -p artifacts/android
-          cp -- "${apks[0]}" artifacts/android/weachy-mini-device-arm64-api26.apk
+
+          if [[ "${download_ok}" != true ]]; then
+            printf '::warning title=Exact-SHA APK artifact unavailable::Rebuilding the checked-out exact source SHA locally because artifact transport is unavailable.\n'
+            project_version="$(sed -n 's/^m_EditorVersion: //p' ProjectSettings/ProjectVersion.txt)"
+            [[ -n "${project_version}" ]] || {
+              printf '%s\n' 'Could not read the pinned Unity version.' >&2
+              exit 1
+            }
+            unity_editor="${UNITY_EDITOR:-}"
+            if [[ -z "${unity_editor}" ]]; then
+              for candidate in \
+                "${HOME}/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+                "${HOME}/UnityHub/Editors/${project_version}/Editor/Unity" \
+                "${HOME}/.local/share/UnityHub/Editors/${project_version}/Editor/Unity" \
+                "/opt/Unity/Hub/Editor/${project_version}/Editor/Unity" \
+                "/opt/unity/editors/${project_version}/Editor/Unity"; do
+                if [[ -x "${candidate}" ]]; then
+                  unity_editor="${candidate}"
+                  break
+                fi
+              done
+            fi
+            [[ -n "${unity_editor}" && -x "${unity_editor}" ]] || {
+              printf 'Pinned Unity %s was not found.\n' "${project_version}" >&2
+              exit 1
+            }
+            android_sdk_root="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-${HOME}/Android/Sdk}}"
+            [[ -x "${android_sdk_root}/platform-tools/adb" ]] || {
+              printf 'Android SDK platform-tools unavailable under %s.\n' "${android_sdk_root}" >&2
+              exit 1
+            }
+            export UNITY_EDITOR="${unity_editor}"
+            export ANDROID_SDK_ROOT="${android_sdk_root}"
+            export ANDROID_HOME="${android_sdk_root}"
+            export REACHY_UNITY_WORK_ROOT="${RUNNER_TEMP}/reachy-unity-presentation"
+            bash scripts/prepare_reachy_unity_presentation.sh
+            bash scripts/stage_reachy_unity_android_runtime.sh
+            bash scripts/build_unity_android.sh device-feasibility
+            test -s Builds/Android/weachy-mini-device-arm64-api26.apk
+            cp -- Builds/Android/weachy-mini-device-arm64-api26.apk \
+              artifacts/android/weachy-mini-device-arm64-api26.apk
+          fi
           sha256sum artifacts/android/weachy-mini-device-arm64-api26.apk \
             > artifacts/android/weachy-mini-device-arm64-api26.apk.sha256
 
-      - name: Run physical resource-governor acceptance
+      - name: Capture fresh RMA-184 support-policy evidence
         if: steps.scope.outputs.relevant == 'true'
         shell: bash
+        run: |
+          set -euo pipefail
+          : "${REACHY_ANDROID_SERIAL:?The workflow must pin REACHY_ANDROID_SERIAL before the RMA-184 probe.}"
+          : "${ADB_BIN:?The workflow must resolve ADB_BIN before the RMA-184 probe.}"
+          "${ADB_BIN}" -s "${REACHY_ANDROID_SERIAL}" install -r \
+            artifacts/android/weachy-mini-device-arm64-api26.apk \
+            > artifacts/rma184-probe-install.txt
+          mkdir -p artifacts/rma135-resource-governor-android
+          ANDROID_SERIAL="${REACHY_ANDROID_SERIAL}" \
+          ADB="${ADB_BIN}" \
+          RMA184_OUTPUT=artifacts/rma135-resource-governor-android/rma184-device-probe.json \
+            bash scripts/run_rma184_device_probe_android.sh
+
+      - name: Run physical RMA-135 and RMA-184 long-run acceptance
+        if: steps.scope.outputs.relevant == 'true'
+        shell: bash
+        env:
+          RMA184_LONG_RUN_SECONDS: '1800'
+          RMA184_PERFORMANCE_CLASS: '1'
+          RMA135_ACCEPTANCE_TIMEOUT_SECONDS: '3300'
         run: |
           set -euo pipefail
           : "${REACHY_ANDROID_SERIAL:?The workflow must pin REACHY_ANDROID_SERIAL before acceptance.}"
@@ -249,8 +313,9 @@ jobs:
           cp artifacts-rma135-changed-files.txt \
             artifacts/rma135-resource-governor-android/changed-files.txt
 
-      - name: Upload RMA-135 physical evidence
+      - name: Upload RMA-135/RMA-184 physical evidence
         if: always() && steps.scope.outputs.relevant == 'true'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: rma135-resource-governor-android-${{ github.event.workflow_run.head_sha }}

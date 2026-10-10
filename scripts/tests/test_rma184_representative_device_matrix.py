@@ -17,6 +17,11 @@ PROFILE_EVIDENCE = ROOT / "docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2
 PROGRAM = ROOT / "managed/ReachyMini.Core.Tests/Program.cs"
 MANAGED = ROOT / ("managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs")
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
+SOAK = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Rma184.cs"
+RMA135_ACCEPTANCE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs"
+RMA135_RUNNER = ROOT / "scripts/run_rma135_resource_governor_acceptance_android.sh"
+RMA135_WORKFLOW = ROOT / ".github/workflows/rma135-resource-governor-android.yml"
+DEGRADATION_DRIVER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver.cs"
 
 
 class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
@@ -183,6 +188,88 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "- [ ] Supported devices meet the defined simulation and interaction targets.",
         ]:
             self.assertIn(gate, block)
+
+
+    def test_integrated_long_run_uses_production_paths_and_fail_closed_policy(self) -> None:
+        soak = SOAK.read_text(encoding="utf-8")
+        for token in (
+            "ReachyRepresentativeDeviceProfile.MinimumLongRunSeconds",
+            "ReachyPerformanceTelemetry.StartSession",
+            "ReachyProductionAuthoritativeRuntime",
+            "ReachyPriorityDegradationRuntimeDriver",
+            "degradation.CurrentSignals",
+            "ReachyRepresentativeDeviceQualificationPolicy.Evaluate",
+            "successful_local_llm_generations",
+            "minimum_local_llm_decode_tokens_per_second",
+            "initial_state_lag_seconds",
+            "final_state_lag_seconds",
+            "thermal_degradation_order_valid",
+            "report_contains_prompt_or_response_content = false",
+        ):
+            self.assertIn(token, soak)
+        self.assertIn(
+            "thermalPressureSamples > 0 && nonNominalDecisionSamples > 0",
+            soak,
+        )
+        self.assertIn(
+            "LocalLlmGovernedGenerationStatus.ResourceSuspendedBeforeStart",
+            soak,
+        )
+        self.assertIn(
+            "LocalLlmGovernedGenerationStatus.ResourceCancelledDuringGeneration",
+            soak,
+        )
+        self.assertNotIn("ReachySimSession.Create", soak)
+
+        driver = DEGRADATION_DRIVER.read_text(encoding="utf-8")
+        self.assertIn(
+            "internal ReachyPriorityDegradationSignals? CurrentSignals",
+            driver,
+        )
+        self.assertIn("priorityRuntime?.LastSignals", driver)
+
+    def test_rma135_acceptance_invokes_optional_long_run_before_final_observation(self) -> None:
+        source = RMA135_ACCEPTANCE.read_text(encoding="utf-8")
+        call = source.index("RunRma184LongRunIfRequestedAsync")
+        final_observation = source.index(
+            "ReachySimulationTimingSnapshot finalWorker",
+            call,
+        )
+        self.assertLess(call, final_observation)
+
+    def test_long_run_runner_requires_real_duration_and_private_report(self) -> None:
+        runner = RMA135_RUNNER.read_text(encoding="utf-8")
+        for token in (
+            "RMA184_LONG_RUN_SECONDS",
+            "RMA184_LONG_RUN_SECONDS < 1800",
+            "reachy_rma184_long_run_seconds",
+            "reachy_rma184_performance_class",
+            "rma184-representative-device-long-run.json",
+            'report["measured_duration_seconds"] >= requested',
+            'report["state_lag_growth_seconds"] <= 0.002',
+            'report["minimum_local_llm_decode_tokens_per_second"] >= 1.0',
+            'report["thermal_degradation_order_valid"] is True',
+            'report["report_contains_prompt_or_response_content"] is False',
+        ):
+            self.assertIn(token, runner)
+
+    def test_physical_workflow_runs_probe_soak_and_survives_artifact_quota(self) -> None:
+        workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
+        for token in (
+            "timeout-minutes: 75",
+            "Acquire exact-SHA Unity Android APK",
+            "Exact-SHA APK artifact unavailable",
+            "build_unity_android.sh device-feasibility",
+            "Capture fresh RMA-184 support-policy evidence",
+            "run_rma184_device_probe_android.sh",
+            "Run physical RMA-135 and RMA-184 long-run acceptance",
+            "RMA184_LONG_RUN_SECONDS: '1800'",
+            "RMA184_PERFORMANCE_CLASS: '1'",
+            "RMA135_ACCEPTANCE_TIMEOUT_SECONDS: '3300'",
+            "Upload RMA-135/RMA-184 physical evidence",
+            "continue-on-error: true",
+        ):
+            self.assertIn(token, workflow)
 
 
 if __name__ == "__main__":

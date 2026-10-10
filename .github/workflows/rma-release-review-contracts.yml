@@ -26,6 +26,9 @@ jobs:
       - name: Guard RMA-184 physical-device preflight ordering
         run: python3 scripts/tests/test_rma184_device_preflight.py
 
+      - name: Guard RMA-184 representative-device matrix and long-run path
+        run: python3 scripts/tests/test_rma184_representative_device_matrix.py
+
       - name: Guard RMA-002 two-clean-environment evidence boundary
         run: python3 scripts/tests/test_rma002_two_environment_build_blocker.py
 

@@ -11,10 +11,36 @@ ADB_BIN="${ADB_BIN:-adb}"
 PACKAGE_NAME="com.ekkus.weachymini"
 REMOTE_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
 REMOTE_RESULT_PATH="${REMOTE_FILES_DIR}/rma135-resource-governor-acceptance.json"
+REMOTE_RMA184_RESULT_PATH="${REMOTE_FILES_DIR}/rma184-representative-device-long-run.json"
 REMOTE_MODEL_PATH="${REMOTE_FILES_DIR}/rma135-qwen3-0.6b-q4_k_m.gguf"
 REMOTE_CHECKPOINT_GLOB="${REMOTE_FILES_DIR}/rma135-resource-governor-checkpoint-*.json"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
-TIMEOUT_SECONDS="${RMA135_ACCEPTANCE_TIMEOUT_SECONDS:-600}"
+RMA184_LONG_RUN_SECONDS="${RMA184_LONG_RUN_SECONDS:-0}"
+RMA184_PERFORMANCE_CLASS="${RMA184_PERFORMANCE_CLASS:-1}"
+[[ "${RMA184_LONG_RUN_SECONDS}" =~ ^[0-9]+$ ]] || {
+  printf '%s\n' 'RMA184_LONG_RUN_SECONDS must be an integer.' >&2
+  exit 2
+}
+if (( RMA184_LONG_RUN_SECONDS != 0 && (RMA184_LONG_RUN_SECONDS < 1800 || RMA184_LONG_RUN_SECONDS > 3600) )); then
+  printf '%s\n' 'RMA184_LONG_RUN_SECONDS must be 0 or between 1800 and 3600.' >&2
+  exit 2
+fi
+[[ "${RMA184_PERFORMANCE_CLASS}" =~ ^[0-2]$ ]] || {
+  printf '%s\n' 'RMA184_PERFORMANCE_CLASS must be 0 (low), 1 (mid), or 2 (high).' >&2
+  exit 2
+}
+if [[ -n "${RMA135_ACCEPTANCE_TIMEOUT_SECONDS:-}" ]]; then
+  [[ "${RMA135_ACCEPTANCE_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]] || {
+    printf '%s\n' 'RMA135_ACCEPTANCE_TIMEOUT_SECONDS must be an integer.' >&2
+    exit 2
+  }
+  TIMEOUT_SECONDS="${RMA135_ACCEPTANCE_TIMEOUT_SECONDS}"
+else
+  TIMEOUT_SECONDS=600
+  if (( RMA184_LONG_RUN_SECONDS > 0 )); then
+    TIMEOUT_SECONDS=$((RMA184_LONG_RUN_SECONDS + 1200))
+  fi
+fi
 DEVICE_MATRIX_PATH="models/reachy-mini/android-device-matrix.json"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 
@@ -115,6 +141,9 @@ capture() {
   timeout 10s "${ADB[@]}" shell \
     "if test -f '${REMOTE_RESULT_PATH}'; then cat '${REMOTE_RESULT_PATH}'; fi" \
     | tr -d '\r' > "${REPORT_DIR}/rma135-resource-governor-acceptance-latest.json" 2>/dev/null
+  timeout 10s "${ADB[@]}" shell \
+    "if test -f '${REMOTE_RMA184_RESULT_PATH}'; then cat '${REMOTE_RMA184_RESULT_PATH}'; fi" \
+    | tr -d '\r' > "${REPORT_DIR}/rma184-representative-device-long-run.json" 2>/dev/null
   set -e
 }
 
@@ -218,7 +247,7 @@ printf '%s\n' "${launch_component}" > "${REPORT_DIR}/launch-component.txt"
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 "${ADB[@]}" shell pm clear "${PACKAGE_NAME}" > "${REPORT_DIR}/pm-clear.txt"
 "${ADB[@]}" shell \
-  "mkdir -p '${REMOTE_FILES_DIR}' && rm -f '${REMOTE_RESULT_PATH}' '${REMOTE_MODEL_PATH}' ${REMOTE_CHECKPOINT_GLOB}"
+  "mkdir -p '${REMOTE_FILES_DIR}' && rm -f '${REMOTE_RESULT_PATH}' '${REMOTE_RMA184_RESULT_PATH}' '${REMOTE_MODEL_PATH}' ${REMOTE_CHECKPOINT_GLOB}"
 timeout --signal=TERM --kill-after=15s 240s \
   "${ADB[@]}" push "${MODEL_CACHE_PATH}" "${REMOTE_MODEL_PATH}" \
   > "${REPORT_DIR}/model-push.txt" 2>&1
@@ -239,6 +268,8 @@ printf '%s\n' "${remote}" > "${REPORT_DIR}/model-device-verification.txt"
   -a android.intent.action.MAIN \
   -c android.intent.category.LAUNCHER \
   --ez reachy_rma135_resource_governor_acceptance true \
+  --ei reachy_rma184_long_run_seconds "${RMA184_LONG_RUN_SECONDS}" \
+  --ei reachy_rma184_performance_class "${RMA184_PERFORMANCE_CLASS}" \
   > "${REPORT_DIR}/launch.txt" 2>&1
 cat "${REPORT_DIR}/launch.txt"
 grep -Eq '(^|[[:space:]])(Error:|Exception)' "${REPORT_DIR}/launch.txt" && {
@@ -407,6 +438,45 @@ print(json.dumps(r, indent=2, sort_keys=True))
 PY
 
 capture
+if (( RMA184_LONG_RUN_SECONDS > 0 )); then
+  RMA184_REPORT="${REPORT_DIR}/rma184-representative-device-long-run.json"
+  [[ -s "${RMA184_REPORT}" ]] || {
+    printf '%s\n' 'RMA-184 long-run report is missing after RMA-135 acceptance.' >&2
+    exit 1
+  }
+  python3 - "${RMA184_REPORT}" "${RMA184_LONG_RUN_SECONDS}" "${RMA184_PERFORMANCE_CLASS}" <<'PY'
+import json
+import math
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+requested = int(sys.argv[2])
+performance_class = int(sys.argv[3])
+class_names = ["Low", "Mid", "High"]
+target_fps = [30, 30, 60]
+assert report["status"] == "passed", report
+assert report["qualification_passed"] is True, report
+assert report["qualification_failures"] == "", report
+assert report["performance_class"] == class_names[performance_class], report
+assert report["target_fps"] == target_fps[performance_class], report
+assert report["requested_duration_seconds"] == requested, report
+assert report["measured_duration_seconds"] >= requested, report
+assert math.isfinite(report["render_p95_ms"]) and report["render_p95_ms"] > 0.0, report
+assert math.isfinite(report["physics_p95_ms"]) and 0.0 < report["physics_p95_ms"] <= 2.0, report
+assert report["initial_unity_allocated_memory_bytes"] > 0, report
+assert report["final_unity_allocated_memory_bytes"] > 0, report
+assert report["state_lag_growth_seconds"] <= 0.002, report
+assert report["successful_local_llm_generations"] > 0, report
+assert report["minimum_local_llm_decode_tokens_per_second"] >= 1.0, report
+assert report["decision_samples"] > 0, report
+assert report["thermal_pressure_samples"] > 0, report
+assert report["non_nominal_decision_samples"] > 0, report
+assert report["thermal_degradation_order_valid"] is True, report
+assert report["report_contains_prompt_or_response_content"] is False, report
+print(json.dumps(report, indent=2, sort_keys=True))
+PY
+fi
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 trap - EXIT
 printf 'RMA-135 resource governor physical acceptance passed on %s (%s).\n' \

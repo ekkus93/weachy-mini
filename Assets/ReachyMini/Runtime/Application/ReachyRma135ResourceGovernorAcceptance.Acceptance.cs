@@ -703,6 +703,10 @@ namespace ReachyMini.Validation
                     postRecoveryAttempts.ToString(CultureInfo.InvariantCulture) + " attempt(s)");
                 }
 
+                await RunRma184LongRunIfRequestedAsync(
+                    productionRuntime,
+                    coordinator).ConfigureAwait(true);
+
                 ReachySimulationTimingSnapshot finalWorker =
                     await WaitForTimingProgressAsync(
                         productionRuntime,

@@ -33,6 +33,12 @@ namespace ReachyMini.AppState
 
         internal ReachyPriorityDegradationDecision? CurrentDecision { get; private set; }
 
+        // Exact sampled inputs associated with CurrentDecision, exposed only so
+        // physical qualification can verify the shipping policy. Callers cannot
+        // replace or mutate the production sampling path through this property.
+        internal ReachyPriorityDegradationSignals? CurrentSignals =>
+            priorityRuntime?.LastSignals;
+
         internal void Configure(
             ReachyProductionAuthoritativeRuntime runtime)
         {
