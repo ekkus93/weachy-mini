@@ -134,7 +134,7 @@ namespace ReachyMini.Core.Tests
                         thermalDegradationOrderValid: false,
                         minimumAppliedRenderFramesPerSecond: 15));
             Equal(false, result.Passed, "unvalidated render reduction");
-            Equal(true, result.Failures.Contains("degraded_render_budget_invalid"),
+            Equal("degraded_render_budget_invalid", result.Failures[0],
                 "unvalidated adaptive render budget diagnostic");
         }
 
