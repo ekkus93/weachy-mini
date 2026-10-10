@@ -308,6 +308,22 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         self.assertIn("RMA184_PERFORMANCE_CLASS: 'auto'", workflow)
         self.assertNotIn("RMA184_PERFORMANCE_CLASS: '1'", workflow)
 
+    def test_self_hosted_matrix_contracts_run_before_physical_device_pin(self) -> None:
+        gate = "python3 scripts/tests/test_rma184_representative_device_matrix.py"
+        for name in (
+            "local-unity-android-validation.yml",
+            "local-unity-android-device-no-artifacts.yml",
+        ):
+            workflow = (ROOT / ".github/workflows" / name).read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(gate, workflow, name)
+            self.assertLess(
+                workflow.index(gate),
+                workflow.index("- name: Pin one physical Android device"),
+                name,
+            )
+
     def test_physical_workflow_runs_probe_soak_and_survives_artifact_quota(self) -> None:
         workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
         for token in (

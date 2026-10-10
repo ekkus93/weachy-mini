@@ -136,6 +136,12 @@ jobs:
           python3 scripts/tests/test_rma194_release_acceptance.py
           python3 scripts/tests/test_rma194_release_acceptance_status.py
 
+      - name: Run RMA-184 representative-device matrix source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/tests/test_rma184_representative_device_matrix.py
+
       - name: Resolve local Unity and Android installations
         shell: bash
         run: |
