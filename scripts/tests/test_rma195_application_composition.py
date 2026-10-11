@@ -96,6 +96,19 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertNotIn("exception.Message", probe)
         self.assertIn("probeCancellation?.Cancel();", speech)
         self.assertIn("probeCancellation?.Dispose();", speech)
+        for name in (
+            "local-unity-android-validation.yml",
+            "local-unity-android-device-no-artifacts.yml",
+        ):
+            workflow = read(ROOT / ".github/workflows" / name)
+            self.assertIn(
+                "python3 -m unittest scripts.tests.test_rma195_application_composition",
+                workflow,
+            )
+            self.assertLess(
+                workflow.index("python3 -m unittest scripts.tests.test_rma195_application_composition"),
+                workflow.index("- name: Pin one physical Android device"),
+            )
 
     def test_live_speech_uses_one_shared_offline_audio_focus_stack(self) -> None:
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")

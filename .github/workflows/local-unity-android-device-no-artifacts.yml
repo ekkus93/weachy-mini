@@ -59,6 +59,12 @@ jobs:
           set -euo pipefail
           python3 scripts/tests/test_rma184_representative_device_matrix.py
 
+      - name: Run RMA-125 and RMA-195 speech readiness contracts (no device)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest scripts.tests.test_rma195_application_composition
+
       - name: Run RMA-125 A54 speech revalidation contract
         shell: bash
         run: python3 scripts/tests/test_rma125_a54_speech_revalidation.py
