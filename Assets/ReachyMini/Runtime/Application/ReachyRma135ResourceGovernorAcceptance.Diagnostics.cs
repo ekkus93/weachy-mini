@@ -46,7 +46,7 @@ namespace ReachyMini.Validation
             {
                 return;
             }
-            unhandledFailure = true;
+            Interlocked.Exchange(ref unhandledFailure, 1);
             // Do not retain private Unity exception text or stack traces.
         }
 

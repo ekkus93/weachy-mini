@@ -3,6 +3,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -85,7 +86,7 @@ namespace ReachyMini.Validation
         private const int MinimumHeadroomTokensForFaultInjectionProbe = 8;
 
         private static string bootstrapError = string.Empty;
-        private static bool unhandledFailure;
+        private static int unhandledFailure;
         private static int checkpointSequence;
         private static Stopwatch? checkpointStopwatch;
 
@@ -146,7 +147,7 @@ namespace ReachyMini.Validation
                 }
 
                 Rma135AcceptanceReport report = await RunAcceptanceAsync().ConfigureAwait(true);
-                if (unhandledFailure)
+                if (Volatile.Read(ref unhandledFailure) != 0)
                 {
                     throw new InvalidOperationException(
                         "An unhandled Unity exception occurred during RMA-135 acceptance.");

@@ -369,6 +369,8 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             / "ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs"
         ).read_text(encoding="utf-8")
         self.assertNotIn("unhandledFailureMessage", diagnostics)
+        self.assertIn("Interlocked.Exchange(ref unhandledFailure, 1)", diagnostics)
+        self.assertIn("Volatile.Read(ref unhandledFailure) != 0", parent)
         self.assertNotIn("unhandledFailureMessage", parent)
         self.assertNotIn('Bound(condition + "\\n" + stackTrace', diagnostics)
         checkpoint_failure = diagnostics[diagnostics.index("private static void TryWriteCheckpoint("):]
