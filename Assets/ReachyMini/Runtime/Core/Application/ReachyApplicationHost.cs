@@ -74,7 +74,8 @@ namespace ReachyMini.AppState
             catch (Exception exception)
             {
                 string rollback = DisposeConstructedServices();
-                string message = $"Application startup failed: {exception.Message}";
+                // Health is user-visible: preserve type, not exception payload.
+                string message = $"Application startup failed: {exception.GetType().Name}.";
                 if (!string.IsNullOrEmpty(rollback))
                 {
                     message = $"{message} Rollback failures: {rollback}";
@@ -155,7 +156,7 @@ namespace ReachyMini.AppState
                     string disposalFailure = DisposeRejectedService(service);
                     string message =
                         $"Factory result for '{registration.ServiceId}' was rejected: " +
-                        contractException.Message;
+                        contractException.GetType().Name;
                     if (!string.IsNullOrEmpty(disposalFailure))
                     {
                         message = $"{message} Rejected-service disposal failed: {disposalFailure}";
@@ -278,7 +279,7 @@ namespace ReachyMini.AppState
                 }
                 catch (Exception exception)
                 {
-                    failures.Add($"{service.ServiceId}: {exception.Message}");
+                    failures.Add($"{service.ServiceId}: {exception.GetType().Name}");
                 }
                 finally
                 {
@@ -300,7 +301,7 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                return $"{service.ServiceId}: {exception.Message}";
+                return $"{service.ServiceId}: {exception.GetType().Name}";
             }
         }
 
