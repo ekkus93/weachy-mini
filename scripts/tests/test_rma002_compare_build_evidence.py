@@ -163,6 +163,41 @@ class BuildComparisonTests(unittest.TestCase):
             workflow.index("Pin one physical Android device"),
         )
 
+    def test_cli_optional_artifact_integrity_is_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            paths = [root / "a.apk", root / "b.apk"]
+            for path, value, record_data in zip(
+                paths, (b"first apk", b"second apk"), (self.a, self.b)
+            ):
+                path.write_bytes(value)
+                record_data["build"]["apk_sha256"] = hashlib.sha256(value).hexdigest()
+            reports = [root / "a.json", root / "b.json"]
+            for path, data in zip(reports, (self.a, self.b)):
+                path.write_text(json.dumps(data), encoding="utf-8")
+            command = [
+                sys.executable, str(SCRIPT), str(reports[0]), str(reports[1]),
+                "--expected-sha", SHA,
+            ]
+            options = ["--apk-a", str(paths[0]), "--apk-b", str(paths[1])]
+            passed = subprocess.run(command + options, capture_output=True, text=True)
+            self.assertEqual(passed.returncode, 0, passed.stderr)
+            result = json.loads(passed.stdout)
+            self.assertTrue(result["apk_files_verified"])
+            self.assertFalse(result["todo_gate_closed"])
+            for invalid in (
+                ["--apk-a", str(paths[0])],
+                ["--apk-a", str(paths[0]), "--apk-b", str(paths[0])],
+                ["--apk-a", str(paths[0]), "--apk-b", str(root / "missing.apk")],
+            ):
+                failed = subprocess.run(command + invalid, capture_output=True, text=True)
+                self.assertEqual(failed.returncode, 1)
+                self.assertFalse(failed.stdout)
+            paths[1].write_bytes(b"tampered")
+            failed = subprocess.run(command + options, capture_output=True, text=True)
+            self.assertEqual(failed.returncode, 1)
+            self.assertFalse(failed.stdout)
+
     def test_cli_rejects_mismatch_without_success_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             first = Path(temp) / "a.json"

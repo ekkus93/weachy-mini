@@ -155,16 +155,40 @@ def compare(
     }
 
 
+def verify_apk_file(path: Path, expected_sha256: str) -> None:
+    digest = hashlib.sha256()
+    size = 0
+    try:
+        with path.open("rb") as file:
+            for chunk in iter(lambda: file.read(1024 * 1024), b""):
+                size += len(chunk)
+                digest.update(chunk)
+    except OSError as exc:
+        raise EvidenceError(f"cannot read APK {path}: {exc}") from exc
+    if not size or digest.hexdigest() != expected_sha256:
+        raise EvidenceError(f"APK {path} is empty or its SHA-256 disagrees with record")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("record_a", type=Path)
     parser.add_argument("record_b", type=Path)
     parser.add_argument("--expected-sha", required=True)
+    parser.add_argument("--apk-a", type=Path)
+    parser.add_argument("--apk-b", type=Path)
     args = parser.parse_args(argv)
     try:
-        result = compare(
-            read_record(args.record_a), read_record(args.record_b), args.expected_sha
-        )
+        if (args.apk_a is None) != (args.apk_b is None):
+            raise EvidenceError("both APK paths are required")
+        first, second = read_record(args.record_a), read_record(args.record_b)
+        result = compare(first, second, args.expected_sha)
+        result["apk_files_verified"] = False
+        if args.apk_a is not None:
+            if args.apk_a.resolve() == args.apk_b.resolve():
+                raise EvidenceError("APK paths must be independent")
+            verify_apk_file(args.apk_a, first["build"]["apk_sha256"])
+            verify_apk_file(args.apk_b, second["build"]["apk_sha256"])
+            result["apk_files_verified"] = True
     except EvidenceError as exc:
         print(f"RMA-002 evidence comparison rejected: {exc}", file=sys.stderr)
         return 1
