@@ -95,13 +95,12 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
 
     def test_independent_speech_probes_preserve_partial_readiness(self) -> None:
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
-        self.assertIn("ProbeIndependentlyAsync(", speech)
+        self.assertEqual(speech.count("await ProbeIndependentlyAsync("), 3)
         for provider in (
             "ProbeOnDeviceAsrAsync",
             "ProbeSystemAsrAsync",
             "ProbeOfflineTtsAsync",
         ):
-            self.assertIn("await ProbeIndependentlyAsync(\\n", speech.replace("\\n", "\n"))
             self.assertIn(provider + ",", speech)
         self.assertIn("SpeechAvailabilityState.Faulted", speech)
         self.assertIn("cancellationToken.IsCancellationRequested", speech)
