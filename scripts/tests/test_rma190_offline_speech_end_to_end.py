@@ -64,6 +64,8 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn('(( sdk >= 31 ))', runner)
         self.assertIn('"${abi}" == "arm64-v8a"', runner)
         self.assertIn('$1 !~ /^emulator-/', runner)
+        self.assertIn('ro.kernel.qemu', runner)
+        self.assertIn('"${qemu}" != "1"', runner)
 
     def test_real_selector_rejects_ineligible_or_ambiguous_fake_adb_devices(self) -> None:
         # Fake ADB is a deterministic selector fixture, never physical evidence.
@@ -86,6 +88,7 @@ if [[ "${1:-}" == "devices" ]]; then
     printf 'List of devices attached\n'
     printf 'good-one\tdevice\n'
     printf 'good-two\tdevice\n'
+    printf 'virtual-one\tdevice\n'
     printf 'old-api\tdevice\n'
     printf 'wrong-abi\tdevice\n'
     printf 'emulator-5554\tdevice\n'
@@ -100,6 +103,10 @@ if [[ "${1:-}" == "-s" && "${3:-}" == "shell" && "${4:-}" == "getprop" ]]; then
             ;;
         ro.build.version.sdk)
             [[ "${2:-}" == "old-api" ]] && echo 30 || echo 36
+            exit 0
+            ;;
+        ro.kernel.qemu)
+            [[ "${2:-}" == "virtual-one" ]] && echo 1 || echo 0
             exit 0
             ;;
     esac
@@ -124,7 +131,7 @@ exit 3
                     )
                     self.assertEqual(outcome.returncode, 0, outcome.stderr)
                     self.assertEqual(outcome.stdout.strip(), pinned)
-            for pinned in ("old-api", "wrong-abi", "emulator-5554", "unauthorized"):
+            for pinned in ("old-api", "wrong-abi", "virtual-one", "emulator-5554", "unauthorized"):
                 with self.subTest(rejected=pinned):
                     outcome = subprocess.run(
                         ["bash", "-c", command],
@@ -187,6 +194,8 @@ exit 3
         self.assertLess(pin, build)
         self.assertIn("adb devices", workflow)
         self.assertIn("sdk >= 31", workflow)
+        self.assertIn("ro.kernel.qemu", workflow)
+        self.assertIn('"${qemu}" != "1"', workflow)
         self.assertNotIn("upload-artifact", workflow)
 
     def test_authoritative_acceptance_remains_open_until_real_run(self) -> None:

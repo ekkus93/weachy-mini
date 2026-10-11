@@ -97,7 +97,9 @@ jobs:
           for serial in "${serials[@]}"; do
             abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
             sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
-            if [[ "${abi}" == "arm64-v8a" &&
+            qemu="$(adb -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+            if [[ "${qemu}" != "1" &&
+                  "${abi}" == "arm64-v8a" &&
                   "${sdk}" =~ ^[0-9]+$ ]] &&
                 (( sdk >= 31 )); then
               accepted+=("${serial}")

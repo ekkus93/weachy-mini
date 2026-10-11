@@ -114,10 +114,12 @@ select_device_serial()
     local -a accepted=()
     local serial
     for serial in "${serials[@]}"; do
-        local abi sdk
+        local abi sdk qemu
         abi="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
         sdk="$("${ADB_BIN}" -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
-        if [[ "${abi}" == "arm64-v8a" &&
+        qemu="$("${ADB_BIN}" -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+        if [[ "${qemu}" != "1" &&
+              "${abi}" == "arm64-v8a" &&
               "${sdk}" =~ ^[0-9]+$ ]] &&
             (( sdk >= 31 )); then
             accepted+=("${serial}")
