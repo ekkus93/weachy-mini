@@ -77,14 +77,10 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
     def test_speech_capability_does_not_claim_ready_before_probe_or_after_disposal(self) -> None:
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
         base = read(CORE / "Application/ReachyApplicationServiceBase.cs")
-        self.assertIn(
-            "if (Health.State == ReachyServiceState.Initializing)",
-            base,
-        )
-        on_initialize = speech[
-            speech.index("protected override void OnInitialize()"):
-            speech.index("protected override void OnDispose()")
-        ]
+        self.assertIn("if (Health.State == ReachyServiceState.Initializing)", base)
+        start = speech.index("protected override void OnInitialize()")
+        end = speech.index("protected override void OnDispose()", start)
+        on_initialize = speech[start:end]
         self.assertIn("Speech capability verification is pending", on_initialize)
         self.assertLess(
             on_initialize.index("SetDegraded("),
@@ -96,17 +92,18 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertNotIn("exception.Message", probe)
         self.assertIn("probeCancellation?.Cancel();", speech)
         self.assertIn("probeCancellation?.Dispose();", speech)
+        command = (
+            "python3 -m unittest "
+            "scripts.tests.test_rma195_application_composition"
+        )
         for name in (
             "local-unity-android-validation.yml",
             "local-unity-android-device-no-artifacts.yml",
         ):
             workflow = read(ROOT / ".github/workflows" / name)
-            self.assertIn(
-                "python3 -m unittest scripts.tests.test_rma195_application_composition",
-                workflow,
-            )
+            self.assertIn(command, workflow)
             self.assertLess(
-                workflow.index("python3 -m unittest scripts.tests.test_rma195_application_composition"),
+                workflow.index(command),
                 workflow.index("- name: Pin one physical Android device"),
             )
 
