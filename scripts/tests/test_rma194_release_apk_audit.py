@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import stat
+import struct
 import tempfile
 import unittest
 import zipfile
@@ -25,6 +26,16 @@ REQUIRED_LIBRARIES = (
     "libreachy_llama.so",
 )
 
+def elf64_aarch64_shared(*, elf_class: int = 2, byte_order: int = 1,
+                         elf_type: int = 3, machine: int = 183,
+                         version: int = 1) -> bytes:
+    """Minimal synthetic ELF header for structural verification only."""
+    header = bytearray(64)
+    header[:7] = bytes((0x7F, 0x45, 0x4C, 0x46, elf_class, byte_order, 1))
+    struct.pack_into("<HHI", header, 16, elf_type, machine, version)
+    struct.pack_into("<H", header, 52, 64)
+    return bytes(header)
+
 
 class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -38,7 +49,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             ("assets/bin/Data/globalgamemanagers", b"fixture Unity payload"),
         ]
         for name in REQUIRED_LIBRARIES:
-            entries.append((f"lib/arm64-v8a/{name}", b"fixture ELF"))
+            entries.append((f"lib/arm64-v8a/{name}", elf64_aarch64_shared()))
         with zipfile.ZipFile(self.apk, "w") as archive:
             for name, content in (*entries, *extra):
                 if name not in omit:
@@ -85,6 +96,63 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             extra=(("lib/arm64-v8a/libmujoco.so", b""),),
         )
         with self.assertRaisesRegex(ValueError, "empty required ARM64"):
+            AUDIT.inspect_apk(self.apk)
+
+
+    def test_non_elf_required_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/libmujoco.so", b"not an ELF library" * 5),),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid ELF64 header"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_truncated_elf_required_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libreachy_sim.so",),
+            extra=(("lib/arm64-v8a/libreachy_sim.so", b"\\x7fELF"),),
+        )
+        with self.assertRaisesRegex(ValueError, "truncated ELF header"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_wrong_architecture_required_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/libmujoco.so", elf64_aarch64_shared(machine=62)),),
+        )
+        with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_executable_instead_of_shared_object_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libreachy_llama.so",),
+            extra=(("lib/arm64-v8a/libreachy_llama.so", elf64_aarch64_shared(elf_type=2)),),
+        )
+        with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_elf32_required_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libil2cpp.so",),
+            extra=(("lib/arm64-v8a/libil2cpp.so", elf64_aarch64_shared(elf_class=1)),),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid ELF64 header"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_big_endian_required_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/libmujoco.so", elf64_aarch64_shared(byte_order=2)),),
+        )
+        with self.assertRaisesRegex(ValueError, "invalid ELF64 header"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_nested_required_library_does_not_satisfy_android_layout(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/nested/libmujoco.so", elf64_aarch64_shared()),),
+        )
+        with self.assertRaisesRegex(ValueError, "lacks required ARM64"):
             AUDIT.inspect_apk(self.apk)
 
     def test_deferred_ar_payload_is_rejected(self) -> None:

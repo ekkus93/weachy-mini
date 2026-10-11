@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import stat
+import struct
 import sys
 import zipfile
 from pathlib import Path
@@ -26,6 +27,30 @@ FORBIDDEN_MANIFEST = (
     "android.hardware.camera.ar",
     "com.unity.xr",
 )
+
+
+def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
+    """Reject non-AArch64 or non-shared objects disguised as runtime libraries."""
+    info = apk.getinfo(name)
+    if info.file_size < 64:
+        raise ValueError(f"APK has truncated ELF header in required ARM64 library: {name}")
+    # Read only the bounded ELF header; do not decompress an entire native
+    # library just to inspect its machine and object type.
+    with apk.open(info) as library:
+        header = library.read(64)
+    if (
+        len(header) != 64
+        or header[:4] != b"\\x7fELF"
+        or header[4] != 2  # ELFCLASS64
+        or header[5] != 1  # ELFDATA2LSB
+        or header[6] != 1  # EV_CURRENT
+    ):
+        raise ValueError(f"APK has invalid ELF64 header in required ARM64 library: {name}")
+    elf_type, machine, version = struct.unpack_from("<HHI", header, 16)
+    if elf_type != 3 or machine != 183 or version != 1:
+        raise ValueError(
+            f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}"
+        )
 
 
 def inspect_apk(path: Path) -> dict[str, object]:
@@ -80,15 +105,22 @@ def inspect_apk(path: Path) -> dict[str, object]:
             "libreachy_sim.so",
             "libreachy_llama.so",
         }
-        observed_native = {Path(name).name for name in native}
+        # Only direct lib/arm64-v8a/<name> entries satisfy Android's loader
+        # layout; a nested ZIP entry with the same basename does not.
+        observed_native = {
+            name.removeprefix("lib/arm64-v8a/") for name in native
+        }
         missing_native = required_native - observed_native
-        for name in native:
-            if Path(name).name in required_native and apk.getinfo(name).file_size == 0:
-                raise ValueError(f"APK has empty required ARM64 runtime library: {name}")
         if missing_native:
             raise ValueError(
                 f"APK lacks required ARM64 runtime libraries: {sorted(missing_native)}"
             )
+        for name in native:
+            if name.removeprefix("lib/arm64-v8a/") not in required_native:
+                continue
+            if apk.getinfo(name).file_size == 0:
+                raise ValueError(f"APK has empty required ARM64 runtime library: {name}")
+            _verify_required_arm64_elf(apk, name)
         if not any(
             entry.filename.casefold().startswith("assets/bin/data/")
             and not entry.is_dir()
