@@ -133,7 +133,46 @@ def load_manifest() -> dict[str, Any]:
             f"({project_version}) and toolchain.lock.json ({unity['editor_version']})."
         )
 
+    verify_gradle_wrapper(manifest)
     return manifest
+
+
+def verify_gradle_wrapper(manifest: dict[str, Any]) -> None:
+    """Ensure the checked-in Gradle wrapper cannot bypass pinned distribution identity."""
+    android = manifest["android"]
+    version = android.get("gradle")
+    digest = android.get("gradle_distribution_sha256")
+    if not isinstance(version, str) or re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version) is None:
+        raise ToolchainError("Android Gradle version must be a pinned dotted version.")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise ToolchainError("Android Gradle distribution SHA-256 must be 64 lowercase hex digits.")
+
+    properties_path = ROOT / "android-plugin" / "gradle" / "wrapper" / "gradle-wrapper.properties"
+    try:
+        lines = properties_path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ToolchainError(f"Cannot read pinned Gradle wrapper {properties_path}: {exc}") from exc
+    properties: dict[str, str] = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator:
+            raise ToolchainError(f"Malformed Gradle wrapper property: {line!r}")
+        key = key.strip()
+        if key in properties:
+            raise ToolchainError(f"Duplicate Gradle wrapper property: {key}")
+        properties[key] = value.strip()
+
+    expected_url = f"https://services.gradle.org/distributions/gradle-{version}-bin.zip"
+    actual_url = properties.get("distributionUrl", "").replace(r"\\:", ":")
+    if actual_url != expected_url:
+        raise ToolchainError(
+            f"Gradle wrapper distributionUrl mismatch: expected {expected_url}, got {actual_url!r}"
+        )
+    if properties.get("distributionSha256Sum") != digest:
+        raise ToolchainError("Gradle wrapper distributionSha256Sum does not match toolchain.lock.json.")
 
 
 def run_version(command: list[str]) -> str:
