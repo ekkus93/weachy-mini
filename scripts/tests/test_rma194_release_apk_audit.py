@@ -45,6 +45,7 @@ def elf64_aarch64_shared(
     struct.pack_into("<IIQQQQQQ", header, 120, 2, 6, 0, 0, 0, 176, 176, 8)
     return bytes(header)
 
+
 class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()

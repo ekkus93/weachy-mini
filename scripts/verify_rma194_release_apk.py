@@ -43,10 +43,14 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
             or header[5] != 1  # ELFDATA2LSB
             or header[6] != 1  # EV_CURRENT
         ):
-            raise ValueError(f"APK has invalid ELF64 header in required ARM64 library: {name}")
+            raise ValueError(
+                f"APK has invalid ELF64 header in required ARM64 library: {name}"
+            )
         elf_type, machine, version = struct.unpack_from("<HHI", header, 16)
         if elf_type != 3 or machine != 183 or version != 1:
-            raise ValueError(f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}")
+            raise ValueError(
+                f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}"
+            )
 
         # A 64-byte file with a forged ELF identity is not a loadable .so.
         # Keep the table offset/count bounded before seeking in compressed ZIP
