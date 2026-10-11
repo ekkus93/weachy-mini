@@ -12,7 +12,13 @@ CLASS_INDEX = {"low": 0, "mid": 1, "high": 2}
 
 
 def resolve(matrix: dict, model: str) -> int:
-    entries = matrix["representative_devices"]
+    if not isinstance(matrix, dict):
+        raise ValueError("RMA-184 matrix must be a JSON object")
+    entries = matrix.get("representative_devices")
+    if not isinstance(entries, list):
+        raise ValueError("representative_devices must be a JSON array")
+    if any(not isinstance(entry, dict) for entry in entries):
+        raise ValueError("representative_devices entries must be JSON objects")
     matches = [entry for entry in entries if entry.get("model") == model]
     if len(matches) != 1:
         raise ValueError(
