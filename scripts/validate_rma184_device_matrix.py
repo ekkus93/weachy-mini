@@ -99,7 +99,10 @@ def main() -> int:
         "evidence",
     }
     ids: set[str] = set()
+    models: set[str] = set()
     for device in devices:
+        if not isinstance(device, dict):
+            fail("RMA-184 representative device entries must be JSON objects")
         missing = required_device_fields - set(device)
         if missing:
             fail(f"RMA-184 device record missing fields: {sorted(missing)}")
@@ -107,6 +110,12 @@ def main() -> int:
         if not isinstance(device_id, str) or not device_id or device_id in ids:
             fail("RMA-184 device ids must be non-empty and unique")
         ids.add(device_id)
+        model = device["model"]
+        if not isinstance(model, str) or not model.strip() or model != model.strip():
+            fail(f"RMA-184 device model must be a canonical non-empty string: {device_id}")
+        if model in models:
+            fail(f"RMA-184 duplicate representative device model: {model}")
+        models.add(model)
         if device["performance_class"] not in classes:
             fail(f"RMA-184 invalid performance class for {device_id}")
         if not device["ram_configuration_gib"]:
