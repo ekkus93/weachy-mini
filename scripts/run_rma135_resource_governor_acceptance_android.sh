@@ -49,7 +49,8 @@ mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
 # inventories may contain unrelated private user data and are never evidence.
 rm -f -- "${REPORT_DIR}/adb-devices.txt" "${REPORT_DIR}/getprop.txt" \
   "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/activity.txt" \
-  "${REPORT_DIR}/processes.txt"
+  "${REPORT_DIR}/processes.txt" "${REPORT_DIR}/package.txt" \
+  "${REPORT_DIR}/package-before-launch.txt" "${REPORT_DIR}/thermalservice.txt"
 [[ -f "${APK_PATH}" ]] || { printf 'RMA-135 APK is missing: %s\n' "${APK_PATH}" >&2; exit 1; }
 command -v "${ADB_BIN}" >/dev/null 2>&1 || { printf 'adb unavailable: %s\n' "${ADB_BIN}" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'python3 is required.' >&2; exit 1; }
@@ -124,8 +125,9 @@ capture() {
   timeout 10s "${ADB[@]}" get-state > "${REPORT_DIR}/adb-state.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys battery > "${REPORT_DIR}/battery.txt" 2>&1
   timeout 15s "${ADB[@]}" shell dumpsys meminfo "${PACKAGE_NAME}" > "${REPORT_DIR}/meminfo.txt" 2>&1
-  timeout 15s "${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package.txt" 2>&1
-  timeout 15s "${ADB[@]}" shell dumpsys thermalservice > "${REPORT_DIR}/thermalservice.txt" 2>&1
+  # The structured RMA-184 report already records observed thermal signals.
+  # Unrestricted package and thermalservice dumps may contain unrelated
+  # device/application information and must never enter uploaded artifacts.
   timeout 10s "${ADB[@]}" shell pidof "${PACKAGE_NAME}" > "${REPORT_DIR}/pidof.txt" 2>&1
   timeout 10s "${ADB[@]}" shell \
     "ls -1 ${REMOTE_CHECKPOINT_GLOB} 2>/dev/null || true" \
@@ -217,8 +219,9 @@ elif [[ "${RMA184_PERFORMANCE_CLASS}" != "${expected_performance_class}" ]]; the
     "${model}" "${RMA184_PERFORMANCE_CLASS}" "${expected_performance_class}" >&2
   exit 1
 fi
-printf 'serial=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' \
-  "${DEVICE_SERIAL}" "${model}" "${abi}" "${sdk}" "${hardware}" \
+SERIAL_SHA256="$(printf '%s' "${DEVICE_SERIAL}" | sha256sum | awk '{print $1}')"
+printf 'serial_sha256=%s\nmodel=%s\nabi=%s\nsdk=%s\nhardware=%s\n' \
+  "${SERIAL_SHA256}" "${model}" "${abi}" "${sdk}" "${hardware}" \
   > "${REPORT_DIR}/device.txt"
 printf 'rma184_performance_class=%s\n' "${RMA184_PERFORMANCE_CLASS}" >> "${REPORT_DIR}/device.txt"
 
@@ -248,8 +251,13 @@ printf 'host_sha256=%s\ndevice_path=%s\ndevice_sha256=%s\n' \
   exit 1
 }
 
-"${ADB[@]}" shell dumpsys package "${PACKAGE_NAME}" > "${REPORT_DIR}/package-before-launch.txt"
-launch_component="$(awk '/android.intent.action.MAIN:/ {main=1; next} main && / filter / {print $2; exit}' "${REPORT_DIR}/package-before-launch.txt")"
+# Resolve only our launchable activity; never persist unrestricted package dumps.
+launch_component="$(
+  "${ADB[@]}" shell cmd package resolve-activity --brief \
+    -a android.intent.action.MAIN \
+    -c android.intent.category.LAUNCHER \
+    "${PACKAGE_NAME}" | tr -d '\r' | tail -n 1
+)"
 [[ -n "${launch_component}" && "${launch_component}" == */* ]] || {
   printf '%s\n' 'Could not resolve Unity launcher activity.' >&2
   exit 1
@@ -524,5 +532,5 @@ PY
 fi
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
 trap - EXIT
-printf 'RMA-135 resource governor physical acceptance passed on %s (%s).\n' \
-  "${DEVICE_SERIAL}" "${model}"
+printf 'RMA-135 resource governor physical acceptance passed on %s (serial SHA-256 %s).\n' \
+  "${model}" "${SERIAL_SHA256}"
