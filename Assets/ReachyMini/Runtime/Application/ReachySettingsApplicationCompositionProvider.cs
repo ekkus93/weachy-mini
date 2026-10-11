@@ -324,6 +324,10 @@ namespace ReachyMini.AppState
             screen.ConfigureDiagnosticBundleExport(
                 diagnosticBundleExporter.ExportRedactedBundle);
             screen.ConfigureConversationTurn(conversationTurnOrchestrator.StartTurnAsync);
+            // The audio service may have completed its capability probe before
+            // this screen subscribed to HealthChanged. Surface that initial
+            // unavailable/degraded state, not just subsequent transitions.
+            ReportSpeechSetupIfUnavailable();
             SetReady("Main screen and durable settings are bound to application state.");
         }
 
@@ -373,6 +377,7 @@ namespace ReachyMini.AppState
             if (eventArgs.Health.Kind == ReachyServiceKind.Audio)
             {
                 UpdateMainScreenCapabilities();
+                ReportSpeechSetupIfUnavailable();
             }
 
             if (eventArgs.Health.Criticality == ReachyServiceCriticality.Required &&
@@ -382,6 +387,31 @@ namespace ReachyMini.AppState
                 stateStore.SetInteraction(
                     ReachyInteractionState.Error,
                     $"{eventArgs.Health.ServiceId}: {eventArgs.Health.Message}");
+            }
+        }
+
+        private void ReportSpeechSetupIfUnavailable()
+        {
+            ReachyServiceHealth health = audio.Health;
+            if (health.State == ReachyServiceState.Ready &&
+                stateStore.Current.InteractionState == ReachyInteractionState.Unavailable &&
+                stateStore.Current.Detail.StartsWith(
+                    "Speech setup unavailable:", StringComparison.Ordinal))
+            {
+                // Clear only our own stale setup notice; never replace an
+                // unrelated camera/provider/solver failure or an active turn.
+                stateStore.SetInteraction(
+                    ReachyInteractionState.Idle,
+                    "Speech capability probe completed; verify installed on-device ASR " +
+                    "and offline TTS before starting a turn.");
+            }
+            if (health.State == ReachyServiceState.Unavailable ||
+                health.State == ReachyServiceState.Degraded ||
+                health.State == ReachyServiceState.Faulted)
+            {
+                // This service publishes bounded, typed capability diagnostics;
+                // never select a network speech provider as a workaround.
+                stateStore.ReportUnavailableAction("Speech setup", health.Message);
             }
         }
 
