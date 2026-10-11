@@ -64,6 +64,12 @@ namespace ReachyMini.AppState
                     "user action; it is never requested automatically on launch.");
                 return;
             }
+            // The shared service base marks any still-Initializing service Ready
+            // when OnInitialize returns. Never report readiness before the
+            // shipping Android ASR and TTS providers have been probed.
+            SetDegraded(
+                "Speech capability verification is pending; no ASR or TTS " +
+                "provider has been confirmed available yet.");
             probeCancellation = new CancellationTokenSource();
             _ = ProbeAsync(probeCancellation.Token);
 #else
@@ -126,9 +132,17 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    // A provider may fail while disposal is cancelling the
+                    // probe. Never overwrite Disposed with a late fault.
+                    return;
+                }
+                // Android provider exceptions may contain private payloads.
+                // Preserve only the exception class in visible diagnostics.
                 SetFaulted(
                     "Speech capability probe failed with " + exception.GetType().Name +
-                    ": " + exception.Message);
+                    ". No network speech provider was selected automatically.");
             }
         }
 

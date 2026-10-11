@@ -74,6 +74,29 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("and an offline TTS voice in device settings", speech)
         self.assertNotIn("Microphone capture and speech playback are available.", speech)
 
+    def test_speech_capability_does_not_claim_ready_before_probe_or_after_disposal(self) -> None:
+        speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
+        base = read(CORE / "Application/ReachyApplicationServiceBase.cs")
+        self.assertIn(
+            "if (Health.State == ReachyServiceState.Initializing)",
+            base,
+        )
+        on_initialize = speech[
+            speech.index("protected override void OnInitialize()"):
+            speech.index("protected override void OnDispose()")
+        ]
+        self.assertIn("Speech capability verification is pending", on_initialize)
+        self.assertLess(
+            on_initialize.index("SetDegraded("),
+            on_initialize.index("_ = ProbeAsync(probeCancellation.Token)"),
+        )
+        probe = speech[speech.index("private async Task ProbeAsync("):]
+        self.assertIn("if (cancellationToken.IsCancellationRequested)", probe)
+        self.assertIn("No network speech provider was selected automatically.", probe)
+        self.assertNotIn("exception.Message", probe)
+        self.assertIn("probeCancellation?.Cancel();", speech)
+        self.assertIn("probeCancellation?.Dispose();", speech)
+
     def test_live_speech_uses_one_shared_offline_audio_focus_stack(self) -> None:
         orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
         asr = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
