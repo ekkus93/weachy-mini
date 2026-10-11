@@ -47,7 +47,7 @@ namespace ReachyMini.Validation
                 return;
             }
             unhandledFailure = true;
-            unhandledFailureMessage = Bound(condition + "\n" + stackTrace, 2048);
+            // Do not retain private Unity exception text or stack traces.
         }
 
         private static void InitializeCheckpointRun()
@@ -116,7 +116,7 @@ namespace ReachyMini.Validation
             {
                 Debug.LogError(
                     "RMA-135 could not publish checkpoint '" + stage + "': " +
-                    Bound(exception.Message, 1024));
+                    exception.GetType().Name);
             }
         }
 

@@ -364,6 +364,16 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         self.assertIn("exception.GetType().Name", failure_writer)
         self.assertIn('previous.status == "failed"', failure_writer)
         self.assertIn("!previous.qualification_passed", failure_writer)
+        diagnostics = (
+            ROOT / "Assets/ReachyMini/Runtime/Application"
+            / "ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("unhandledFailureMessage", diagnostics)
+        self.assertNotIn("unhandledFailureMessage", parent)
+        self.assertNotIn('Bound(condition + "\\n" + stackTrace', diagnostics)
+        checkpoint_failure = diagnostics[diagnostics.index("private static void TryWriteCheckpoint("):]
+        self.assertNotIn("exception.Message", checkpoint_failure)
+        self.assertIn("exception.GetType().Name", checkpoint_failure)
         report_handler = parent[parent.index("private async void Start()"):]
         self.assertNotIn("exception.ToString()", report_handler)
         self.assertNotIn("exception.Message", report_handler)

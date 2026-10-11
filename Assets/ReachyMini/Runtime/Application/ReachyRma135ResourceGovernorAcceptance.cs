@@ -86,7 +86,6 @@ namespace ReachyMini.Validation
 
         private static string bootstrapError = string.Empty;
         private static bool unhandledFailure;
-        private static string unhandledFailureMessage = string.Empty;
         private static int checkpointSequence;
         private static Stopwatch? checkpointStopwatch;
 
