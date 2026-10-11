@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import tempfile
@@ -83,6 +84,48 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
             for file in stale:
                 self.assertFalse(file.exists(), file)
             self.assertEqual(unrelated.read_text(encoding="utf-8"), "preserve")
+
+    def test_quota_independent_summary_preserves_multiple_governor_reasons(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "rma135-resource-governor-checkpoint-042.json"
+            checkpoint.write_text(json.dumps({
+                "schema_version": 1, "sequence": 42,
+                "stage": "post_recovery_generation_completed",
+                "detail": "attempt=8 governed_status=ResourceCancelledDuringGeneration "
+                          "governor_reasons=ThermalModerate, PhysicsBudgetExceeded, RecoveryHold "
+                          "worker_deadline_miss_delta=3 user_prompt=private",
+            }), encoding="utf-8")
+            result = subprocess.run(
+                ["python3", "-I", str(ROOT / "scripts/rma135_checkpoint_summary.py"), directory],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertIn(
+                "governor_reasons=ThermalModerate, PhysicsBudgetExceeded, RecoveryHold",
+                result.stdout,
+            )
+            self.assertIn("worker_deadline_miss_delta=3", result.stdout)
+            self.assertNotIn("user_prompt", result.stdout)
+            self.assertNotIn("private", result.stdout)
+
+    def test_quota_independent_summary_rejects_unknown_reason_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            checkpoint = root / "rma135-resource-governor-checkpoint-042.json"
+            checkpoint.write_text(json.dumps({
+                "schema_version": 1, "sequence": 42,
+                "stage": "governor_recovery_exhausted",
+                "detail": "samples=100 last_mode=Suspended "
+                          "last_reasons=PhysicsBudgetExceeded, UnknownReason "
+                          "last_real_physics_state=Exceeded",
+            }), encoding="utf-8")
+            result = subprocess.run(
+                ["python3", "-I", str(ROOT / "scripts/rma135_checkpoint_summary.py"), directory],
+                capture_output=True, text=True, check=True,
+            )
+            self.assertIn("samples=100", result.stdout)
+            self.assertNotIn("UnknownReason", result.stdout)
+            self.assertNotIn("last_reasons=", result.stdout)
 
     def test_structured_performance_and_thermal_evidence_is_preserved(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
