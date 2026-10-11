@@ -154,10 +154,10 @@ namespace ReachyMini.Speech
 
         private static string DescribeException(Exception exception)
         {
-            string typeName = exception.GetType().Name;
-            return string.IsNullOrWhiteSpace(exception.Message)
-                ? typeName + "."
-                : typeName + ": " + exception.Message;
+            // Android/JNI exception messages are platform-controlled and may
+            // expose private recognizer data. Only the exception class belongs
+            // in a provider diagnostic shared with application/UI callers.
+            return exception.GetType().Name + ".";
         }
 
         // MapFailure is called from MapPlatformEvent in

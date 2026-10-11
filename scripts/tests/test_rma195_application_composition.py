@@ -78,6 +78,8 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
         on_device = read(CORE / "Speech/AndroidOnDeviceAsrProvider.Readiness.cs")
         self.assertIn("DescribeException(exception)", on_device)
+        self.assertIn('return exception.GetType().Name + ".";', on_device)
+        self.assertNotIn("exception.Message", on_device)
         self.assertIn('"on_device_asr=" + onDeviceAsr.State', speech)
         self.assertIn('"system_asr=" + systemAsr.State', speech)
         self.assertIn('"offline_tts=" + offlineTts.State', speech)
