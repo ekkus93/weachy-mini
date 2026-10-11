@@ -114,14 +114,18 @@ select_device_serial()
     local -a accepted=()
     local serial
     for serial in "${serials[@]}"; do
-        local abi sdk qemu
+        local abi sdk qemu manufacturer model
         abi="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
         sdk="$("${ADB_BIN}" -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
         qemu="$("${ADB_BIN}" -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+        manufacturer="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.manufacturer | tr -d '\r')"
+        model="$("${ADB_BIN}" -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
         if [[ "${qemu}" != "1" &&
               "${abi}" == "arm64-v8a" &&
               "${sdk}" =~ ^[0-9]+$ ]] &&
-            (( sdk >= 31 )); then
+            (( sdk >= 31 )) &&
+            python3 "${ROOT_DIR}/scripts/rma190_approved_physical_device.py" \
+                "${manufacturer}" "${model}" >/dev/null; then
             accepted+=("${serial}")
         fi
     done

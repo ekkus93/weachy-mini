@@ -98,10 +98,14 @@ jobs:
             abi="$(adb -s "${serial}" shell getprop ro.product.cpu.abi | tr -d '\r')"
             sdk="$(adb -s "${serial}" shell getprop ro.build.version.sdk | tr -d '\r')"
             qemu="$(adb -s "${serial}" shell getprop ro.kernel.qemu | tr -d '\r')"
+            manufacturer="$(adb -s "${serial}" shell getprop ro.product.manufacturer | tr -d '\r')"
+            model="$(adb -s "${serial}" shell getprop ro.product.model | tr -d '\r')"
             if [[ "${qemu}" != "1" &&
                   "${abi}" == "arm64-v8a" &&
                   "${sdk}" =~ ^[0-9]+$ ]] &&
-                (( sdk >= 31 )); then
+                (( sdk >= 31 )) &&
+                python3 scripts/rma190_approved_physical_device.py \
+                  "${manufacturer}" "${model}" >/dev/null; then
               accepted+=("${serial}")
             fi
           done

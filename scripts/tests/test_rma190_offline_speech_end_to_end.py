@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "Assets/ReachyMini/Runtime/Application"
 WORKFLOW = ROOT / ".github/workflows/rma190-offline-speech-end-to-end.yml"
 RUNNER = ROOT / "scripts/run_rma190_offline_speech_end_to_end_android.sh"
+APPROVAL = ROOT / "scripts/rma190_approved_physical_device.py"
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
 
 
@@ -66,6 +67,7 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn('$1 !~ /^emulator-/', runner)
         self.assertIn('ro.kernel.qemu', runner)
         self.assertIn('"${qemu}" != "1"', runner)
+        self.assertIn("rma190_approved_physical_device.py", runner)
 
     def test_real_selector_rejects_ineligible_or_ambiguous_fake_adb_devices(self) -> None:
         # Fake ADB is a deterministic selector fixture, never physical evidence.
@@ -89,6 +91,7 @@ if [[ "${1:-}" == "devices" ]]; then
     printf 'good-one\tdevice\n'
     printf 'good-two\tdevice\n'
     printf 'virtual-one\tdevice\n'
+    printf 'unregistered\tdevice\n'
     printf 'old-api\tdevice\n'
     printf 'wrong-abi\tdevice\n'
     printf 'emulator-5554\tdevice\n'
@@ -107,6 +110,14 @@ if [[ "${1:-}" == "-s" && "${3:-}" == "shell" && "${4:-}" == "getprop" ]]; then
             ;;
         ro.kernel.qemu)
             [[ "${2:-}" == "virtual-one" ]] && echo 1 || echo 0
+            exit 0
+            ;;
+        ro.product.manufacturer)
+            [[ "${2:-}" == "unregistered" ]] && echo Other || echo samsung
+            exit 0
+            ;;
+        ro.product.model)
+            [[ "${2:-}" == "unregistered" ]] && echo OtherPhone || echo SM-A546E
             exit 0
             ;;
     esac
@@ -131,7 +142,7 @@ exit 3
                     )
                     self.assertEqual(outcome.returncode, 0, outcome.stderr)
                     self.assertEqual(outcome.stdout.strip(), pinned)
-            for pinned in ("old-api", "wrong-abi", "virtual-one", "emulator-5554", "unauthorized"):
+            for pinned in ("old-api", "wrong-abi", "virtual-one", "unregistered", "emulator-5554", "unauthorized"):
                 with self.subTest(rejected=pinned):
                     outcome = subprocess.run(
                         ["bash", "-c", command],
@@ -152,6 +163,23 @@ exit 3
             self.assertNotEqual(unpinned.returncode, 0)
             self.assertIn("found 2", unpinned.stderr)
         subprocess.run(["bash", "-n", str(RUNNER)], check=True)
+
+    def test_approval_rejects_unregistered_and_pending_models(self) -> None:
+        for manufacturer, model, approved in (
+            ("samsung", "SM-A546E", True),
+            ("Samsung", "SM-A546E", True),
+            ("Other", "SM-A546E", False),
+            ("samsung", "OtherPhone", False),
+            ("OnePlus", "OnePlus 11 5G", False),
+        ):
+            with self.subTest(manufacturer=manufacturer, model=model):
+                result = subprocess.run(
+                    ["python3", str(APPROVAL), manufacturer, model],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode == 0, approved, result.stderr)
 
     def test_report_assertions_ignore_python_optimization_environment(self) -> None:
         runner = read(RUNNER)
@@ -196,6 +224,7 @@ exit 3
         self.assertIn("sdk >= 31", workflow)
         self.assertIn("ro.kernel.qemu", workflow)
         self.assertIn('"${qemu}" != "1"', workflow)
+        self.assertIn("rma190_approved_physical_device.py", workflow)
         self.assertNotIn("upload-artifact", workflow)
 
     def test_authoritative_acceptance_remains_open_until_real_run(self) -> None:
