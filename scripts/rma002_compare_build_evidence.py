@@ -89,13 +89,18 @@ def read_record(path: Path) -> dict[str, Any]:
         record = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise EvidenceError(f"cannot read {path}: {exc}") from exc
+    return validate_record(record, str(path))
+
+
+def validate_record(record: Any, label: str = "record") -> dict[str, Any]:
+    """Validate every declared field even for direct in-memory API callers."""
     if not isinstance(record, dict) or type(record.get("schema_version")) is not int:
-        raise EvidenceError(f"{path}: schema_version must be integer 1")
+        raise EvidenceError(f"{label}: schema_version must be integer 1")
     if record["schema_version"] != 1:
-        raise EvidenceError(f"{path}: unsupported schema version")
-    required_hash(record, "source_sha", str(path), COMMIT)
-    required_hash(record, "toolchain_lock_sha256", str(path), SHA256)
-    environment = required_object(record, "environment", str(path))
+        raise EvidenceError(f"{label}: unsupported schema version")
+    required_hash(record, "source_sha", label, COMMIT)
+    required_hash(record, "toolchain_lock_sha256", label, SHA256)
+    environment = required_object(record, "environment", label)
     for key in (
         "environment_id", "provisioning_id", "provisioning_evidence",
         "os", "architecture",
@@ -104,10 +109,10 @@ def read_record(path: Path) -> dict[str, Any]:
     for key in ("clean_checkout", "fresh_provisioning", "toolchain_verified"):
         if environment.get(key) is not True:
             raise EvidenceError(f"environment.{key} must be explicitly true")
-    versions = required_object(record, "toolchain_versions", str(path))
+    versions = required_object(record, "toolchain_versions", label)
     for key in VERSIONS:
         required_text(versions, key, "toolchain_versions")
-    build = required_object(record, "build", str(path))
+    build = required_object(record, "build", label)
     if required_text(build, "command", "build") != COMMAND:
         raise EvidenceError("build.command differs from pinned device-feasibility build")
     if type(build.get("exit_code")) is not int or build["exit_code"] != 0:
@@ -129,9 +134,9 @@ def read_record(path: Path) -> dict[str, Any]:
 def compare(
     a: dict[str, Any], b: dict[str, Any], expected_sha: str
 ) -> dict[str, Any]:
-    validate_repository_pins(a)
-    validate_repository_pins(b)
-    if COMMIT.fullmatch(expected_sha) is None:
+    validate_record(a, "record_a")
+    validate_record(b, "record_b")
+    if not isinstance(expected_sha, str) or COMMIT.fullmatch(expected_sha) is None:
         raise EvidenceError("expected SHA must be exactly 40 lowercase hex characters")
     if a["source_sha"] != expected_sha or b["source_sha"] != expected_sha:
         raise EvidenceError("source SHA differs from expected exact revision")

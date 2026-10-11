@@ -163,6 +163,34 @@ class BuildComparisonTests(unittest.TestCase):
             workflow.index("Pin one physical Android device"),
         )
 
+    def test_direct_compare_rejects_unvalidated_in_memory_claims(self) -> None:
+        mutations = (
+            ("schema_version", 2),
+            ("source_sha", "not-a-sha"),
+            ("toolchain_lock_sha256", "wrong"),
+        )
+        for key, value in mutations:
+            with self.subTest(key=key):
+                altered = copy.deepcopy(self.a)
+                altered[key] = value
+                with self.assertRaises(EvidenceError):
+                    compare(altered, self.b, SHA)
+        for section, key, value in (
+            ("environment", "clean_checkout", False),
+            ("environment", "fresh_provisioning", "true"),
+            ("environment", "toolchain_verified", False),
+            ("build", "exit_code", False),
+            ("build", "apk_sha256", "not-a-digest"),
+            ("build", "build_log_evidence", ""),
+        ):
+            with self.subTest(section=section, key=key):
+                altered = copy.deepcopy(self.a)
+                altered[section][key] = value
+                with self.assertRaises(EvidenceError):
+                    compare(altered, self.b, SHA)
+        with self.assertRaises(EvidenceError):
+            compare(self.a, self.b, None)
+
     def test_cli_optional_artifact_integrity_is_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
