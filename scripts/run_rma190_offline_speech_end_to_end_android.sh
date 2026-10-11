@@ -123,6 +123,21 @@ select_device_serial()
             accepted+=("${serial}")
         fi
     done
+    # An operator-supplied serial must pass the same real-device/API/ABI
+    # eligibility check as automatic discovery. Never allow an explicit
+    # override to turn emulator or API-ineligible evidence into acceptance.
+    local pinned="${REACHY_ANDROID_SERIAL:-}"
+    if [[ -n "${pinned}" ]]; then
+        for serial in "${accepted[@]}"; do
+            if [[ "${serial}" == "${pinned}" ]]; then
+                printf '%s\n' "${serial}"
+                return 0
+            fi
+        done
+        printf 'Pinned Android serial %s is not an eligible physical arm64-v8a API-31+ device.\n' "${pinned}" >&2
+        "${ADB_BIN}" devices -l >&2
+        exit 1
+    fi
     if (( ${#accepted[@]} != 1 )); then
         printf 'Expected exactly one physical arm64-v8a API-31+ device; found %s.\n'             "${#accepted[@]}" >&2
         "${ADB_BIN}" devices -l >&2
@@ -131,7 +146,7 @@ select_device_serial()
     printf '%s\n' "${accepted[0]}"
 }
 
-DEVICE_SERIAL="${REACHY_ANDROID_SERIAL:-$(select_device_serial)}"
+DEVICE_SERIAL="$(select_device_serial)"
 ADB=("${ADB_BIN}" -s "${DEVICE_SERIAL}")
 rm -rf -- "${REPORT_DIR}"
 mkdir -p "${REPORT_DIR}"

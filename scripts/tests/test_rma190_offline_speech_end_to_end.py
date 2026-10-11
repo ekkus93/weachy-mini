@@ -51,6 +51,17 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn('"transcript_persisted"', runner)
         self.assertIn('"raw_audio_persisted"', runner)
 
+    def test_pinned_serial_cannot_bypass_physical_device_eligibility(self) -> None:
+        runner = read(RUNNER)
+        self.assertIn('DEVICE_SERIAL="$(select_device_serial)"', runner)
+        self.assertNotIn('REACHY_ANDROID_SERIAL:-$(select_device_serial)', runner)
+        self.assertIn('local pinned="${REACHY_ANDROID_SERIAL:-}"', runner)
+        self.assertIn('if [[ "${serial}" == "${pinned}" ]]', runner)
+        self.assertIn('"${sdk}" =~ ^[0-9]+$', runner)
+        self.assertIn('(( sdk >= 31 ))', runner)
+        self.assertIn('"${abi}" == "arm64-v8a"', runner)
+        self.assertIn('$1 !~ /^emulator-/', runner)
+
     def test_human_speech_evidence_is_privacy_scoped(self) -> None:
         runner = read(RUNNER)
         source = read(APP / "ReachyRma190OfflineSpeechEndToEndAcceptance.cs")
