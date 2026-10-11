@@ -40,7 +40,7 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
         header = library.read(64)
     if (
         len(header) != 64
-        or header[:4] != b"\\x7fELF"
+        or header[:4] != bytes((127, 69, 76, 70))
         or header[4] != 2  # ELFCLASS64
         or header[5] != 1  # ELFDATA2LSB
         or header[6] != 1  # EV_CURRENT
