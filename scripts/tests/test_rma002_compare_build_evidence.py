@@ -150,6 +150,19 @@ class BuildComparisonTests(unittest.TestCase):
         result = compare(self.a, self.b, SHA)
         self.assertFalse(result["todo_gate_closed"])
 
+    def test_selfhosted_validation_runs_comparator_contracts_before_device_pin(self) -> None:
+        workflow = (
+            ROOT / ".github/workflows/local-unity-android-validation.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "python3 -m unittest scripts.tests.test_rma002_compare_build_evidence",
+            workflow,
+        )
+        self.assertLess(
+            workflow.index("Run RMA-002 pinned build-evidence regression contracts"),
+            workflow.index("Pin one physical Android device"),
+        )
+
     def test_cli_rejects_mismatch_without_success_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             first = Path(temp) / "a.json"
