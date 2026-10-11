@@ -106,7 +106,7 @@ namespace ReachyMini.Validation
             catch (Exception exception)
             {
                 requested = true;
-                bootstrapError = "Failed to read the RMA-135 launch extra: " + exception.Message;
+                bootstrapError = "Failed to read the RMA-135 launch extra: " + exception.GetType().Name;
             }
             if (!requested)
             {
@@ -120,7 +120,7 @@ namespace ReachyMini.Validation
             }
             catch (Exception exception)
             {
-                bootstrapError = "Failed to initialize RMA-135 checkpoints: " + exception.Message;
+                bootstrapError = "Failed to initialize RMA-135 checkpoints: " + exception.GetType().Name;
                 Debug.LogError(bootstrapError);
             }
 
@@ -150,8 +150,7 @@ namespace ReachyMini.Validation
                 if (unhandledFailure)
                 {
                     throw new InvalidOperationException(
-                        "An unhandled Unity exception occurred during RMA-135 acceptance: " +
-                        unhandledFailureMessage);
+                        "An unhandled Unity exception occurred during RMA-135 acceptance.");
                 }
                 report.status = "passed";
                 WriteReport(resultPath, report);
@@ -160,11 +159,11 @@ namespace ReachyMini.Validation
             }
             catch (Exception exception)
             {
-                TryWriteCheckpoint("failed", Bound(exception.Message, 1024));
+                TryWriteCheckpoint("failed", exception.GetType().Name);
                 Rma135AcceptanceReport failure = new Rma135AcceptanceReport
                 {
                     status = "failed",
-                    error = Bound(exception.ToString(), 4096),
+                    error = exception.GetType().Name,
                     device_model = SystemInfo.deviceModel,
                     operating_system = SystemInfo.operatingSystem,
                     android_api_level = TryReadApiLevel(),
@@ -175,9 +174,11 @@ namespace ReachyMini.Validation
                 }
                 catch (Exception reportException)
                 {
-                    Debug.LogError("RMA-135 could not write its failure report: " + reportException);
+                    Debug.LogError("RMA-135 could not write its failure report: " +
+                        reportException.GetType().Name);
                 }
-                Debug.LogError("RMA-135 resource governor physical acceptance failed: " + exception);
+                Debug.LogError("RMA-135 resource governor physical acceptance failed: " +
+                    exception.GetType().Name);
             }
             finally
             {

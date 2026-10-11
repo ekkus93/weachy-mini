@@ -351,6 +351,27 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ):
             self.assertIn(acceptance, todo)
 
+    def test_integrated_physical_failure_reports_do_not_persist_private_provider_text(self) -> None:
+        soak = SOAK.read_text(encoding="utf-8")
+        parent = (
+            ROOT / "Assets/ReachyMini/Runtime/Application"
+            / "ReachyRma135ResourceGovernorAcceptance.cs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("generation.Detail", soak)
+        failure_writer = soak[soak.index("private static void TryWriteRma184Failure("):]
+        self.assertNotIn("exception.Message", failure_writer)
+        self.assertNotIn("writeException.Message", failure_writer)
+        self.assertIn("exception.GetType().Name", failure_writer)
+        self.assertIn('previous.status == "failed"', failure_writer)
+        self.assertIn("!previous.qualification_passed", failure_writer)
+        report_handler = parent[parent.index("private async void Start()"):]
+        self.assertNotIn("exception.ToString()", report_handler)
+        self.assertNotIn("exception.Message", report_handler)
+        self.assertNotIn("unhandledFailureMessage);", report_handler)
+        self.assertIn("error = exception.GetType().Name,", report_handler)
+        self.assertIn('TryWriteCheckpoint("failed", exception.GetType().Name)', report_handler)
+        self.assertNotIn(" + exception);", report_handler)
+
     def test_physical_workflow_runs_probe_soak_and_survives_artifact_quota(self) -> None:
         workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
         for token in (

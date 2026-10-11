@@ -215,10 +215,8 @@ namespace ReachyMini.Validation
                         {
                             throw new InvalidOperationException(
                                 "RMA-184 governed long-run " +
-                                "generation failed: " +
-                                generation.Status +
-                                "; " +
-                                generation.Detail);
+                                "generation failed with status " +
+                                generation.Status);
                         }
                     }
 
@@ -659,6 +657,28 @@ namespace ReachyMini.Validation
         {
             try
             {
+                // Retain measured rejection evidence rather than replacing it
+                // with a generic exception record. A previously written
+                // "passed" report, however, must not survive a later failure.
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        Rma184LongRunReport? previous =
+                            JsonUtility.FromJson<Rma184LongRunReport>(
+                                File.ReadAllText(path));
+                        if (previous != null &&
+                            previous.status == "failed" &&
+                            !previous.qualification_passed)
+                        {
+                            return;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // Replace invalid prior evidence with a typed failure.
+                    }
+                }
                 WriteRma184Report(
                     path,
                     new Rma184LongRunReport
@@ -673,9 +693,7 @@ namespace ReachyMini.Validation
                             false,
                         qualification_failures =
                             Bound(
-                                exception.GetType().Name +
-                                ": " +
-                                exception.Message,
+                                exception.GetType().Name,
                                 1024),
                         report_contains_prompt_or_response_content =
                             false,
@@ -686,9 +704,7 @@ namespace ReachyMini.Validation
                 Debug.LogError(
                     "RMA-184 long-run failure evidence " +
                     "could not be written: " +
-                    Bound(
-                        writeException.Message,
-                        1024));
+                    writeException.GetType().Name);
             }
         }
     }
