@@ -75,7 +75,10 @@ def inspect_apk(path: Path) -> dict[str, object]:
             if entry.filename.startswith("lib/arm64-v8a/") and entry.filename.endswith(".so")
         ]
         required_native = {
-            "libil2cpp.so", "libmujoco.so", "libreachy_sim.so", "libreachy_llama.so"
+            "libil2cpp.so",
+            "libmujoco.so",
+            "libreachy_sim.so",
+            "libreachy_llama.so",
         }
         observed_native = {Path(name).name for name in native}
         missing_native = required_native - observed_native

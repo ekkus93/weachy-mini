@@ -36,11 +36,9 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
         entries = [
             ("AndroidManifest.xml", b"fixture binary manifest"),
             ("assets/bin/Data/globalgamemanagers", b"fixture Unity payload"),
-            *(
-                (f"lib/arm64-v8a/{name}", b"fixture ELF")
-                for name in REQUIRED_LIBRARIES
-            ),
         ]
+        for name in REQUIRED_LIBRARIES:
+            entries.append((f"lib/arm64-v8a/{name}", b"fixture ELF"))
         with zipfile.ZipFile(self.apk, "w") as archive:
             for name, content in (*entries, *extra):
                 if name not in omit:
@@ -79,6 +77,19 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             extra=(("AndroidManifest.xml", b""),),
         )
         with self.assertRaisesRegex(ValueError, "nonempty file"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_empty_required_native_library_is_rejected(self) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/libmujoco.so", b""),),
+        )
+        with self.assertRaisesRegex(ValueError, "empty required ARM64"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_deferred_ar_payload_is_rejected(self) -> None:
+        self.build(extra=(("lib/arm64-v8a/libarcore_sdk_c.so", b"fixture"),))
+        with self.assertRaisesRegex(ValueError, "Deferred AR/XR"):
             AUDIT.inspect_apk(self.apk)
 
     def test_noncanonical_path_is_rejected(self) -> None:
