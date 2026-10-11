@@ -71,9 +71,15 @@ namespace ReachyMini.Tests
                 {
                     throw new AssertionException("Main-screen state was not published.");
                 }
+                // In the Editor there is no installed Android offline speech
+                // service. Startup must expose that unavailable capability
+                // instead of presenting an apparently ready idle microphone.
                 Assert.That(
                     snapshot.InteractionState,
-                    Is.EqualTo(ReachyInteractionState.Idle));
+                    Is.EqualTo(ReachyInteractionState.Unavailable));
+                StringAssert.Contains(
+                    "Speech setup unavailable:",
+                    snapshot.Detail);
                 Assert.That(
                     snapshot.ActiveCamera,
                     Is.EqualTo("Fixed front / three-quarter"));
