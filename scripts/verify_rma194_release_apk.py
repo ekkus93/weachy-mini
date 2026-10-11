@@ -144,7 +144,9 @@ def inspect_apk(path: Path) -> dict[str, object]:
                 not name.startswith("lib/arm64-v8a/")
                 or "/" in name.removeprefix("lib/arm64-v8a/")
             ):
-                raise ValueError(f"APK contains unsupported native library layout: {name}")
+                raise ValueError(
+                    f"APK contains unsupported native library layout: {name}"
+                )
             native.append(name)
         required_native = {
             "libil2cpp.so",

@@ -177,12 +177,18 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             AUDIT.inspect_apk(self.apk)
 
     def test_nested_optional_library_is_rejected(self) -> None:
-        self.build(extra=(("lib/arm64-v8a/plugins/liboptional.so", elf64_aarch64_shared()),))
+        self.build(
+            extra=(("lib/arm64-v8a/plugins/liboptional.so", elf64_aarch64_shared()),)
+        )
         with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
             AUDIT.inspect_apk(self.apk)
 
     def test_invalid_optional_native_library_is_rejected(self) -> None:
-        self.build(extra=(("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared(machine=62)),))
+        self.build(
+            extra=(
+                ("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared(machine=62)),
+            )
+        )
         with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
             AUDIT.inspect_apk(self.apk)
 
