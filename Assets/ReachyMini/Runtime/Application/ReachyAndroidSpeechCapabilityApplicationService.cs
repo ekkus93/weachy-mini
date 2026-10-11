@@ -85,24 +85,62 @@ namespace ReachyMini.AppState
             probeCancellation = null;
         }
 
+        private static async Task<SpeechProviderAvailability> ProbeIndependentlyAsync(
+            Func<CancellationToken, Task<SpeechProviderAvailability>> probe,
+            string providerName,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await probe(cancellationToken).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                // A failed capability check must not prevent the independent
+                // offline providers from reporting their own availability.
+                // Do not expose platform exception messages or select a fallback.
+                return new SpeechProviderAvailability(
+                    SpeechAvailabilityState.Faulted,
+                    providerName + " capability probe failed with " +
+                    exception.GetType().Name + ".");
+            }
+        }
+
         private async Task ProbeAsync(CancellationToken cancellationToken)
         {
             try
             {
                 SpeechProviderAvailability onDeviceAsr =
-                    await ProbeOnDeviceAsrAsync(cancellationToken).ConfigureAwait(true);
+                    await ProbeIndependentlyAsync(
+                        ProbeOnDeviceAsrAsync,
+                        "on_device_asr",
+                        cancellationToken).ConfigureAwait(true);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     return;
                 }
                 SpeechProviderAvailability systemAsr =
-                    await ProbeSystemAsrAsync(cancellationToken).ConfigureAwait(true);
+                    await ProbeIndependentlyAsync(
+                        ProbeSystemAsrAsync,
+                        "system_asr",
+                        cancellationToken).ConfigureAwait(true);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     return;
                 }
                 SpeechProviderAvailability offlineTts =
-                    await ProbeOfflineTtsAsync(cancellationToken).ConfigureAwait(true);
+                    await ProbeIndependentlyAsync(
+                        ProbeOfflineTtsAsync,
+                        "offline_tts",
+                        cancellationToken).ConfigureAwait(true);
                 if (cancellationToken.IsCancellationRequested)
                 {
                     return;

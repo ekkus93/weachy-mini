@@ -93,6 +93,25 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("explicit on-device ASR service", speech)
         self.assertIn("and an offline TTS voice in device settings", speech)
 
+    def test_independent_speech_probes_preserve_partial_readiness(self) -> None:
+        speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
+        self.assertIn("ProbeIndependentlyAsync(", speech)
+        for provider in (
+            "ProbeOnDeviceAsrAsync",
+            "ProbeSystemAsrAsync",
+            "ProbeOfflineTtsAsync",
+        ):
+            self.assertIn("await ProbeIndependentlyAsync(\\n", speech.replace("\\n", "\n"))
+            self.assertIn(provider + ",", speech)
+        self.assertIn("SpeechAvailabilityState.Faulted", speech)
+        self.assertIn("cancellationToken.IsCancellationRequested", speech)
+        self.assertIn("exception.GetType().Name", speech)
+        self.assertNotIn("exception.Message", speech)
+        self.assertIn(
+            "onDeviceAsr.IsAvailable || systemAsr.IsAvailable || offlineTts.IsAvailable",
+            speech,
+        )
+
     def test_speech_capability_does_not_claim_ready_before_probe_or_after_disposal(self) -> None:
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
         base = read(CORE / "Application/ReachyApplicationServiceBase.cs")
