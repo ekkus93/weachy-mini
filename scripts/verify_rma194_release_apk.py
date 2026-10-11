@@ -73,6 +73,8 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
 
     has_load = False
     has_dynamic = False
+    file_backed_loads: list[tuple[int, int]] = []
+    dynamic_ranges: list[tuple[int, int]] = []
     for offset in range(0, len(table), 56):
         p_type, _flags, p_offset, _vaddr, _paddr, filesz, memsz, _align = (
             struct.unpack_from("<IIQQQQQQ", table, offset)
@@ -83,10 +85,23 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
             raise ValueError(f"APK has invalid ELF segment extent: {name}")
         if p_type == 1:
             has_load = True
+            if filesz:
+                file_backed_loads.append((p_offset, p_offset + filesz))
         else:
             has_dynamic = True
-    if not (has_load and has_dynamic):
-        raise ValueError(f"APK required ARM64 library lacks load/dynamic segments: {name}")
+            if filesz:
+                dynamic_ranges.append((p_offset, p_offset + filesz))
+    if not (has_load and has_dynamic and file_backed_loads and dynamic_ranges):
+        raise ValueError(
+            f"APK required ARM64 library lacks nonempty load/dynamic segments: {name}"
+        )
+    # PT_DYNAMIC must point to bytes actually mapped by PT_LOAD, not merely
+    # to an arbitrary region of the archive member or an empty segment.
+    for start, end in dynamic_ranges:
+        if not any(load_start <= start and end <= load_end for load_start, load_end in file_backed_loads):
+            raise ValueError(
+                f"APK ARM64 dynamic segment is not file-backed by PT_LOAD: {name}"
+            )
 
 
 def inspect_apk(path: Path) -> dict[str, object]:

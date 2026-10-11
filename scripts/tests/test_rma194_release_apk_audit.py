@@ -257,6 +257,31 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             bytes(library), "invalid ELF segment extent"
         )
 
+    def test_empty_file_backed_load_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<Q", library, 64 + 32, 0)
+        self.assert_rejects_native_layout(
+            bytes(library), "lacks nonempty load/dynamic segments"
+        )
+
+    def test_empty_dynamic_segment_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<Q", library, 120 + 32, 0)
+        struct.pack_into("<Q", library, 120 + 40, 0)
+        self.assert_rejects_native_layout(
+            bytes(library), "lacks nonempty load/dynamic segments"
+        )
+
+    def test_dynamic_segment_outside_file_backed_load_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<Q", library, 64 + 32, 160)
+        struct.pack_into("<Q", library, 120 + 8, 160)
+        struct.pack_into("<Q", library, 120 + 32, 16)
+        struct.pack_into("<Q", library, 120 + 40, 16)
+        self.assert_rejects_native_layout(
+            bytes(library), "dynamic segment is not file-backed by PT_LOAD"
+        )
+
     def test_deferred_ar_payload_is_rejected(self) -> None:
         self.build(extra=(("lib/arm64-v8a/libarcore_sdk_c.so", b"fixture"),))
         with self.assertRaisesRegex(ValueError, "Deferred AR/XR"):
