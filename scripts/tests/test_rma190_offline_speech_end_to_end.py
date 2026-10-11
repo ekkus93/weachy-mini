@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -61,6 +64,77 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn('(( sdk >= 31 ))', runner)
         self.assertIn('"${abi}" == "arm64-v8a"', runner)
         self.assertIn('$1 !~ /^emulator-/', runner)
+
+    def test_real_selector_rejects_ineligible_or_ambiguous_fake_adb_devices(self) -> None:
+        # Fake ADB is a deterministic selector fixture, never physical evidence.
+        runner = read(RUNNER)
+        beginning = runner.index("select_device_serial()\\n{".replace("\\n", "\n"))
+        ending = runner.index('\\n}\\n\\nDEVICE_SERIAL="$(select_device_serial)"'.replace("\\n", "\n"), beginning) + 2
+        command = "set -euo pipefail\\n".replace("\\n", "\n") + runner[beginning:ending] + "\nselect_device_serial\n"
+        stub = r"""#!/usr/bin/env bash
+if [[ "${1:-}" == "devices" ]]; then
+    printf 'List of devices attached\n'
+    printf 'good-one\tdevice\n'
+    printf 'good-two\tdevice\n'
+    printf 'old-api\tdevice\n'
+    printf 'wrong-abi\tdevice\n'
+    printf 'emulator-5554\tdevice\n'
+    printf 'unauthorized\tunauthorized\n'
+    exit 0
+fi
+if [[ "${1:-}" == "-s" && "${3:-}" == "shell" && "${4:-}" == "getprop" ]]; then
+    case "${5:-}" in
+        ro.product.cpu.abi)
+            [[ "${2:-}" == "wrong-abi" ]] && echo armeabi-v7a || echo arm64-v8a
+            exit 0
+            ;;
+        ro.build.version.sdk)
+            [[ "${2:-}" == "old-api" ]] && echo 30 || echo 36
+            exit 0
+            ;;
+    esac
+fi
+exit 3
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            fake_adb = Path(directory) / "fixture-adb"
+            fake_adb.write_text(stub, encoding="utf-8")
+            fake_adb.chmod(0o755)
+            base_env = os.environ.copy()
+            base_env.pop("REACHY_ANDROID_SERIAL", None)
+            base_env["ADB_BIN"] = str(fake_adb)
+            for pinned in ("good-one", "good-two"):
+                with self.subTest(pinned=pinned):
+                    outcome = subprocess.run(
+                        ["bash", "-c", command],
+                        capture_output=True,
+                        text=True,
+                        env={**base_env, "REACHY_ANDROID_SERIAL": pinned},
+                        check=False,
+                    )
+                    self.assertEqual(outcome.returncode, 0, outcome.stderr)
+                    self.assertEqual(outcome.stdout.strip(), pinned)
+            for pinned in ("old-api", "wrong-abi", "emulator-5554", "unauthorized"):
+                with self.subTest(rejected=pinned):
+                    outcome = subprocess.run(
+                        ["bash", "-c", command],
+                        capture_output=True,
+                        text=True,
+                        env={**base_env, "REACHY_ANDROID_SERIAL": pinned},
+                        check=False,
+                    )
+                    self.assertNotEqual(outcome.returncode, 0, pinned)
+                    self.assertFalse(outcome.stdout.strip())
+            unpinned = subprocess.run(
+                ["bash", "-c", command],
+                capture_output=True,
+                text=True,
+                env=base_env,
+                check=False,
+            )
+            self.assertNotEqual(unpinned.returncode, 0)
+            self.assertIn("found 2", unpinned.stderr)
+        subprocess.run(["bash", "-n", str(RUNNER)], check=True)
 
     def test_human_speech_evidence_is_privacy_scoped(self) -> None:
         runner = read(RUNNER)
