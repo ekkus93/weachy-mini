@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """RMA-191: no raw provider or lifecycle exception text in UI health."""
 
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CORE = ROOT / "Assets/ReachyMini/Runtime/Core"
