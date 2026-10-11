@@ -256,6 +256,23 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ):
             self.assertIn(token, runner)
 
+    def test_physical_verifier_checks_memory_lag_finite_and_private_content(self) -> None:
+        runner = RMA135_RUNNER.read_text(encoding="utf-8")
+        for contract in (
+            'math.isfinite(report["measured_duration_seconds"])',
+            'report["memory_growth_bytes"] == memory_growth',
+            "memory_budgets_mib = [128, 192, 256]",
+            'initial_lag = report["initial_state_lag_seconds"]',
+            'final_lag = report["final_state_lag_seconds"]',
+            'observed_lag_growth = max(0.0, final_lag - initial_lag)',
+            'report["state_lag_growth_seconds"]',
+            "math.isclose(",
+            "observed_lag_growth <= 0.002",
+            'math.isfinite(report["minimum_local_llm_decode_tokens_per_second"])',
+            'for forbidden in ("prompt", "transcript", "raw_audio", "response_json", "messages"):',
+        ):
+            self.assertIn(contract, runner)
+
     def test_optimized_python_cannot_disable_physical_report_assertions(self) -> None:
         runner = RMA135_RUNNER.read_text(encoding="utf-8")
         self.assertIn(

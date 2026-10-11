@@ -463,6 +463,10 @@ import sys
 from pathlib import Path
 
 report = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+# Never echo a report carrying private prompt, transcript, or media fields.
+for forbidden in ("prompt", "transcript", "raw_audio", "response_json", "messages"):
+    if forbidden in report:
+        raise SystemExit(f"RMA-184 report contains forbidden field: {forbidden}")
 requested = int(sys.argv[2])
 performance_class = int(sys.argv[3])
 class_names = ["Low", "Mid", "High"]
@@ -483,14 +487,32 @@ assert math.isclose(
     abs_tol=1e-9,
 ), report
 assert report["requested_duration_seconds"] == requested, report
+assert math.isfinite(report["measured_duration_seconds"]), report
 assert report["measured_duration_seconds"] >= requested, report
 assert math.isfinite(report["render_p95_ms"]) and report["render_p95_ms"] > 0.0, report
 assert report["render_p95_ms"] <= report["qualified_render_p95_budget_ms"], report
 assert math.isfinite(report["physics_p95_ms"]) and 0.0 < report["physics_p95_ms"] <= 2.0, report
-assert report["initial_unity_allocated_memory_bytes"] > 0, report
-assert report["final_unity_allocated_memory_bytes"] > 0, report
-assert report["state_lag_growth_seconds"] <= 0.002, report
+initial_memory = report["initial_unity_allocated_memory_bytes"]
+final_memory = report["final_unity_allocated_memory_bytes"]
+assert initial_memory > 0 and final_memory > 0, report
+memory_growth = max(0, final_memory - initial_memory)
+assert report["memory_growth_bytes"] == memory_growth, report
+memory_budgets_mib = [128, 192, 256]
+assert memory_growth <= memory_budgets_mib[performance_class] * 1024 * 1024, report
+initial_lag = report["initial_state_lag_seconds"]
+final_lag = report["final_state_lag_seconds"]
+observed_lag_growth = max(0.0, final_lag - initial_lag)
+assert math.isfinite(initial_lag) and initial_lag >= 0.0, report
+assert math.isfinite(final_lag) and final_lag >= 0.0, report
+assert math.isclose(
+    report["state_lag_growth_seconds"],
+    observed_lag_growth,
+    rel_tol=1e-9,
+    abs_tol=1e-9,
+), report
+assert observed_lag_growth <= 0.002, report
 assert report["successful_local_llm_generations"] > 0, report
+assert math.isfinite(report["minimum_local_llm_decode_tokens_per_second"]), report
 assert report["minimum_local_llm_decode_tokens_per_second"] >= 1.0, report
 assert report["decision_samples"] > 0, report
 assert report["thermal_pressure_samples"] > 0, report
