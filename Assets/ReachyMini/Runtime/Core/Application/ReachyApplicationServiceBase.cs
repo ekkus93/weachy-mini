@@ -83,7 +83,8 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                SetFaulted($"Initialization failed: {exception.Message}");
+                // UI-visible health must never echo private exception payloads.
+                SetFaulted($"Initialization failed: {exception.GetType().Name}.");
                 throw;
             }
         }
@@ -122,7 +123,8 @@ namespace ReachyMini.AppState
             }
             catch (Exception exception)
             {
-                SetFaulted($"Disposal failed: {exception.Message}");
+                // Preserve the failure class without exposing platform details.
+                SetFaulted($"Disposal failed: {exception.GetType().Name}.");
                 throw;
             }
         }
