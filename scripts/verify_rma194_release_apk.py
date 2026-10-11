@@ -107,9 +107,7 @@ def inspect_apk(path: Path) -> dict[str, object]:
         }
         # Only direct lib/arm64-v8a/<name> entries satisfy Android's loader
         # layout; a nested ZIP entry with the same basename does not.
-        observed_native = {
-            name.removeprefix("lib/arm64-v8a/") for name in native
-        }
+        observed_native = {name.removeprefix("lib/arm64-v8a/") for name in native}
         missing_native = required_native - observed_native
         if missing_native:
             raise ValueError(
