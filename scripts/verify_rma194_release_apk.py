@@ -93,12 +93,15 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
                 dynamic_ranges.append((p_offset, p_offset + filesz))
     if not (has_load and has_dynamic and file_backed_loads and dynamic_ranges):
         raise ValueError(
-            f"APK required ARM64 library lacks nonempty load/dynamic segments: {name}"
+            f"APK required ARM64 library lacks load/dynamic segments or nonempty file-backed data: {name}"
         )
     # PT_DYNAMIC must point to bytes actually mapped by PT_LOAD, not merely
     # to an arbitrary region of the archive member or an empty segment.
     for start, end in dynamic_ranges:
-        if not any(load_start <= start and end <= load_end for load_start, load_end in file_backed_loads):
+        if not any(
+            load_start <= start and end <= load_end
+            for load_start, load_end in file_backed_loads
+        ):
             raise ValueError(
                 f"APK ARM64 dynamic segment is not file-backed by PT_LOAD: {name}"
             )

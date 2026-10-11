@@ -261,7 +261,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<Q", library, 64 + 32, 0)
         self.assert_rejects_native_layout(
-            bytes(library), "lacks nonempty load/dynamic segments"
+            bytes(library), "lacks load/dynamic segments"
         )
 
     def test_empty_dynamic_segment_is_rejected(self) -> None:
@@ -269,7 +269,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
         struct.pack_into("<Q", library, 120 + 32, 0)
         struct.pack_into("<Q", library, 120 + 40, 0)
         self.assert_rejects_native_layout(
-            bytes(library), "lacks nonempty load/dynamic segments"
+            bytes(library), "lacks load/dynamic segments"
         )
 
     def test_dynamic_segment_outside_file_backed_load_is_rejected(self) -> None:
