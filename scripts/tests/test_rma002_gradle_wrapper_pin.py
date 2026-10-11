@@ -22,7 +22,7 @@ class GradleWrapperPinTests(unittest.TestCase):
         )
         self.project_path.parent.mkdir(parents=True)
         self.project_path.write_text(
-            f"m_EditorVersion: {self.manifest['unity']['editor_version']}\\n", encoding="utf-8"
+            f"m_EditorVersion: {self.manifest['unity']['editor_version']}\n", encoding="utf-8"
         )
         self.wrapper_path.parent.mkdir(parents=True)
         self.write_wrapper()
@@ -44,8 +44,8 @@ class GradleWrapperPinTests(unittest.TestCase):
         version = version or android["gradle"]
         digest = digest or android["gradle_distribution_sha256"]
         self.wrapper_path.write_text(
-            f"distributionUrl=https\\\\://services.gradle.org/distributions/gradle-{version}-bin.zip\\n"
-            f"distributionSha256Sum={digest}\\n",
+            f"distributionUrl=https\\://services.gradle.org/distributions/gradle-{version}-bin.zip\n"
+            f"distributionSha256Sum={digest}\n",
             encoding="utf-8",
         )
 
@@ -69,7 +69,7 @@ class GradleWrapperPinTests(unittest.TestCase):
 
     def test_duplicate_checksum_property_fails(self) -> None:
         with self.wrapper_path.open("a", encoding="utf-8") as stream:
-            stream.write("distributionSha256Sum=" + self.manifest["android"]["gradle_distribution_sha256"] + "\\n")
+            stream.write("distributionSha256Sum=" + self.manifest["android"]["gradle_distribution_sha256"] + "\n")
         with self.assertRaisesRegex(verify_toolchain.ToolchainError, "Duplicate Gradle wrapper"):
             verify_toolchain.load_manifest()
 

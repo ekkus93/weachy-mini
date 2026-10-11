@@ -142,7 +142,7 @@ def verify_gradle_wrapper(manifest: dict[str, Any]) -> None:
     android = manifest["android"]
     version = android.get("gradle")
     digest = android.get("gradle_distribution_sha256")
-    if not isinstance(version, str) or re.fullmatch(r"\\d+\\.\\d+\\.\\d+", version) is None:
+    if not isinstance(version, str) or re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
         raise ToolchainError("Android Gradle version must be a pinned dotted version.")
     if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
         raise ToolchainError("Android Gradle distribution SHA-256 must be 64 lowercase hex digits.")
@@ -166,7 +166,7 @@ def verify_gradle_wrapper(manifest: dict[str, Any]) -> None:
         properties[key] = value.strip()
 
     expected_url = f"https://services.gradle.org/distributions/gradle-{version}-bin.zip"
-    actual_url = properties.get("distributionUrl", "").replace(r"\\:", ":")
+    actual_url = properties.get("distributionUrl", "").replace(r"\:", ":")
     if actual_url != expected_url:
         raise ToolchainError(
             f"Gradle wrapper distributionUrl mismatch: expected {expected_url}, got {actual_url!r}"
