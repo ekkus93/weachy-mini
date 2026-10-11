@@ -30,27 +30,59 @@ FORBIDDEN_MANIFEST = (
 
 
 def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
-    """Reject non-AArch64 or non-shared objects disguised as runtime libraries."""
+    """Check the bounded ELF layout, not just an easily forged 64-byte header."""
     info = apk.getinfo(name)
     if info.file_size < 64:
         raise ValueError(f"APK has truncated ELF header in required ARM64 library: {name}")
-    # Read only the bounded ELF header; do not decompress an entire native
-    # library just to inspect its machine and object type.
     with apk.open(info) as library:
         header = library.read(64)
-    if (
-        len(header) != 64
-        or header[:4] != bytes((127, 69, 76, 70))
-        or header[4] != 2  # ELFCLASS64
-        or header[5] != 1  # ELFDATA2LSB
-        or header[6] != 1  # EV_CURRENT
-    ):
-        raise ValueError(f"APK has invalid ELF64 header in required ARM64 library: {name}")
-    elf_type, machine, version = struct.unpack_from("<HHI", header, 16)
-    if elf_type != 3 or machine != 183 or version != 1:
-        raise ValueError(
-            f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}"
+        if (
+            len(header) != 64
+            or header[:4] != bytes((127, 69, 76, 70))
+            or header[4] != 2  # ELFCLASS64
+            or header[5] != 1  # ELFDATA2LSB
+            or header[6] != 1  # EV_CURRENT
+        ):
+            raise ValueError(f"APK has invalid ELF64 header in required ARM64 library: {name}")
+        elf_type, machine, version = struct.unpack_from("<HHI", header, 16)
+        if elf_type != 3 or machine != 183 or version != 1:
+            raise ValueError(f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}")
+
+        # A 64-byte file with a forged ELF identity is not a loadable .so.
+        # Keep the table offset/count bounded before seeking in compressed ZIP
+        # members; validate segment extents without decompressing the full .so.
+        phoff = struct.unpack_from("<Q", header, 32)[0]
+        ehsize, phentsize, phnum = struct.unpack_from("<HHH", header, 52)
+        table_size = phnum * phentsize
+        if (
+            ehsize != 64
+            or phentsize != 56  # sizeof(Elf64_Phdr)
+            or not 1 <= phnum <= 128
+            or not 64 <= phoff <= 65536
+            or phoff + table_size > info.file_size
+        ):
+            raise ValueError(f"APK has invalid ELF program-header table: {name}")
+        library.seek(phoff)
+        table = library.read(table_size)
+        if len(table) != table_size:
+            raise ValueError(f"APK has truncated ELF program-header table: {name}")
+
+    has_load = False
+    has_dynamic = False
+    for offset in range(0, len(table), 56):
+        p_type, _flags, p_offset, _vaddr, _paddr, filesz, memsz, _align = (
+            struct.unpack_from("<IIQQQQQQ", table, offset)
         )
+        if p_type not in (1, 2):  # PT_LOAD / PT_DYNAMIC
+            continue
+        if filesz > memsz or p_offset + filesz > info.file_size:
+            raise ValueError(f"APK has invalid ELF segment extent: {name}")
+        if p_type == 1:
+            has_load = True
+        else:
+            has_dynamic = True
+    if not (has_load and has_dynamic):
+        raise ValueError(f"APK required ARM64 library lacks load/dynamic segments: {name}")
 
 
 def inspect_apk(path: Path) -> dict[str, object]:

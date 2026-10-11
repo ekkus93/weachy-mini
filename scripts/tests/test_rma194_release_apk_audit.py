@@ -35,13 +35,15 @@ def elf64_aarch64_shared(
     machine: int = 183,
     version: int = 1,
 ) -> bytes:
-    """Minimal synthetic ELF header for structural verification only."""
-    header = bytearray(64)
+    """Synthetic ELF with a bounded load segment and dynamic segment."""
+    header = bytearray(176)
     header[:7] = bytes((0x7F, 0x45, 0x4C, 0x46, elf_class, byte_order, 1))
     struct.pack_into("<HHI", header, 16, elf_type, machine, version)
-    struct.pack_into("<H", header, 52, 64)
+    struct.pack_into("<Q", header, 32, 64)
+    struct.pack_into("<HHH", header, 52, 64, 56, 2)
+    struct.pack_into("<IIQQQQQQ", header, 64, 1, 5, 0, 0, 0, 176, 176, 4096)
+    struct.pack_into("<IIQQQQQQ", header, 120, 2, 6, 0, 0, 0, 176, 176, 8)
     return bytes(header)
-
 
 class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -167,6 +169,61 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "lacks required ARM64"):
             AUDIT.inspect_apk(self.apk)
+
+    def assert_rejects_native_layout(self, content: bytes, reason: str) -> None:
+        self.build(
+            omit=("lib/arm64-v8a/libmujoco.so",),
+            extra=(("lib/arm64-v8a/libmujoco.so", content),),
+        )
+        with self.assertRaisesRegex(ValueError, reason):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_header_only_elf_cannot_pass_as_loadable_library(self) -> None:
+        self.assert_rejects_native_layout(
+            elf64_aarch64_shared()[:64], "invalid ELF program-header table"
+        )
+
+    def test_invalid_program_header_offset_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<Q", library, 32, 65537)
+        self.assert_rejects_native_layout(
+            bytes(library), "invalid ELF program-header table"
+        )
+
+    def test_invalid_program_header_entry_size_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<H", library, 54, 8)
+        self.assert_rejects_native_layout(
+            bytes(library), "invalid ELF program-header table"
+        )
+
+    def test_oversized_program_header_count_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<H", library, 56, 129)
+        self.assert_rejects_native_layout(
+            bytes(library), "invalid ELF program-header table"
+        )
+
+    def test_missing_dynamic_segment_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<I", library, 120, 0)
+        self.assert_rejects_native_layout(
+            bytes(library), "lacks load/dynamic segments"
+        )
+
+    def test_missing_load_segment_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<I", library, 64, 0)
+        self.assert_rejects_native_layout(
+            bytes(library), "lacks load/dynamic segments"
+        )
+
+    def test_out_of_file_segment_extent_is_rejected(self) -> None:
+        library = bytearray(elf64_aarch64_shared())
+        struct.pack_into("<Q", library, 64 + 32, 177)
+        self.assert_rejects_native_layout(
+            bytes(library), "invalid ELF segment extent"
+        )
 
     def test_deferred_ar_payload_is_rejected(self) -> None:
         self.build(extra=(("lib/arm64-v8a/libarcore_sdk_c.so", b"fixture"),))
