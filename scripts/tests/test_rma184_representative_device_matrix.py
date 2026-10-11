@@ -256,7 +256,6 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ):
             self.assertIn(token, runner)
 
-
     def test_optimized_python_cannot_disable_physical_report_assertions(self) -> None:
         runner = RMA135_RUNNER.read_text(encoding="utf-8")
         self.assertIn(
