@@ -93,6 +93,14 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("explicit on-device ASR service", speech)
         self.assertIn("and an offline TTS voice in device settings", speech)
 
+    def test_host_lifecycle_health_redacts_exception_messages(self) -> None:
+        host = read(CORE / "Application/ReachyApplicationHost.cs")
+        self.assertNotIn("exception.Message", host)
+        self.assertNotIn("contractException.Message", host)
+        self.assertIn("exception.GetType().Name", host)
+        self.assertIn("contractException.GetType().Name", host)
+        self.assertIn("Rollback failures:", host)
+
     def test_service_lifecycle_health_never_exposes_exception_messages(self) -> None:
         service = read(CORE / "Application/ReachyApplicationServiceBase.cs")
         self.assertIn('exception.GetType().Name', service)
