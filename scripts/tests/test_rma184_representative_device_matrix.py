@@ -249,7 +249,10 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             'report["measured_duration_seconds"] >= requested',
             'minimum_applied_fps = report["minimum_applied_render_fps"]',
             'report["render_p95_ms"] <= report["qualified_render_p95_budget_ms"]',
-            'report["state_lag_growth_seconds"] <= 0.002',
+            # The physical verifier recomputes lag from two finite timing
+            # snapshots, compares the reported growth to that value, then
+            # enforces the unchanged 2-ms limit on observed growth.
+            'observed_lag_growth <= 0.002',
             'report["minimum_local_llm_decode_tokens_per_second"] >= 1.0',
             'report["thermal_degradation_order_valid"] is True',
             'report["report_contains_prompt_or_response_content"] is False',
