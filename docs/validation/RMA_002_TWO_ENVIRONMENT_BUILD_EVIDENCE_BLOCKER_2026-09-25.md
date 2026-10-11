@@ -49,3 +49,10 @@ For two genuinely independent clean Android builds, record private JSON reports 
     python3 scripts/rma002_compare_build_evidence.py environment-a.json environment-b.json --expected-sha <exact-40-character-SHA>
 
 Both schema-version-1 records require the exact source SHA and toolchain-lock SHA-256, independently provisioned environment/provisioning IDs and non-sensitive evidence links, explicit clean-checkout/fresh-provisioning/verified-toolchain declarations, observed Unity/JDK/SDK/NDK/CMake/Gradle/AGP versions, the same device-feasibility build command, integer-zero exit status, package ID, ARM64 ABI, minimum API 26, target API 37, actual APK SHA-256, and sanitized build-log references. The comparator rejects mismatches or reused identities, and reports whether APK hashes match. APK binary equality is not itself proof of environmental independence; differing APK hashes can reflect nondeterministic metadata and require review rather than automatic failure. The command always reports todo_gate_closed=false: JSON declarations are not independent build attestations. Inspect both machine-provisioning records, actual builds, original APKs, and logs before changing the authoritative TODO.
+
+The paired-record comparator also verifies each reported toolchain version, package ABI,
+minimum/target API and the lockfile SHA-256 against the **checked-out**
+`toolchain.lock.json`; two equally incorrect declarations are rejected even
+if the records agree with each other. Run the comparator from the exact source
+revision being qualified. Toolchain agreement is still not a substitute for
+independently obtained build/provisioning evidence.

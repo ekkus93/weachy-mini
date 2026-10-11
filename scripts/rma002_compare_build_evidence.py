@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -13,6 +14,8 @@ from typing import Any
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 COMMAND = "./scripts/build_unity_android.sh device-feasibility"
+ROOT = Path(__file__).resolve().parents[1]
+LOCKFILE = ROOT / "toolchain.lock.json"
 VERSIONS = (
     "unity_editor", "jdk", "android_sdk", "android_ndk",
     "android_cmake", "gradle", "android_gradle_plugin",
@@ -46,6 +49,39 @@ def required_object(obj: dict[str, Any], key: str, label: str) -> dict[str, Any]
     if not isinstance(value, dict):
         raise EvidenceError(f"{label}.{key} must be a JSON object")
     return value
+
+
+def validate_repository_pins(record: dict[str, Any]) -> None:
+    """Fail closed when two agreeing build records contradict the checked-out lock."""
+    try:
+        lock_bytes = LOCKFILE.read_bytes()
+        manifest = json.loads(lock_bytes)
+        android = manifest["android"]
+        expected_versions = {
+            "unity_editor": manifest["unity"]["editor_version"],
+            "jdk": str(android["jdk_major"]),
+            "android_sdk": android["compile_sdk_package"],
+            "android_ndk": android["ndk"],
+            "android_cmake": android["cmake"],
+            "gradle": android["gradle"],
+            "android_gradle_plugin": android["android_gradle_plugin"],
+        }
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise EvidenceError(f"cannot validate checked-out toolchain lock: {exc}") from exc
+
+    actual_lock_hash = hashlib.sha256(lock_bytes).hexdigest()
+    if record["toolchain_lock_sha256"] != actual_lock_hash:
+        raise EvidenceError("toolchain_lock_sha256 does not match checked-out lock")
+    for key, expected in expected_versions.items():
+        if record["toolchain_versions"][key] != expected:
+            raise EvidenceError(f"toolchain_versions.{key} disagrees with pinned lock")
+    for key, expected in (
+        ("min_sdk", android["unity_device_feasibility_min_sdk"]),
+        ("target_sdk", android["target_sdk"]),
+        ("abi", android["abi"]),
+    ):
+        if record["build"][key] != expected:
+            raise EvidenceError(f"build.{key} disagrees with pinned lock")
 
 
 def read_record(path: Path) -> dict[str, Any]:
@@ -86,12 +122,15 @@ def read_record(path: Path) -> dict[str, Any]:
         raise EvidenceError("build.target_sdk must be integer 37")
     required_hash(build, "apk_sha256", "build", SHA256)
     required_text(build, "build_log_evidence", "build")
+    validate_repository_pins(record)
     return record
 
 
 def compare(
     a: dict[str, Any], b: dict[str, Any], expected_sha: str
 ) -> dict[str, Any]:
+    validate_repository_pins(a)
+    validate_repository_pins(b)
     if COMMIT.fullmatch(expected_sha) is None:
         raise EvidenceError("expected SHA must be exactly 40 lowercase hex characters")
     if a["source_sha"] != expected_sha or b["source_sha"] != expected_sha:

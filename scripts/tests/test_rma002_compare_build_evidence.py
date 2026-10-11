@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import subprocess
 import sys
@@ -16,13 +17,14 @@ from scripts.rma002_compare_build_evidence import EvidenceError, compare, read_r
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/rma002_compare_build_evidence.py"
 SHA = "a" * 40
+LOCK_HASH = hashlib.sha256((ROOT / "toolchain.lock.json").read_bytes()).hexdigest()
 
 
 def record(label: str) -> dict:
     return {
         "schema_version": 1,
         "source_sha": SHA,
-        "toolchain_lock_sha256": "b" * 64,
+        "toolchain_lock_sha256": LOCK_HASH,
         "environment": {
             "environment_id": f"environment-{label}",
             "provisioning_id": f"provision-{label}",
@@ -114,6 +116,39 @@ class BuildComparisonTests(unittest.TestCase):
                     path.write_text(json.dumps(candidate), encoding="utf-8")
                     with self.assertRaises(EvidenceError):
                         read_record(path)
+
+    def test_agreeing_records_cannot_override_checked_out_toolchain_pins(self) -> None:
+        mutations = (
+            (None, "toolchain_lock_sha256", "f" * 64),
+            ("toolchain_versions", "unity_editor", "6000.5.1f1"),
+            ("toolchain_versions", "jdk", "21"),
+            ("toolchain_versions", "android_sdk", "36.0"),
+            ("toolchain_versions", "android_ndk", "27.0.0"),
+            ("toolchain_versions", "android_cmake", "3.30.0"),
+            ("toolchain_versions", "gradle", "9.4.0"),
+            ("toolchain_versions", "android_gradle_plugin", "9.2.0"),
+        )
+        for section, key, value in mutations:
+            with self.subTest(key=key):
+                one = copy.deepcopy(self.a)
+                two = copy.deepcopy(self.b)
+                (one if section is None else one[section])[key] = value
+                (two if section is None else two[section])[key] = value
+                with self.assertRaises(EvidenceError):
+                    compare(one, two, SHA)
+                with tempfile.TemporaryDirectory() as temp:
+                    path = Path(temp) / "bad.json"
+                    path.write_text(json.dumps(one), encoding="utf-8")
+                    with self.assertRaises(EvidenceError):
+                        read_record(path)
+
+    def test_pin_check_preserves_fail_closed_release_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            file = Path(temp) / "build.json"
+            file.write_text(json.dumps(self.a), encoding="utf-8")
+            self.assertEqual(read_record(file)["toolchain_lock_sha256"], LOCK_HASH)
+        result = compare(self.a, self.b, SHA)
+        self.assertFalse(result["todo_gate_closed"])
 
     def test_cli_rejects_mismatch_without_success_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
