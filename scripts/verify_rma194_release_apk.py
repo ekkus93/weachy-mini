@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import stat
 import sys
 import zipfile
 from pathlib import Path
@@ -38,14 +39,30 @@ def inspect_apk(path: Path) -> dict[str, object]:
         for entry in entries:
             name = entry.filename
             folded = name.casefold()
-            if name.startswith("/") or "\\" in name or ".." in name.split("/") or folded in names:
+            parts = name.split("/")
+            if entry.is_dir():
+                parts = parts[:-1]
+            if not parts or any(part in ("", ".", "..") for part in parts):
+                raise ValueError("APK contains noncanonical entry names")
+            if name.startswith("/") or "\\" in name or folded in names:
                 raise ValueError("APK contains unsafe or duplicate entry names")
+            # APK contents are untrusted ZIP entries; never accept a link or
+            # special file masquerading as a required library or Unity asset.
+            kind = stat.S_IFMT(entry.external_attr >> 16)
+            if kind not in (0, stat.S_IFREG, stat.S_IFDIR):
+                raise ValueError(f"APK contains nonregular entry: {name}")
+            if kind and (kind == stat.S_IFDIR) != entry.is_dir():
+                raise ValueError(f"APK entry type disagrees with its path: {name}")
             names.add(folded)
             if any(token in folded for token in FORBIDDEN_FILES):
                 raise ValueError(f"Deferred AR/XR payload present: {name}")
-        if "androidmanifest.xml" not in names:
+        # ZIP lookups are case-sensitive even though duplicate detection is
+        # case-insensitive. Require the actual Android package entry spelling.
+        if "AndroidManifest.xml" not in {entry.filename for entry in entries}:
             raise ValueError("APK AndroidManifest.xml is missing")
         info = apk.getinfo("AndroidManifest.xml")
+        if info.is_dir() or info.file_size == 0:
+            raise ValueError("APK AndroidManifest.xml is not a nonempty file")
         if info.file_size > 2 * 1024 * 1024:
             raise ValueError("APK manifest exceeds audit limit")
         manifest = apk.read("AndroidManifest.xml")
@@ -57,7 +74,9 @@ def inspect_apk(path: Path) -> dict[str, object]:
             for entry in entries
             if entry.filename.startswith("lib/arm64-v8a/") and entry.filename.endswith(".so")
         ]
-        required_native = {"libmujoco.so", "libreachy_sim.so", "libreachy_llama.so"}
+        required_native = {
+            "libil2cpp.so", "libmujoco.so", "libreachy_sim.so", "libreachy_llama.so"
+        }
         observed_native = {Path(name).name for name in native}
         missing_native = required_native - observed_native
         for name in native:
@@ -67,8 +86,13 @@ def inspect_apk(path: Path) -> dict[str, object]:
             raise ValueError(
                 f"APK lacks required ARM64 runtime libraries: {sorted(missing_native)}"
             )
-        if not any(name.startswith("assets/bin/data/") for name in names):
-            raise ValueError("APK lacks Unity data payload")
+        if not any(
+            entry.filename.casefold().startswith("assets/bin/data/")
+            and not entry.is_dir()
+            and entry.file_size > 0
+            for entry in entries
+        ):
+            raise ValueError("APK lacks nonempty Unity data payload")
     digest = hashlib.sha256()
     with path.open("rb") as source:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
