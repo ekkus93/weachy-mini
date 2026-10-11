@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -40,6 +43,46 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
         self.assertIn('serial_sha256=%s', runner)
         self.assertNotIn('serial=%s', runner)
         self.assertNotIn('"${DEVICE_SERIAL}" "${model}" "${abi}"', runner)
+
+    def test_early_preflight_failure_clears_stale_evidence(self) -> None:
+        # This fixture has no APK, ADB call, or physical-device side effect.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "report"
+            checkpoints = report / "checkpoints"
+            checkpoints.mkdir(parents=True)
+            stale = [
+                report / "rma135-resource-governor-acceptance.json",
+                report / "rma135-resource-governor-acceptance-latest.json",
+                report / "rma184-representative-device-long-run.json",
+                report / "checkpoint-latest.json",
+                report / "checkpoint-files.txt",
+                checkpoints / "rma135-resource-governor-checkpoint-00001.json",
+            ]
+            for file in stale:
+                file.write_text('{"status":"passed"}', encoding="utf-8")
+            unrelated = report / "operator-notes.txt"
+            unrelated.write_text("preserve", encoding="utf-8")
+            env = dict(os.environ)
+            env["REACHY_ANDROID_SERIAL"] = "fixture-not-a-device"
+            env["RMA133_MODEL_CACHE_ROOT"] = str(root / "model-cache")
+            result = subprocess.run(
+                [
+                    "bash",
+                    str(RUNNER),
+                    str(root / "missing.apk"),
+                    str(report),
+                ],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("RMA-135 APK is missing", result.stderr)
+            for file in stale:
+                self.assertFalse(file.exists(), file)
+            self.assertEqual(unrelated.read_text(encoding="utf-8"), "preserve")
 
     def test_structured_performance_and_thermal_evidence_is_preserved(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")

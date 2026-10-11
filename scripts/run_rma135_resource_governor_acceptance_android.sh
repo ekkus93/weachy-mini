@@ -51,6 +51,19 @@ rm -f -- "${REPORT_DIR}/adb-devices.txt" "${REPORT_DIR}/getprop.txt" \
   "${REPORT_DIR}/logcat.txt" "${REPORT_DIR}/activity.txt" \
   "${REPORT_DIR}/processes.txt" "${REPORT_DIR}/package.txt" \
   "${REPORT_DIR}/package-before-launch.txt" "${REPORT_DIR}/thermalservice.txt"
+# A fresh physical run must not inherit a prior successful report or checkpoint.
+# Failures before APK preflight are uploaded too; delete only our known outputs.
+[[ ! -L "${REPORT_DIR}/checkpoints" ]] || {
+  printf '%s\n' 'RMA-135 checkpoint directory cannot be a symlink.' >&2
+  exit 2
+}
+mkdir -p "${REPORT_DIR}/checkpoints"
+rm -f -- "${REPORT_DIR}/rma135-resource-governor-acceptance.json" \
+  "${REPORT_DIR}/rma135-resource-governor-acceptance-latest.json" \
+  "${REPORT_DIR}/rma184-representative-device-long-run.json" \
+  "${REPORT_DIR}/checkpoint-latest.json" \
+  "${REPORT_DIR}/checkpoint-files.txt" \
+  "${REPORT_DIR}/checkpoints/"rma135-resource-governor-checkpoint-*.json
 [[ -f "${APK_PATH}" ]] || { printf 'RMA-135 APK is missing: %s\n' "${APK_PATH}" >&2; exit 1; }
 command -v "${ADB_BIN}" >/dev/null 2>&1 || { printf 'adb unavailable: %s\n' "${ADB_BIN}" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { printf '%s\n' 'python3 is required.' >&2; exit 1; }

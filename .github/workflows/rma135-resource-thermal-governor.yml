@@ -29,6 +29,7 @@ on:
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
       - 'scripts/tests/test_rma135_android_acceptance_contracts.py'
+      - 'scripts/tests/test_rma135_private_physical_evidence.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -60,6 +61,7 @@ on:
       - 'scripts/tests/test_rma135_governor_diagnostics.py'
       - 'scripts/tests/test_rma135_main_screen_governor_wiring.py'
       - 'scripts/tests/test_rma135_android_acceptance_contracts.py'
+      - 'scripts/tests/test_rma135_private_physical_evidence.py'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_SPEC_2026-08-10.md'
       - 'docs/RMA_135_RESOURCE_THERMAL_GOVERNOR_TODO_2026-08-10.md'
       - 'docs/validation/RMA_135_RESOURCE_THERMAL_GOVERNOR_VALIDATION_*.md'
@@ -142,6 +144,7 @@ jobs:
           python3 scripts/tests/test_rma135_governor_diagnostics.py
           python3 scripts/tests/test_rma135_main_screen_governor_wiring.py
           python3 scripts/tests/test_rma135_android_acceptance_contracts.py
+          python3 scripts/tests/test_rma135_private_physical_evidence.py
 
       - name: Compile Python contracts
         run: >-
@@ -150,6 +153,7 @@ jobs:
           scripts/tests/test_rma135_governor_diagnostics.py
           scripts/tests/test_rma135_main_screen_governor_wiring.py
           scripts/tests/test_rma135_android_acceptance_contracts.py
+          scripts/tests/test_rma135_private_physical_evidence.py
 
       - name: Check physical runner shell syntax
         run: bash -n scripts/run_rma135_resource_governor_acceptance_android.sh
