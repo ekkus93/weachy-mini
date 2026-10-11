@@ -131,6 +131,7 @@ exit 3
             base_env = os.environ.copy()
             base_env.pop("REACHY_ANDROID_SERIAL", None)
             base_env["ADB_BIN"] = str(fake_adb)
+            base_env["ROOT_DIR"] = str(ROOT)
             for pinned in ("good-one", "good-two"):
                 with self.subTest(pinned=pinned):
                     outcome = subprocess.run(

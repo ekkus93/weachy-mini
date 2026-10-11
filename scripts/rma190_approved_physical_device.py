@@ -7,7 +7,10 @@ import json
 import sys
 from pathlib import Path
 
-MATRIX = Path(__file__).resolve().parents[1] / "models/reachy-mini/android-device-matrix.json"
+MATRIX = (
+    Path(__file__).resolve().parents[1]
+    / "models/reachy-mini/android-device-matrix.json"
+)
 
 
 def is_approved(manufacturer: str, model: str) -> bool:
