@@ -130,11 +130,22 @@ def inspect_apk(path: Path) -> dict[str, object]:
         for token in FORBIDDEN_MANIFEST:
             if token.encode("utf-8") in manifest or token.encode("utf-16le") in manifest:
                 raise ValueError(f"Deferred AR/XR manifest declaration: {token}")
-        native = [
+        # The shipping build targets ARM64 exclusively. A second ABI or a
+        # nested .so is not loadable through Android's standard JNI layout;
+        # validate every packaged library, not just the four required names.
+        packaged_native = [
             entry.filename
             for entry in entries
-            if entry.filename.startswith("lib/arm64-v8a/") and entry.filename.endswith(".so")
+            if entry.filename.startswith("lib/") and entry.filename.endswith(".so")
         ]
+        native = []
+        for name in packaged_native:
+            if (
+                not name.startswith("lib/arm64-v8a/")
+                or "/" in name.removeprefix("lib/arm64-v8a/")
+            ):
+                raise ValueError(f"APK contains unsupported native library layout: {name}")
+            native.append(name)
         required_native = {
             "libil2cpp.so",
             "libmujoco.so",
@@ -142,7 +153,7 @@ def inspect_apk(path: Path) -> dict[str, object]:
             "libreachy_llama.so",
         }
         # Only direct lib/arm64-v8a/<name> entries satisfy Android's loader
-        # layout; a nested ZIP entry with the same basename does not.
+        # layout. The inventory above rejects unexpected ABIs and nesting.
         observed_native = {name.removeprefix("lib/arm64-v8a/") for name in native}
         missing_native = required_native - observed_native
         if missing_native:
@@ -150,10 +161,8 @@ def inspect_apk(path: Path) -> dict[str, object]:
                 f"APK lacks required ARM64 runtime libraries: {sorted(missing_native)}"
             )
         for name in native:
-            if name.removeprefix("lib/arm64-v8a/") not in required_native:
-                continue
             if apk.getinfo(name).file_size == 0:
-                raise ValueError(f"APK has empty required ARM64 runtime library: {name}")
+                raise ValueError(f"APK has empty ARM64 native library: {name}")
             _verify_required_arm64_elf(apk, name)
         if not any(
             entry.filename.casefold().startswith("assets/bin/data/")

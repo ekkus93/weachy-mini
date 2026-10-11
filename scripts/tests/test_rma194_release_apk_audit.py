@@ -104,7 +104,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             omit=("lib/arm64-v8a/libmujoco.so",),
             extra=(("lib/arm64-v8a/libmujoco.so", b""),),
         )
-        with self.assertRaisesRegex(ValueError, "empty required ARM64"):
+        with self.assertRaisesRegex(ValueError, "empty ARM64 native library"):
             AUDIT.inspect_apk(self.apk)
 
     def test_non_elf_required_library_is_rejected(self) -> None:
@@ -168,8 +168,33 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
                 ("lib/arm64-v8a/nested/libmujoco.so", elf64_aarch64_shared()),
             ),
         )
-        with self.assertRaisesRegex(ValueError, "lacks required ARM64"):
+        with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
             AUDIT.inspect_apk(self.apk)
+
+    def test_foreign_abi_library_is_rejected(self) -> None:
+        self.build(extra=(("lib/x86_64/liboptional.so", elf64_aarch64_shared()),))
+        with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_nested_optional_library_is_rejected(self) -> None:
+        self.build(extra=(("lib/arm64-v8a/plugins/liboptional.so", elf64_aarch64_shared()),))
+        with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_invalid_optional_native_library_is_rejected(self) -> None:
+        self.build(extra=(("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared(machine=62)),))
+        with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_empty_optional_native_library_is_rejected(self) -> None:
+        self.build(extra=(("lib/arm64-v8a/liboptional.so", b""),))
+        with self.assertRaisesRegex(ValueError, "empty ARM64 native library"):
+            AUDIT.inspect_apk(self.apk)
+
+    def test_valid_optional_native_library_is_counted(self) -> None:
+        self.build(extra=(("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared()),))
+        result = AUDIT.inspect_apk(self.apk)
+        self.assertEqual(5, result["arm64_native_library_count"])
 
     def assert_rejects_native_layout(self, content: bytes, reason: str) -> None:
         self.build(
