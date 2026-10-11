@@ -2878,17 +2878,30 @@ the shipping `ReachyProductionAuthoritativeRuntime`, selected RMA-133 local mode
 governed generation coordinator, bounded `ReachyPerformanceTelemetry`, and the
 shipping RMA-181 priority-degradation driver. The exact sampled RMA-181 signals
 are exposed read-only for qualification so the run can bind thermal input to the
-actual applied decision. The physical workflow requests a 1,800-second mid-class
-run, captures a fresh support-policy probe, verifies render/physics p95, memory
-growth, authoritative state-lag growth, local-LLM decode throughput, and observed
-thermal-degradation ordering. Render p95 is judged against the lowest actually
+actual applied decision. The physical workflow requests a 1,800-second run in
+the low/mid/high class resolved from the connected physical device by the
+authoritative matrix (`scripts/rma184_select_performance_class.py`), rather
+than applying mid-class budgets to every phone. Exact-head self-hosted run
+`38081513188` on `4b7934e84c6b9cad25623073baa9404f056095df`
+passed the updated RMA-184 source contracts and Unity tests, but failed at
+physical A54 pinning, so **no** RMA-184 long-run evidence was obtained.
+The workflow captures a fresh support-policy probe and verifies render/physics
+p95, memory growth, authoritative state-lag growth, local-LLM decode
+throughput, and observed thermal-degradation ordering. Render p95 is judged against the lowest actually
 applied, policy-valid RMA-181 frame target when thermal degradation is observed;
 physics, memory, state-lag, LLM-throughput, and degradation-order limits are not
 relaxed. The lane can rebuild the exact checked-out SHA when
 GitHub artifact transport is unavailable. Artifact upload is non-blocking; the
-device acceptance itself remains blocking. These three criteria intentionally
-remain unchecked until that exact-head physical run passes; implementation/static
-contracts are not substituted for measured device evidence.
+device acceptance itself remains blocking. The registered LG-H872 low-class
+phone has Android API 26; the shipping RMA-135 thermal signal is explicitly
+`Unavailable` on API 28 and below, while RMA-184 currently requires observed
+physical thermal-pressure samples. Therefore an LG-H872 30-minute run can
+produce real render/physics/memory/lag evidence but **cannot alone qualify**
+RMA-184's thermal-order gate. Closing the low-class thermal portion requires a
+representative low-class device with API 29+ thermal telemetry or an explicitly
+reviewed alternative acceptance plan; neither can be silently inferred from
+memory/CPU pressure or deterministic fixtures. These three criteria
+intentionally remain unchecked pending measured evidence.
 
 ---
 

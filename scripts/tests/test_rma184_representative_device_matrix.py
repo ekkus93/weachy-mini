@@ -320,6 +320,37 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
                 name,
             )
 
+    def test_api26_low_device_thermal_evidence_limit_is_fail_visible(self) -> None:
+        matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
+        legacy_devices = [
+            entry for entry in matrix["representative_devices"]
+            if isinstance(entry.get("android_api"), int)
+            and entry["android_api"] < 29
+        ]
+        self.assertTrue(legacy_devices, "Boundary-device compatibility must be explicit")
+        source = (
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application/ReachyAndroidLocalLlmResourceSignalSource.cs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if (apiLevel < 29)", source)
+        self.assertIn("return LocalLlmThermalStatus.Unavailable;", source)
+        soak = SOAK.read_text(encoding="utf-8")
+        self.assertRegex(
+            soak,
+            r"thermalPressureSamples\s*>\s*0\s*&&\s*nonNominalDecisionSamples\s*>\s*0",
+        )
+        spec = SPEC.read_text(encoding="utf-8")
+        todo = TODO.read_text(encoding="utf-8")
+        self.assertIn("API 26 thermal observability gap", spec)
+        self.assertIn("cannot alone qualify", todo)
+        self.assertIn("API 29+", todo)
+        for acceptance in (
+            "- [ ] Long-running tests do not accumulate unbounded memory or state lag.",
+            "- [ ] Thermal degradation follows the documented priority order.",
+            "- [ ] Supported devices meet the defined simulation and interaction targets.",
+        ):
+            self.assertIn(acceptance, todo)
+
     def test_physical_workflow_runs_probe_soak_and_survives_artifact_quota(self) -> None:
         workflow = RMA135_WORKFLOW.read_text(encoding="utf-8")
         for token in (
