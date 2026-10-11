@@ -14,6 +14,7 @@ on:
       - 'scripts/tests/test_rma170_structured_logging.py'
       - 'scripts/tests/test_rma172_diagnostic_bundle_export.py'
       - 'scripts/tests/test_rma191_security_privacy_review.py'
+      - 'scripts/tests/test_rma191_health_exception_redaction.py'
   push:
     branches:
       - master
@@ -29,6 +30,7 @@ on:
       - 'scripts/tests/test_rma170_structured_logging.py'
       - 'scripts/tests/test_rma172_diagnostic_bundle_export.py'
       - 'scripts/tests/test_rma191_security_privacy_review.py'
+      - 'scripts/tests/test_rma191_health_exception_redaction.py'
   workflow_dispatch:
 
 permissions:
@@ -58,6 +60,7 @@ jobs:
           python3 scripts/tests/test_rma170_structured_logging.py
           python3 scripts/tests/test_rma172_diagnostic_bundle_export.py
           python3 scripts/tests/test_rma191_security_privacy_review.py
+          python3 scripts/tests/test_rma191_health_exception_redaction.py
           python3 -m py_compile scripts/tests/test_rma191_security_privacy_review.py
 
       - name: Run application privacy contracts
