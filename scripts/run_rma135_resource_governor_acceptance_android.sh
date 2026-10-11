@@ -167,6 +167,8 @@ on_exit() {
   trap - EXIT
   if (( code != 0 )); then
     capture
+    # Artifacts can be quota-blocked; publish only allowlisted physical counters.
+    python3 -I scripts/rma135_checkpoint_summary.py "${REPORT_DIR}/checkpoints" || true
   fi
   exit "${code}"
 }
@@ -398,6 +400,7 @@ assert r["logical_processor_count"] > 0, r
 # more informative, not a failure. Accept the full real LocalLlmThermalStatus
 # enum (LocalLlmResourceGovernor.cs) rather than a single hardcoded value.
 _valid_thermal_statuses = {
+
     "Unavailable", "None", "Light", "Moderate", "Severe", "Critical",
     "Emergency", "Shutdown",
 }

@@ -139,6 +139,7 @@ def main() -> None:
     )
     require(text, "startup_physics_exceeded_observations", "startup miss evidence")
     require(runner, 'mkdir -p "${REPORT_DIR}/checkpoints"', "checkpoint evidence directory")
+    require(runner, "scripts/rma135_checkpoint_summary.py", "quota-independent privacy-safe checkpoint summary")
     require(runner, '"${ADB[@]}" pull "${checkpoint_path}"', "all-checkpoint device pull")
     require(
         runner,
