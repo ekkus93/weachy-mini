@@ -345,7 +345,7 @@ PY
   sleep 2
 done
 
-python3 - "${REPORT_DIR}/rma135-resource-governor-acceptance.json" <<'PY'
+python3 -I - "${REPORT_DIR}/rma135-resource-governor-acceptance.json" <<'PY'
 import json
 import math
 import sys
@@ -456,7 +456,7 @@ if (( RMA184_LONG_RUN_SECONDS > 0 )); then
     printf '%s\n' 'RMA-184 long-run report is missing after RMA-135 acceptance.' >&2
     exit 1
   }
-  python3 - "${RMA184_REPORT}" "${RMA184_LONG_RUN_SECONDS}" "${RMA184_PERFORMANCE_CLASS}" <<'PY'
+  python3 -I - "${RMA184_REPORT}" "${RMA184_LONG_RUN_SECONDS}" "${RMA184_PERFORMANCE_CLASS}" <<'PY'
 import json
 import math
 import sys

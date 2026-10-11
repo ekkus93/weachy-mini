@@ -146,6 +146,17 @@ exit 3
             self.assertIn("found 2", unpinned.stderr)
         subprocess.run(["bash", "-n", str(RUNNER)], check=True)
 
+    def test_report_assertions_ignore_python_optimization_environment(self) -> None:
+        runner = read(RUNNER)
+        self.assertIn(
+            'python3 -I - "${REPORT_DIR}/${RESULT_FILE}"',
+            runner,
+        )
+        self.assertNotIn(
+            'python3 - "${REPORT_DIR}/${RESULT_FILE}"',
+            runner,
+        )
+
     def test_human_speech_evidence_is_privacy_scoped(self) -> None:
         runner = read(RUNNER)
         source = read(APP / "ReachyRma190OfflineSpeechEndToEndAcceptance.cs")

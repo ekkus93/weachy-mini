@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -254,6 +255,26 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             'report["report_contains_prompt_or_response_content"] is False',
         ):
             self.assertIn(token, runner)
+
+
+    def test_optimized_python_cannot_disable_physical_report_assertions(self) -> None:
+        runner = RMA135_RUNNER.read_text(encoding="utf-8")
+        self.assertIn(
+            'python3 -I - "${REPORT_DIR}/rma135-resource-governor-acceptance.json"',
+            runner,
+        )
+        self.assertIn('python3 -I - "${RMA184_REPORT}"', runner)
+        environment = dict(os.environ)
+        environment["PYTHONOPTIMIZE"] = "1"
+        result = subprocess.run(
+            [sys.executable, "-I", "-c", "assert False, 'qualification must reject'"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("AssertionError", result.stderr)
 
     def test_integrated_soak_uses_physical_model_class_not_fixed_mid_class(self) -> None:
         matrix = json.loads(MATRIX.read_text(encoding="utf-8"))

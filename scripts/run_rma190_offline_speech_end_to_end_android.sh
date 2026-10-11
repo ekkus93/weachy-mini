@@ -282,7 +282,7 @@ while true; do
 done
 
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/${RESULT_FILE}"
-python3 - "${REPORT_DIR}/${RESULT_FILE}" <<'PY'
+python3 -I - "${REPORT_DIR}/${RESULT_FILE}" <<'PY'
 from __future__ import annotations
 
 import json
