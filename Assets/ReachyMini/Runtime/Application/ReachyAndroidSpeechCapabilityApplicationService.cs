@@ -108,10 +108,14 @@ namespace ReachyMini.AppState
                     return;
                 }
 
+                // Providers can include platform exception messages in their
+                // diagnostics. Aggregate speech health is surfaced to the UI,
+                // so expose typed states without copying arbitrary provider text.
+                // Setup guidance below remains explicit and network-fail-closed.
                 string message =
-                    "on_device_asr=" + onDeviceAsr.State + " (" + onDeviceAsr.Diagnostic + "); " +
-                    "system_asr=" + systemAsr.State + " (" + systemAsr.Diagnostic + "); " +
-                    "offline_tts=" + offlineTts.State + " (" + offlineTts.Diagnostic + ").";
+                    "on_device_asr=" + onDeviceAsr.State + "; " +
+                    "system_asr=" + systemAsr.State + "; " +
+                    "offline_tts=" + offlineTts.State + ".";
                 if (onDeviceAsr.IsAvailable || systemAsr.IsAvailable || offlineTts.IsAvailable)
                 {
                     SetReady(

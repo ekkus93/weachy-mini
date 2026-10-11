@@ -74,6 +74,23 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
         self.assertIn("and an offline TTS voice in device settings", speech)
         self.assertNotIn("Microphone capture and speech playback are available.", speech)
 
+    def test_speech_health_never_republishes_raw_provider_exception_text(self) -> None:
+        speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
+        on_device = read(CORE / "Speech/AndroidOnDeviceAsrProvider.Readiness.cs")
+        self.assertIn("DescribeException(exception)", on_device)
+        self.assertIn('"on_device_asr=" + onDeviceAsr.State', speech)
+        self.assertIn('"system_asr=" + systemAsr.State', speech)
+        self.assertIn('"offline_tts=" + offlineTts.State', speech)
+        for value in (
+            "onDeviceAsr.Diagnostic",
+            "systemAsr.Diagnostic",
+            "offlineTts.Diagnostic",
+            "exception.Message",
+        ):
+            self.assertNotIn(value, speech)
+        self.assertIn("explicit on-device ASR service", speech)
+        self.assertIn("and an offline TTS voice in device settings", speech)
+
     def test_speech_capability_does_not_claim_ready_before_probe_or_after_disposal(self) -> None:
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
         base = read(CORE / "Application/ReachyApplicationServiceBase.cs")
