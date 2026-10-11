@@ -68,9 +68,19 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
     def test_real_selector_rejects_ineligible_or_ambiguous_fake_adb_devices(self) -> None:
         # Fake ADB is a deterministic selector fixture, never physical evidence.
         runner = read(RUNNER)
-        beginning = runner.index("select_device_serial()\\n{".replace("\\n", "\n"))
-        ending = runner.index('\\n}\\n\\nDEVICE_SERIAL="$(select_device_serial)"'.replace("\\n", "\n"), beginning) + 2
-        command = "set -euo pipefail\\n".replace("\\n", "\n") + runner[beginning:ending] + "\nselect_device_serial\n"
+        beginning = runner.index("select_device_serial()\n{")
+        ending = (
+            runner.index(
+                '\n}\n\nDEVICE_SERIAL="$(select_device_serial)"',
+                beginning,
+            )
+            + 2
+        )
+        command = (
+            "set -euo pipefail\n"
+            + runner[beginning:ending]
+            + "\nselect_device_serial\n"
+        )
         stub = r"""#!/usr/bin/env bash
 if [[ "${1:-}" == "devices" ]]; then
     printf 'List of devices attached\n'
