@@ -56,3 +56,18 @@ minimum/target API and the lockfile SHA-256 against the **checked-out**
 if the records agree with each other. Run the comparator from the exact source
 revision being qualified. Toolchain agreement is still not a substitute for
 independently obtained build/provisioning evidence.
+
+## Optional direct APK-integrity check
+
+When both original APK files are available, pass `--apk-a /path/to/a.apk`
+and `--apk-b /path/to/b.apk` to the paired-build comparator. Both
+flags must be present together. The tool streams the bytes of each APK,
+checks the SHA-256 against its respective build report, and rejects empty,
+missing, altered, or identical resolved file paths. The JSON output reports
+`apk_files_verified=true` only after both file hashes match; when the flags
+are absent it reports `apk_files_verified=false`.
+
+This does **not** establish independent provisioning, actual build execution,
+APK provenance, or physical-device acceptance. Original logs and clean-build
+environment evidence still require independent review; the authoritative
+RMA-002 checkbox remains open until that review is complete.

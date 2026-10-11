@@ -176,8 +176,12 @@ class BuildComparisonTests(unittest.TestCase):
             for path, data in zip(reports, (self.a, self.b)):
                 path.write_text(json.dumps(data), encoding="utf-8")
             command = [
-                sys.executable, str(SCRIPT), str(reports[0]), str(reports[1]),
-                "--expected-sha", SHA,
+                sys.executable,
+                str(SCRIPT),
+                str(reports[0]),
+                str(reports[1]),
+                "--expected-sha",
+                SHA,
             ]
             options = ["--apk-a", str(paths[0]), "--apk-b", str(paths[1])]
             passed = subprocess.run(command + options, capture_output=True, text=True)
