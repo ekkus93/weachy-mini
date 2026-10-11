@@ -57,6 +57,32 @@ def main() -> None:
         "SelectExactOfflineVoice" in tts,
         "shipping TTS must retain exact installed offline voice selection",
     )
+    composition = read("ReachySettingsApplicationCompositionProvider.cs")
+    require(
+        "screen.ConfigureConversationTurn(conversationTurnOrchestrator.StartTurnAsync);\n"
+        "            // The audio service may have completed" in composition
+        and "ReportSpeechSetupIfUnavailable();" in composition,
+        "initial audio-service setup failures must remain visible after screen binding",
+    )
+    require(
+        "if (eventArgs.Health.Kind == ReachyServiceKind.Audio)" in composition
+        and "UpdateMainScreenCapabilities();\n"
+        "                ReportSpeechSetupIfUnavailable();" in composition,
+        "subsequent audio-health failures must surface setup guidance",
+    )
+    require(
+        'stateStore.ReportUnavailableAction("Speech setup", health.Message);' in composition
+        and "ReachyServiceState.Unavailable" in composition
+        and "ReachyServiceState.Degraded" in composition
+        and "ReachyServiceState.Faulted" in composition,
+        "speech setup guidance must surface all failed local-capability states",
+    )
+    require(
+        '"Speech setup unavailable:", StringComparison.Ordinal' in composition
+        and "stateStore.Current.InteractionState == ReachyInteractionState.Unavailable" in composition
+        and "ReachyInteractionState.Idle" in composition,
+        "speech recovery must clear only its own stale setup notice",
+    )
     print("RMA-125 shipping audio-focus integration contract passed")
 
 
