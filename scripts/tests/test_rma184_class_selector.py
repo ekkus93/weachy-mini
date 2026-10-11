@@ -67,7 +67,11 @@ class Rma184ClassSelectorTests(unittest.TestCase):
         for value in (None, 0, False, [], {}, ["mid"], {"name": "mid"}):
             with self.subTest(performance_class=value), self.assertRaises(ValueError):
                 selector.resolve(
-                    {"representative_devices": [{"model": "phone", "performance_class": value}]},
+                    {
+                        "representative_devices": [
+                            {"model": "phone", "performance_class": value}
+                        ]
+                    },
                     "phone",
                 )
         with self.assertRaises(ValueError):
