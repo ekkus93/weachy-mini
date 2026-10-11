@@ -53,6 +53,8 @@ namespace ReachyMini.Validation
         private static void InitializeCheckpointRun()
         {
             checkpointSequence = 0;
+            Volatile.Write(ref lastCompletedCheckpointStage, string.Empty);
+            Volatile.Write(ref lastCompletedCheckpointSequence, 0);
             checkpointStopwatch = Stopwatch.StartNew();
             string directory = UnityEngine.Application.persistentDataPath;
             Directory.CreateDirectory(directory);
@@ -100,6 +102,10 @@ namespace ReachyMini.Validation
                     "RMA-135 checkpoint destination already exists: " + finalPath);
             }
             File.Move(temporaryPath, finalPath);
+            // Publish only after the checkpoint is durably committed. The stage is a
+            // fixed code-owned label; never copy checkpoint detail into failure reports.
+            Volatile.Write(ref lastCompletedCheckpointStage, stage);
+            Volatile.Write(ref lastCompletedCheckpointSequence, sequence);
             Debug.Log(
                 "RMA-135 checkpoint " + sequence.ToString(CultureInfo.InvariantCulture) +
                 " stage=" + stage + " elapsed_ms=" +

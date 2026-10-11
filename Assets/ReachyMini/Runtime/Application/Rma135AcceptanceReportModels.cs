@@ -21,6 +21,10 @@ namespace ReachyMini.Validation
     {
         public string status = string.Empty;
         public string error = string.Empty;
+        // Last successfully written stage before failure, not the terminal 'failed'
+        // marker. Deliberately excludes checkpoint detail and all private content.
+        public string failure_stage = string.Empty;
+        public int failure_checkpoint_sequence;
         public string device_model = string.Empty;
         public string operating_system = string.Empty;
         public int android_api_level;

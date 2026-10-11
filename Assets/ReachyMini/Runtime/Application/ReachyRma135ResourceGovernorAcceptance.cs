@@ -89,6 +89,10 @@ namespace ReachyMini.Validation
         private static int unhandledFailure;
         private static int checkpointSequence;
         private static Stopwatch? checkpointStopwatch;
+        // Only allowlisted stage identifiers and counters are retained for failed-run
+        // reports. Checkpoint details may contain diagnostic text and are never copied.
+        private static string lastCompletedCheckpointStage = string.Empty;
+        private static int lastCompletedCheckpointSequence;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
@@ -159,11 +163,17 @@ namespace ReachyMini.Validation
             }
             catch (Exception exception)
             {
+                // Capture the preceding durable checkpoint before writing the terminal
+                // 'failed' marker; otherwise the failure report loses the actual stage.
+                string failureStage = Volatile.Read(ref lastCompletedCheckpointStage);
+                int failureCheckpointSequence = Volatile.Read(ref lastCompletedCheckpointSequence);
                 TryWriteCheckpoint("failed", exception.GetType().Name);
                 Rma135AcceptanceReport failure = new Rma135AcceptanceReport
                 {
                     status = "failed",
                     error = exception.GetType().Name,
+                    failure_stage = failureStage,
+                    failure_checkpoint_sequence = failureCheckpointSequence,
                     device_model = SystemInfo.deviceModel,
                     operating_system = SystemInfo.operatingSystem,
                     android_api_level = TryReadApiLevel(),

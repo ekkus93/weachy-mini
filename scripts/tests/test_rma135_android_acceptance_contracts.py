@@ -61,6 +61,14 @@ def main() -> None:
         "physics-priority cancellation assertion",
     )
     require(text, "worker_steps_after_injection", "worker continuity evidence")
+    # A failed physical run must preserve its last durable, privacy-safe stage even
+    # when the success report was never constructed. Never include checkpoint detail.
+    require(text, "failure_stage = failureStage", "failure report retains last completed stage")
+    require(text, "failure_checkpoint_sequence = failureCheckpointSequence", "failure report retains checkpoint sequence")
+    require(text, "Volatile.Write(ref lastCompletedCheckpointStage, stage)", "stage recorded after checkpoint commit")
+    require(text, "Volatile.Read(ref lastCompletedCheckpointStage)", "stage captured before terminal failure checkpoint")
+    require(text, "Volatile.Write(ref lastCompletedCheckpointSequence, sequence)", "checkpoint sequence recorded")
+    forbid(text, "failure_detail =", "private checkpoint details in failure report")
     require(text, "post_load_stabilization_started", "real post-load stabilization")
     require(text, "post_load_stabilized_mode", "post-load recovery evidence")
     require(
