@@ -12,7 +12,16 @@ FIELDS = {
     "post_recovery_generation_exhausted": "attempts first_refusal last_status worker_steps_during_retry_window worker_deadline_misses_during_retry_window",
 }
 NAME = re.compile(r"rma135-resource-governor-checkpoint-([0-9]{3,5})\.json")
-PAIR = re.compile(r"(?<!\S)([a-z_]+)=([A-Za-z0-9_.+-]+)")
+PAIR = re.compile(r"(?<!\S)([a-z_]+)=([A-Za-z0-9_.+-]+(?:, [A-Za-z0-9_.+-]+)*)")
+REASONS = {
+    "None", "DeviceProfileLimit", "ThermalSignalUnavailable",
+    "MemorySignalUnavailable", "PhysicsSignalUnavailable", "ThermalLight",
+    "ThermalModerate", "ThermalSevereOrWorse", "MemoryPressure",
+    "MemoryCritical", "AndroidLowMemory", "PhysicsAtRisk",
+    "PhysicsBudgetExceeded", "RecoveryHold", "RecentOutOfMemory",
+    "ProfileIncompatible", "PriorityDegradationPolicy", "none",
+}
+
 
 
 def summarize(directory):
@@ -36,7 +45,9 @@ def summarize(directory):
             allowed = set(FIELDS[stage].split())
             values = {}
             for key, value in PAIR.findall(obj["detail"][:1024]):
-                if key in allowed and key not in values:
+                if (key in allowed and key not in values and
+                        (key not in ("governor_reasons", "last_reasons") or
+                         all(reason in REASONS for reason in value.split(", ")))):
                     values[key] = value
             suffix = " ".join(f"{key}={values[key]}" for key in sorted(values))
             lines.append((seq, f"RMA-135 safe checkpoint sequence={seq} stage={stage} {suffix}"))
