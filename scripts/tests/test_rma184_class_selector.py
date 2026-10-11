@@ -63,6 +63,51 @@ class Rma184ClassSelectorTests(unittest.TestCase):
             with self.subTest(matrix=matrix), self.assertRaises(ValueError):
                 selector.resolve(matrix, "phone")
 
+    def test_malformed_registered_class_fails_closed(self) -> None:
+        for value in (None, 0, False, [], {}, ["mid"], {"name": "mid"}):
+            with self.subTest(performance_class=value), self.assertRaises(ValueError):
+                selector.resolve(
+                    {"representative_devices": [{"model": "phone", "performance_class": value}]},
+                    "phone",
+                )
+        with self.assertRaises(ValueError):
+            selector.resolve({"representative_devices": [{"model": "phone"}]}, "phone")
+
+    def test_invalid_physical_model_fails_closed(self) -> None:
+        matrix = {
+            "representative_devices": [
+                {"model": "phone", "performance_class": "mid"}
+            ]
+        }
+        for model in (None, "", "  ", 0, [], {}):
+            with self.subTest(model=model), self.assertRaises(ValueError):
+                selector.resolve(matrix, model)
+
+    def test_cli_missing_class_is_actionable_not_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "matrix.json"
+            path.write_text(
+                json.dumps({"representative_devices": [{"model": "phone"}]}),
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SELECTOR),
+                    "--matrix",
+                    str(path),
+                    "--model",
+                    "phone",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("unknown registered RMA-184 class", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+
     def test_cli_does_not_print_a_class_for_malformed_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "matrix.json"

@@ -14,6 +14,8 @@ CLASS_INDEX = {"low": 0, "mid": 1, "high": 2}
 def resolve(matrix: dict, model: str) -> int:
     if not isinstance(matrix, dict):
         raise ValueError("RMA-184 matrix must be a JSON object")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError("RMA-184 physical model must be a nonempty string")
     entries = matrix.get("representative_devices")
     if not isinstance(entries, list):
         raise ValueError("representative_devices must be a JSON array")
@@ -25,8 +27,8 @@ def resolve(matrix: dict, model: str) -> int:
             f"expected exactly one registered representative model {model!r}; "
             f"found {len(matches)}"
         )
-    performance_class = matches[0]["performance_class"]
-    if performance_class not in CLASS_INDEX:
+    performance_class = matches[0].get("performance_class")
+    if not isinstance(performance_class, str) or performance_class not in CLASS_INDEX:
         raise ValueError(f"unknown registered RMA-184 class {performance_class!r}")
     return CLASS_INDEX[performance_class]
 
