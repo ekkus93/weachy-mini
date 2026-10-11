@@ -76,6 +76,8 @@ def main() -> int:
     devices = data.get("representative_devices")
     if not isinstance(devices, list) or len(devices) < 3:
         fail("RMA-184 requires at least three representative devices")
+    if any(not isinstance(device, dict) for device in devices):
+        fail("RMA-184 representative device entries must be JSON objects")
     covered = {entry.get("performance_class") for entry in devices}
     if not classes.issubset(covered):
         fail("RMA-184 representative devices must cover low, mid, and high")
@@ -101,8 +103,6 @@ def main() -> int:
     ids: set[str] = set()
     models: set[str] = set()
     for device in devices:
-        if not isinstance(device, dict):
-            fail("RMA-184 representative device entries must be JSON objects")
         missing = required_device_fields - set(device)
         if missing:
             fail(f"RMA-184 device record missing fields: {sorted(missing)}")
