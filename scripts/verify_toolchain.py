@@ -223,6 +223,72 @@ def require_pattern(label: str, output: str, pattern: str, expected: str) -> Non
         raise ToolchainError(f"{label} version mismatch: expected {expected}, found {actual}")
 
 
+
+def read_sdk_package_properties(package_dir: Path) -> dict[str, str]:
+    """Read Android SDK package metadata, rejecting missing or ambiguous fields."""
+    properties_path = package_dir / "source.properties"
+    try:
+        lines = properties_path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ToolchainError(
+            f"Android SDK package metadata is missing or unreadable: {properties_path}: {exc}"
+        ) from exc
+
+    properties: dict[str, str] = {}
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith(("#", "!")):
+            continue
+        key, separator, value = line.partition("=")
+        if not separator or not key.strip() or not value.strip():
+            raise ToolchainError(f"Malformed Android SDK package metadata in {properties_path}.")
+        key = key.strip()
+        if key in properties:
+            raise ToolchainError(
+                f"Duplicate Android SDK package metadata field {key!r} in {properties_path}."
+            )
+        properties[key] = value.strip()
+    return properties
+
+
+def verify_android_sdk_packages(manifest: dict[str, Any], sdk_root: Path) -> None:
+    """Verify package identity from installed metadata, not just directory names."""
+    android = manifest["android"]
+    packages = (
+        (
+            "Android platform",
+            sdk_root / "platforms" / f"android-{android['compile_sdk_package']}",
+            "AndroidVersion.ApiLevel",
+            str(android["compile_sdk"]),
+        ),
+        ("Android Build Tools", sdk_root / "build-tools" / android["build_tools"],
+         "Pkg.Revision", android["build_tools"]),
+        ("Android NDK", sdk_root / "ndk" / android["ndk"], "Pkg.Revision", android["ndk"]),
+        ("Android CMake", sdk_root / "cmake" / android["cmake"], "Pkg.Revision",
+         android["cmake"]),
+    )
+    for label, path, field, expected in packages:
+        if not path.is_dir():
+            raise ToolchainError(
+                f"{label} package directory is missing: {path}. "
+                "Install the exact package pinned in toolchain.lock.json."
+            )
+        properties = read_sdk_package_properties(path)
+        actual = properties.get(field)
+        if actual != expected:
+            raise ToolchainError(
+                f"{label} installed {field} mismatch at {path}: "
+                f"expected {expected!r}, found {actual!r}. "
+                "Reinstall the version pinned in toolchain.lock.json."
+            )
+    print(
+        "Android SDK metadata verified: "
+        f"platform API {android['compile_sdk']}, "
+        f"Build Tools {android['build_tools']}, NDK {android['ndk']}, "
+        f"CMake {android['cmake']}"
+    )
+
+
 def verify_installed_tools(manifest: dict[str, Any]) -> None:
     """Verify locally installed tools against pinned versions."""
     android = manifest["android"]
@@ -322,17 +388,7 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
     if not android_home:
         raise ToolchainError("ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK.")
     sdk_root = Path(android_home)
-    required_paths = [
-        sdk_root / "platforms" / f"android-{android['compile_sdk_package']}",
-        sdk_root / "build-tools" / android["build_tools"],
-        sdk_root / "ndk" / android["ndk"],
-        sdk_root / "cmake" / android["cmake"],
-    ]
-    missing_paths = [str(path) for path in required_paths if not path.exists()]
-    if missing_paths:
-        raise ToolchainError(
-            "Android SDK packages are missing:\n  - " + "\n  - ".join(missing_paths)
-        )
+    verify_android_sdk_packages(manifest, sdk_root)
 
 
 def parse_args() -> argparse.Namespace:
