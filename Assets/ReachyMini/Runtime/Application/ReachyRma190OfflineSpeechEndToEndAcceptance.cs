@@ -17,6 +17,8 @@ namespace ReachyMini.Validation
             "reachy_rma190_offline_speech_e2e_acceptance";
         internal const string ResultFileName =
             "rma190-offline-speech-end-to-end-acceptance.json";
+        internal const string ReadyFileName =
+            "rma190-offline-speech-end-to-end-ready.json";
         internal const string ModelFileName =
             "rma190-qwen3-0.6b-q4_k_m.gguf";
 
@@ -24,6 +26,10 @@ namespace ReachyMini.Validation
         private static readonly TimeSpan SpeechReadinessTimeout =
             TimeSpan.FromSeconds(45.0);
         private static readonly TimeSpan TurnTimeout = TimeSpan.FromMinutes(5.0);
+        private static string currentStage = "bootstrap";
+        private static string currentFailureCode = string.Empty;
+        private static long currentAvailableStorageBytes = -1L;
+        private static string currentInteractionState = string.Empty;
 
         [Serializable]
         private sealed class AcceptanceReport
@@ -31,6 +37,10 @@ namespace ReachyMini.Validation
             public int schema_version = 1;
             public string status = string.Empty;
             public string error = string.Empty;
+            public string failure_stage = string.Empty;
+            public string failure_code = string.Empty;
+            public string last_interaction_state = string.Empty;
+            public long available_storage_bytes = -1L;
             public string device_model = string.Empty;
             public int android_api_level;
             public string selected_llm_execution = string.Empty;
@@ -97,6 +107,10 @@ namespace ReachyMini.Validation
                     // Never persist exception messages or stack traces: they may
                     // include a private recognizer result or conversation text.
                     error = exception.GetType().Name,
+                    failure_stage = currentStage,
+                    failure_code = currentFailureCode,
+                    last_interaction_state = currentInteractionState,
+                    available_storage_bytes = currentAvailableStorageBytes,
                     device_model = SystemInfo.deviceModel,
                     android_api_level = TryReadApiLevel(),
                 };
@@ -121,6 +135,7 @@ namespace ReachyMini.Validation
 
         private static async Task<AcceptanceReport> RunAcceptanceAsync()
         {
+            currentStage = "wait_for_shipping_host";
             ReachyApplicationHostBehaviour hostBehaviour =
                 await WaitForShippingHostAsync().ConfigureAwait(true);
             ReachyApplicationHost host = hostBehaviour.Host ??
@@ -152,15 +167,18 @@ namespace ReachyMini.Validation
                 host.GetRequiredService<IReachyUserInterfaceService>(
                     ReachyServiceKind.UserInterface));
 
+            currentStage = "wait_for_main_screen";
             ReachyMainScreen screen =
                 await WaitForMainScreenAsync().ConfigureAwait(true);
 
+            currentStage = "install_selected_local_model";
             LocalModelManifest manifest =
                 LocalLlmBehaviorContract.CreateSelectedManifest();
             LocalModelApprovedArtifact installed =
                 await EnsureSelectedModelInstalledAsync(manifest)
                     .ConfigureAwait(true);
 
+            currentStage = "select_on_device_providers";
             SelectOnDeviceProvider(
                 persistence.Settings,
                 ReachyProviderKind.Asr);
@@ -182,6 +200,7 @@ namespace ReachyMini.Validation
                     "selection with no off-device data boundary.");
             }
 
+            currentStage = "wait_for_microphone";
             await WaitForMicrophoneAsync(screen).ConfigureAwait(true);
 
             ReachyServiceState behaviorHealth = behavior.Health.State;
@@ -212,7 +231,14 @@ namespace ReachyMini.Validation
                 network_tts_fallback_used = false,
             };
 
+            currentStage = "request_microphone";
             screen.RequestMicrophone();
+            currentStage = "wait_for_listening";
+            await WaitForListeningAsync(screen).ConfigureAwait(true);
+            currentStage = "real_spoken_turn";
+            WriteAtomically(
+                Path.Combine(Application.persistentDataPath, ReadyFileName),
+                "{\"ready_for_real_utterance\":true}");
 
             DateTime deadline = DateTime.UtcNow + TurnTimeout;
             while (DateTime.UtcNow < deadline)
@@ -220,6 +246,7 @@ namespace ReachyMini.Validation
                 ReachyMainScreenSnapshot snapshot = screen.Snapshot ??
                     throw new InvalidOperationException(
                         "The shipping main-screen snapshot disappeared.");
+                currentInteractionState = snapshot.InteractionState.ToString();
 
                 switch (snapshot.InteractionState)
                 {
@@ -271,6 +298,7 @@ namespace ReachyMini.Validation
 
             ReachyProviderServiceSnapshot providerSnapshot =
                 provider.ProviderSnapshot;
+            currentStage = "verify_provider_and_behavior";
             if (providerSnapshot.ExecutionState !=
                     ReachyProviderServiceExecutionState.Ready ||
                 !string.Equals(
@@ -315,23 +343,34 @@ namespace ReachyMini.Validation
             string storeRoot = Path.Combine(
                 Application.persistentDataPath,
                 "local-models");
+            Directory.CreateDirectory(storeRoot);
+            currentStage = "probe_model_storage";
+            var storageProbe = new ReachyPlatformLocalModelStorageProbe();
+            currentAvailableStorageBytes =
+                storageProbe.GetAvailableBytes(storeRoot);
+
+            currentStage = "construct_model_package_manager";
             using var manager = new LocalModelPackageManager(
                 storeRoot,
-                new DriveInfoLocalModelStorageProbe());
+                storageProbe);
+            currentStage = "open_selected_model_source";
             using var source = new FileStream(
                 sourcePath,
                 FileMode.Open,
                 FileAccess.Read,
                 FileShare.Read);
 
+            currentStage = "import_selected_model";
             LocalModelPackageResult result = await manager
                 .ImportAsync(
                     manifest,
                     source,
                     CancellationToken.None)
                 .ConfigureAwait(true);
+            currentStage = "validate_imported_model";
             if (!result.Succeeded || result.Artifact == null)
             {
+                currentFailureCode = result.Failure.ToString();
                 throw new InvalidOperationException(
                     "The exact selected local model could not be installed " +
                     "through the production package manager: " +
@@ -426,6 +465,30 @@ namespace ReachyMini.Validation
             throw new InvalidOperationException(
                 "The shipping speech service did not expose an available " +
                 "physical microphone/on-device speech path.");
+        }
+
+        private static async Task WaitForListeningAsync(
+            ReachyMainScreen screen)
+        {
+            DateTime deadline = DateTime.UtcNow + SpeechReadinessTimeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                ReachyMainScreenSnapshot? snapshot = screen.Snapshot;
+                if (snapshot?.InteractionState == ReachyInteractionState.Listening)
+                {
+                    return;
+                }
+                if (snapshot?.InteractionState == ReachyInteractionState.Error ||
+                    snapshot?.InteractionState == ReachyInteractionState.Unavailable)
+                {
+                    throw new InvalidOperationException(
+                        "The shipping speech service did not enter Listening state.");
+                }
+                await Task.Delay(50).ConfigureAwait(true);
+            }
+
+            throw new TimeoutException(
+                "The shipping speech service did not enter Listening state.");
         }
 
         private static T RequireConcreteType<T>(object service)

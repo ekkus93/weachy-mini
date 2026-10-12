@@ -783,7 +783,7 @@ namespace ReachyMini.AppState
                         LocalModelStoreDirectoryName);
                     packageManager = new LocalModelPackageManager(
                         root,
-                        new DriveInfoLocalModelStorageProbe());
+                        new ReachyPlatformLocalModelStorageProbe());
                 }
                 return packageManager;
             }

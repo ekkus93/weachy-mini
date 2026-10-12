@@ -7,9 +7,11 @@ APK_PATH="${UNITY_DEVICE_APK_PATH:-${ROOT_DIR}/Builds/Android/weachy-mini-device
 REPORT_DIR="${RMA190_OFFLINE_SPEECH_REPORT_DIR:-${ROOT_DIR}/build/rma190-offline-speech-end-to-end-report}"
 PACKAGE_NAME="com.ekkus.weachymini"
 RESULT_FILE="rma190-offline-speech-end-to-end-acceptance.json"
+READY_FILE="rma190-offline-speech-end-to-end-ready.json"
 MODEL_FILE="rma190-qwen3-0.6b-q4_k_m.gguf"
 REMOTE_FILES_DIR="/sdcard/Android/data/${PACKAGE_NAME}/files"
 REMOTE_RESULT="${REMOTE_FILES_DIR}/${RESULT_FILE}"
+REMOTE_READY="${REMOTE_FILES_DIR}/${READY_FILE}"
 REMOTE_MODEL="${REMOTE_FILES_DIR}/${MODEL_FILE}"
 MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/models}"
 TIMEOUT_SECONDS="${RMA190_OFFLINE_SPEECH_TIMEOUT_SECONDS:-360}"
@@ -162,6 +164,11 @@ read_report()
     "${ADB[@]}" shell         "if test -f '${REMOTE_RESULT}'; then cat '${REMOTE_RESULT}'; fi"         2>/dev/null | tr -d '\r' || true
 }
 
+read_ready()
+{
+    "${ADB[@]}" shell         "if test -f '${REMOTE_READY}'; then cat '${REMOTE_READY}'; fi"         2>/dev/null | tr -d '\r' || true
+}
+
 capture_diagnostics()
 {
     # Never persist unrestricted logcat, microphone/audio dumps, or system
@@ -223,7 +230,7 @@ if [[ -z "${LAUNCH_COMPONENT}" || "${LAUNCH_COMPONENT}" != */* ]]; then
 fi
 
 "${ADB[@]}" shell mkdir -p "${REMOTE_FILES_DIR}"
-"${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp" "${REMOTE_MODEL}"
+"${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp" "${REMOTE_READY}" "${REMOTE_READY}.tmp" "${REMOTE_MODEL}"
 timeout --signal=TERM --kill-after=15s 240s     "${ADB[@]}" push "${MODEL_CACHE_PATH}" "${REMOTE_MODEL}"     > "${REPORT_DIR}/model-push.txt" 2>&1
 
 remote_hash="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL}'" |
@@ -266,8 +273,33 @@ ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     prepare "${DEVICE_SERIAL}" 
 cat "${REPORT_DIR}/launch.txt"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 30     > "${REPORT_DIR}/focus.txt"
 
-printf '%s\n'     'PHYSICAL ACTION REQUIRED: speak a real request into the A54 microphone.'     'Recommended utterance: "Please say hello back to me and nod once."'     'Do not play a recording or inject a transcript; the harness requires the shipping microphone path.'
+deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
+report_json=""
+while true; do
+    ready_json="$(read_ready)"
+    if [[ "${ready_json}" == *'"ready_for_real_utterance":true'* ]]; then
+        printf '%s\n'             'PHYSICAL ACTION REQUIRED: speak a real request into the A54 microphone.'             'Recommended utterance: "Please say hello back to me and nod once."'             'Do not play a recording or inject a transcript; the harness requires the shipping microphone path.'
+        break
+    fi
+    report_json="$(read_report)"
+    if [[ "${report_json}" == \{* ]]; then
+        break
+    fi
+    report_json=""
+    if (( $(date +%s) >= deadline )); then
+        printf 'Timed out waiting for speech/model readiness or a failure report.\n' >&2
+        exit 1
+    fi
+    if ! "${ADB[@]}" shell pidof "${PACKAGE_NAME}" >/dev/null; then
+        printf 'Unity exited before speech/model readiness.\n' >&2
+        exit 1
+    fi
+    sleep "${POLL_SECONDS}"
+done
 
+if [[ -n "${report_json}" ]]; then
+    printf '%s\n' "${report_json}" > "${REPORT_DIR}/${RESULT_FILE}"
+fi
 deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))
 report_json=""
 while true; do
