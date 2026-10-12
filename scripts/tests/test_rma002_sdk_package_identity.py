@@ -68,6 +68,23 @@ class AndroidSdkPackageIdentityTests(unittest.TestCase):
                     verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
                 properties.write_text(expected_content, encoding="utf-8")
 
+    def test_platform_package_api_suffix_passes(self) -> None:
+        path = self.directories["platform"] / "source.properties"
+        path.write_text(
+            "Pkg.Revision=1\nAndroidVersion.ApiLevel=37.0\n",
+            encoding="utf-8",
+        )
+        verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
+
+    def test_wrong_platform_api_extension_fails(self) -> None:
+        path = self.directories["platform"] / "source.properties"
+        path.write_text(
+            "Pkg.Revision=1\nAndroidVersion.ApiLevel=37.1\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(verify_toolchain.ToolchainError, "platform.*mismatch"):
+            verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
+
     def test_incorrect_platform_api_fails(self) -> None:
         path = self.directories["platform"] / "source.properties"
         path.write_text("Pkg.Revision=1\nAndroidVersion.ApiLevel=36\n", encoding="utf-8")

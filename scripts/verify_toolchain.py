@@ -291,10 +291,16 @@ def verify_android_sdk_packages(manifest: dict[str, Any], sdk_root: Path) -> Non
             )
         properties = read_sdk_package_properties(path)
         actual = properties.get(field)
-        if actual != expected:
+        accepted = (expected,)
+        if label == "Android platform":
+            # SDK platform metadata may report the API as '37' or the
+            # pinned package suffix '37.0'; both identify the locked API.
+            accepted = (expected, android["compile_sdk_package"])
+        if actual not in accepted:
+            expected_values = " or ".join(repr(value) for value in accepted)
             raise ToolchainError(
                 f"{label} installed {field} mismatch at {path}: "
-                f"expected {expected!r}, found {actual!r}. "
+                f"expected {expected_values}, found {actual!r}. "
                 "Reinstall the version pinned in toolchain.lock.json."
             )
     print(
