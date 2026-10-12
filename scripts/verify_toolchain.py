@@ -442,10 +442,12 @@ def main() -> int:
         print(f"toolchain validation failed: {exc}", file=sys.stderr)
         return 1
 
-    mode = (
-        "manifest" if args.manifest_only else
-        "Android SDK packages" if args.android_sdk_only else "installed toolchain"
-    )
+    if args.manifest_only:
+        mode = "manifest"
+    elif args.android_sdk_only:
+        mode = "Android SDK packages"
+    else:
+        mode = "installed toolchain"
     print(f"toolchain validation passed ({mode})")
     return 0
 
