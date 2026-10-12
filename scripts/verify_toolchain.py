@@ -63,6 +63,7 @@ def load_manifest() -> dict[str, Any]:
         "compile_sdk",
         "compile_sdk_package",
         "target_sdk",
+        "build_tools",
         "android_gradle_plugin",
         "gradle",
         "jdk_major",
@@ -261,11 +262,24 @@ def verify_android_sdk_packages(manifest: dict[str, Any], sdk_root: Path) -> Non
             "AndroidVersion.ApiLevel",
             str(android["compile_sdk"]),
         ),
-        ("Android Build Tools", sdk_root / "build-tools" / android["build_tools"],
-         "Pkg.Revision", android["build_tools"]),
-        ("Android NDK", sdk_root / "ndk" / android["ndk"], "Pkg.Revision", android["ndk"]),
-        ("Android CMake", sdk_root / "cmake" / android["cmake"], "Pkg.Revision",
-         android["cmake"]),
+        (
+            "Android Build Tools",
+            sdk_root / "build-tools" / android["build_tools"],
+            "Pkg.Revision",
+            android["build_tools"],
+        ),
+        (
+            "Android NDK",
+            sdk_root / "ndk" / android["ndk"],
+            "Pkg.Revision",
+            android["ndk"],
+        ),
+        (
+            "Android CMake",
+            sdk_root / "cmake" / android["cmake"],
+            "Pkg.Revision",
+            android["cmake"],
+        ),
     )
     for label, path, field, expected in packages:
         if not path.is_dir():
@@ -394,10 +408,16 @@ def verify_installed_tools(manifest: dict[str, Any]) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--manifest-only",
         action="store_true",
         help="Validate only toolchain.lock.json without checking installed SDKs.",
+    )
+    mode.add_argument(
+        "--android-sdk-only",
+        action="store_true",
+        help="Validate installed Android SDK package metadata without other tool probes.",
     )
     return parser.parse_args()
 
@@ -407,13 +427,23 @@ def main() -> int:
     args = parse_args()
     try:
         manifest = load_manifest()
-        if not args.manifest_only:
+        if args.android_sdk_only:
+            sdk_home = os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME")
+            if not sdk_home:
+                raise ToolchainError(
+                    "ANDROID_SDK_ROOT or ANDROID_HOME must identify the Android SDK."
+                )
+            verify_android_sdk_packages(manifest, Path(sdk_home))
+        elif not args.manifest_only:
             verify_installed_tools(manifest)
     except ToolchainError as exc:
         print(f"toolchain validation failed: {exc}", file=sys.stderr)
         return 1
 
-    mode = "manifest" if args.manifest_only else "installed toolchain"
+    mode = (
+        "manifest" if args.manifest_only else
+        "Android SDK packages" if args.android_sdk_only else "installed toolchain"
+    )
     print(f"toolchain validation passed ({mode})")
     return 0
 

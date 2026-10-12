@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Fail-closed tests for RMA-002 installed Android SDK package identity."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import verify_toolchain
 
@@ -37,6 +39,21 @@ class AndroidSdkPackageIdentityTests(unittest.TestCase):
         for name, directory in self.directories.items():
             directory.mkdir(parents=True)
             (directory / "source.properties").write_text(versions[name], encoding="utf-8")
+
+    def test_missing_build_tools_pin_fails_manifest_preflight(self) -> None:
+        manifest = json.loads(verify_toolchain.MANIFEST_PATH.read_text(encoding="utf-8"))
+        del manifest["android"]["build_tools"]
+        manifest_path = self.root / "invalid-toolchain.lock.json"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with mock.patch.object(verify_toolchain, "MANIFEST_PATH", manifest_path):
+            with self.assertRaisesRegex(verify_toolchain.ToolchainError, "build_tools"):
+                verify_toolchain.load_manifest()
+
+    def test_unity_build_invokes_sdk_metadata_preflight(self) -> None:
+        build_script = (verify_toolchain.ROOT / "scripts" / "build_unity_android.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("verify_toolchain.py\" --android-sdk-only", build_script)
 
     def test_valid_installed_metadata_passes(self) -> None:
         verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)

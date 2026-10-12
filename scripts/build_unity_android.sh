@@ -214,6 +214,9 @@ if [[ ! -x "${REQUIRED_BUILD_TOOLS}/aapt2" ]]; then
     exit 1
 fi
 
+# Check the installed metadata after provisioning, before any Unity build.
+python3 "${ROOT_DIR}/scripts/verify_toolchain.py" --android-sdk-only
+
 printf 'android_sdk=%s\n' "${ANDROID_SDK_ROOT}"
 printf 'android_compile_sdk=%s\n' "${COMPILE_SDK}"
 printf 'android_platform_package=%s\n' "${PLATFORM_PACKAGE}"
