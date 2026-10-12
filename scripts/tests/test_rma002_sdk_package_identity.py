@@ -74,6 +74,20 @@ class AndroidSdkPackageIdentityTests(unittest.TestCase):
         with self.assertRaisesRegex(verify_toolchain.ToolchainError, "platform.*mismatch"):
             verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
 
+    def test_optional_empty_java_properties_value_is_accepted(self) -> None:
+        path = self.directories["platform"] / "source.properties"
+        path.write_text(
+            "Pkg.Revision=1\nAndroidVersion.ApiLevel=37\nAndroidVersion.CodeName=\n",
+            encoding="utf-8",
+        )
+        verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
+
+    def test_empty_required_version_fails(self) -> None:
+        path = self.directories["ndk"] / "source.properties"
+        path.write_text("Pkg.Revision=\n", encoding="utf-8")
+        with self.assertRaisesRegex(verify_toolchain.ToolchainError, "mismatch"):
+            verify_toolchain.verify_android_sdk_packages(self.manifest, self.root)
+
     def test_missing_package_metadata_fails(self) -> None:
         (self.directories["ndk"] / "source.properties").unlink()
         with self.assertRaisesRegex(verify_toolchain.ToolchainError, "metadata"):

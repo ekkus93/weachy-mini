@@ -241,7 +241,9 @@ def read_sdk_package_properties(package_dir: Path) -> dict[str, str]:
         if not line or line.startswith(("#", "!")):
             continue
         key, separator, value = line.partition("=")
-        if not separator or not key.strip() or not value.strip():
+        # Java .properties permits empty optional fields (e.g. AndroidVersion.CodeName=).
+        # Identity fields are required and compared to nonempty pins below.
+        if not separator or not key.strip():
             raise ToolchainError(f"Malformed Android SDK package metadata in {properties_path}.")
         key = key.strip()
         if key in properties:
