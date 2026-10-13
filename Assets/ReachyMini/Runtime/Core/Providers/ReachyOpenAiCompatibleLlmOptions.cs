@@ -24,7 +24,8 @@ namespace ReachyMini.Providers
         public const string DefaultBehaviorIntentSystemPrompt =
             "Respond with exactly one JSON object describing a Reachy Mini behavior " +
             "intent and nothing else -- no prose, no markdown fences. Schema: " +
-            "{\"schema_version\":1,\"speech\":<string, 1-160 chars, optional>," +
+            "The schema_version field is required and MUST be the JSON integer 1. " +
+            "Schema: {\"schema_version\":1,\"speech\":<string, 1-160 chars, optional>," +
             "\"gaze_target\":{\"kind\":\"tracked_entity\",\"entity_id\":<string, " +
             "optional>},\"expression\":<one of neutral|attentive|curious|pleased|" +
             "concerned|surprised, optional>,\"gesture\":<one of none|nod|" +

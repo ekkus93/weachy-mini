@@ -20,6 +20,34 @@ def read(path: Path) -> str:
 
 
 class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
+    def test_remote_ollama_diagnostic_is_explicit_and_separate(self) -> None:
+        wrapper = read(ROOT / "scripts/run_rma190_remote_ollama_speech_diagnostic_android.sh")
+        runner = read(RUNNER)
+        source = read(APP / "ReachyRma190OfflineSpeechEndToEndAcceptance.cs")
+        audio_focus = read(APP / "ReachyAndroidSpeechAudioFocusPlatform.cs")
+        self.assertIn("RMA190_REMOTE_OLLAMA_DIAGNOSTIC=1", wrapper)
+        self.assertIn('"http://127.0.0.1:11434/v1/models"', runner)
+        self.assertIn("reverse tcp:11434 tcp:11434", runner)
+        self.assertIn("reachy_rma190_remote_ollama_speech_diagnostic", runner)
+        self.assertIn("does not count as offline-speech acceptance evidence", runner)
+        self.assertIn("ConfigureRemoteOllamaDiagnostic", source)
+        self.assertIn('"devstral-small-2:24b"', source)
+        self.assertIn("AndroidJNI.InvokeAttached(", audio_focus)
+        release = audio_focus.split("public async ValueTask ReleaseFocusAsync(", 1)[1]
+        self.assertLess(
+            release.index("AndroidJNI.InvokeAttached("),
+            release.index("new ReleaseCallback("),
+        )
+        offline_tts = read(APP / "ReachyAndroidOfflineTtsPlatform.cs")
+        self.assertGreaterEqual(offline_tts.count("AndroidJNI.InvokeAttached("), 8)
+        probe = offline_tts.split("public async ValueTask<AndroidOfflineTtsProbe> ProbeAsync(", 1)[
+            1
+        ]
+        self.assertLess(
+            probe.index("AndroidJNI.InvokeAttached("),
+            probe.index("GetCurrentActivity()"),
+        )
+
     def test_harness_uses_shipping_path_without_speech_injection(self) -> None:
         source = read(APP / "ReachyRma190OfflineSpeechEndToEndAcceptance.cs")
         self.assertIn("FindAnyObjectByType<ReachyApplicationHostBehaviour>", source)
@@ -86,7 +114,11 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn("ObservedConversationTranscribing", composition)
         self.assertIn("stateStore.Changed += OnConversationStateChanged", composition)
         self.assertIn("stateStore.Changed -= OnConversationStateChanged", composition)
-        self.assertNotIn("snapshot.Detail", source)
+        self.assertIn("remote_ollama_failure_detail", source)
+        self.assertIn("remote_ollama_tts_failure_detail", source)
+        self.assertIn("if (remoteOllamaDiagnostic &&", source)
+        self.assertIn("BoundRemoteDiagnosticDetail(snapshot.Detail)", source)
+        self.assertIn("MaximumDiagnosticCharacters = 512", source)
         self.assertNotIn("new AsrEvent(", source)
         self.assertNotIn("Fake", source)
 
@@ -268,7 +300,8 @@ exit 3
         self.assertIn('read_report > "${REPORT_DIR}/device-report.json"', runner)
         self.assertIn("error = exception.GetType().Name", source)
         self.assertNotIn("exception.ToString()", source)
-        self.assertNotIn("snapshot.Detail", source)
+        self.assertIn("BoundRemoteDiagnosticDetail(snapshot.Detail)", source)
+        self.assertIn("MaximumDiagnosticCharacters = 512", source)
         self.assertNotIn("final_detail", source)
         self.assertIn("synthetic_speech_injected = false", source)
         self.assertIn("transcript_persisted = false", source)

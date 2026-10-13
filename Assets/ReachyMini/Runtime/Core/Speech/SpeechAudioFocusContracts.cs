@@ -108,7 +108,9 @@ namespace ReachyMini.Speech
 
     public sealed class SpeechAudioFocusException : Exception
     {
-        public SpeechAudioFocusException(string failureCode)
+        public SpeechAudioFocusException(
+            string failureCode,
+            string diagnostic = "")
             : base("Android speech audio focus operation failed.")
         {
             Code = SpeechProviderDescriptor.RequireText(
@@ -118,7 +120,10 @@ namespace ReachyMini.Speech
             {
                 throw new ArgumentOutOfRangeException(nameof(failureCode));
             }
+            Diagnostic = diagnostic ?? string.Empty;
         }
+
+        public string Diagnostic { get; }
 
         public string Code { get; }
     }

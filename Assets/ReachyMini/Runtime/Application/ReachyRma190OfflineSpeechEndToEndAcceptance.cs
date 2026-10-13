@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.AppState;
 using ReachyMini.LocalModels;
+using ReachyMini.Providers;
 using ReachyMini.Speech;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -24,8 +25,18 @@ namespace ReachyMini.Validation
             "rma190-offline-speech-end-to-end-start.txt";
         internal const string ListeningFileName =
             "rma190-offline-speech-end-to-end-listening.json";
+        internal const string RemoteOllamaLaunchExtraName =
+            "reachy_rma190_remote_ollama_speech_diagnostic";
+        internal const string RemoteOllamaModelLaunchExtraName =
+            "reachy_rma190_remote_ollama_model_id";
         internal const string ModelFileName =
             "rma190-qwen3-0.6b-q4_k_m.gguf";
+        private const string RemoteOllamaBaseUrl =
+            "http://127.0.0.1:11434";
+        private const string RemoteOllamaDefaultModelId =
+            "devstral-small-2:24b";
+        private const string RemoteOllamaDummyApiKey =
+            "ollama-local-diagnostic-no-secret";
 
         private static readonly TimeSpan HostTimeout = TimeSpan.FromSeconds(20.0);
         private static readonly TimeSpan SpeechReadinessTimeout =
@@ -52,6 +63,13 @@ namespace ReachyMini.Validation
             public string selected_llm_execution = string.Empty;
             public string local_model_id = string.Empty;
             public string local_model_sha256 = string.Empty;
+            public bool remote_ollama_diagnostic;
+            public string remote_ollama_endpoint = string.Empty;
+            public string remote_ollama_model_id = string.Empty;
+            public bool remote_ollama_uses_adb_reverse;
+            public bool remote_ollama_dummy_bearer_used;
+            public string remote_ollama_failure_detail = string.Empty;
+            public string remote_ollama_tts_failure_detail = string.Empty;
             public bool microphone_available;
             public string asr_preflight_state = string.Empty;
             public bool recognizer_ready;
@@ -77,7 +95,8 @@ namespace ReachyMini.Validation
         private static void Bootstrap()
         {
             if (Application.platform != RuntimePlatform.Android ||
-                !ReadBooleanLaunchExtra(LaunchExtraName, false))
+                (!ReadBooleanLaunchExtra(LaunchExtraName, false) &&
+                 !ReadBooleanLaunchExtra(RemoteOllamaLaunchExtraName, false)))
             {
                 return;
             }
@@ -143,6 +162,17 @@ namespace ReachyMini.Validation
 
         private static async Task<AcceptanceReport> RunAcceptanceAsync()
         {
+            bool remoteOllamaDiagnostic = ReadBooleanLaunchExtra(
+                RemoteOllamaLaunchExtraName,
+                false);
+            if (remoteOllamaDiagnostic &&
+                ReadBooleanLaunchExtra(LaunchExtraName, false))
+            {
+                throw new InvalidOperationException(
+                    "Offline acceptance and remote Ollama diagnostic modes " +
+                    "cannot run together.");
+            }
+
             currentStage = "wait_for_shipping_host";
             ReachyApplicationHostBehaviour hostBehaviour =
                 await WaitForShippingHostAsync().ConfigureAwait(true);
@@ -180,12 +210,16 @@ namespace ReachyMini.Validation
             ReachyMainScreen screen =
                 await WaitForMainScreenAsync().ConfigureAwait(true);
 
-            currentStage = "install_selected_local_model";
-            LocalModelManifest manifest =
-                LocalLlmBehaviorContract.CreateSelectedManifest();
-            LocalModelApprovedArtifact installed =
-                await EnsureSelectedModelInstalledAsync(manifest)
+            LocalModelManifest? manifest = null;
+            LocalModelApprovedArtifact? installed = null;
+            string remoteOllamaModelId = string.Empty;
+            if (!remoteOllamaDiagnostic)
+            {
+                currentStage = "install_selected_local_model";
+                manifest = LocalLlmBehaviorContract.CreateSelectedManifest();
+                installed = await EnsureSelectedModelInstalledAsync(manifest)
                     .ConfigureAwait(true);
+            }
 
             currentStage = "select_on_device_providers";
             SelectOnDeviceProvider(
@@ -194,19 +228,34 @@ namespace ReachyMini.Validation
             SelectOnDeviceProvider(
                 persistence.Settings,
                 ReachyProviderKind.Tts);
-            SelectOnDeviceProvider(
-                persistence.Settings,
-                ReachyProviderKind.Llm);
+            if (remoteOllamaDiagnostic)
+            {
+                currentStage = "configure_remote_ollama_diagnostic";
+                remoteOllamaModelId = ConfigureRemoteOllamaDiagnostic(
+                    persistence.Settings);
+            }
+            else
+            {
+                SelectOnDeviceProvider(
+                    persistence.Settings,
+                    ReachyProviderKind.Llm);
+            }
 
             ReachyProviderSelection llmSelection =
                 persistence.Settings.Current.GetProvider(
                     ReachyProviderKind.Llm);
-            if (llmSelection.Execution != ReachyProviderExecution.OnDevice ||
-                llmSelection.SendsDataOffDevice)
+            if (remoteOllamaDiagnostic
+                ? llmSelection.Execution != ReachyProviderExecution.Cloud ||
+                    !llmSelection.SendsDataOffDevice
+                : llmSelection.Execution != ReachyProviderExecution.OnDevice ||
+                    llmSelection.SendsDataOffDevice)
             {
                 throw new InvalidOperationException(
-                    "The physical speech scenario requires an on-device LLM " +
-                    "selection with no off-device data boundary.");
+                    remoteOllamaDiagnostic
+                        ? "The remote diagnostic requires an explicitly selected " +
+                            "network-backed LLM provider."
+                        : "The physical speech scenario requires an on-device LLM " +
+                            "selection with no off-device data boundary.");
             }
 
             currentReport = new AcceptanceReport
@@ -214,9 +263,16 @@ namespace ReachyMini.Validation
                 device_model = SystemInfo.deviceModel,
                 android_api_level = TryReadApiLevel(),
                 selected_llm_execution = llmSelection.Execution.ToString(),
-                local_model_id = manifest.Identity.ModelId,
-                local_model_sha256 = installed.Sha256,
+                local_model_id = manifest?.Identity.ModelId ?? string.Empty,
+                local_model_sha256 = installed?.Sha256 ?? string.Empty,
                 available_storage_bytes = currentAvailableStorageBytes,
+                remote_ollama_diagnostic = remoteOllamaDiagnostic,
+                remote_ollama_endpoint = remoteOllamaDiagnostic
+                    ? RemoteOllamaBaseUrl
+                    : string.Empty,
+                remote_ollama_model_id = remoteOllamaModelId,
+                remote_ollama_uses_adb_reverse = remoteOllamaDiagnostic,
+                remote_ollama_dummy_bearer_used = remoteOllamaDiagnostic,
                 synthetic_speech_injected = false,
                 transcript_persisted = false,
                 raw_audio_persisted = false,
@@ -313,6 +369,24 @@ namespace ReachyMini.Validation
                             screenService.LastConversationFailureCode)
                         ? "conversation-error-state"
                         : screenService.LastConversationFailureCode;
+                    if (remoteOllamaDiagnostic &&
+                        string.Equals(
+                            currentFailureCode,
+                            "llm-http-failure",
+                            StringComparison.Ordinal))
+                    {
+                        report.remote_ollama_failure_detail =
+                            BoundRemoteDiagnosticDetail(snapshot.Detail);
+                    }
+                    else if (remoteOllamaDiagnostic &&
+                        string.Equals(
+                            currentFailureCode,
+                            "tts-playback-failed",
+                            StringComparison.Ordinal))
+                    {
+                        report.remote_ollama_tts_failure_detail =
+                            BoundRemoteDiagnosticDetail(snapshot.Detail);
+                    }
                 }
 
                 switch (snapshot.InteractionState)
@@ -370,17 +444,22 @@ namespace ReachyMini.Validation
                     ReachyProviderServiceExecutionState.Ready ||
                 !string.Equals(
                     providerSnapshot.ActiveModelId,
-                    manifest.Identity.ModelId,
+                    remoteOllamaDiagnostic
+                        ? ReachyLocalLlmProviderApplicationService.CloudLlmProfileProviderId
+                        : manifest!.Identity.ModelId,
                     StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    "The shipping local LLM did not finish the turn with the " +
-                    "selected model ready: state=" +
+                    "The selected LLM provider did not finish the turn ready: " +
+                    "state=" +
                     providerSnapshot.ExecutionState + " model=" +
                     providerSnapshot.ActiveModelId + ".");
             }
 
-            report.local_model_id = providerSnapshot.ActiveModelId;
+            if (!remoteOllamaDiagnostic)
+            {
+                report.local_model_id = providerSnapshot.ActiveModelId;
+            }
             report.behavior_revision_after = behavior.Snapshot.Revision;
             if (report.behavior_revision_after <=
                 report.behavior_revision_before)
@@ -445,6 +524,87 @@ namespace ReachyMini.Validation
             }
 
             return result.Artifact;
+        }
+
+        private static string ConfigureRemoteOllamaDiagnostic(
+            ReachySettingsStateStore settings)
+        {
+            string modelId = ReadStringLaunchExtra(
+                RemoteOllamaModelLaunchExtraName,
+                RemoteOllamaDefaultModelId);
+            if (string.IsNullOrWhiteSpace(modelId) ||
+                modelId.Length > 160 ||
+                !string.Equals(modelId, modelId.Trim(), StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "The remote Ollama model identifier is invalid.");
+            }
+            for (int index = 0; index < modelId.Length; ++index)
+            {
+                char value = modelId[index];
+                if (!(char.IsLetterOrDigit(value) ||
+                      value == '-' || value == '_' || value == '.' ||
+                      value == ':' || value == '/'))
+                {
+                    throw new InvalidOperationException(
+                        "The remote Ollama model identifier contains unsupported characters.");
+                }
+            }
+
+            var credentials = new ReachyCloudLlmCredentialCoordinator();
+            credentials.Initialize();
+            string profileStatus = credentials.SaveProfile(
+                RemoteOllamaBaseUrl,
+                ReachyProviderEndpointStyle.ChatCompletions,
+                modelId);
+            if (credentials.CurrentProfile == null)
+            {
+                throw new InvalidOperationException(
+                    "Could not save the loopback Ollama profile: " + profileStatus);
+            }
+
+            string keyStatus = credentials.SaveApiKey(RemoteOllamaDummyApiKey);
+            if (!credentials.HasApiKey)
+            {
+                throw new InvalidOperationException(
+                    "Could not configure the Ollama dummy bearer credential: " +
+                    keyStatus);
+            }
+
+            string authorizationStatus = credentials.GrantAuthorization();
+            if (!credentials.IsAuthorized)
+            {
+                throw new InvalidOperationException(
+                    "Could not authorize the explicit remote Ollama diagnostic: " +
+                    authorizationStatus);
+            }
+
+            for (int attempt = 0; attempt < 3; ++attempt)
+            {
+                ReachyProviderSelection selection = settings.Current.GetProvider(
+                    ReachyProviderKind.Llm);
+                if (selection.Execution == ReachyProviderExecution.Cloud &&
+                    selection.SendsDataOffDevice)
+                {
+                    return modelId;
+                }
+                settings.CycleProvider(ReachyProviderKind.Llm);
+            }
+
+            throw new InvalidOperationException(
+                "Could not explicitly select the remote Ollama LLM preference.");
+        }
+
+        private static string BoundRemoteDiagnosticDetail(string detail)
+        {
+            const int MaximumDiagnosticCharacters = 512;
+            if (string.IsNullOrWhiteSpace(detail))
+            {
+                return string.Empty;
+            }
+            return detail.Length <= MaximumDiagnosticCharacters
+                ? detail
+                : detail.Substring(0, MaximumDiagnosticCharacters);
         }
 
         private static void SelectOnDeviceProvider(
@@ -601,6 +761,24 @@ namespace ReachyMini.Validation
             using AndroidJavaObject intent =
                 activity.Call<AndroidJavaObject>("getIntent");
             return intent.Call<bool>("getBooleanExtra", key, defaultValue);
+#else
+            return defaultValue;
+#endif
+        }
+
+        private static string ReadStringLaunchExtra(
+            string key,
+            string defaultValue)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using var unityPlayer =
+                new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+            using AndroidJavaObject activity =
+                unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+            using AndroidJavaObject intent =
+                activity.Call<AndroidJavaObject>("getIntent");
+            string? result = intent.Call<string>("getStringExtra", key);
+            return string.IsNullOrWhiteSpace(result) ? defaultValue : result;
 #else
             return defaultValue;
 #endif

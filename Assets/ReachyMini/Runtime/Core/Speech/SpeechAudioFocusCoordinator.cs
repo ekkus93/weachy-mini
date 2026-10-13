@@ -209,7 +209,9 @@ namespace ReachyMini.Speech
                 releaseError = new SpeechProviderError(
                     SpeechErrorCategory.ServiceFailure,
                     exception.Code,
-                    "Android speech audio focus could not be released safely.",
+                    BoundDiagnostic(
+                        "Android speech audio focus could not be released safely " +
+                        "(" + exception.Code + "). " + exception.Diagnostic),
                     isRetryable: false);
             }
             catch (Exception exception)
@@ -219,7 +221,7 @@ namespace ReachyMini.Speech
                     "audio_focus_release_failed",
                     BoundDiagnostic(
                         "Releasing Android speech audio focus failed with " +
-                        exception.GetType().Name +
+                        exception.GetType().FullName + ": " + exception.Message +
                         "; the coordinator was faulted to prevent overlapping audio ownership."),
                     isRetryable: false);
             }

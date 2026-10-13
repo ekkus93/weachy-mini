@@ -19,6 +19,9 @@ MODEL_CACHE_ROOT="${RMA133_MODEL_CACHE_ROOT:-${HOME}/.cache/weachy-mini/rma133/m
 TIMEOUT_SECONDS="${RMA190_OFFLINE_SPEECH_TIMEOUT_SECONDS:-360}"
 POLL_SECONDS="${RMA190_OFFLINE_SPEECH_POLL_SECONDS:-0.5}"
 FOREGROUND_HELPER="${ROOT_DIR}/scripts/android_device_acceptance_foreground.sh"
+REMOTE_OLLAMA_DIAGNOSTIC="${RMA190_REMOTE_OLLAMA_DIAGNOSTIC:-0}"
+REMOTE_OLLAMA_MODEL_ID="${RMA190_REMOTE_OLLAMA_MODEL_ID:-devstral-small-2:24b}"
+REMOTE_OLLAMA_REVERSE_OWNED=0
 
 command -v "${ADB_BIN}" >/dev/null
 command -v python3 >/dev/null
@@ -35,6 +38,24 @@ command -v sha256sum >/dev/null
 
 mkdir -p "${REPORT_DIR}" "${MODEL_CACHE_ROOT}"
 
+if [[ "${REMOTE_OLLAMA_DIAGNOSTIC}" == "1" ]]; then
+    [[ "${REMOTE_OLLAMA_MODEL_ID}" =~ ^[a-zA-Z0-9._:/-]{1,160}$ ]] || {
+        printf '%s\n' 'RMA190_REMOTE_OLLAMA_MODEL_ID contains unsupported characters.' >&2
+        exit 1
+    }
+    python3 - "${REMOTE_OLLAMA_MODEL_ID}" <<'PY'
+import json
+import sys
+import urllib.request
+
+requested = sys.argv[1]
+with urllib.request.urlopen("http://127.0.0.1:11434/v1/models", timeout=5) as response:
+    available = {item.get("id") for item in json.load(response).get("data", [])}
+if requested not in available:
+    raise SystemExit(f"Ollama model is not available: {requested}")
+print(f"Ollama model available: {requested}")
+PY
+else
 mapfile -t MODEL_FIELDS < <(
     python3 - "${ROOT_DIR}/benchmarks/rma133/candidates-v6.json" <<'PY'
 import json
@@ -108,6 +129,7 @@ verify_model "${MODEL_CACHE_PATH}" || {
     printf '%s\n' 'Selected model cache preparation failed.' >&2
     exit 1
 }
+fi
 
 select_device_serial()
 {
@@ -226,6 +248,9 @@ cleanup()
     trap - EXIT
     capture_diagnostics
     "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}" >/dev/null 2>&1 || true
+    if [[ "${REMOTE_OLLAMA_REVERSE_OWNED}" == "1" ]]; then
+        "${ADB[@]}" reverse --remove tcp:11434 >/dev/null 2>&1 || true
+    fi
     restore_network
     ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"         restore "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 10         >/dev/null 2>&1 || true
     exit "${exit_code}"
@@ -248,6 +273,20 @@ fi
 
 "${ADB[@]}" shell mkdir -p "${REMOTE_FILES_DIR}"
 "${ADB[@]}" shell rm -f "${REMOTE_RESULT}" "${REMOTE_RESULT}.tmp" "${REMOTE_READY}" "${REMOTE_READY}.tmp" "${REMOTE_START}" "${REMOTE_LISTENING}" "${REMOTE_LISTENING}.tmp" "${REMOTE_MODEL}"
+if [[ "${REMOTE_OLLAMA_DIAGNOSTIC}" == "1" ]]; then
+    existing_reverse="$("${ADB[@]}" reverse --list | tr -d '\r')"
+    if [[ "${existing_reverse}" == *"tcp:11434 tcp:11434"* ]]; then
+        :
+    elif [[ "${existing_reverse}" == *"tcp:11434"* ]]; then
+        printf '%s\n' 'ADB reverse port 11434 is already mapped elsewhere; refusing to replace it.' >&2
+        exit 1
+    else
+        "${ADB[@]}" reverse tcp:11434 tcp:11434
+        REMOTE_OLLAMA_REVERSE_OWNED=1
+    fi
+    "${ADB[@]}" reverse --list > "${REPORT_DIR}/adb-reverse.txt"
+    printf 'http://127.0.0.1:11434\n' > "${REPORT_DIR}/remote-ollama-endpoint.txt"
+else
 timeout --signal=TERM --kill-after=15s 240s     "${ADB[@]}" push "${MODEL_CACHE_PATH}" "${REMOTE_MODEL}"     > "${REPORT_DIR}/model-push.txt" 2>&1
 
 remote_hash="$("${ADB[@]}" shell "toybox sha256sum '${REMOTE_MODEL}'" |
@@ -258,6 +297,7 @@ if [[ "${remote_hash}" != "${MODEL_SHA256}" ||
       "${remote_size}" != "${MODEL_BYTES}" ]]; then
     printf 'On-device selected model verification failed.\n' >&2
     exit 1
+fi
 fi
 
 ORIGINAL_AIRPLANE="$("${ADB[@]}" shell settings get global airplane_mode_on | tr -d '\r')"
@@ -286,7 +326,22 @@ fi
 
 "${ADB[@]}" shell am force-stop "${PACKAGE_NAME}"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     prepare "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 20     > "${REPORT_DIR}/prepare.txt"
-"${ADB[@]}" shell am start -W     -n "${LAUNCH_COMPONENT}"     -a android.intent.action.MAIN     -c android.intent.category.LAUNCHER     --ez reachy_rma190_offline_speech_e2e_acceptance true     > "${REPORT_DIR}/launch.txt"
+if [[ "${REMOTE_OLLAMA_DIAGNOSTIC}" == "1" ]]; then
+    "${ADB[@]}" shell am start -W \
+        -n "${LAUNCH_COMPONENT}" \
+        -a android.intent.action.MAIN \
+        -c android.intent.category.LAUNCHER \
+        --ez reachy_rma190_remote_ollama_speech_diagnostic true \
+        --es reachy_rma190_remote_ollama_model_id "${REMOTE_OLLAMA_MODEL_ID}" \
+        > "${REPORT_DIR}/launch.txt"
+else
+    "${ADB[@]}" shell am start -W \
+        -n "${LAUNCH_COMPONENT}" \
+        -a android.intent.action.MAIN \
+        -c android.intent.category.LAUNCHER \
+        --ez reachy_rma190_offline_speech_e2e_acceptance true \
+        > "${REPORT_DIR}/launch.txt"
+fi
 cat "${REPORT_DIR}/launch.txt"
 ADB_BIN="${ADB_BIN}" bash "${FOREGROUND_HELPER}"     wait-focus "${DEVICE_SERIAL}" "${PACKAGE_NAME}" 30     > "${REPORT_DIR}/focus.txt"
 
@@ -372,7 +427,7 @@ while true; do
 done
 
 printf '%s\n' "${report_json}" > "${REPORT_DIR}/${RESULT_FILE}"
-python3 -I - "${REPORT_DIR}/${RESULT_FILE}" <<'PY'
+python3 -I - "${REPORT_DIR}/${RESULT_FILE}" "${REMOTE_OLLAMA_DIAGNOSTIC}" "${REMOTE_OLLAMA_MODEL_ID}" <<'PY'
 from __future__ import annotations
 
 import json
@@ -381,11 +436,20 @@ import sys
 
 report = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 assert report["status"] == "passed", report
-assert report["selected_llm_execution"] == "OnDevice", report
-assert report["local_model_id"] == "qwen3-0.6b", report
-assert report["local_model_sha256"] == (
-    "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e"
-), report
+remote_diagnostic = report.get("remote_ollama_diagnostic") is True
+if remote_diagnostic:
+    assert sys.argv[2] == "1", report
+    assert report["selected_llm_execution"] == "Cloud", report
+    assert report["remote_ollama_endpoint"] == "http://127.0.0.1:11434", report
+    assert report["remote_ollama_model_id"] == sys.argv[3], report
+    assert report["remote_ollama_uses_adb_reverse"] is True, report
+else:
+    assert sys.argv[2] != "1", report
+    assert report["selected_llm_execution"] == "OnDevice", report
+    assert report["local_model_id"] == "qwen3-0.6b", report
+    assert report["local_model_sha256"] == (
+        "b0638f08417a2d3c8652760462eb5407c6e30173cf9608ad0820757a281eea0e"
+    ), report
 for key in (
     "microphone_available",
     "observed_listening",
@@ -402,11 +466,12 @@ for key in (
     "synthetic_speech_injected",
     "transcript_persisted",
     "raw_audio_persisted",
-    "cloud_credentials_injected",
     "system_asr_fallback_used",
     "network_tts_fallback_used",
 ):
     assert report[key] is False, (key, report)
+if not remote_diagnostic:
+    assert report["cloud_credentials_injected"] is False, report
 assert report["final_interaction_state"] == "Idle", report
 print(json.dumps(report, indent=2, sort_keys=True))
 PY
@@ -424,4 +489,10 @@ sha256sum "${REPORT_DIR}/${RESULT_FILE}" > "${REPORT_DIR}/report.sha256"
     printf 'network_disabled_mobile_data=%s\n' "${DATA_NOW}"
 } > "${REPORT_DIR}/environment.txt"
 
-printf '%s\n'     'RMA-190 physical on-device ASR -> local LLM -> behavior -> offline TTS spoken turn passed.'
+if [[ "${REMOTE_OLLAMA_DIAGNOSTIC}" == "1" ]]; then
+    printf '%s\n' \
+        'Remote Ollama spoken-turn diagnostic passed; this does not count as offline-speech acceptance evidence.'
+else
+    printf '%s\n' \
+        'RMA-190 physical on-device ASR -> local LLM -> behavior -> offline TTS spoken turn passed.'
+fi

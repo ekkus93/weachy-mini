@@ -24,7 +24,8 @@ namespace ReachyMini.Speech
         public ReachyAndroidOfflineTtsPlatform()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            bridge = new AndroidJavaObject(JavaClassName);
+            AndroidJNI.InvokeAttached(() =>
+                bridge = new AndroidJavaObject(JavaClassName));
 #else
             throw new PlatformNotSupportedException(
                 "Android offline TTS is available only in Android player builds.");
@@ -47,14 +48,15 @@ namespace ReachyMini.Speech
             string requestId = "offline-tts-probe-" + Guid.NewGuid().ToString("N");
             var completion = new TaskCompletionSource<ProbeResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var callback = new ProbeCallback(requestId, completion);
+            ProbeCallback callback = null!;
             using CancellationTokenRegistration registration = cancellationToken.Register(
                 () =>
                 {
                     completion.TrySetCanceled(cancellationToken);
                     try
                     {
-                        activeBridge.Call("cancel", requestId);
+                        AndroidJNI.InvokeAttached(() =>
+                            activeBridge.Call("cancel", requestId));
                     }
                     catch (AndroidJavaException exception)
                     {
@@ -63,8 +65,12 @@ namespace ReachyMini.Speech
                             exception.GetType().Name);
                     }
                 });
-            using AndroidJavaObject activity = GetCurrentActivity();
-            activeBridge.Call("probe", activity, requestId, languageTag, callback);
+            AndroidJNI.InvokeAttached(() =>
+            {
+                callback = new ProbeCallback(requestId, completion);
+                using AndroidJavaObject activity = GetCurrentActivity();
+                activeBridge.Call("probe", activity, requestId, languageTag, callback);
+            });
             ProbeResult result = await completion.Task.ConfigureAwait(false);
             return new AndroidOfflineTtsProbe(
                 result.ApiLevel,
@@ -98,14 +104,15 @@ namespace ReachyMini.Speech
             string requestId = "offline-tts-voices-" + Guid.NewGuid().ToString("N");
             var completion = new TaskCompletionSource<IReadOnlyList<AndroidOfflineTtsPlatformVoice>>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var callback = new VoiceCallback(requestId, completion);
+            VoiceCallback callback = null!;
             using CancellationTokenRegistration registration = cancellationToken.Register(
                 () =>
                 {
                     completion.TrySetCanceled(cancellationToken);
                     try
                     {
-                        activeBridge.Call("cancel", requestId);
+                        AndroidJNI.InvokeAttached(() =>
+                            activeBridge.Call("cancel", requestId));
                     }
                     catch (AndroidJavaException exception)
                     {
@@ -114,8 +121,12 @@ namespace ReachyMini.Speech
                             exception.GetType().Name);
                     }
                 });
-            using AndroidJavaObject activity = GetCurrentActivity();
-            activeBridge.Call("listVoices", activity, requestId, languageTag, callback);
+            AndroidJNI.InvokeAttached(() =>
+            {
+                callback = new VoiceCallback(requestId, completion);
+                using AndroidJavaObject activity = GetCurrentActivity();
+                activeBridge.Call("listVoices", activity, requestId, languageTag, callback);
+            });
             return await completion.Task.ConfigureAwait(false);
 #else
             await Task.Yield();
@@ -185,13 +196,14 @@ namespace ReachyMini.Speech
                     "Android offline TTS operation acquired without a Java bridge.");
 
             using var queue = new SpeechEventQueue(requestId);
-            var callback = new SpeechCallback(requestId, queue);
+            SpeechCallback callback = null!;
             using CancellationTokenRegistration registration = cancellationToken.Register(
                 () =>
                 {
                     try
                     {
-                        activeBridge.Call("cancel", requestId);
+                        AndroidJNI.InvokeAttached(() =>
+                            activeBridge.Call("cancel", requestId));
                         queue.Publish(new AndroidOfflineTtsPlatformEvent(
                             requestId,
                             AndroidOfflineTtsPlatformEventKind.Cancelled));
@@ -208,17 +220,21 @@ namespace ReachyMini.Speech
 
             try
             {
-                using AndroidJavaObject activity = GetCurrentActivity();
                 try
                 {
-                    activeBridge.Call(
-                        "start",
-                        activity,
-                        requestId,
-                        text,
-                        languageTag,
-                        voiceId,
-                        callback);
+                    AndroidJNI.InvokeAttached(() =>
+                    {
+                        callback = new SpeechCallback(requestId, queue);
+                        using AndroidJavaObject activity = GetCurrentActivity();
+                        activeBridge.Call(
+                            "start",
+                            activity,
+                            requestId,
+                            text,
+                            languageTag,
+                            voiceId,
+                            callback);
+                    });
                 }
                 catch (AndroidJavaException exception)
                 {
@@ -242,7 +258,8 @@ namespace ReachyMini.Speech
             {
                 try
                 {
-                    activeBridge.Call("cancel", requestId);
+                    AndroidJNI.InvokeAttached(() =>
+                        activeBridge.Call("cancel", requestId));
                 }
                 catch (AndroidJavaException exception)
                 {
@@ -289,14 +306,17 @@ namespace ReachyMini.Speech
             }
             if (value != null)
             {
-                try
+                AndroidJNI.InvokeAttached(() =>
                 {
-                    value.Call("close");
-                }
-                finally
-                {
-                    value.Dispose();
-                }
+                    try
+                    {
+                        value.Call("close");
+                    }
+                    finally
+                    {
+                        value.Dispose();
+                    }
+                });
             }
 #endif
             GC.SuppressFinalize(this);

@@ -57,18 +57,22 @@ namespace ReachyMini.Speech
             AndroidJavaObject activeBridge = GetBridge();
             var completion = new TaskCompletionSource<SpeechAudioFocusRequestResult>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var callback = new FocusCallback(this, sessionId, completion);
-            using AndroidJavaObject activity = GetCurrentActivity();
+            FocusCallback callback = null!;
             try
             {
-                activeBridge.Call(
-                    "request",
-                    activity,
-                    sessionId,
-                    role == SpeechAudioRole.Listening
-                        ? "listening"
-                        : "speaking",
-                    callback);
+                AndroidJNI.InvokeAttached(() =>
+                {
+                    callback = new FocusCallback(this, sessionId, completion);
+                    using AndroidJavaObject activity = GetCurrentActivity();
+                    activeBridge.Call(
+                        "request",
+                        activity,
+                        sessionId,
+                        role == SpeechAudioRole.Listening
+                            ? "listening"
+                            : "speaking",
+                        callback);
+                });
             }
             catch (AndroidJavaException exception)
             {
@@ -84,13 +88,16 @@ namespace ReachyMini.Speech
                     {
                         try
                         {
-                            activeBridge.Call(
-                                "release",
-                                sessionId,
-                                new CancellationReleaseCallback(
+                            AndroidJNI.InvokeAttached(() =>
+                            {
+                                activeBridge.Call(
+                                    "release",
                                     sessionId,
-                                    completion,
-                                    cancellationToken));
+                                    new CancellationReleaseCallback(
+                                        sessionId,
+                                        completion,
+                                        cancellationToken));
+                            });
                         }
                         catch (AndroidJavaException exception)
                         {
@@ -123,20 +130,24 @@ namespace ReachyMini.Speech
             AndroidJavaObject activeBridge = GetBridge();
             var completion = new TaskCompletionSource<object?>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
-            var callback = new ReleaseCallback(sessionId, completion);
             using CancellationTokenRegistration registration =
                 cancellationToken.Register(
                     () => completion.TrySetCanceled(cancellationToken));
+            ReleaseCallback callback = null!;
             try
             {
-                activeBridge.Call("release", sessionId, callback);
+                AndroidJNI.InvokeAttached(() =>
+                {
+                    // AndroidJavaProxy registers a JNI proxy in its constructor.
+                    callback = new ReleaseCallback(sessionId, completion);
+                    activeBridge.Call("release", sessionId, callback);
+                });
             }
             catch (AndroidJavaException exception)
             {
                 throw new SpeechAudioFocusException(
                     "audio_focus_release_exception");
             }
-
             _ = await completion.Task.ConfigureAwait(false);
 #else
             await Task.Yield();
@@ -162,14 +173,17 @@ namespace ReachyMini.Speech
 
             if (value != null)
             {
-                try
+                AndroidJNI.InvokeAttached(() =>
                 {
-                    value.Call("close");
-                }
-                finally
-                {
-                    value.Dispose();
-                }
+                    try
+                    {
+                        value.Call("close");
+                    }
+                    finally
+                    {
+                        value.Dispose();
+                    }
+                });
             }
 #endif
             GC.SuppressFinalize(this);
@@ -358,7 +372,7 @@ namespace ReachyMini.Speech
                 if (ValidateIdentity(callbackSessionId))
                 {
                     completion.TrySetException(
-                        new SpeechAudioFocusException(code));
+                        new SpeechAudioFocusException(code, diagnostic));
                 }
             }
 
