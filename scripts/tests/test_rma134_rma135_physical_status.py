@@ -33,17 +33,15 @@ class PhysicalStatusTests(unittest.TestCase):
         self.assertIn("continue-on-error: true", upload_header)
 
     def test_rma135_hashed_paths_are_real_files(self) -> None:
-        source = (
-            ROOT / ".github/workflows/rma135-resource-thermal-governor.yml"
-        ).read_text(encoding="utf-8")
+        source = (ROOT / ".github/workflows/rma135-resource-thermal-governor.yml").read_text(
+            encoding="utf-8"
+        )
         section = source.split("- name: Create exact-SHA evidence", 1)[1]
         section = section.split('> "$OUT/source-sha256.txt"', 1)[0]
         paths = [
             line.strip().removesuffix("\\").strip()
             for line in section.splitlines()
-            if line.strip().startswith(
-                ("Assets/", "managed/", "scripts/", "docs/", ".github/")
-            )
+            if line.strip().startswith(("Assets/", "managed/", "scripts/", "docs/", ".github/"))
         ]
         self.assertGreaterEqual(len(paths), 25, "RMA-135 evidence sources truncated")
         self.assertEqual(len(paths), len(set(paths)), "duplicate evidence paths")

@@ -19,30 +19,30 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
         runner = RUNNER.read_text(encoding="utf-8")
         workflow = WORKFLOW.read_text(encoding="utf-8")
         for forbidden in (
-            'shell dumpsys package',
-            'shell dumpsys thermalservice',
-            'shell logcat',
-            'shell getprop >',
+            "shell dumpsys package",
+            "shell dumpsys thermalservice",
+            "shell logcat",
+            "shell getprop >",
         ):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, runner)
         self.assertIn('"${REPORT_DIR}/package-before-launch.txt"', runner)
         self.assertIn('"${REPORT_DIR}/thermalservice.txt"', runner)
-        self.assertIn('name: rma135-resource-governor-android-', workflow)
-        self.assertIn('path: artifacts/rma135-resource-governor-android', workflow)
+        self.assertIn("name: rma135-resource-governor-android-", workflow)
+        self.assertIn("path: artifacts/rma135-resource-governor-android", workflow)
 
     def test_activity_resolution_avoids_private_package_inventory(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
-        self.assertIn('shell cmd package resolve-activity --brief', runner)
-        self.assertIn('android.intent.category.LAUNCHER', runner)
+        self.assertIn("shell cmd package resolve-activity --brief", runner)
+        self.assertIn("android.intent.category.LAUNCHER", runner)
         self.assertIn('"${REPORT_DIR}/launch-component.txt"', runner)
-        self.assertNotIn('awk \'/android.intent.action.MAIN:', runner)
+        self.assertNotIn("awk '/android.intent.action.MAIN:", runner)
 
     def test_pinned_serial_is_hashed_in_uploaded_device_identity(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
         self.assertIn('SERIAL_SHA256="$(printf', runner)
-        self.assertIn('serial_sha256=%s', runner)
-        self.assertNotIn('serial=%s', runner)
+        self.assertIn("serial_sha256=%s", runner)
+        self.assertNotIn("serial=%s", runner)
         self.assertNotIn('"${DEVICE_SERIAL}" "${model}" "${abi}"', runner)
 
     def test_early_preflight_failure_clears_stale_evidence(self) -> None:
@@ -89,16 +89,24 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             checkpoint = root / "rma135-resource-governor-checkpoint-042.json"
-            checkpoint.write_text(json.dumps({
-                "schema_version": 1, "sequence": 42,
-                "stage": "post_recovery_generation_completed",
-                "detail": "attempt=8 governed_status=ResourceCancelledDuringGeneration "
-                          "governor_reasons=ThermalModerate, PhysicsBudgetExceeded, RecoveryHold "
-                          "worker_deadline_miss_delta=3 user_prompt=private",
-            }), encoding="utf-8")
+            checkpoint.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "sequence": 42,
+                        "stage": "post_recovery_generation_completed",
+                        "detail": "attempt=8 governed_status=ResourceCancelledDuringGeneration "
+                        "governor_reasons=ThermalModerate, PhysicsBudgetExceeded, RecoveryHold "
+                        "worker_deadline_miss_delta=3 user_prompt=private",
+                    }
+                ),
+                encoding="utf-8",
+            )
             result = subprocess.run(
                 ["python3", "-I", str(ROOT / "scripts/rma135_checkpoint_summary.py"), directory],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             self.assertIn(
                 "governor_reasons=ThermalModerate, PhysicsBudgetExceeded, RecoveryHold",
@@ -112,16 +120,24 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             checkpoint = root / "rma135-resource-governor-checkpoint-042.json"
-            checkpoint.write_text(json.dumps({
-                "schema_version": 1, "sequence": 42,
-                "stage": "governor_recovery_exhausted",
-                "detail": "samples=100 last_mode=Suspended "
-                          "last_reasons=PhysicsBudgetExceeded, UnknownReason "
-                          "last_real_physics_state=Exceeded",
-            }), encoding="utf-8")
+            checkpoint.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "sequence": 42,
+                        "stage": "governor_recovery_exhausted",
+                        "detail": "samples=100 last_mode=Suspended "
+                        "last_reasons=PhysicsBudgetExceeded, UnknownReason "
+                        "last_real_physics_state=Exceeded",
+                    }
+                ),
+                encoding="utf-8",
+            )
             result = subprocess.run(
                 ["python3", "-I", str(ROOT / "scripts/rma135_checkpoint_summary.py"), directory],
-                capture_output=True, text=True, check=True,
+                capture_output=True,
+                text=True,
+                check=True,
             )
             self.assertIn("samples=100", result.stdout)
             self.assertNotIn("UnknownReason", result.stdout)
@@ -129,7 +145,7 @@ class Rma135PrivatePhysicalEvidenceTests(unittest.TestCase):
 
     def test_structured_performance_and_thermal_evidence_is_preserved(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
-        self.assertIn('rma184-representative-device-long-run.json', runner)
+        self.assertIn("rma184-representative-device-long-run.json", runner)
         self.assertIn('"thermal_pressure_samples"', runner)
         self.assertIn('"thermal_degradation_order_valid"', runner)
         self.assertIn('dumpsys meminfo "${PACKAGE_NAME}"', runner)

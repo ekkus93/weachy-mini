@@ -265,9 +265,14 @@ internal static partial class AndroidOnDeviceAsrTests
             "support exception state");
         Assert(
             availability.Diagnostic.Contains(
-                "InvalidOperationException: synthetic support JNI failure",
+                "InvalidOperationException.",
                 StringComparison.Ordinal),
-            "support exception diagnostic must preserve bounded exception detail");
+            "support exception diagnostic must preserve the exception class");
+        Assert(
+            !availability.Diagnostic.Contains(
+                "synthetic support JNI failure",
+                StringComparison.Ordinal),
+            "support exception diagnostic must redact exception message detail");
     }
 
     private static async Task ConfiguredLanguageEnforced()

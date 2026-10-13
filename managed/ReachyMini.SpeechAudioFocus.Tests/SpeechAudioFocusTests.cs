@@ -25,6 +25,8 @@ internal static class SpeechAudioFocusTests
             ("microphone-mute-is-visible-and-cancels", MicrophoneMuteIsVisible),
             ("stale-interruption-is-ignored", StaleInterruptionIsIgnored),
             ("release-failure-faults-coordinator", ReleaseFailureFaultsCoordinator),
+            ("android-release-failure-code-is-preserved", AndroidReleaseFailureCodeIsPreserved),
+            ("asr-retains-caller-context-across-focus-and-release", AsrRetainsCallerContext),
             ("caller-cancellation-remains-cancellation", CallerCancellationRemainsCancellation),
             ("provider-mismatch-does-not-acquire-focus", ProviderMismatchDoesNotAcquire),
             ("java-focus-and-interruption-contracts-are-fail-closed", JavaSourceContracts),
@@ -58,6 +60,38 @@ internal static class SpeechAudioFocusTests
         Require(speaking.IsGranted && speaking.Lease != null, "Speaking focus should be granted by the fake platform.");
         Require(platform.LastRole == SpeechAudioRole.Speaking, "Speaking role must reach the platform unchanged.");
         _ = await speaking.Lease!.ReleaseAsync().ConfigureAwait(false);
+    }
+
+    private static async Task AsrRetainsCallerContext()
+    {
+        var context = new ProbeSynchronizationContext();
+        await using var platform = new FakeAudioPlatform
+        {
+            YieldBeforeGrant = true,
+            ExpectedReleaseContext = context,
+        };
+        await using var coordinator = new SpeechAudioFocusCoordinator(platform);
+        await using var raw = new FakeAsrProvider { ExpectedContext = context };
+        await using var provider = new AudioCoordinatedAsrProvider(raw, coordinator, ownsInner: false);
+        var result = new TaskCompletionSource<List<AsrEvent>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        context.Post(async _ =>
+        {
+            try
+            {
+                result.TrySetResult(await CollectAsync(provider.RecognizeAsync(
+                    CreateAsrRequest(provider, "asr-caller-context"),
+                    CancellationToken.None)));
+            }
+            catch (Exception exception)
+            {
+                result.TrySetException(exception);
+            }
+        }, null);
+
+        List<AsrEvent> events = await result.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Require(events[^1].Kind == AsrEventKind.FinalResult,
+            "Recognition and focus release must finish on the caller context.");
     }
 
     private static async Task FocusDenialStopsProviderStart()
@@ -250,6 +284,32 @@ internal static class SpeechAudioFocusTests
             CancellationToken.None).ConfigureAwait(false);
         Require(!next.IsGranted && next.Error != null && !next.Error.IsRetryable,
             "A faulted coordinator must fail closed until recreated.");
+    }
+
+    private static async Task AndroidReleaseFailureCodeIsPreserved()
+    {
+        await using var platform = new FakeAudioPlatform
+        {
+            ReleaseFailureCode = "audio_focus_abandon_failed",
+        };
+        await using var coordinator = new SpeechAudioFocusCoordinator(platform);
+        await using var raw = new FakeTtsProvider();
+        await using var provider = new AudioCoordinatedTtsProvider(
+            raw,
+            coordinator,
+            ownsInner: false);
+
+        List<TtsEvent> events = await CollectAsync(provider.SpeakAsync(
+            CreateTtsRequest(provider, "release-code"),
+            CancellationToken.None)).ConfigureAwait(false);
+
+        RequireSingleFailure(
+            events,
+            SpeechErrorCategory.ServiceFailure,
+            "audio_focus_abandon_failed");
+        Require(
+            coordinator.Current.State == SpeechAudioState.Faulted,
+            "An Android release failure must keep the coordinator faulted.");
     }
 
     private static async Task CallerCancellationRemainsCancellation()
@@ -469,6 +529,26 @@ internal static class SpeechAudioFocusTests
         }
     }
 
+    private sealed class ProbeSynchronizationContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                SynchronizationContext? previous = Current;
+                SetSynchronizationContext(this);
+                try
+                {
+                    callback(state);
+                }
+                finally
+                {
+                    SetSynchronizationContext(previous);
+                }
+            });
+        }
+    }
+
     private sealed class FakeAudioPlatform : ISpeechAudioFocusPlatform
     {
         private string? activeSessionId;
@@ -477,7 +557,10 @@ internal static class SpeechAudioFocusTests
         public event EventHandler<SpeechAudioPlatformInterruptionEventArgs>? Interrupted;
         public bool DenyFocus { get; set; }
         public bool FailRelease { get; set; }
+        public string? ReleaseFailureCode { get; set; }
         public bool BlockRelease { get; set; }
+        public bool YieldBeforeGrant { get; set; }
+        public SynchronizationContext? ExpectedReleaseContext { get; set; }
         public int RequestCalls { get; private set; }
         public int ReleaseCalls { get; private set; }
         public SpeechAudioRole? LastRole { get; private set; }
@@ -485,7 +568,7 @@ internal static class SpeechAudioFocusTests
         public TaskCompletionSource<object?> ReleaseStarted { get; } = NewSignal();
         public TaskCompletionSource<object?> AllowRelease { get; } = NewSignal();
 
-        public ValueTask<SpeechAudioFocusRequestResult> RequestFocusAsync(
+        public async ValueTask<SpeechAudioFocusRequestResult> RequestFocusAsync(
             string sessionId,
             SpeechAudioRole role,
             CancellationToken cancellationToken)
@@ -496,17 +579,19 @@ internal static class SpeechAudioFocusTests
             LastRole = role;
             if (DenyFocus)
             {
-                return new ValueTask<SpeechAudioFocusRequestResult>(
-                    SpeechAudioFocusRequestResult.Denied("audio_focus_denied", "Fake platform denied focus."));
+                return SpeechAudioFocusRequestResult.Denied(
+                    "audio_focus_denied", "Fake platform denied focus.");
             }
             if (activeSessionId != null)
             {
-                return new ValueTask<SpeechAudioFocusRequestResult>(
-                    SpeechAudioFocusRequestResult.Denied("audio_focus_busy", "Fake platform already has a session."));
+                return SpeechAudioFocusRequestResult.Denied("audio_focus_busy", "Fake platform already has a session.");
             }
             activeSessionId = sessionId;
-            return new ValueTask<SpeechAudioFocusRequestResult>(
-                SpeechAudioFocusRequestResult.Granted("Fake platform granted focus."));
+            if (YieldBeforeGrant)
+            {
+                await Task.Yield();
+            }
+            return SpeechAudioFocusRequestResult.Granted("Fake platform granted focus.");
         }
 
         public async ValueTask ReleaseFocusAsync(
@@ -514,6 +599,12 @@ internal static class SpeechAudioFocusTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (ExpectedReleaseContext != null &&
+                !ReferenceEquals(SynchronizationContext.Current, ExpectedReleaseContext))
+            {
+                throw new InvalidOperationException(
+                    "Focus release ran outside the caller synchronization context.");
+            }
             ReleaseCalls++;
             ReleaseStarted.TrySetResult(null);
             if (BlockRelease)
@@ -523,6 +614,10 @@ internal static class SpeechAudioFocusTests
             if (FailRelease)
             {
                 throw new InvalidOperationException("Fake release failure.");
+            }
+            if (ReleaseFailureCode != null)
+            {
+                throw new SpeechAudioFocusException(ReleaseFailureCode);
             }
             if (activeSessionId != null && !string.Equals(activeSessionId, sessionId, StringComparison.Ordinal))
             {
@@ -576,6 +671,7 @@ internal static class SpeechAudioFocusTests
         public SpeechProviderDescriptor Descriptor { get; }
         public AsrCapabilities Capabilities { get; }
         public bool BlockUntilCancellation { get; set; }
+        public SynchronizationContext? ExpectedContext { get; set; }
         public int RecognizeCalls { get; private set; }
         public TaskCompletionSource<object?> Started { get; } = NewSignal();
 
@@ -589,6 +685,12 @@ internal static class SpeechAudioFocusTests
             AsrRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            if (ExpectedContext != null &&
+                !ReferenceEquals(SynchronizationContext.Current, ExpectedContext))
+            {
+                throw new InvalidOperationException(
+                    "Recognizer start ran outside the caller synchronization context.");
+            }
             RecognizeCalls++;
             yield return new AsrEvent(Descriptor.InstanceId, request.Context.RequestId, 1UL, AsrEventKind.Started);
             Started.TrySetResult(null);

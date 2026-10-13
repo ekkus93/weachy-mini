@@ -11,6 +11,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from scripts.tests.rma194_apk_fixture import elf64_aarch64_shared
+
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
     "rma194_apk_audit", ROOT / "scripts/verify_rma194_release_apk.py"
@@ -27,25 +29,6 @@ REQUIRED_LIBRARIES = (
 )
 
 
-def elf64_aarch64_shared(
-    *,
-    elf_class: int = 2,
-    byte_order: int = 1,
-    elf_type: int = 3,
-    machine: int = 183,
-    version: int = 1,
-) -> bytes:
-    """Synthetic ELF with a bounded load segment and dynamic segment."""
-    header = bytearray(176)
-    header[:7] = bytes((0x7F, 0x45, 0x4C, 0x46, elf_class, byte_order, 1))
-    struct.pack_into("<HHI", header, 16, elf_type, machine, version)
-    struct.pack_into("<Q", header, 32, 64)
-    struct.pack_into("<HHH", header, 52, 64, 56, 2)
-    struct.pack_into("<IIQQQQQQ", header, 64, 1, 5, 0, 0, 0, 176, 176, 4096)
-    struct.pack_into("<IIQQQQQQ", header, 120, 2, 6, 0, 0, 0, 176, 176, 8)
-    return bytes(header)
-
-
 class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -59,9 +42,23 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
         ]
         for name in REQUIRED_LIBRARIES:
             entries.append((f"lib/arm64-v8a/{name}", elf64_aarch64_shared()))
+        extra_entries = list(extra)
+        extra_names = {
+            entry_name.filename if isinstance(entry_name, zipfile.ZipInfo) else entry_name
+            for entry_name, _ in extra_entries
+        }
+        entries = [
+            (entry_name, content)
+            for entry_name, content in entries
+            if entry_name not in extra_names
+        ]
+        for entry_name, content in extra_entries:
+            name = entry_name.filename if isinstance(entry_name, zipfile.ZipInfo) else entry_name
+            entries.append((entry_name, content))
         with zipfile.ZipFile(self.apk, "w") as archive:
-            for name, content in (*entries, *extra):
-                if name not in omit:
+            for name, content in entries:
+                actual_name = name.filename if isinstance(name, zipfile.ZipInfo) else name
+                if actual_name not in omit or actual_name in extra_names:
                     archive.writestr(name, content)
 
     def test_minimal_nondevice_fixture_is_structurally_accepted(self) -> None:
@@ -134,9 +131,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def test_executable_instead_of_shared_object_is_rejected(self) -> None:
         self.build(
             omit=("lib/arm64-v8a/libreachy_llama.so",),
-            extra=(
-                ("lib/arm64-v8a/libreachy_llama.so", elf64_aarch64_shared(elf_type=2)),
-            ),
+            extra=(("lib/arm64-v8a/libreachy_llama.so", elf64_aarch64_shared(elf_type=2)),),
         )
         with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
             AUDIT.inspect_apk(self.apk)
@@ -144,9 +139,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def test_elf32_required_library_is_rejected(self) -> None:
         self.build(
             omit=("lib/arm64-v8a/libil2cpp.so",),
-            extra=(
-                ("lib/arm64-v8a/libil2cpp.so", elf64_aarch64_shared(elf_class=1)),
-            ),
+            extra=(("lib/arm64-v8a/libil2cpp.so", elf64_aarch64_shared(elf_class=1)),),
         )
         with self.assertRaisesRegex(ValueError, "invalid ELF64 header"):
             AUDIT.inspect_apk(self.apk)
@@ -154,9 +147,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def test_big_endian_required_library_is_rejected(self) -> None:
         self.build(
             omit=("lib/arm64-v8a/libmujoco.so",),
-            extra=(
-                ("lib/arm64-v8a/libmujoco.so", elf64_aarch64_shared(byte_order=2)),
-            ),
+            extra=(("lib/arm64-v8a/libmujoco.so", elf64_aarch64_shared(byte_order=2)),),
         )
         with self.assertRaisesRegex(ValueError, "invalid ELF64 header"):
             AUDIT.inspect_apk(self.apk)
@@ -164,9 +155,7 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def test_nested_required_library_does_not_satisfy_android_layout(self) -> None:
         self.build(
             omit=("lib/arm64-v8a/libmujoco.so",),
-            extra=(
-                ("lib/arm64-v8a/nested/libmujoco.so", elf64_aarch64_shared()),
-            ),
+            extra=(("lib/arm64-v8a/nested/libmujoco.so", elf64_aarch64_shared()),),
         )
         with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
             AUDIT.inspect_apk(self.apk)
@@ -177,18 +166,12 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
             AUDIT.inspect_apk(self.apk)
 
     def test_nested_optional_library_is_rejected(self) -> None:
-        self.build(
-            extra=(("lib/arm64-v8a/plugins/liboptional.so", elf64_aarch64_shared()),)
-        )
+        self.build(extra=(("lib/arm64-v8a/plugins/liboptional.so", elf64_aarch64_shared()),))
         with self.assertRaisesRegex(ValueError, "unsupported native library layout"):
             AUDIT.inspect_apk(self.apk)
 
     def test_invalid_optional_native_library_is_rejected(self) -> None:
-        self.build(
-            extra=(
-                ("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared(machine=62)),
-            )
-        )
+        self.build(extra=(("lib/arm64-v8a/liboptional.so", elf64_aarch64_shared(machine=62)),))
         with self.assertRaisesRegex(ValueError, "AArch64 shared objects"):
             AUDIT.inspect_apk(self.apk)
 
@@ -218,59 +201,43 @@ class Rma194ApkArchiveAuditTests(unittest.TestCase):
     def test_invalid_program_header_offset_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<Q", library, 32, 65537)
-        self.assert_rejects_native_layout(
-            bytes(library), "invalid ELF program-header table"
-        )
+        self.assert_rejects_native_layout(bytes(library), "invalid ELF program-header table")
 
     def test_invalid_program_header_entry_size_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<H", library, 54, 8)
-        self.assert_rejects_native_layout(
-            bytes(library), "invalid ELF program-header table"
-        )
+        self.assert_rejects_native_layout(bytes(library), "invalid ELF program-header table")
 
     def test_oversized_program_header_count_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<H", library, 56, 129)
-        self.assert_rejects_native_layout(
-            bytes(library), "invalid ELF program-header table"
-        )
+        self.assert_rejects_native_layout(bytes(library), "invalid ELF program-header table")
 
     def test_missing_dynamic_segment_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<I", library, 120, 0)
-        self.assert_rejects_native_layout(
-            bytes(library), "lacks load/dynamic segments"
-        )
+        self.assert_rejects_native_layout(bytes(library), "lacks load/dynamic segments")
 
     def test_missing_load_segment_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<I", library, 64, 0)
-        self.assert_rejects_native_layout(
-            bytes(library), "lacks load/dynamic segments"
-        )
+        self.assert_rejects_native_layout(bytes(library), "lacks load/dynamic segments")
 
     def test_out_of_file_segment_extent_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<Q", library, 64 + 32, 177)
-        self.assert_rejects_native_layout(
-            bytes(library), "invalid ELF segment extent"
-        )
+        self.assert_rejects_native_layout(bytes(library), "invalid ELF segment extent")
 
     def test_empty_file_backed_load_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<Q", library, 64 + 32, 0)
-        self.assert_rejects_native_layout(
-            bytes(library), "lacks load/dynamic segments"
-        )
+        self.assert_rejects_native_layout(bytes(library), "lacks load/dynamic segments")
 
     def test_empty_dynamic_segment_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())
         struct.pack_into("<Q", library, 120 + 32, 0)
         struct.pack_into("<Q", library, 120 + 40, 0)
-        self.assert_rejects_native_layout(
-            bytes(library), "lacks load/dynamic segments"
-        )
+        self.assert_rejects_native_layout(bytes(library), "lacks load/dynamic segments")
 
     def test_dynamic_segment_outside_file_backed_load_is_rejected(self) -> None:
         library = bytearray(elf64_aarch64_shared())

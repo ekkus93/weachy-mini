@@ -44,9 +44,7 @@ class Rma134Rma135EvidencePrivacyTests(unittest.TestCase):
 
     def test_release_review_guards_both_physical_evidence_paths(self) -> None:
         workflow = RELEASE_REVIEW.read_text(encoding="utf-8")
-        self.assertIn(
-            "python3 scripts/tests/test_rma134_rma135_artifact_privacy.py", workflow
-        )
+        self.assertIn("python3 scripts/tests/test_rma134_rma135_artifact_privacy.py", workflow)
 
 
 if __name__ == "__main__":

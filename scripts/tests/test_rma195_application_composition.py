@@ -103,10 +103,10 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
 
     def test_service_lifecycle_health_never_exposes_exception_messages(self) -> None:
         service = read(CORE / "Application/ReachyApplicationServiceBase.cs")
-        self.assertIn('exception.GetType().Name', service)
-        self.assertNotIn('exception.Message', service)
-        self.assertIn('Initialization failed:', service)
-        self.assertIn('Disposal failed:', service)
+        self.assertIn("exception.GetType().Name", service)
+        self.assertNotIn("exception.Message", service)
+        self.assertIn("Initialization failed:", service)
+        self.assertIn("Disposal failed:", service)
 
     def test_independent_speech_probes_preserve_partial_readiness(self) -> None:
         speech = read(APP / "ReachyAndroidSpeechCapabilityApplicationService.cs")
@@ -138,16 +138,13 @@ class Rma195ApplicationCompositionTests(unittest.TestCase):
             on_initialize.index("SetDegraded("),
             on_initialize.index("_ = ProbeAsync(probeCancellation.Token)"),
         )
-        probe = speech[speech.index("private async Task ProbeAsync("):]
+        probe = speech[speech.index("private async Task ProbeAsync(") :]
         self.assertIn("if (cancellationToken.IsCancellationRequested)", probe)
         self.assertIn("No network speech provider was selected automatically.", probe)
         self.assertNotIn("exception.Message", probe)
         self.assertIn("probeCancellation?.Cancel();", speech)
         self.assertIn("probeCancellation?.Dispose();", speech)
-        command = (
-            "python3 -m unittest "
-            "scripts.tests.test_rma195_application_composition"
-        )
+        command = "python3 -m unittest scripts.tests.test_rma195_application_composition"
         for name in (
             "local-unity-android-validation.yml",
             "local-unity-android-device-no-artifacts.yml",

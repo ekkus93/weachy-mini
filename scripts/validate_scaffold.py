@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -38,10 +39,19 @@ def main() -> int:
         if not (ROOT / relative_path).exists():
             errors.append(f"missing required path: {relative_path}")
 
-    for path in ROOT.rglob("*"):
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout.split(b"\0")
+    for entry in tracked:
+        if not entry:
+            continue
+        relative = Path(entry.decode("utf-8"))
+        path = ROOT / relative
         if not path.is_file():
             continue
-        relative = path.relative_to(ROOT)
         if path.name in FORBIDDEN_NAMES:
             errors.append(f"forbidden machine-specific or secret file: {relative}")
         if path.suffix.lower() in FORBIDDEN_SUFFIXES:

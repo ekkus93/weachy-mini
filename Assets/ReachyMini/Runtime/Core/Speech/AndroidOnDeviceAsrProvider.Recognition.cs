@@ -122,8 +122,10 @@ namespace ReachyMini.Speech
 
                 while (!terminal)
                 {
+                    // The platform enumerator enters JNI on its first move
+                    // and during cleanup. Keep the Unity context for each move.
                     PlatformMoveNextResult move =
-                        await MoveNextSafelyAsync(enumerator).ConfigureAwait(false);
+                        await MoveNextSafelyAsync(enumerator).ConfigureAwait(true);
 
                     if (move.Cancelled)
                     {

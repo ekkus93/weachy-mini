@@ -18,11 +18,18 @@ PROFILE_EVIDENCE = ROOT / "docs/validation/RMA_184_A54_DEFAULT_PROFILE_CAPTURE_2
 PROGRAM = ROOT / "managed/ReachyMini.Core.Tests/Program.cs"
 MANAGED = ROOT / ("managed/ReachyMini.Core.Tests/Rma184RepresentativeDeviceMatrixContractTests.cs")
 TODO = ROOT / "docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md"
-SOAK = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Rma184.cs"
-RMA135_ACCEPTANCE = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs"
+SOAK = (
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Rma184.cs"
+)
+RMA135_ACCEPTANCE = (
+    ROOT
+    / "Assets/ReachyMini/Runtime/Application/ReachyRma135ResourceGovernorAcceptance.Acceptance.cs"
+)
 RMA135_RUNNER = ROOT / "scripts/run_rma135_resource_governor_acceptance_android.sh"
 RMA135_WORKFLOW = ROOT / ".github/workflows/rma135-resource-governor-android.yml"
-DEGRADATION_DRIVER = ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver.cs"
+DEGRADATION_DRIVER = (
+    ROOT / "Assets/ReachyMini/Runtime/Application/ReachyPriorityDegradationRuntimeDriver.cs"
+)
 
 
 class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
@@ -192,7 +199,6 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         ]:
             self.assertIn(gate, block)
 
-
     def test_integrated_long_run_uses_production_paths_and_fail_closed_policy(self) -> None:
         soak = SOAK.read_text(encoding="utf-8")
         for token in (
@@ -252,7 +258,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             # The physical verifier recomputes lag from two finite timing
             # snapshots, compares the reported growth to that value, then
             # enforces the unchanged 2-ms limit on observed growth.
-            'observed_lag_growth <= 0.002',
+            "observed_lag_growth <= 0.002",
             'report["minimum_local_llm_decode_tokens_per_second"] >= 1.0',
             'report["thermal_degradation_order_valid"] is True',
             'report["report_contains_prompt_or_response_content"] is False',
@@ -269,7 +275,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "memory_budgets_mib = [128, 192, 256]",
             'initial_lag = report["initial_state_lag_seconds"]',
             'final_lag = report["final_state_lag_seconds"]',
-            'observed_lag_growth = max(0.0, final_lag - initial_lag)',
+            "observed_lag_growth = max(0.0, final_lag - initial_lag)",
             'report["state_lag_growth_seconds"]',
             "math.isclose(",
             "observed_lag_growth <= 0.002",
@@ -355,9 +361,7 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
             "local-unity-android-validation.yml",
             "local-unity-android-device-no-artifacts.yml",
         ):
-            workflow = (ROOT / ".github/workflows" / name).read_text(
-                encoding="utf-8"
-            )
+            workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
             self.assertIn(gate, workflow, name)
             self.assertLess(
                 workflow.index(gate),
@@ -368,9 +372,9 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
     def test_api26_low_device_thermal_evidence_limit_is_fail_visible(self) -> None:
         matrix = json.loads(MATRIX.read_text(encoding="utf-8"))
         legacy_devices = [
-            entry for entry in matrix["representative_devices"]
-            if isinstance(entry.get("android_api"), int)
-            and entry["android_api"] < 29
+            entry
+            for entry in matrix["representative_devices"]
+            if isinstance(entry.get("android_api"), int) and entry["android_api"] < 29
         ]
         self.assertTrue(legacy_devices, "Boundary-device compatibility must be explicit")
         source = (
@@ -399,18 +403,20 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
     def test_integrated_physical_failure_reports_do_not_persist_private_provider_text(self) -> None:
         soak = SOAK.read_text(encoding="utf-8")
         parent = (
-            ROOT / "Assets/ReachyMini/Runtime/Application"
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application"
             / "ReachyRma135ResourceGovernorAcceptance.cs"
         ).read_text(encoding="utf-8")
         self.assertNotIn("generation.Detail", soak)
-        failure_writer = soak[soak.index("private static void TryWriteRma184Failure("):]
+        failure_writer = soak[soak.index("private static void TryWriteRma184Failure(") :]
         self.assertNotIn("exception.Message", failure_writer)
         self.assertNotIn("writeException.Message", failure_writer)
         self.assertIn("exception.GetType().Name", failure_writer)
         self.assertIn('previous.status == "failed"', failure_writer)
         self.assertIn("!previous.qualification_passed", failure_writer)
         diagnostics = (
-            ROOT / "Assets/ReachyMini/Runtime/Application"
+            ROOT
+            / "Assets/ReachyMini/Runtime/Application"
             / "ReachyRma135ResourceGovernorAcceptance.Diagnostics.cs"
         ).read_text(encoding="utf-8")
         self.assertNotIn("unhandledFailureMessage", diagnostics)
@@ -418,10 +424,12 @@ class Rma184RepresentativeDeviceMatrixTests(unittest.TestCase):
         self.assertIn("Volatile.Read(ref unhandledFailure) != 0", parent)
         self.assertNotIn("unhandledFailureMessage", parent)
         self.assertNotIn('Bound(condition + "\\n" + stackTrace', diagnostics)
-        checkpoint_failure = diagnostics[diagnostics.index("private static void TryWriteCheckpoint("):]
+        checkpoint_failure = diagnostics[
+            diagnostics.index("private static void TryWriteCheckpoint(") :
+        ]
         self.assertNotIn("exception.Message", checkpoint_failure)
         self.assertIn("exception.GetType().Name", checkpoint_failure)
-        report_handler = parent[parent.index("private async void Start()"):]
+        report_handler = parent[parent.index("private async void Start()") :]
         self.assertNotIn("exception.ToString()", report_handler)
         self.assertNotIn("exception.Message", report_handler)
         self.assertNotIn("unhandledFailureMessage);", report_handler)

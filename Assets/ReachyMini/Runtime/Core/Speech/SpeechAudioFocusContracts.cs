@@ -106,6 +106,23 @@ namespace ReachyMini.Speech
             new SpeechAudioFocusRequestResult(false, code, diagnostic);
     }
 
+    public sealed class SpeechAudioFocusException : Exception
+    {
+        public SpeechAudioFocusException(string failureCode)
+            : base("Android speech audio focus operation failed.")
+        {
+            Code = SpeechProviderDescriptor.RequireText(
+                failureCode,
+                nameof(failureCode));
+            if (Code.Length > SpeechProviderError.MaximumCodeCharacters)
+            {
+                throw new ArgumentOutOfRangeException(nameof(failureCode));
+            }
+        }
+
+        public string Code { get; }
+    }
+
     public sealed class SpeechAudioPlatformInterruptionEventArgs : EventArgs
     {
         public SpeechAudioPlatformInterruptionEventArgs(

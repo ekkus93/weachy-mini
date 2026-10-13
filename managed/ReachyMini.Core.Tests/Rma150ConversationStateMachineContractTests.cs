@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using ReachyMini.Conversation;
+using ReachyMini.Speech;
 
 namespace ReachyMini.Core.Tests
 {
@@ -18,6 +19,8 @@ namespace ReachyMini.Core.Tests
             SpeakingBargeInCancelsPlaybackBeforeNextTurn();
             ConflictingSessionStartIsRejected();
             ErrorResetChangesSessionIdentity();
+            RecognizerStartupLeavesTurnListening();
+            TranscriptStartsTranscribingOnlyOnce();
         }
 
         private static void HappyPathIsDeterministic()
@@ -101,6 +104,54 @@ namespace ReachyMini.Core.Tests
             Equal(0UL, reset.TurnId, "reset turn identity");
             Throws<ReachyStaleConversationCompletionException>(
                 () => machine.MarkListeningComplete(listening));
+        }
+
+        private static void RecognizerStartupLeavesTurnListening()
+        {
+            using var machine = new ReachyConversationStateMachine();
+            ReachyConversationOperation listening = machine.BeginListening();
+            var progress = new ReachyConversationAsrProgress(machine, listening);
+
+            Equal(false, progress.Observe(AsrEventKind.Started), "started transition");
+            Equal(true, progress.RecognizerReady, "recognizer ready signal");
+            Equal<ReachyConversationOperation?>(
+                null,
+                progress.Transcribing,
+                "transcribing operation after start");
+            Equal(
+                ReachyConversationState.Listening,
+                machine.Current.State,
+                "state after recognizer startup");
+            AssertAudioOwnership(
+                machine.Current,
+                asr: true,
+                tts: false,
+                "recognizer startup ownership");
+        }
+
+        private static void TranscriptStartsTranscribingOnlyOnce()
+        {
+            using var machine = new ReachyConversationStateMachine();
+            ReachyConversationOperation listening = machine.BeginListening();
+            var progress = new ReachyConversationAsrProgress(machine, listening);
+
+            progress.Observe(AsrEventKind.Started);
+            Equal(
+                true,
+                progress.Observe(AsrEventKind.FinalResult),
+                "first final-result transition");
+            Equal(
+                ReachyConversationState.Transcribing,
+                machine.Current.State,
+                "state after final result");
+            Equal(
+                false,
+                progress.Observe(AsrEventKind.FinalResult),
+                "duplicate final-result transition");
+            Equal(
+                ReachyConversationState.Transcribing,
+                machine.Current.State,
+                "state after duplicate final result");
         }
 
         private static void AssertAudioOwnership(

@@ -119,9 +119,7 @@ def capture(apk: Path, machine: str, provisioning: str) -> dict:
 
 
 def _bounded_label(value: object, field: str) -> str:
-    if not isinstance(value, str) or not re.fullmatch(
-        r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value
-    ):
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value):
         raise ValueError(f"{field} must be a bounded non-secret label.")
     return value
 
@@ -170,9 +168,7 @@ def validate_record(record: object) -> dict:
     if not isinstance(libs, dict) or not REQUIRED.issubset(libs):
         raise ValueError("A build omits required production libraries.")
     for name, library_hash in libs.items():
-        if not isinstance(name, str) or not re.fullmatch(
-            r"lib/arm64-v8a/[^/]+\.so", name
-        ):
+        if not isinstance(name, str) or not re.fullmatch(r"lib/arm64-v8a/[^/]+\.so", name):
             raise ValueError(
                 "Build evidence contains a non-ARM64 or malformed native library path."
             )

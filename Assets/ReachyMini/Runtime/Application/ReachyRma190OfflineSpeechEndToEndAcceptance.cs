@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ReachyMini.AppState;
 using ReachyMini.LocalModels;
+using ReachyMini.Speech;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -19,6 +20,10 @@ namespace ReachyMini.Validation
             "rma190-offline-speech-end-to-end-acceptance.json";
         internal const string ReadyFileName =
             "rma190-offline-speech-end-to-end-ready.json";
+        internal const string StartFileName =
+            "rma190-offline-speech-end-to-end-start.txt";
+        internal const string ListeningFileName =
+            "rma190-offline-speech-end-to-end-listening.json";
         internal const string ModelFileName =
             "rma190-qwen3-0.6b-q4_k_m.gguf";
 
@@ -30,6 +35,7 @@ namespace ReachyMini.Validation
         private static string currentFailureCode = string.Empty;
         private static long currentAvailableStorageBytes = -1L;
         private static string currentInteractionState = string.Empty;
+        private static AcceptanceReport? currentReport;
 
         [Serializable]
         private sealed class AcceptanceReport
@@ -47,6 +53,8 @@ namespace ReachyMini.Validation
             public string local_model_id = string.Empty;
             public string local_model_sha256 = string.Empty;
             public bool microphone_available;
+            public string asr_preflight_state = string.Empty;
+            public bool recognizer_ready;
             public bool observed_listening;
             public bool observed_transcribing;
             public bool observed_thinking;
@@ -101,19 +109,19 @@ namespace ReachyMini.Validation
             }
             catch (Exception exception)
             {
-                var failure = new AcceptanceReport
+                AcceptanceReport failure = currentReport ?? new AcceptanceReport
                 {
-                    status = "failed",
-                    // Never persist exception messages or stack traces: they may
-                    // include a private recognizer result or conversation text.
-                    error = exception.GetType().Name,
-                    failure_stage = currentStage,
-                    failure_code = currentFailureCode,
-                    last_interaction_state = currentInteractionState,
-                    available_storage_bytes = currentAvailableStorageBytes,
                     device_model = SystemInfo.deviceModel,
                     android_api_level = TryReadApiLevel(),
                 };
+                failure.status = "failed";
+                // Never persist exception messages or stack traces: they may
+                // include a private recognizer result or conversation text.
+                failure.error = exception.GetType().Name;
+                failure.failure_stage = currentStage;
+                failure.failure_code = currentFailureCode;
+                failure.last_interaction_state = currentInteractionState;
+                failure.available_storage_bytes = currentAvailableStorageBytes;
                 try
                 {
                     WriteAtomically(
@@ -163,7 +171,8 @@ namespace ReachyMini.Validation
                 RequireConcreteType<ReachyBaselineBehaviorApplicationService>(
                     host.GetRequiredService<IReachyBehaviorService>(
                         ReachyServiceKind.Behavior));
-            RequireConcreteType<ReachySettingsMainScreenApplicationService>(
+            ReachySettingsMainScreenApplicationService screenService =
+                RequireConcreteType<ReachySettingsMainScreenApplicationService>(
                 host.GetRequiredService<IReachyUserInterfaceService>(
                     ReachyServiceKind.UserInterface));
 
@@ -200,6 +209,46 @@ namespace ReachyMini.Validation
                     "selection with no off-device data boundary.");
             }
 
+            currentReport = new AcceptanceReport
+            {
+                device_model = SystemInfo.deviceModel,
+                android_api_level = TryReadApiLevel(),
+                selected_llm_execution = llmSelection.Execution.ToString(),
+                local_model_id = manifest.Identity.ModelId,
+                local_model_sha256 = installed.Sha256,
+                available_storage_bytes = currentAvailableStorageBytes,
+                synthetic_speech_injected = false,
+                transcript_persisted = false,
+                raw_audio_persisted = false,
+                cloud_credentials_injected = false,
+            };
+
+            currentStage = "probe_explicit_on_device_asr";
+            var asrProvider = ReachyAndroidOnDeviceAsrProviderFactory.Create(
+                "rma190-explicit-on-device-asr-preflight",
+                "en-US",
+                SpeechReadinessTimeout);
+            SpeechProviderAvailability asrAvailability;
+            try
+            {
+                asrAvailability = await asrProvider.CheckAvailabilityAsync(
+                    new AsrOptions("en-US", requestPartialResults: false),
+                    CancellationToken.None).ConfigureAwait(true);
+            }
+            finally
+            {
+                await asrProvider.DisposeAsync().ConfigureAwait(true);
+            }
+            currentReport.asr_preflight_state = asrAvailability.State.ToString();
+            if (!asrAvailability.IsAvailable)
+            {
+                currentFailureCode =
+                    "android_on_device_asr_availability_" +
+                    asrAvailability.State.ToString().ToLowerInvariant();
+                throw new InvalidOperationException(
+                    "The selected explicit on-device ASR is not ready.");
+            }
+
             currentStage = "wait_for_microphone";
             await WaitForMicrophoneAsync(screen).ConfigureAwait(true);
 
@@ -213,32 +262,32 @@ namespace ReachyMini.Validation
             }
 
             ulong behaviorBefore = behavior.Snapshot.Revision;
-            var report = new AcceptanceReport
-            {
-                device_model = SystemInfo.deviceModel,
-                android_api_level = TryReadApiLevel(),
-                selected_llm_execution = llmSelection.Execution.ToString(),
-                local_model_id = manifest.Identity.ModelId,
-                local_model_sha256 = installed.Sha256,
-                microphone_available = true,
-                behavior_service_ready = true,
-                behavior_revision_before = behaviorBefore,
-                synthetic_speech_injected = false,
-                transcript_persisted = false,
-                raw_audio_persisted = false,
-                cloud_credentials_injected = false,
-                system_asr_fallback_used = false,
-                network_tts_fallback_used = false,
-            };
+            AcceptanceReport report = currentReport ??
+                throw new InvalidOperationException(
+                    "The physical speech acceptance report was not initialized.");
+            report.microphone_available = true;
+            report.behavior_service_ready = true;
+            report.behavior_revision_before = behaviorBefore;
+            report.system_asr_fallback_used = false;
+            report.network_tts_fallback_used = false;
+
+            currentStage = "wait_for_manual_start";
+            WriteAtomically(
+                Path.Combine(Application.persistentDataPath, ReadyFileName),
+                "{\"setup_ready_for_manual_start\":true}");
+            await WaitForManualStartAsync().ConfigureAwait(true);
 
             currentStage = "request_microphone";
             screen.RequestMicrophone();
             currentStage = "wait_for_listening";
-            await WaitForListeningAsync(screen).ConfigureAwait(true);
+            await WaitForListeningAsync(screen, screenService).ConfigureAwait(true);
             currentStage = "real_spoken_turn";
+            report.observed_listening = true;
+            report.recognizer_ready = true;
+            currentInteractionState = ReachyInteractionState.Listening.ToString();
             WriteAtomically(
-                Path.Combine(Application.persistentDataPath, ReadyFileName),
-                "{\"ready_for_real_utterance\":true}");
+                Path.Combine(Application.persistentDataPath, ListeningFileName),
+                "{\"listening_for_real_utterance\":true}");
 
             DateTime deadline = DateTime.UtcNow + TurnTimeout;
             while (DateTime.UtcNow < deadline)
@@ -247,6 +296,24 @@ namespace ReachyMini.Validation
                     throw new InvalidOperationException(
                         "The shipping main-screen snapshot disappeared.");
                 currentInteractionState = snapshot.InteractionState.ToString();
+                report.observed_listening |=
+                    screenService.ObservedConversationListening;
+                report.observed_transcribing |=
+                    screenService.ObservedConversationTranscribing;
+                report.observed_thinking |=
+                    screenService.ObservedConversationThinking;
+                report.observed_speaking |=
+                    screenService.ObservedConversationSpeaking;
+                report.observed_idle_after_speaking |=
+                    screenService.ObservedConversationIdleAfterSpeaking;
+                if (snapshot.InteractionState == ReachyInteractionState.Error ||
+                    snapshot.InteractionState == ReachyInteractionState.Unavailable)
+                {
+                    currentFailureCode = string.IsNullOrEmpty(
+                            screenService.LastConversationFailureCode)
+                        ? "conversation-error-state"
+                        : screenService.LastConversationFailureCode;
+                }
 
                 switch (snapshot.InteractionState)
                 {
@@ -468,19 +535,25 @@ namespace ReachyMini.Validation
         }
 
         private static async Task WaitForListeningAsync(
-            ReachyMainScreen screen)
+            ReachyMainScreen screen,
+            ReachySettingsMainScreenApplicationService screenService)
         {
             DateTime deadline = DateTime.UtcNow + SpeechReadinessTimeout;
             while (DateTime.UtcNow < deadline)
             {
                 ReachyMainScreenSnapshot? snapshot = screen.Snapshot;
-                if (snapshot?.InteractionState == ReachyInteractionState.Listening)
+                if (screenService.ObservedConversationRecognizerReady &&
+                    snapshot?.InteractionState == ReachyInteractionState.Listening)
                 {
                     return;
                 }
                 if (snapshot?.InteractionState == ReachyInteractionState.Error ||
                     snapshot?.InteractionState == ReachyInteractionState.Unavailable)
                 {
+                    currentInteractionState =
+                        snapshot.InteractionState.ToString();
+                    currentFailureCode =
+                        screenService.LastConversationFailureCode;
                     throw new InvalidOperationException(
                         "The shipping speech service did not enter Listening state.");
                 }
@@ -488,7 +561,23 @@ namespace ReachyMini.Validation
             }
 
             throw new TimeoutException(
-                "The shipping speech service did not enter Listening state.");
+                "The on-device recognizer did not become ready to listen.");
+        }
+
+        private static async Task WaitForManualStartAsync()
+        {
+            string startPath = Path.Combine(
+                Application.persistentDataPath,
+                StartFileName);
+            while (true)
+            {
+                if (File.Exists(startPath))
+                {
+                    File.Delete(startPath);
+                    return;
+                }
+                await Task.Delay(50).ConfigureAwait(true);
+            }
         }
 
         private static T RequireConcreteType<T>(object service)

@@ -65,6 +65,9 @@ namespace ReachyMini.AppState
         private long requestSequence;
         private int disposed;
 
+        internal string LastFailureCode { get; private set; } = string.Empty;
+        internal bool ObservedRecognizerReady { get; private set; }
+
         internal ReachyConversationTurnOrchestrator(
             ReachyMainScreenStateStore stateStore,
             ReachySettingsPersistenceApplicationService persistence,
@@ -125,6 +128,8 @@ namespace ReachyMini.AppState
             ReachyConversationOperation listening;
             try
             {
+                LastFailureCode = string.Empty;
+                ObservedRecognizerReady = false;
                 listening = conversation.BeginListening();
             }
             catch (InvalidOperationException)
@@ -164,9 +169,16 @@ namespace ReachyMini.AppState
                     listening,
                     listening.CancellationToken)
                 .ConfigureAwait(true);
-            if (!asrResult.Succeeded || string.IsNullOrWhiteSpace(asrResult.Transcript))
+            if (!asrResult.Succeeded)
             {
-                FailTurnClosed("asr-failed", asrResult.Detail);
+                FailTurnClosed(asrResult.FailureCode, asrResult.Detail);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(asrResult.Transcript))
+            {
+                FailTurnClosed(
+                    "android_on_device_asr_empty_transcript",
+                    "The on-device recognizer returned an empty final result.");
                 return;
             }
 
@@ -341,6 +353,8 @@ namespace ReachyMini.AppState
                 return;
             }
 
+            LastFailureCode = SafeFailureCode(diagnosticCode);
+
             // Fail closed: no fabricated apology speech, no silent
             // fallback. The conversation state machine is reset back to
             // Idle immediately afterward (a fresh session/turn id) so the
@@ -361,6 +375,91 @@ namespace ReachyMini.AppState
                 ? "The conversation turn failed (" + diagnosticCode + ")."
                 : detail;
             stateStore.SetInteraction(ReachyInteractionState.Error, safeDetail);
+        }
+
+        private static string SafeFailureCode(string diagnosticCode)
+        {
+            const string asrPrefix = "android_on_device_asr_";
+            if (diagnosticCode.StartsWith(asrPrefix, StringComparison.Ordinal) &&
+                diagnosticCode.Length <= 128)
+            {
+                for (int index = 0; index < diagnosticCode.Length; ++index)
+                {
+                    char value = diagnosticCode[index];
+                    if (!(value >= 'a' && value <= 'z') &&
+                        !(value >= '0' && value <= '9') && value != '_')
+                    {
+                        return "asr-provider-failed";
+                    }
+                }
+                return diagnosticCode;
+            }
+
+            if (HasSafeCodePrefix(diagnosticCode, "speech_audio_") ||
+                HasSafeCodePrefix(diagnosticCode, "audio_focus_") ||
+                HasSafeCodePrefix(diagnosticCode, "audio_coordinated_asr_"))
+            {
+                return diagnosticCode;
+            }
+
+            switch (diagnosticCode)
+            {
+                case "permission_denied":
+                case "audio_failure":
+                case "speech_timeout":
+                case "recognizer_busy":
+                case "too_many_requests":
+                case "service_disconnected":
+                case "language_not_supported":
+                case "language_model_unavailable":
+                case "unexpected_network_error":
+                case "client_failure":
+                case "service_failure":
+                case "unknown_android_asr_error":
+                    return "android_asr_" + diagnosticCode;
+            }
+
+            if (HasSafeCodePrefix(diagnosticCode, "llm-") ||
+                HasSafeCodePrefix(diagnosticCode, "llm_") ||
+                HasSafeCodePrefix(diagnosticCode, "behavior-") ||
+                HasSafeCodePrefix(diagnosticCode, "behavior_") ||
+                HasSafeCodePrefix(diagnosticCode, "intent-") ||
+                HasSafeCodePrefix(diagnosticCode, "intent_"))
+            {
+                return diagnosticCode;
+            }
+
+            switch (diagnosticCode)
+            {
+                case "asr-failed":
+                    return "asr-provider-failed";
+                case "tts-playback-failed":
+                    return "tts-playback-failed";
+                case "turn-unhandled-exception":
+                    return "turn-unhandled-exception";
+                default:
+                    return "conversation-failed";
+            }
+        }
+
+        private static bool HasSafeCodePrefix(string value, string prefix)
+        {
+            if (!value.StartsWith(prefix, StringComparison.Ordinal) ||
+                value.Length > 128)
+            {
+                return false;
+            }
+            for (int index = 0; index < value.Length; ++index)
+            {
+                char current = value[index];
+                if (!(current >= 'a' && current <= 'z') &&
+                    !(current >= '0' && current <= '9') &&
+                    current != '_' && current != '-')
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         private string NextRequestId(string prefix)

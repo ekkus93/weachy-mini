@@ -151,9 +151,9 @@ class BuildComparisonTests(unittest.TestCase):
         self.assertFalse(result["todo_gate_closed"])
 
     def test_selfhosted_validation_runs_comparator_contracts_before_device_pin(self) -> None:
-        workflow = (
-            ROOT / ".github/workflows/local-unity-android-validation.yml"
-        ).read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/local-unity-android-validation.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn(
             "python3 -m unittest scripts.tests.test_rma002_compare_build_evidence",
             workflow,
@@ -196,12 +196,12 @@ class BuildComparisonTests(unittest.TestCase):
             root = Path(directory)
             paths = [root / "a.apk", root / "b.apk"]
             for path, value, record_data in zip(
-                paths, (b"first apk", b"second apk"), (self.a, self.b)
+                paths, (b"first apk", b"second apk"), (self.a, self.b), strict=False
             ):
                 path.write_bytes(value)
                 record_data["build"]["apk_sha256"] = hashlib.sha256(value).hexdigest()
             reports = [root / "a.json", root / "b.json"]
-            for path, data in zip(reports, (self.a, self.b)):
+            for path, data in zip(reports, (self.a, self.b), strict=False):
                 path.write_text(json.dumps(data), encoding="utf-8")
             command = [
                 sys.executable,
@@ -237,8 +237,12 @@ class BuildComparisonTests(unittest.TestCase):
             first.write_text(json.dumps(self.a), encoding="utf-8")
             second.write_text(json.dumps(self.b), encoding="utf-8")
             args = [
-                sys.executable, str(SCRIPT), str(first), str(second),
-                "--expected-sha", SHA,
+                sys.executable,
+                str(SCRIPT),
+                str(first),
+                str(second),
+                "--expected-sha",
+                SHA,
             ]
             passed = subprocess.run(args, capture_output=True, text=True, check=False)
             self.assertEqual(passed.returncode, 0, passed.stderr)

@@ -48,9 +48,11 @@ class Rma191PrivacySecurityReviewTests(unittest.TestCase):
 
     def test_provider_credentials_use_android_keystore_bridge(self) -> None:
         store = read(APP / "ReachyAndroidProviderSecretStore.cs")
-        bridges = sorted(ROOT.glob("**/ReachyProviderSecretBridge.java"))
-        self.assertEqual(1, len(bridges), [str(path) for path in bridges])
-        bridge = read(bridges[0])
+        bridge_path = (
+            ROOT / "Assets/Plugins/Android/ReachyProviderSecurity.androidlib/src/main/java/"
+            "com/ekkus93/weachy/providers/ReachyProviderSecretBridge.java"
+        )
+        bridge = read(bridge_path)
         self.assertIn("ReachyProviderSecretBridge", store)
         self.assertIn("IReachyProviderSecretStore", store)
         self.assertIn("MaximumSecretBytes", store)
@@ -93,7 +95,9 @@ class Rma191PrivacySecurityReviewTests(unittest.TestCase):
         policy = read(CORE / "Application/ReachyPrivateMediaRetentionPolicy.cs")
         temp_store = read(CORE / "Application/ReachyPrivateMediaTemporaryFileStore.cs")
         bundle_sources = "\n".join(
-            read(path) for path in sorted(ROOT.glob("**/*DiagnosticBundle*.cs"))
+            read(path)
+            for path in source_files()
+            if path.suffix == ".cs" and "DiagnosticBundle" in path.name
         )
         self.assertIn("RecordingEnabled => false", policy)
         self.assertIn("MediaExportEnabled => false", policy)

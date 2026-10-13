@@ -24,9 +24,7 @@ class Rma184ClassSelectorTests(unittest.TestCase):
         for index, name in enumerate(("low", "mid", "high")):
             with self.subTest(performance_class=name):
                 matrix = {
-                    "representative_devices": [
-                        {"model": "device", "performance_class": name}
-                    ]
+                    "representative_devices": [{"model": "device", "performance_class": name}]
                 }
                 self.assertEqual(selector.resolve(matrix, "device"), index)
 
@@ -42,11 +40,7 @@ class Rma184ClassSelectorTests(unittest.TestCase):
                 selector.resolve(matrix, model)
 
     def test_unrecognized_class_fails_closed(self) -> None:
-        matrix = {
-            "representative_devices": [
-                {"model": "phone", "performance_class": "ultra"}
-            ]
-        }
+        matrix = {"representative_devices": [{"model": "phone", "performance_class": "ultra"}]}
         with self.assertRaises(ValueError):
             selector.resolve(matrix, "phone")
 
@@ -67,22 +61,14 @@ class Rma184ClassSelectorTests(unittest.TestCase):
         for value in (None, 0, False, [], {}, ["mid"], {"name": "mid"}):
             with self.subTest(performance_class=value), self.assertRaises(ValueError):
                 selector.resolve(
-                    {
-                        "representative_devices": [
-                            {"model": "phone", "performance_class": value}
-                        ]
-                    },
+                    {"representative_devices": [{"model": "phone", "performance_class": value}]},
                     "phone",
                 )
         with self.assertRaises(ValueError):
             selector.resolve({"representative_devices": [{"model": "phone"}]}, "phone")
 
     def test_invalid_physical_model_fails_closed(self) -> None:
-        matrix = {
-            "representative_devices": [
-                {"model": "phone", "performance_class": "mid"}
-            ]
-        }
+        matrix = {"representative_devices": [{"model": "phone", "performance_class": "mid"}]}
         for model in (None, "", "  ", 0, [], {}):
             with self.subTest(model=model), self.assertRaises(ValueError):
                 selector.resolve(matrix, model)
@@ -115,9 +101,7 @@ class Rma184ClassSelectorTests(unittest.TestCase):
     def test_cli_does_not_print_a_class_for_malformed_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "matrix.json"
-            path.write_text(
-                json.dumps({"representative_devices": [None]}), encoding="utf-8"
-            )
+            path.write_text(json.dumps({"representative_devices": [None]}), encoding="utf-8")
             result = subprocess.run(
                 [
                     sys.executable,
@@ -133,9 +117,7 @@ class Rma184ClassSelectorTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 2)
             self.assertEqual(result.stdout, "")
-            self.assertIn(
-                "representative_devices entries must be JSON objects", result.stderr
-            )
+            self.assertIn("representative_devices entries must be JSON objects", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
 
 

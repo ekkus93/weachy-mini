@@ -60,14 +60,15 @@ def main() -> None:
     composition = read("ReachySettingsApplicationCompositionProvider.cs")
     require(
         "screen.ConfigureConversationTurn(conversationTurnOrchestrator.StartTurnAsync);\n"
-        "            // The audio service may have completed" in composition
+        "            // The audio service may have completed"
+        in composition
         and "ReportSpeechSetupIfUnavailable();" in composition,
         "initial audio-service setup failures must remain visible after screen binding",
     )
     require(
         "if (eventArgs.Health.Kind == ReachyServiceKind.Audio)" in composition
-        and "UpdateMainScreenCapabilities();\n"
-        "                ReportSpeechSetupIfUnavailable();" in composition,
+        and "UpdateMainScreenCapabilities();\n                ReportSpeechSetupIfUnavailable();"
+        in composition,
         "subsequent audio-health failures must surface setup guidance",
     )
     require(
@@ -79,7 +80,8 @@ def main() -> None:
     )
     require(
         '"Speech setup unavailable:", StringComparison.Ordinal' in composition
-        and "stateStore.Current.InteractionState == ReachyInteractionState.Unavailable" in composition
+        and "stateStore.Current.InteractionState == ReachyInteractionState.Unavailable"
+        in composition
         and "ReachyInteractionState.Idle" in composition,
         "speech recovery must clear only its own stale setup notice",
     )

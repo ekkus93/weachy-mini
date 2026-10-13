@@ -168,13 +168,15 @@ public final class ReachySpeechAudioFocusBridge {
             return;
         }
 
-        RuntimeException cleanupFailure = cleanupSession(session);
+        CleanupFailure cleanupFailure = cleanupSession(session);
         if (cleanupFailure != null) {
             callback.onReleaseFailed(
                     sessionId,
-                    "audio_focus_release_failed",
-                    "Releasing Android speech audio focus failed with "
-                            + cleanupFailure.getClass().getSimpleName()
+                    cleanupFailure.code,
+                    "Releasing Android speech audio focus failed"
+                            + (cleanupFailure.exceptionClass.isEmpty()
+                                    ? "."
+                                    : " with " + cleanupFailure.exceptionClass + ".")
                             + "; the exact session remains retained for close-time cleanup and the managed coordinator must remain faulted.");
             return;
         }
@@ -231,23 +233,25 @@ public final class ReachySpeechAudioFocusBridge {
             session.interrupted = true;
         }
 
-        RuntimeException cleanupFailure = cleanupSession(session);
+        CleanupFailure cleanupFailure = cleanupSession(session);
         if (cleanupFailure != null) {
-            code = "audio_focus_interrupt_cleanup_failed";
+            code = cleanupFailure.code;
             diagnostic = "Speech audio interruption cleanup failed with "
-                    + cleanupFailure.getClass().getSimpleName()
+                    + cleanupFailure.exceptionClass
                     + "; the operation was still cancelled and the exact session remains retained for an explicit release retry.";
         }
         session.callback.onInterrupted(session.sessionId, code, diagnostic);
     }
 
-    private RuntimeException cleanupSession(Session session) {
-        RuntimeException failure = null;
+    private CleanupFailure cleanupSession(Session session) {
+        CleanupFailure failure = null;
         if (session.monitor != null) {
             try {
                 session.monitor.stop();
             } catch (RuntimeException exception) {
-                failure = exception;
+                failure = new CleanupFailure(
+                        "audio_focus_monitor_stop_failed",
+                        exception.getClass().getSimpleName());
             }
         }
         if (session.focusHeld && session.focusRequest != null) {
@@ -256,12 +260,15 @@ public final class ReachySpeechAudioFocusBridge {
                 if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
                     session.focusHeld = false;
                 } else if (failure == null) {
-                    failure = new IllegalStateException(
-                            "AudioManager.abandonAudioFocusRequest did not report success.");
+                    failure = new CleanupFailure(
+                            "audio_focus_abandon_failed",
+                            "");
                 }
             } catch (RuntimeException exception) {
                 if (failure == null) {
-                    failure = exception;
+                    failure = new CleanupFailure(
+                            "audio_focus_abandon_exception",
+                            exception.getClass().getSimpleName());
                 }
             }
         }
@@ -278,11 +285,11 @@ public final class ReachySpeechAudioFocusBridge {
             session = activeSession;
         }
         if (session != null) {
-            RuntimeException cleanupFailure = cleanupSession(session);
+            CleanupFailure cleanupFailure = cleanupSession(session);
             if (cleanupFailure != null) {
                 throw new IllegalStateException(
-                        "Closing Android speech audio focus could not release the exact session.",
-                        cleanupFailure);
+                        "Closing Android speech audio focus could not release the exact session (" +
+                                cleanupFailure.code + ").");
             }
             clearActive(session);
         }
@@ -379,6 +386,16 @@ public final class ReachySpeechAudioFocusBridge {
     private enum Role {
         LISTENING,
         SPEAKING,
+    }
+
+    private static final class CleanupFailure {
+        final String code;
+        final String exceptionClass;
+
+        CleanupFailure(String code, String exceptionClass) {
+            this.code = code;
+            this.exceptionClass = exceptionClass;
+        }
     }
 
     private static final class Session {

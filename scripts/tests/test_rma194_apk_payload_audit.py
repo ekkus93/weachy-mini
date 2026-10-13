@@ -11,6 +11,8 @@ import unittest
 import zipfile
 from pathlib import Path
 
+from scripts.tests.rma194_apk_fixture import elf64_aarch64_shared
+
 SCRIPT = Path(__file__).resolve().parents[1] / "verify_rma194_release_apk.py"
 
 
@@ -22,9 +24,10 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
             apk = Path(directory) / "candidate.apk"
             entries = {
                 "AndroidManifest.xml": b"<manifest package='com.ekkus.weachymini'/>",
-                "lib/arm64-v8a/libmujoco.so": b"native-test-fixture",
-                "lib/arm64-v8a/libreachy_sim.so": b"native-test-fixture",
-                "lib/arm64-v8a/libreachy_llama.so": b"native-test-fixture",
+                "lib/arm64-v8a/libil2cpp.so": elf64_aarch64_shared(),
+                "lib/arm64-v8a/libmujoco.so": elf64_aarch64_shared(),
+                "lib/arm64-v8a/libreachy_sim.so": elf64_aarch64_shared(),
+                "lib/arm64-v8a/libreachy_llama.so": elf64_aarch64_shared(),
                 "assets/bin/Data/globalgamemanagers": b"unity-test-fixture",
             }
             if extra:
@@ -61,7 +64,7 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
         result = self.run_fixture({"lib/arm64-v8a/libreachy_sim.so": b""})
         # An empty library is not a valid shipping runtime even if its name is present.
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("empty required ARM64 runtime", result.stderr)
+        self.assertIn("empty ARM64 native library", result.stderr)
 
     def test_rejects_arcore_library(self) -> None:
         result = self.run_fixture({"lib/arm64-v8a/libarcore_sdk_c.so": b"bad"})
@@ -81,7 +84,7 @@ class Rma194ApkPayloadAuditTests(unittest.TestCase):
     def test_rejects_path_traversal(self) -> None:
         result = self.run_fixture({"assets/../com/google/ar/core/Foo.class": b"x"})
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("unsafe or duplicate", result.stderr)
+        self.assertIn("noncanonical entry names", result.stderr)
 
     def test_rejects_missing_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

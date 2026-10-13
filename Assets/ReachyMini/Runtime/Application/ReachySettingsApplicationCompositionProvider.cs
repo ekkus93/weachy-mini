@@ -248,6 +248,16 @@ namespace ReachyMini.AppState
         private readonly ReachyMainScreenStateStore stateStore =
             new ReachyMainScreenStateStore();
 
+        internal string LastConversationFailureCode =>
+            conversationTurnOrchestrator.LastFailureCode;
+        internal bool ObservedConversationRecognizerReady =>
+            conversationTurnOrchestrator.ObservedRecognizerReady;
+        internal bool ObservedConversationListening { get; private set; }
+        internal bool ObservedConversationTranscribing { get; private set; }
+        internal bool ObservedConversationThinking { get; private set; }
+        internal bool ObservedConversationSpeaking { get; private set; }
+        internal bool ObservedConversationIdleAfterSpeaking { get; private set; }
+
         public ReachySettingsMainScreenApplicationService(
             ReachyMainScreen screen,
             ReachyProductionAuthoritativeRuntime runtime,
@@ -301,6 +311,7 @@ namespace ReachyMini.AppState
 
         protected override void OnInitialize()
         {
+            stateStore.Changed += OnConversationStateChanged;
             for (int index = 0; index < dependencies.Length; ++index)
             {
                 dependencies[index].HealthChanged += OnDependencyHealthChanged;
@@ -333,6 +344,7 @@ namespace ReachyMini.AppState
 
         protected override void OnDispose()
         {
+            stateStore.Changed -= OnConversationStateChanged;
             persistence.Settings.Changed -= OnSettingsChanged;
             cameraDiscovery.State.Changed -= OnCameraCapabilitiesChanged;
             diagnosticsSource.Dispose();
@@ -344,6 +356,33 @@ namespace ReachyMini.AppState
             // and-forget from RequestMicrophone) so a stale async completion
             // can never touch already-disposed application-service state.
             conversationTurnOrchestrator.Dispose();
+        }
+
+        private void OnConversationStateChanged(
+            object? sender,
+            ReachyMainScreenChangedEventArgs eventArgs)
+        {
+            switch (eventArgs.Snapshot.InteractionState)
+            {
+                case ReachyInteractionState.Listening:
+                    ObservedConversationListening = true;
+                    break;
+                case ReachyInteractionState.Transcribing:
+                    ObservedConversationTranscribing = true;
+                    break;
+                case ReachyInteractionState.Thinking:
+                    ObservedConversationThinking = true;
+                    break;
+                case ReachyInteractionState.Speaking:
+                    ObservedConversationSpeaking = true;
+                    break;
+                case ReachyInteractionState.Idle:
+                    if (ObservedConversationSpeaking)
+                    {
+                        ObservedConversationIdleAfterSpeaking = true;
+                    }
+                    break;
+            }
         }
 
         public void PauseForApplicationInterruption()

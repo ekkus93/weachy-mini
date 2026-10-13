@@ -204,6 +204,14 @@ namespace ReachyMini.Speech
                     session.SessionId,
                     CancellationToken.None).ConfigureAwait(false);
             }
+            catch (SpeechAudioFocusException exception)
+            {
+                releaseError = new SpeechProviderError(
+                    SpeechErrorCategory.ServiceFailure,
+                    exception.Code,
+                    "Android speech audio focus could not be released safely.",
+                    isRetryable: false);
+            }
             catch (Exception exception)
             {
                 releaseError = new SpeechProviderError(

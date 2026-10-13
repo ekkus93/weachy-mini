@@ -17,8 +17,13 @@ COMMAND = "./scripts/build_unity_android.sh device-feasibility"
 ROOT = Path(__file__).resolve().parents[1]
 LOCKFILE = ROOT / "toolchain.lock.json"
 VERSIONS = (
-    "unity_editor", "jdk", "android_sdk", "android_ndk",
-    "android_cmake", "gradle", "android_gradle_plugin",
+    "unity_editor",
+    "jdk",
+    "android_sdk",
+    "android_ndk",
+    "android_cmake",
+    "gradle",
+    "android_gradle_plugin",
 )
 
 
@@ -35,9 +40,7 @@ def required_text(obj: dict[str, Any], key: str, label: str) -> str:
     return value
 
 
-def required_hash(
-    obj: dict[str, Any], key: str, label: str, pattern: re.Pattern[str]
-) -> str:
+def required_hash(obj: dict[str, Any], key: str, label: str, pattern: re.Pattern[str]) -> str:
     value = required_text(obj, key, label)
     if pattern.fullmatch(value) is None:
         raise EvidenceError(f"{label}.{key} must be lowercase hexadecimal")
@@ -102,8 +105,11 @@ def validate_record(record: Any, label: str = "record") -> dict[str, Any]:
     required_hash(record, "toolchain_lock_sha256", label, SHA256)
     environment = required_object(record, "environment", label)
     for key in (
-        "environment_id", "provisioning_id", "provisioning_evidence",
-        "os", "architecture",
+        "environment_id",
+        "provisioning_id",
+        "provisioning_evidence",
+        "os",
+        "architecture",
     ):
         required_text(environment, key, "environment")
     for key in ("clean_checkout", "fresh_provisioning", "toolchain_verified"):
@@ -131,9 +137,7 @@ def validate_record(record: Any, label: str = "record") -> dict[str, Any]:
     return record
 
 
-def compare(
-    a: dict[str, Any], b: dict[str, Any], expected_sha: str
-) -> dict[str, Any]:
+def compare(a: dict[str, Any], b: dict[str, Any], expected_sha: str) -> dict[str, Any]:
     validate_record(a, "record_a")
     validate_record(b, "record_b")
     if not isinstance(expected_sha, str) or COMMIT.fullmatch(expected_sha) is None:

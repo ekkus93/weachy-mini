@@ -21,7 +21,7 @@ spec.loader.exec_module(evidence)
 def valid_record(machine: str, provisioning: str) -> dict:
     lock_path = ROOT / "toolchain.lock.json"
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    libraries = {name: "1" * 64 for name in evidence.REQUIRED}
+    libraries = dict.fromkeys(evidence.REQUIRED, "1" * 64)
     return {
         "schema": evidence.SCHEMA,
         "machine": machine,

@@ -177,7 +177,10 @@ namespace ReachyMini.AppState
                     .ConfigureAwait(true);
                 if (governed.Status != LocalLlmGovernedGenerationStatus.ProviderCompleted)
                 {
-                    return LlmTurnResult.Failure("llm-local-governed-failure", governed.Detail);
+                    return LlmTurnResult.Failure(
+                        "llm-local-governed-failure-" +
+                            governed.Status.ToString().ToLowerInvariant(),
+                        governed.Detail);
                 }
 
                 LocalLlmGenerationResult? providerResult = governed.ProviderResult;

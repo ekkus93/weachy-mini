@@ -28,9 +28,7 @@ class MatrixModelIdentityContracts(unittest.TestCase):
     def test_duplicate_device_model_is_rejected_before_soak(self) -> None:
         entries = self.source["representative_devices"]
         entries[1]["model"] = entries[0]["model"]
-        with self.assertRaisesRegex(
-            SystemExit, "duplicate representative device model"
-        ):
+        with self.assertRaisesRegex(SystemExit, "duplicate representative device model"):
             self.check_matrix(self.source)
 
     def test_missing_or_noncanonical_model_is_rejected(self) -> None:

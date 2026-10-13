@@ -24,8 +24,7 @@ def resolve(matrix: dict, model: str) -> int:
     matches = [entry for entry in entries if entry.get("model") == model]
     if len(matches) != 1:
         raise ValueError(
-            f"expected exactly one registered representative model {model!r}; "
-            f"found {len(matches)}"
+            f"expected exactly one registered representative model {model!r}; found {len(matches)}"
         )
     performance_class = matches[0].get("performance_class")
     if not isinstance(performance_class, str) or performance_class not in CLASS_INDEX:

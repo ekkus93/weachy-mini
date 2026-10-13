@@ -133,10 +133,8 @@ namespace ReachyMini.Speech
             }
             catch (AndroidJavaException exception)
             {
-                throw new InvalidOperationException(
-                    "Releasing Android speech audio focus failed with " +
-                    exception.GetType().Name + ".",
-                    exception);
+                throw new SpeechAudioFocusException(
+                    "audio_focus_release_exception");
             }
 
             _ = await completion.Task.ConfigureAwait(false);
@@ -359,9 +357,8 @@ namespace ReachyMini.Speech
             {
                 if (ValidateIdentity(callbackSessionId))
                 {
-                    completion.TrySetException(new InvalidOperationException(
-                        "Android speech audio-focus release failed: " +
-                        code + ": " + diagnostic));
+                    completion.TrySetException(
+                        new SpeechAudioFocusException(code));
                 }
             }
 

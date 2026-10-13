@@ -194,8 +194,10 @@ namespace ReachyMini.Speech
                 bool terminal = false;
                 while (!terminal)
                 {
+                    // Finally calls the Android bridge to cancel the exact
+                    // session, so resume on the attached Unity thread.
                     AndroidOnDeviceAsrPlatformEvent value =
-                        await queue.ReadAsync().ConfigureAwait(false);
+                        await queue.ReadAsync().ConfigureAwait(true);
                     terminal = value.IsTerminal;
                     yield return value;
                 }

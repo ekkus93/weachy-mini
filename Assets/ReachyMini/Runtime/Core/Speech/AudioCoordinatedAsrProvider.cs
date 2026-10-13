@@ -51,11 +51,14 @@ namespace ReachyMini.Speech
                 ReachyPerformanceTelemetry.Measure(
                     ReachyPerformanceWorkload.Audio);
 
+            // The Android inner provider enters Unity JNI when its enumerator
+            // starts. Preserve the caller's Unity context across focus and
+            // recognizer awaits, including terminal release and disposal.
             SpeechAudioAcquireAttempt acquisitionAttempt =
                 await SpeechAudioSafeOperations.AcquireSafelyAsync(
                     audio,
                     SpeechAudioRole.Listening,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(true);
             if (acquisitionAttempt.Cancelled)
             {
                 yield return new AsrEvent(
@@ -114,7 +117,7 @@ namespace ReachyMini.Speech
                 while (terminal == null)
                 {
                     MoveNextResult<AsrEvent> move =
-                        await SpeechAudioEnumerator.MoveNextSafelyAsync(enumerator).ConfigureAwait(false);
+                        await SpeechAudioEnumerator.MoveNextSafelyAsync(enumerator).ConfigureAwait(true);
                     if (move.Cancelled)
                     {
                         SpeechAudioInterruption? interruption = lease.Interruption;
@@ -187,7 +190,7 @@ namespace ReachyMini.Speech
                 }
 
                 SpeechProviderError? releaseError =
-                    await lease.ReleaseAsync().ConfigureAwait(false);
+                    await lease.ReleaseAsync().ConfigureAwait(true);
                 released = true;
                 if (releaseError != null)
                 {
@@ -216,7 +219,7 @@ namespace ReachyMini.Speech
             {
                 if (!released)
                 {
-                    await lease.DisposeAsync().ConfigureAwait(false);
+                    await lease.DisposeAsync().ConfigureAwait(true);
                 }
             }
         }

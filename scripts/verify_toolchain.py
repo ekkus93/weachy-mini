@@ -146,19 +146,13 @@ def verify_gradle_wrapper(manifest: dict[str, Any]) -> None:
     if not isinstance(version, str) or re.fullmatch(r"\d+\.\d+\.\d+", version) is None:
         raise ToolchainError("Android Gradle version must be a pinned dotted version.")
     if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
-        raise ToolchainError(
-            "Android Gradle distribution SHA-256 must be 64 lowercase hex digits."
-        )
+        raise ToolchainError("Android Gradle distribution SHA-256 must be 64 lowercase hex digits.")
 
-    properties_path = (
-        ROOT / "android-plugin" / "gradle" / "wrapper" / "gradle-wrapper.properties"
-    )
+    properties_path = ROOT / "android-plugin" / "gradle" / "wrapper" / "gradle-wrapper.properties"
     try:
         lines = properties_path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
-        raise ToolchainError(
-            f"Cannot read pinned Gradle wrapper {properties_path}: {exc}"
-        ) from exc
+        raise ToolchainError(f"Cannot read pinned Gradle wrapper {properties_path}: {exc}") from exc
     properties: dict[str, str] = {}
     for line in lines:
         line = line.strip()
@@ -176,8 +170,7 @@ def verify_gradle_wrapper(manifest: dict[str, Any]) -> None:
     actual_url = properties.get("distributionUrl", "").replace(r"\:", ":")
     if actual_url != expected_url:
         raise ToolchainError(
-            "Gradle wrapper distributionUrl mismatch: "
-            f"expected {expected_url}, got {actual_url!r}"
+            f"Gradle wrapper distributionUrl mismatch: expected {expected_url}, got {actual_url!r}"
         )
     if properties.get("distributionSha256Sum") != digest:
         raise ToolchainError(
@@ -222,7 +215,6 @@ def require_pattern(label: str, output: str, pattern: str, expected: str) -> Non
     actual = match.group(1)
     if actual != expected:
         raise ToolchainError(f"{label} version mismatch: expected {expected}, found {actual}")
-
 
 
 def read_sdk_package_properties(package_dir: Path) -> dict[str, str]:

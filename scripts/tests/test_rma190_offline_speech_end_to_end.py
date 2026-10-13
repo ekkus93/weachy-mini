@@ -27,13 +27,26 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn("LocalLlmBehaviorContract.CreateSelectedManifest()", source)
         self.assertIn("new LocalModelPackageManager(", source)
         self.assertIn("new ReachyPlatformLocalModelStorageProbe()", source)
+        self.assertIn("ReachyAndroidOnDeviceAsrProviderFactory.Create(", source)
+        self.assertIn('"probe_explicit_on_device_asr"', source)
+        self.assertIn("asr_preflight_state = string.Empty", source)
         storage_probe = read(APP / "ReachyPlatformLocalModelStorageProbe.cs")
         self.assertIn("AndroidJNI.AttachCurrentThread()", storage_probe)
         self.assertIn("AndroidJNI.DetachCurrentThread()", storage_probe)
         self.assertIn("settings.CycleProvider(kind)", source)
         self.assertIn("screen.RequestMicrophone();", source)
-        self.assertIn('ready_for_real_utterance\\":true', source)
-        self.assertIn("await WaitForListeningAsync(screen)", source)
+        self.assertIn('setup_ready_for_manual_start\\":true', source)
+        self.assertIn('listening_for_real_utterance\\":true', source)
+        self.assertIn("await WaitForManualStartAsync()", source)
+        self.assertIn("StartFileName", source)
+        self.assertIn("await WaitForListeningAsync(screen, screenService)", source)
+        self.assertIn("ObservedConversationRecognizerReady", source)
+        self.assertIn("public bool recognizer_ready", source)
+        self.assertIn(
+            "currentFailureCode =\n"
+            "                        screenService.LastConversationFailureCode",
+            source,
+        )
         self.assertIn("provider.ProviderSnapshot", source)
         self.assertIn("providerSnapshot.ExecutionState", source)
         self.assertIn("providerSnapshot.ActiveModelId", source)
@@ -48,6 +61,32 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn("failure_stage = currentStage", source)
         self.assertIn("failure_code = currentFailureCode", source)
         self.assertIn('currentStage = "install_selected_local_model"', source)
+        self.assertIn("currentReport = new AcceptanceReport", source)
+        self.assertIn("screenService.LastConversationFailureCode", source)
+        orchestrator = read(APP / "ReachyConversationTurnOrchestrator.cs")
+        self.assertIn("internal string LastFailureCode", orchestrator)
+        self.assertIn("SafeFailureCode(diagnosticCode)", orchestrator)
+        self.assertIn('case "language_model_unavailable":', orchestrator)
+        self.assertIn('return "android_asr_" + diagnosticCode;', orchestrator)
+        self.assertIn('HasSafeCodePrefix(diagnosticCode, "llm-")', orchestrator)
+        self.assertIn('HasSafeCodePrefix(diagnosticCode, "speech_audio_")', orchestrator)
+        self.assertIn('HasSafeCodePrefix(diagnosticCode, "audio_focus_")', orchestrator)
+        asr_orchestrator = read(APP / "ReachyConversationTurnOrchestrator.Asr.cs")
+        self.assertIn("case AsrEventKind.Started:", asr_orchestrator)
+        self.assertIn("ObservedRecognizerReady = progress.RecognizerReady", asr_orchestrator)
+        self.assertIn("case AsrEventKind.FinalResult:", asr_orchestrator)
+        self.assertIn("progress.Observe(asrEvent.Kind)", asr_orchestrator)
+        progress = read(
+            ROOT / "Assets/ReachyMini/Runtime/Core/Conversation/ReachyConversationAsrProgress.cs"
+        )
+        self.assertIn("if (eventKind == AsrEventKind.Started)", progress)
+        self.assertIn("conversation.MarkListeningComplete(listening)", progress)
+        self.assertIn('"android_on_device_asr_empty_transcript"', orchestrator)
+        composition = read(APP / "ReachySettingsApplicationCompositionProvider.cs")
+        self.assertIn("ObservedConversationTranscribing", composition)
+        self.assertIn("stateStore.Changed += OnConversationStateChanged", composition)
+        self.assertIn("stateStore.Changed -= OnConversationStateChanged", composition)
+        self.assertNotIn("snapshot.Detail", source)
         self.assertNotIn("new AsrEvent(", source)
         self.assertNotIn("Fake", source)
 
@@ -60,6 +99,18 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
         self.assertIn("restore_network", runner)
         self.assertIn("PHYSICAL ACTION REQUIRED", runner)
         self.assertIn("REMOTE_READY", runner)
+        self.assertIn("REMOTE_START", runner)
+        self.assertIn("REMOTE_LISTENING", runner)
+        self.assertIn("start-microphone.trigger", runner)
+        self.assertNotIn("Timed out waiting for operator start trigger", runner)
+        self.assertIn(
+            "deadline=$(( $(date +%s) + TIMEOUT_SECONDS ))\n\n"
+            '    while true; do\n        listening_json="$(read_listening)"',
+            runner,
+        )
+        self.assertIn("app_process_running()", runner)
+        self.assertIn("ps -A", runner)
+        self.assertNotIn('shell pidof "${PACKAGE_NAME}"', runner)
         self.assertIn("Do not play a recording or inject a transcript", runner)
         self.assertIn("--ez reachy_rma190_offline_speech_e2e_acceptance true", runner)
         self.assertIn('"transcript_persisted"', runner)
@@ -68,14 +119,14 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
     def test_pinned_serial_cannot_bypass_physical_device_eligibility(self) -> None:
         runner = read(RUNNER)
         self.assertIn('DEVICE_SERIAL="$(select_device_serial)"', runner)
-        self.assertNotIn('REACHY_ANDROID_SERIAL:-$(select_device_serial)', runner)
+        self.assertNotIn("REACHY_ANDROID_SERIAL:-$(select_device_serial)", runner)
         self.assertIn('local pinned="${REACHY_ANDROID_SERIAL:-}"', runner)
         self.assertIn('if [[ "${serial}" == "${pinned}" ]]', runner)
         self.assertIn('"${sdk}" =~ ^[0-9]+$', runner)
-        self.assertIn('(( sdk >= 31 ))', runner)
+        self.assertIn("(( sdk >= 31 ))", runner)
         self.assertIn('"${abi}" == "arm64-v8a"', runner)
-        self.assertIn('$1 !~ /^emulator-/', runner)
-        self.assertIn('ro.kernel.qemu', runner)
+        self.assertIn("$1 !~ /^emulator-/", runner)
+        self.assertIn("ro.kernel.qemu", runner)
         self.assertIn('"${qemu}" != "1"', runner)
         self.assertIn("rma190_approved_physical_device.py", runner)
 
@@ -90,11 +141,7 @@ class Rma190OfflineSpeechEndToEndContracts(unittest.TestCase):
             )
             + 2
         )
-        command = (
-            "set -euo pipefail\n"
-            + runner[beginning:ending]
-            + "\nselect_device_serial\n"
-        )
+        command = "set -euo pipefail\n" + runner[beginning:ending] + "\nselect_device_serial\n"
         stub = r"""#!/usr/bin/env bash
 if [[ "${1:-}" == "devices" ]]; then
     printf 'List of devices attached\n'
@@ -153,7 +200,14 @@ exit 3
                     )
                     self.assertEqual(outcome.returncode, 0, outcome.stderr)
                     self.assertEqual(outcome.stdout.strip(), pinned)
-            for pinned in ("old-api", "wrong-abi", "virtual-one", "unregistered", "emulator-5554", "unauthorized"):
+            for pinned in (
+                "old-api",
+                "wrong-abi",
+                "virtual-one",
+                "unregistered",
+                "emulator-5554",
+                "unauthorized",
+            ):
                 with self.subTest(rejected=pinned):
                     outcome = subprocess.run(
                         ["bash", "-c", command],

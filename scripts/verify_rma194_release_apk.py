@@ -43,14 +43,10 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
             or header[5] != 1  # ELFDATA2LSB
             or header[6] != 1  # EV_CURRENT
         ):
-            raise ValueError(
-                f"APK has invalid ELF64 header in required ARM64 library: {name}"
-            )
+            raise ValueError(f"APK has invalid ELF64 header in required ARM64 library: {name}")
         elf_type, machine, version = struct.unpack_from("<HHI", header, 16)
         if elf_type != 3 or machine != 183 or version != 1:
-            raise ValueError(
-                f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}"
-            )
+            raise ValueError(f"APK requires ELF64 AArch64 shared objects (ET_DYN): {name}")
 
         # A 64-byte file with a forged ELF identity is not a loadable .so.
         # Keep the table offset/count bounded before seeking in compressed ZIP
@@ -76,8 +72,8 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
     file_backed_loads: list[tuple[int, int]] = []
     dynamic_ranges: list[tuple[int, int]] = []
     for offset in range(0, len(table), 56):
-        p_type, _flags, p_offset, _vaddr, _paddr, filesz, memsz, _align = (
-            struct.unpack_from("<IIQQQQQQ", table, offset)
+        p_type, _flags, p_offset, _vaddr, _paddr, filesz, memsz, _align = struct.unpack_from(
+            "<IIQQQQQQ", table, offset
         )
         if p_type not in (1, 2):  # PT_LOAD / PT_DYNAMIC
             continue
@@ -93,18 +89,16 @@ def _verify_required_arm64_elf(apk: zipfile.ZipFile, name: str) -> None:
                 dynamic_ranges.append((p_offset, p_offset + filesz))
     if not (has_load and has_dynamic and file_backed_loads and dynamic_ranges):
         raise ValueError(
-            f"APK required ARM64 library lacks load/dynamic segments or nonempty file-backed data: {name}"
+            "APK required ARM64 library lacks load/dynamic segments or nonempty "
+            f"file-backed data: {name}"
         )
     # PT_DYNAMIC must point to bytes actually mapped by PT_LOAD, not merely
     # to an arbitrary region of the archive member or an empty segment.
     for start, end in dynamic_ranges:
         if not any(
-            load_start <= start and end <= load_end
-            for load_start, load_end in file_backed_loads
+            load_start <= start and end <= load_end for load_start, load_end in file_backed_loads
         ):
-            raise ValueError(
-                f"APK ARM64 dynamic segment is not file-backed by PT_LOAD: {name}"
-            )
+            raise ValueError(f"APK ARM64 dynamic segment is not file-backed by PT_LOAD: {name}")
 
 
 def inspect_apk(path: Path) -> dict[str, object]:
@@ -158,13 +152,8 @@ def inspect_apk(path: Path) -> dict[str, object]:
         ]
         native = []
         for name in packaged_native:
-            if (
-                not name.startswith("lib/arm64-v8a/")
-                or "/" in name.removeprefix("lib/arm64-v8a/")
-            ):
-                raise ValueError(
-                    f"APK contains unsupported native library layout: {name}"
-                )
+            if not name.startswith("lib/arm64-v8a/") or "/" in name.removeprefix("lib/arm64-v8a/"):
+                raise ValueError(f"APK contains unsupported native library layout: {name}")
             native.append(name)
         required_native = {
             "libil2cpp.so",
