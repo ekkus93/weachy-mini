@@ -67,7 +67,10 @@ class Rma180PerformanceHarnessContractTests(unittest.TestCase):
             ),
         }
         for relative, marker in hooks.items():
-            text = (RUNTIME / relative).read_text()
+            source = RUNTIME / relative
+            text = source.read_text()
+            if relative == "Core/Perception/ReachyLightweightTracking.cs":
+                text += "\n" + (source.parent / "ReachyOnDeviceLightweightTracker.cs").read_text()
             self.assertIn(marker, text, relative)
             self.assertIn("ReachyPerformanceTelemetry", text, relative)
 

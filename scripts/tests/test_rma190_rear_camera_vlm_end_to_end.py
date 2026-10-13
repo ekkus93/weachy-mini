@@ -43,7 +43,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         )
 
     def test_acceptance_uses_shipping_rear_camera_and_production_vlm(self) -> None:
-        source = ACCEPTANCE.read_text(encoding="utf-8")
+        source = acceptance_sources()
         for token in (
             "ReachyApplicationHostBehaviour",
             "ReachyAndroidPerceptionApplicationService",
@@ -64,7 +64,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
             self.assertIn(token, source)
 
     def test_fixture_is_explicitly_non_cloud_and_non_calibration_evidence(self) -> None:
-        source = ACCEPTANCE.read_text(encoding="utf-8")
+        source = acceptance_sources()
         self.assertIn("fixture.Provenance.ToString()", source)
         self.assertIn("deterministic_calibration_fixture = true", source)
         self.assertIn("measured_calibration_claimed = false", source)
@@ -173,7 +173,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertNotIn("print(body", runner)
 
     def test_acceptance_waits_for_shipping_vlm_admission_before_fresh_capture(self) -> None:
-        source = ACCEPTANCE.read_text(encoding="utf-8")
+        source = acceptance_sources()
         for token in (
             "ReachyPriorityDegradationRuntimeDriver",
             "WaitForStableVlmAdmissionAsync",
@@ -269,7 +269,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
     def test_fixture_policy_preflight_checks_actual_android_policy_before_camera(
         self,
     ) -> None:
-        source = ACCEPTANCE.read_text(encoding="utf-8")
+        source = acceptance_sources()
         self.assertIn("android.security.NetworkSecurityPolicy", source)
         self.assertIn('"isCleartextTrafficPermitted"', source)
         self.assertIn('"127.0.0.1"', source)
@@ -287,7 +287,7 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
     def test_failed_vlm_transport_preserves_only_validated_physical_frame_evidence(
         self,
     ) -> None:
-        source = ACCEPTANCE.read_text(encoding="utf-8")
+        source = acceptance_sources()
         self.assertIn("private Report? observedFrameEvidence;", source)
         self.assertIn("observedFrameEvidence = Report.ObservedFrame(", source)
         self.assertIn("observedFrameEvidence.production_vlm_transport_and_encoder = true;", source)
@@ -315,6 +315,11 @@ class Rma190RearCameraVlmEndToEndContracts(unittest.TestCase):
         self.assertIn("11648195872", todo)
         self.assertIn("not** a live-cloud provider test", todo)
         self.assertIn("- [ ] On-device ASR -> local LLM -> behavior -> offline TTS.", todo)
+
+
+def acceptance_sources() -> str:
+    helpers = ACCEPTANCE.with_name("ReachyRma190RearCameraVlmEndToEndAcceptance.Helpers.cs")
+    return ACCEPTANCE.read_text(encoding="utf-8") + "\n" + helpers.read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":

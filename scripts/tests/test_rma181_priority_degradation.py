@@ -58,7 +58,12 @@ class Rma181PriorityDegradationContractTests(unittest.TestCase):
         llm = (CORE / "LocalModels/LocalLlmResourceGovernor.cs").read_text()
         vlm = (CORE / "Perception/ReachyVlmScheduler.cs").read_text()
         vlm_types = (CORE / "Perception/ReachyVlmSchedulingTypes.cs").read_text()
-        tracking = (CORE / "Perception/ReachyLightweightTracking.cs").read_text()
+        tracking_path = CORE / "Perception/ReachyLightweightTracking.cs"
+        tracking = (
+            tracking_path.read_text()
+            + "\n"
+            + (tracking_path.parent / "ReachyOnDeviceLightweightTracker.cs").read_text()
+        )
         unity = (APP / "ReachyUnityPriorityDegradationTarget.cs").read_text()
 
         self.assertIn("IReachyPriorityDegradationTarget", llm)
