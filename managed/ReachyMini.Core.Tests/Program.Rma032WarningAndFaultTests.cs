@@ -190,6 +190,41 @@ namespace ReachyMini.Core.Tests
                     TimeSpan.FromSeconds(5.0));
                 AssertControlSuccess(shutdown, "fault worker shutdown");
             }
+
+            ReachySimCreateResult recoveryCreateResult =
+                ReachySimSession.Create(modelBytes);
+            ReachySimSession recoverySession = recoveryCreateResult.Session ??
+                throw new InvalidOperationException(
+                    $"Recovery worker native create failed: {recoveryCreateResult.Error.Code}: {recoveryCreateResult.Error.Message}");
+            using (ReachySimulationWorker recoveryWorker =
+                new ReachySimulationWorker(recoverySession))
+            {
+                ReachySimulationControlResult recoveryStart = recoveryWorker.Start(
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(recoveryStart, "recovery worker start");
+
+                ReachySimulationControlResult neutralReset = recoveryWorker.Reset(
+                    ReachySimResetPose.NeutralAwake,
+                    TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(
+                    neutralReset,
+                    "recovery worker neutral reset");
+
+                ReachyPublishedSimulationSnapshot recovered = WaitForSnapshot(
+                    recoveryWorker,
+                    snapshot => snapshot.State.Sequence >= 1UL,
+                    TimeSpan.FromSeconds(5.0),
+                    "post-fault recreated worker progress");
+                AssertTrajectoryInvariant(
+                    recovered,
+                    "post-fault recreated worker trajectory");
+
+                ReachySimulationControlResult recoveryShutdown =
+                    recoveryWorker.Shutdown(TimeSpan.FromSeconds(5.0));
+                AssertControlSuccess(
+                    recoveryShutdown,
+                    "recovery worker shutdown");
+            }
         }
 
         private static ReachySimulationFault WaitForWorkerFault(
