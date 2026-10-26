@@ -34,6 +34,18 @@ class Rma190EndToEndScenarioContracts(unittest.TestCase):
         self.assertNotIn("ReachySimFake", source)
         self.assertNotIn("requested_target_used_as_motion_proof = true", source)
 
+    def test_unity_metadata_is_captured_before_worker_thread_awaits(self) -> None:
+        source = "\n".join(
+            read(path) for path in sorted(APP.glob("ReachyRma190CoreEndToEndAcceptance*.cs"))
+        )
+        device_index = source.index("string deviceModel = SystemInfo.deviceModel;")
+        api_index = source.index("int androidApiLevel = ReadApiLevel();")
+        worker_index = source.index(".ConfigureAwait(false);")
+        self.assertLess(device_index, worker_index)
+        self.assertLess(api_index, worker_index)
+        self.assertIn("device_model = deviceModel", source)
+        self.assertIn("android_api_level = androidApiLevel", source)
+
     def test_offline_runner_disables_and_restores_network(self) -> None:
         runner = read(RUNNER)
         self.assertIn("svc wifi disable", runner)

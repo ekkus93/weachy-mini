@@ -158,6 +158,12 @@ namespace ReachyMini.Validation
                     "The runner must disable network transports before launch.");
             }
 
+            // Unity's SystemInfo and AndroidJava-backed API reads are main-thread
+            // only. Capture immutable report metadata before the first
+            // ConfigureAwait(false) transition below.
+            string deviceModel = SystemInfo.deviceModel;
+            int androidApiLevel = ReadApiLevel();
+
             if (runtime.ModelHash == 0UL || runtime.BodyCount != 18)
             {
                 throw new InvalidOperationException(
