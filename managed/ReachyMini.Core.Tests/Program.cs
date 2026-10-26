@@ -18,6 +18,7 @@ namespace ReachyMini.Core.Tests
             Rma182ApplicationInterruptionContractTests.RunAll();
             Rma183MemoryStoragePressureContractTests.RunAll();
             Rma184RepresentativeDeviceMatrixContractTests.RunAll();
+            Rma190NetworkFailureEndToEndTests.RunAll();
 
             if (string.Equals(
                     Environment.GetEnvironmentVariable("REACHY_MANAGED_NATIVE_TESTS"),
