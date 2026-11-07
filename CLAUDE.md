@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Weachy Mini is a free, noncommercial Android app that runs a virtual Reachy Mini robot in Unity (MuJoCo is the authoritative dynamics engine). It is late in the Android digital-twin roadmap (Phase 19+ hardening); most subsystems (camera, speech, local LLM, credential lifecycle, diagnostics) are implemented, with device-qualification and release-prep (Phase 20) still open. Polyglot repo: C/C++ (native sim), C#/Unity, Java/Kotlin (Android plugin), Python (tooling/CI scripts), Bash.
 
-Authoritative docs: `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md` (spec), `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md` (ordered TODO), `docs/BUILDING.md`, `docs/ci/GITHUB_ACTIONS_SETUP.md`, `docs/ASSET_POLICY.md`, `docs/WARNING_POLICY.md`, `docs/CLAUDE_CODE_HANDOFF_*.md` (latest session handoff — check for the newest dated file first).
+Authoritative docs: `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md` (spec), `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_TODO.md` (ordered TODO), `docs/BUILDING.md`, `docs/ci/GITHUB_ACTIONS_SETUP.md`, `docs/ASSET_POLICY.md`, `docs/WARNING_POLICY.md`, `docs/*HANDOFF*.md` (latest session handoff — check for the newest dated file first; currently `docs/CODEX_HANDOFF_WEACHY_MINI_2026-10-12.md`, which the older `CLAUDE_CODE_HANDOFF_*` name pattern misses).
 
 ## Build / test / lint
 
@@ -18,7 +18,7 @@ Authoritative docs: `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md` (spec), `doc
 - `ANDROID_NDK_HOME=... MUJOCO_SOURCE_DIR=... ./scripts/build_mujoco_android.sh` — MuJoCo Android cross-compile.
 - `REACHY_ANDROID_SERIAL=<serial> ./scripts/run_mujoco_probe_android.sh` — perf probe on the physical test phone.
 - Android plugin: the Gradle wrapper JAR is **not committed**. First run `cd android-plugin && gradle wrapper --gradle-version 9.5.0 --distribution-type bin`, then `./gradlew lint test`.
-- Lint tools: `ruff check scripts` / `ruff format --check --diff scripts` (Python), `shellcheck scripts/*.sh`, `actionlint` (`.github/workflows/*.yml`).
+- Lint tools: `ruff check scripts` / `ruff format --check --diff scripts` (Python; CI pins `ruff==0.12.0`, so match it locally), `shellcheck scripts/*.sh`, `actionlint` (`.github/workflows/*.yml`).
 
 ## Code style
 
@@ -30,7 +30,7 @@ Authoritative docs: `docs/REACHY_MINI_ANDROID_DIGITAL_TWIN_SPEC.md` (spec), `doc
 
 ## Git / commit conventions
 
-- History lands directly on `master` — no feature branches or PRs in this repo. Commit messages are usually prefixed with the ticket number: `RMA-<n>: <imperative summary>` (e.g. `RMA-102: implement GPU homography warp`), but plain conventional-commit prefixes (`fix:`, `docs:`, `CI:`) are accepted for follow-up/cleanup/docs-only commits. Each ticket typically has a matching permanent CI gate workflow at `.github/workflows/rma<n>-<slug>.yml`, though this convention lapsed after ~RMA-161.
+- History lands directly on `master` — no feature branches or PRs in this repo. Commit messages are usually prefixed with the ticket number: `RMA-<n>: <imperative summary>` (e.g. `RMA-102: implement GPU homography warp`), but plain conventional-commit prefixes (`fix:`, `docs:`, `CI:`) or unprefixed imperative summaries (e.g. "Fix A54 speech JNI threading and diagnostics") are accepted for follow-up/cleanup/docs-only commits. Each ticket typically has a matching permanent CI gate workflow at `.github/workflows/rma<n>-<slug>.yml`, though this convention lapsed after ~RMA-161.
 
 ## Gotchas
 
